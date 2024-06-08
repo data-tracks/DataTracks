@@ -1,11 +1,11 @@
 use std::fmt;
 use std::fmt::Formatter;
 use std::ops::{Add, Sub};
+
 use crate::value::HoFloat;
 use crate::value::number::Number;
 
-
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(PartialEq, Clone, Copy)]
 pub struct HoInt(pub(crate) i64);
 
 impl Number for HoInt {
