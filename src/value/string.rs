@@ -1,7 +1,8 @@
-use std::fmt::{Display, Formatter};
+use std::fmt::Formatter;
 
 use crate::value::value::{ValType, Valuable};
 use crate::value::value::ValType::String as StringType;
+use crate::value::value::value_display;
 
 #[derive(Debug, PartialEq)]
 pub struct HoString(pub String);
@@ -12,8 +13,4 @@ impl Valuable for HoString{
     }
 }
 
-impl Display for HoString {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
+value_display!(HoString);

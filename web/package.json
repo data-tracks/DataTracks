@@ -1,0 +1,15 @@
+{
+  "name": "hosten",
+  "version": "1.0.0",
+  "main": "index.js",
+  "author": "David Lengweiler",
+  "license": "MIT",
+  "scripts": {
+    "format": "prettier --write --ignore-unknown ."
+  },
+  "devDependencies": {
+    "prettier": "^3.3.1",
+    "prettier-plugin-tailwindcss": "^0.6.2",
+    "tailwindcss": "^3.4.4"
+  }
+}

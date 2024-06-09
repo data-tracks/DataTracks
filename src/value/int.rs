@@ -1,9 +1,9 @@
-use std::fmt;
 use std::fmt::Formatter;
 use std::ops::{Add, Sub};
 
 use crate::value::HoFloat;
 use crate::value::number::Number;
+use crate::value::value::value_display;
 
 #[derive(PartialEq, Clone, Copy)]
 pub struct HoInt(pub(crate) i64);
@@ -53,11 +53,7 @@ impl Sub<HoFloat> for HoInt {
     }
 }
 
-impl fmt::Display for HoInt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
+value_display!(HoInt);
 
 #[cfg(test)]
 mod tests {

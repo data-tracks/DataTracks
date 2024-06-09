@@ -1,27 +1,63 @@
-use crate::value::{HoFloat, HoInt, HoString, Value};
+use std::sync::mpsc;
+use std::sync::mpsc::Receiver;
+use std::thread;
+use std::thread::JoinHandle;
+use std::time::Duration;
+
+use tracing::Level;
+use tracing_subscriber::FmtSubscriber;
 
 mod value;
+mod ui;
+mod util;
+mod processing;
 
 fn main() {
-    let int_a = Value::Int(HoInt(10));
-    let int_b = Value::Int(HoInt(5));
+    setup_logging();
+    util::logo();
 
-    let float_a = Value::Float(HoFloat(10.5));
-    let float_b = Value::Float(HoFloat(5.5));
+    // Create a channel to signal shutdown
+    let (tx, rx) = mpsc::channel();
 
-    let string_a = Value::String(Box::new(HoString("test".parse().unwrap())));
+    // Set up the Ctrl+C handler
+    ctrlc::set_handler(move || {
+        tx.send(()).expect("Could not send signal on shutdown.");
+    }).expect("Error setting Ctrl-C handler");
 
-    let values: Vec<Value> = vec![
-        int_a,
-        int_b,
-        float_a,
-        float_b,
-        string_a
-    ];
+    // Spawn a new thread
+    let handle = thread::spawn(ui::start);
 
-    for val in &values {
-        println!("{} is value", val);
+
+    shutdown_hook(rx, handle);
+}
+
+fn shutdown_hook(rx: Receiver<()>, handle: JoinHandle<()>) {
+// Wait for the shutdown signal or the thread to finish
+    loop {
+        if rx.try_recv().is_ok() {
+            println!("Received shutdown signal.");
+            break;
+        }
+
+        if handle.is_finished() {
+            println!("Thread finished.");
+            handle.join().unwrap();
+            break;
+        }
+
+        // Sleep for a short duration to prevent busy-waiting
+        thread::sleep(Duration::from_millis(100));
     }
 
+    println!("Exiting main function.");
+}
+
+fn setup_logging() {
+    let subscriber = FmtSubscriber::builder()
+        .with_max_level(Level::DEBUG)
+        .finish();
+
+    tracing::subscriber::set_global_default(subscriber)
+        .expect("setting default subscriber failed");
 }
 
