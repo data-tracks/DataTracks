@@ -1,11 +1,11 @@
 use std::fmt::Formatter;
 use std::ops::{Add, Sub};
 
-use crate::value::HoFloat;
+use crate::value::{HoBool, HoFloat, HoString};
 use crate::value::number::Number;
 use crate::value::value::value_display;
 
-#[derive(PartialEq, Clone, Copy)]
+#[derive(PartialEq, Clone, Copy, Debug)]
 pub struct HoInt(pub(crate) i64);
 
 impl Number for HoInt {
@@ -52,6 +52,42 @@ impl Sub<HoFloat> for HoInt {
         HoFloat(self.0 as f64 - other.0)
     }
 }
+
+impl Add<HoBool> for HoInt {
+    type Output = HoInt;
+
+    fn add(self, rhs: HoBool) -> Self::Output {
+        HoInt(self.0 + if rhs.0 { 1 } else { 0 })
+    }
+}
+
+impl Add<Box<HoString>> for HoInt {
+    type Output = HoInt;
+
+    fn add(self, rhs: Box<HoString>) -> Self::Output {
+        panic!("Cannot add string to int")
+    }
+}
+
+impl PartialEq<HoFloat> for HoInt {
+    fn eq(&self, other: &HoFloat) -> bool {
+        self.0 as f64 == other.0
+    }
+}
+
+impl PartialEq<HoBool> for HoInt {
+    fn eq(&self, other: &HoBool) -> bool {
+        self.0 > 0 && other.0
+    }
+}
+
+impl PartialEq<Box<HoString>> for HoInt {
+    fn eq(&self, other: &Box<HoString>) -> bool {
+        self.0 == other.0.parse::<i64>().unwrap()
+    }
+}
+
+
 
 value_display!(HoInt);
 

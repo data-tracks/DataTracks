@@ -1,5 +1,6 @@
 use std::fmt::Formatter;
 use std::ops::{Add, Sub};
+use crate::value::{HoBool, HoString};
 
 use crate::value::int::HoInt;
 use crate::value::number::Number;
@@ -51,6 +52,24 @@ impl Sub<HoInt> for HoFloat {
 
     fn sub(self, other: HoInt) -> HoFloat {
         HoFloat(self.0 - other.0 as f64)
+    }
+}
+
+impl PartialEq<HoInt> for HoFloat {
+    fn eq(&self, other: &HoInt) -> bool {
+        other == self
+    }
+}
+
+impl PartialEq<HoBool> for HoFloat {
+    fn eq(&self, other: &HoBool) -> bool {
+        self.0 > 0.0 && other.0
+    }
+}
+
+impl PartialEq<Box<HoString>> for HoFloat {
+    fn eq(&self, other: &Box<HoString>) -> bool {
+        self.0 == other.0.parse::<f64>().unwrap()
     }
 }
 

@@ -1,20 +1,23 @@
 use std::sync::mpsc;
-use std::sync::mpsc::channel;
+use std::sync::mpsc::{channel, RecvError};
 
 use crate::processing::train::Train;
 
 pub(crate) struct Receiver {
-    sender: mpsc::Sender<Train>,
-    receiver: mpsc::Receiver<Train>,
+    pub tx: mpsc::Sender<Train>,
+    pub rx: mpsc::Receiver<Train>,
 }
 
 impl Receiver {
     pub(crate) fn new() -> Self {
         let (tx, rx) = channel();
         Receiver {
-            sender: tx,
-            receiver: rx,
+            tx,
+            rx,
         }
+    }
+    pub(crate) fn recv(&self) -> Result<Train, RecvError> {
+        self.rx.recv()
     }
 }
 

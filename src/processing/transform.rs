@@ -13,6 +13,6 @@ impl Transform {
     }
 
     pub fn apply(&self, train: Train) -> Train {
-        self.func(train)
+        (self.func)(train)
     }
 }

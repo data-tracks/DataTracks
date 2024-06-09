@@ -7,7 +7,6 @@ use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
 use tower_http::services::ServeDir;
 use tracing::info;
-use tracing_subscriber::util::SubscriberInitExt;
 
 pub fn start() {
     // Create a new Tokio runtime
