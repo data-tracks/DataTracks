@@ -1,14 +1,21 @@
 use std::fmt::Formatter;
 use std::ops::{Add, Sub};
-use crate::value::{HoBool, HoString};
 
+use crate::value::{HoBool, HoString};
 use crate::value::int::HoInt;
 use crate::value::number::Number;
-use crate::value::value::value_display;
+use crate::value::value::{ValType, Valuable, value_display};
+use crate::value::value::ValType::Float;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct HoFloat(pub f64);
 
+
+impl Valuable for HoFloat{
+    fn type_(&self) -> ValType {
+        Float
+    }
+}
 
 impl Number for HoFloat {
     fn float(&self) -> f64 {
@@ -69,7 +76,10 @@ impl PartialEq<HoBool> for HoFloat {
 
 impl PartialEq<Box<HoString>> for HoFloat {
     fn eq(&self, other: &Box<HoString>) -> bool {
-        self.0 == other.0.parse::<f64>().unwrap()
+        match other.0.parse::<f64>(){
+            Ok(f) => f == self.0,
+            Err(_) => false
+        }
     }
 }
 

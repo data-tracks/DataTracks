@@ -9,6 +9,7 @@ dependencies = [
  "askama",
  "axum",
  "ctrlc",
+ "lazy_static",
  "tokio",
  "tower",
  "tower-http",

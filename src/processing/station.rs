@@ -1,43 +1,66 @@
-use std::sync::Arc;
+use std::sync::mpsc;
+use std::sync::mpsc::{channel, Receiver};
 use std::thread;
 use std::thread::JoinHandle;
 
-use crate::processing::receiver::Receiver;
 use crate::processing::sender::Sender;
+use crate::processing::train::Train;
 use crate::processing::transform::Transform;
 use crate::processing::window::Window;
+use crate::util::GLOBAL_ID;
 
-struct Station {
+pub(crate) struct Station {
     id: i64,
-    receiver: Option<Receiver>,
-    sender: Arc<Sender>,
-    window: Arc<Window>,
-    transform: Arc<Transform>,
+    stop: i64,
+    send: mpsc::Sender<Train>,
+    receiver: Option<Receiver<Train>>,
+    sender: Option<Sender>,
+    window: Option<Window>,
+    transform: Transform,
     handlers: Vec<JoinHandle<()>>,
 }
 
 impl Station {
-    fn new(id: i64) -> Self {
+    pub(crate) fn new(stop: i64) -> Self {
+        let (tx, rx) = channel();
         let station = Station {
-            id,
-            sender: Arc::new(Sender::new()),
-            receiver: Some(Receiver::new()),
-            window: Arc::new(Window::default()),
-            transform: Arc::new(Transform::default()),
-            handlers: vec![]
+            id: GLOBAL_ID.new_id(),
+            stop,
+            send: tx,
+            receiver: Some(rx),
+            sender: Some(Sender::new()),
+            window: Some(Window::default()),
+            transform: Transform::default(),
+            handlers: vec![],
         };
         station
     }
 
-    fn operate(&mut self) {
+    pub(crate) fn transform(&mut self, transform: Transform) {
+        self.transform = transform;
+    }
+
+    pub(crate) fn add_out(&mut self, id: i64, out: mpsc::Sender<Train>) {
+        let mut option = self.sender.take();
+        if let Some(ref mut sender) = option {
+            sender.add(id, out);
+        }
+        self.sender = option;
+    }
+
+    pub(crate) fn send(&self, train: Train) {
+        self.send.send(train).unwrap();
+    }
+
+    pub(crate) fn operate(&mut self) {
         let receiver = self.receiver.take().unwrap();
-        let sender = self.sender.clone();
-        let transform = self.transform.clone();
-        let window = self.window.clone();
+        let sender = self.sender.take().unwrap();
+        let transform = self.transform.func.take().unwrap();
+        let window = self.window.take().unwrap();
 
         let handle = thread::spawn(move || {
             while let Ok(train) = receiver.recv() {
-                let transformed = transform.apply(window.apply(train));
+                let transformed = transform(window.apply(train));
                 sender.send(transformed)
             }
         });
@@ -46,28 +69,37 @@ impl Station {
 }
 
 #[cfg(test)]
-mod tests{
+mod tests {
+    use std::sync::mpsc::channel;
+
     use crate::processing::station::Station;
     use crate::processing::train::Train;
     use crate::value::Value;
 
     #[test]
-    fn start_stop_test(){
+    fn start_stop_test() {
         let mut station = Station::new(0);
 
-        let values = vec![Value::string("test")];
+        let values = vec![Value::text("test"), Value::bool(true), Value::float(3.3), Value::null()];
 
+        let (tx, rx) = channel();
+
+        station.add_out(0, tx);
         station.operate();
-        station.sender.send(Train::new(values.clone()));
+        station.send.send(Train::new(values.clone())).unwrap();
 
-        let res = station.sender.;
+        let res = rx.recv();
         match res {
             Ok(t) => {
+                assert_eq!(values.len(), t.values.len());
                 for (i, value) in t.values.iter().enumerate() {
-                    assert_eq!(*value, values[i])
+                    assert_eq!(*value, values[i]);
+                    assert_ne!(Value::text(""), *value)
                 }
-            },
+            }
             Err(..) => assert!(false),
         }
     }
+
+    fn transform_test() {}
 }
