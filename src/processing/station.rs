@@ -15,7 +15,7 @@ pub(crate) struct Station {
     send: mpsc::Sender<Train>,
     receiver: Option<Receiver<Train>>,
     sender: Option<Sender>,
-    window: Option<Window>,
+    window: Window,
     transform: Transform,
     handlers: Vec<JoinHandle<()>>,
 }
@@ -29,7 +29,7 @@ impl Station {
             send: tx,
             receiver: Some(rx),
             sender: Some(Sender::new()),
-            window: Some(Window::default()),
+            window: Window::default(),
             transform: Transform::default(),
             handlers: vec![],
         };
@@ -56,11 +56,11 @@ impl Station {
         let receiver = self.receiver.take().unwrap();
         let sender = self.sender.take().unwrap();
         let transform = self.transform.func.take().unwrap();
-        let window = self.window.take().unwrap();
+        let window = self.window.func.take().unwrap();
 
         let handle = thread::spawn(move || {
             while let Ok(train) = receiver.recv() {
-                let transformed = transform(window.apply(train));
+                let transformed = transform(window(train));
                 sender.send(transformed)
             }
         });

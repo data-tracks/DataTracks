@@ -2,16 +2,20 @@ use crate::value::Value;
 
 #[derive(Clone)]
 pub struct Train {
-    pub course: Vec<i64>,
+    pub last: i64,
     pub values: Vec<Value>,
 }
 
 impl Train {
     pub(crate) fn new(values: Vec<Value>) -> Self {
-        Train { course: vec![], values }
+        Train { last: -1, values }
     }
 
     pub(crate) fn empty() -> Self {
-        Train { course: vec![], values: vec![] }
+        Train::new(vec![])
+    }
+
+    pub(crate) fn visit(&mut self, stop: i64) {
+        self.last = stop;
     }
 }

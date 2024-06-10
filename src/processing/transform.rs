@@ -9,17 +9,17 @@ impl Transform {}
 
 impl Transform {
     pub(crate) fn default() -> Self {
-        Transform::new(Box::new(|f| f))
+        Transform::new(|f| f)
     }
     pub(crate) fn new<F>(func: F) -> Self where F: Fn(Train) -> Train + Send + 'static {
         Transform { func: Some(Box::new(func)) }
     }
 
     pub(crate) fn new_val<F>(func: F) -> Transform where F: Fn(Value) -> Value + Send + Clone + 'static   {
-        Self::new(Box::new( move |t: Train| {
+        Self::new(move |t: Train| {
             let values = t.values.into_iter().map(func.clone()).collect();
             Train::new(values)
-        }))
+        })
     }
 }
 
