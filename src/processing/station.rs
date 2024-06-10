@@ -52,6 +52,10 @@ impl Station {
         self.send.send(train).unwrap();
     }
 
+    pub fn dump(&self) -> &str{
+        ""
+    }
+
     pub(crate) fn operate(&mut self) {
         let receiver = self.receiver.take().unwrap();
         let sender = self.sender.take().unwrap();

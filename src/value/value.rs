@@ -159,31 +159,56 @@ pub trait Valuable {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use crate::value::Value;
 
     #[test]
-    fn list() {
-        let int_a = Value::int(10);
-        let int_b = Value::int(5);
+    fn test_value_equality() {
+        assert_eq!(Value::int(42), Value::int(42));
+        assert_ne!(Value::int(42), Value::int(7));
 
-        let float_a = Value::float(10.5);
-        let float_b = Value::float(5.5);
+        assert_eq!(Value::float(3.14), Value::float(3.14));
+        assert_ne!(Value::float(3.14), Value::float(2.71));
 
-        let string_a = Value::text("test");
+        assert_eq!(Value::bool(true), Value::bool(true));
+        assert_ne!(Value::bool(true), Value::bool(false));
 
-        let bool_a = Value::bool(true);
+        assert_eq!(Value::text("Hello"), Value::text("Hello"));
+        assert_ne!(Value::text("Hello"), Value::text("World"));
 
-        let values: Vec<Value> = vec![
-            int_a,
-            int_b,
-            float_a,
-            float_b,
-            string_a,
-            bool_a,
+        assert_eq!(Value::null(), Value::null());
+    }
+
+    #[test]
+    fn test_value_in_vec() {
+        let values = vec![
+            Value::int(42),
+            Value::float(3.14),
+            Value::bool(true),
+            Value::text("Hello"),
+            Value::null(),
         ];
 
-        for val in &values {
-            println!("{} is value", val);
-        }
+        assert_eq!(values[0], Value::int(42));
+        assert_eq!(values[1], Value::float(3.14));
+        assert_eq!(values[2], Value::bool(true));
+        assert_eq!(values[3], Value::text("Hello"));
+        assert_eq!(values[4], Value::null());
+    }
+
+    #[test]
+    fn test_value_in_map() {
+        let mut map = HashMap::new();
+        map.insert("int", Value::int(42));
+        map.insert("float", Value::float(3.14));
+        map.insert("bool", Value::bool(true));
+        map.insert("text", Value::text("Hello"));
+        map.insert("null", Value::null());
+
+        assert_eq!(map.get("int"), Some(&Value::int(42)));
+        assert_eq!(map.get("float"), Some(&Value::float(3.14)));
+        assert_eq!(map.get("bool"), Some(&Value::bool(true)));
+        assert_eq!(map.get("text"), Some(&Value::text("Hello")));
+        assert_eq!(map.get("null"), Some(&Value::null()));
     }
 }

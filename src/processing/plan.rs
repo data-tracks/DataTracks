@@ -27,4 +27,18 @@ impl Plan {
             destinations: HashMap::new(),
         }
     }
+
+    fn dump(&self) -> String {
+        let mut  dump = "".to_string();
+        let mut lines: Vec<(&i64, &Vec<i64>)> = self.lines.iter().collect();
+        lines.sort_by_key(|&(key, _)| key);
+        for line in lines {
+            for stop in line.1 {
+                dump += &*self.stations[stop].dump()
+            }
+            dump += "\n"
+        }
+
+        dump
+    }
 }
