@@ -1,6 +1,6 @@
 use std::fmt::Formatter;
-use crate::value::{HoFloat, HoInt, HoString};
 
+use crate::value::{HoFloat, HoInt, HoString};
 use crate::value::value::{ValType, Valuable};
 use crate::value::value::value_display;
 
@@ -34,7 +34,10 @@ impl PartialEq for HoBool {
 
 impl PartialEq<Box<HoString>> for HoBool {
     fn eq(&self, other: &Box<HoString>) -> bool {
-        self.0 == other.0.parse::<bool>().unwrap()
+        match other.0.parse::<bool>() {
+            Ok(bo) => self.0 == bo,
+            Err(_) => false
+        }
     }
 }
 

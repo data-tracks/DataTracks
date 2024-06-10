@@ -3,10 +3,17 @@ use std::ops::{Add, Sub};
 
 use crate::value::{HoBool, HoFloat, HoString};
 use crate::value::number::Number;
-use crate::value::value::value_display;
+use crate::value::value::{ValType, Valuable, value_display};
+use crate::value::value::ValType::Integer;
 
 #[derive(PartialEq, Clone, Copy, Debug)]
 pub struct HoInt(pub(crate) i64);
+
+impl Valuable for HoInt{
+    fn type_(&self) -> ValType {
+        Integer
+    }
+}
 
 impl Number for HoInt {
     fn float(&self) -> f64 {
@@ -64,7 +71,7 @@ impl Add<HoBool> for HoInt {
 impl Add<Box<HoString>> for HoInt {
     type Output = HoInt;
 
-    fn add(self, rhs: Box<HoString>) -> Self::Output {
+    fn add(self, _: Box<HoString>) -> Self::Output {
         panic!("Cannot add string to int")
     }
 }
@@ -83,7 +90,10 @@ impl PartialEq<HoBool> for HoInt {
 
 impl PartialEq<Box<HoString>> for HoInt {
     fn eq(&self, other: &Box<HoString>) -> bool {
-        self.0 == other.0.parse::<i64>().unwrap()
+        match other.0.parse::<i64>() {
+            Ok(i) => i == self.0,
+            Err(_) => false
+        }
     }
 }
 
