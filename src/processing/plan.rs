@@ -1,12 +1,15 @@
 use std::collections::HashMap;
 
+use crate::processing::block::Block;
 use crate::processing::destination::Destination;
-use crate::processing::plan::PlanStage::{Block, Num, Transform, Window};
+use crate::processing::plan::PlanStage::{BlockStage, Num, TransformStage, WindowStage};
 use crate::processing::source::Source;
 use crate::processing::station::Station;
+use crate::processing::transform::Transform;
+use crate::processing::window::Window;
 use crate::util::GLOBAL_ID;
 
-struct Plan {
+pub(crate) struct Plan {
     id: i64,
     lines: HashMap<i64, Vec<i64>>,
     stations: HashMap<i64, Station>,
@@ -29,31 +32,37 @@ impl Plan {
         }
     }
 
-    fn dump(&self) -> String {
+    pub(crate) fn dump(&self) -> String {
         let mut dump = "".to_string();
         let mut lines: Vec<(&i64, &Vec<i64>)> = self.lines.iter().collect();
         lines.sort_by_key(|&(key, _)| key);
         for line in lines {
-            for stop in line.1 {
-                dump += &*self.stations[stop].dump()
+            if *line.0 != 0 {
+                dump += "\n"
             }
-            dump += "\n"
+
+            for stop in line.1.iter().enumerate() {
+                if stop.0 != 0 {
+                    dump += "-";
+                }
+                dump += &self.stations[stop.1].dump()
+            }
         }
 
         dump
     }
 
-    pub fn parse(stencil: String) -> Self {
+    pub fn parse(stencil: &str) -> Self {
         let mut plan = Plan::default();
 
         let lines = stencil.split("\n");
-        for line in lines {
-            plan.parse_line(line);
+        for line in lines.enumerate() {
+            plan.parse_line(line.0 as i64, line.1);
         }
 
         plan
     }
-    fn parse_line(&mut self, stencil: &str) {
+    fn parse_line(&mut self, line: i64, stencil: &str) {
         let mut temp = "".to_string();
         let mut stage = Num;
         let mut current: Vec<(PlanStage, String)> = vec![];
@@ -72,22 +81,26 @@ impl Plan {
                         _ => {}
                     };
 
-                    self.parse_stop(&current);
+                    let station = self.parse_stop(current.clone());
+                    self.build(line, station);
                     current.clear();
+                    temp = "".to_string();
                     stage = Num;
                 }
                 '{' | '(' | '[' => {
                     match stage {
-                        Num => current.push((stage, temp.clone())),
+                        Num => {
+                            current.push((stage, temp.clone()));
+                            temp = "".to_string();
+                        }
                         _ => {}
                     };
                     match char {
-                        '[' => stage = Block,
-                        '(' => stage = Window,
-                        '{' => stage = Transform,
+                        '[' => stage = BlockStage,
+                        '(' => stage = WindowStage,
+                        '{' => stage = TransformStage,
                         _ => {}
                     }
-                    stage = Transform;
                 }
                 '}' | ')' | ']' => {
                     current.push((stage, temp.clone()));
@@ -100,17 +113,38 @@ impl Plan {
                 _ => temp.push(char),
             }
         }
+        if !temp.is_empty() {
+            current.push((stage, temp.clone()));
+        }
+        if !current.is_empty() {
+            let station = self.parse_stop(current.clone());
+            self.build(line, station);
+        }
     }
 
-    fn parse_stop<'a>(&mut self, parts: &'a Vec<(PlanStage, String)>) {
+    fn parse_stop(&mut self, parts: Vec<(PlanStage, String)>) -> Station {
+        let mut station: Station = Station::default();
         for stage in parts {
-            match (*stage).0 {
-                Window => {}
-                Transform => {}
-                Block => {}
-                Num => {}
+            match stage.0 {
+                WindowStage => station.window(Window::parse(stage.1)),
+                TransformStage => station.transform(Transform::parse(stage.1).unwrap()),
+                BlockStage => station.block(Block::parse(stage.1)),
+                Num => station.stop(stage.1.parse::<i64>().unwrap()),
             }
         }
+        station
+    }
+    fn build(&mut self, line_num: i64, station: Station) {
+        self.lines.entry(line_num).or_insert_with(Vec::new).push(station.stop);
+        let stop = station.stop;
+        let station = match self.stations.remove(&stop) {
+            None => station,
+            Some(mut other) => {
+                other.merge(station);
+                other
+            },
+        };
+        self.stations.insert(station.stop, station);
     }
 }
 
@@ -118,8 +152,42 @@ struct StartEnd(char, char);
 
 #[derive(Clone, Copy)]
 enum PlanStage {
-    Window,
-    Transform,
-    Block,
+    WindowStage,
+    TransformStage,
+    BlockStage,
     Num,
+}
+
+#[cfg(test)]
+mod test {
+    use crate::processing::plan::Plan;
+
+    #[test]
+    fn parse_line_stop_stencil() {
+        let stencils = vec![
+            "1",
+            "1-2",
+            "1-2-3",
+        ];
+
+        for stencil in stencils {
+            let plan = Plan::parse(stencil);
+            assert_eq!(plan.dump(), stencil)
+        }
+    }
+
+    #[test]
+    fn parse_multiline_stop_stencil() {
+        let stencils = vec![
+            "1-2\
+            3-2",
+            "1-2-3\
+            4-3",
+        ];
+
+        for stencil in stencils {
+            let plan = Plan::parse(stencil);
+            assert_eq!(plan.dump(), stencil)
+        }
+    }
 }

@@ -11,6 +11,7 @@ mod value;
 mod ui;
 mod util;
 mod processing;
+mod language;
 
 fn main() {
     setup_logging();

@@ -1,17 +1,38 @@
 use crate::processing::train::Train;
+use crate::processing::window::Window::Back;
 
-pub struct Window {
+pub enum Window {
+    Back(BackWindow),
+    Interval(IntervalWindow),
+}
+
+
+impl Window {
+    pub(crate) fn default() -> Self {
+        Back(BackWindow::new(|t| t))
+    }
+
+    pub(crate) fn windowing(&self) -> Box<dyn Fn(Train) -> Train + Send + 'static> {
+        todo!()
+    }
+
+    pub(crate) fn parse(_: String) -> Self {
+        Self::default()
+    }
+}
+
+pub struct BackWindow {
     pub func: Option<Box<dyn Fn(Train) -> Train + Send + 'static>>,
 }
 
-impl Window {
+impl BackWindow {
     pub fn new<F>(func: F) -> Self where F: Fn(Train) -> Train + Send + 'static {
-        Window { func: Some(Box::new(func)) }
+        BackWindow { func: Some(Box::new(func)) }
     }
 
-    pub(crate) fn default() -> Self {
-        Window::new(|t| t)
-    }
+}
+
+pub struct IntervalWindow{
 
 }
 
