@@ -109,7 +109,12 @@ mod tests {
     fn start_stop_test() {
         let mut station = Station::new(0);
 
-        let values = vec![Value::text("test"), Value::bool(true), Value::float(3.3), Value::null()];
+        let mut values = vec![Value::text("test"), Value::bool(true), Value::float(3.3), Value::null()];
+
+        for x in 0..1_000_000 {
+            values.push(Value::int(x))
+        }
+
 
         let (tx, rx) = channel();
 
