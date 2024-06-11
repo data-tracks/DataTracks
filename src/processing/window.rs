@@ -13,10 +13,13 @@ impl Window {
     }
 
     pub(crate) fn windowing(&self) -> Box<dyn Fn(Train) -> Train + Send + 'static> {
-        todo!()
+        match self {
+            Back(w) => w.get_window(),
+            Window::Interval(w) => w.get_window()
+        }
     }
 
-    pub(crate) fn parse(_: String) -> Self {
+    pub(crate) fn parse(stencil: String) -> Self {
         Self::default()
     }
 }
@@ -26,14 +29,25 @@ pub struct BackWindow {
 }
 
 impl BackWindow {
+    pub(crate) fn get_window(&self) -> Box<dyn Fn(Train) -> Train + Send> {
+        Box::new(|train: Train| -> Train{ train })
+    }
+}
+
+impl BackWindow {
     pub fn new<F>(func: F) -> Self where F: Fn(Train) -> Train + Send + 'static {
         BackWindow { func: Some(Box::new(func)) }
     }
-
 }
 
-pub struct IntervalWindow{
+pub struct IntervalWindow {}
 
+impl IntervalWindow {
+    pub(crate) fn get_window(&self) -> Box<dyn Fn(Train) -> Train + Send> {
+        Box::new(|train: Train| {
+            return train;
+        })
+    }
 }
 
 #[cfg(test)]

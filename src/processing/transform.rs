@@ -10,7 +10,7 @@ pub enum Transform {
 }
 
 impl Transform {
-    pub fn transformer(&self) -> Box<dyn Fn(Train) -> Train + Send + 'static> {
+    pub fn transformer(&mut self) -> Box<dyn Fn(Train) -> Train + Send + 'static> {
         match self {
             Func(t) => t.get_transform(),
             Transform::LanguageTransform(t) => t.get_transform()
@@ -33,7 +33,7 @@ impl Transform {
         }
     }
 
-    pub fn dump(&self) -> String{
+    pub fn dump(&self) -> String {
         match self {
             Func(f) => f.dump(),
             Transform::LanguageTransform(f) => f.dump()
@@ -42,7 +42,11 @@ impl Transform {
 }
 
 pub trait Transformable {
-    fn get_transform(&self) -> Box<dyn Fn(Train) -> Train + Send + 'static>;
+    fn get_transform(&mut self) -> Box<dyn Fn(Train) -> Train + Send + 'static>{
+        Box::new(|train: Train| {
+            return train;
+        })
+    }
 
     fn dump(&self) -> String;
 
@@ -57,9 +61,6 @@ pub struct LanguageTransform {
 }
 
 impl LanguageTransform {
-    pub(crate) fn get_func(&self) -> Box<dyn Fn(Train) -> Train + Send + 'static> {
-        todo!()
-    }
 
     fn parse(language: Language, query: &str) -> LanguageTransform {
         LanguageTransform { language, query: query.to_string() }
@@ -67,9 +68,6 @@ impl LanguageTransform {
 }
 
 impl Transformable for LanguageTransform {
-    fn get_transform(&self) -> Box<dyn Fn(Train) -> Train + Send + 'static> {
-        self.get_func()
-    }
 
     fn dump(&self) -> String {
         "{".to_owned() + &self.language.name().clone() + "|" + &self.query.clone() + "}"
@@ -94,14 +92,13 @@ impl FuncTransform {
         })
     }
 
-    pub(crate) fn get_func(&self) -> Box<dyn Fn(Train) -> Train + Send + 'static> {
-        todo!()
-    }
+
 }
 
 impl Transformable for FuncTransform {
-    fn get_transform(&self) -> Box<dyn Fn(Train) -> Train + Send + 'static> {
-        self.get_func()
+
+    fn get_transform(&mut self) -> Box<dyn Fn(Train) -> Train + Send + 'static>{
+        self.func.take().unwrap()
     }
 
     fn dump(&self) -> String {
