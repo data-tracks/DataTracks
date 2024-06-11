@@ -76,6 +76,7 @@ impl Station {
 
     pub fn dump(&self) -> String {
         let mut dump = self.stop.to_string();
+        dump += &self.window.dump();
         dump += &self.transform.dump();
         dump
     }
@@ -145,6 +146,7 @@ mod tests {
     fn stencil_window() {
         let stencils = vec![
             "1-2(3s)",
+            "1-2(3s@13:15)"
         ];
 
         for stencil in stencils {
