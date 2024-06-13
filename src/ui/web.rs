@@ -6,7 +6,7 @@ use axum::routing::get;
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
 use tower_http::services::ServeDir;
-use tracing::info;
+use tracing::{debug, info};
 
 pub fn start() {
     // Create a new Tokio runtime
@@ -25,24 +25,35 @@ pub async fn startup() {
     let port = 2666_u16;
     let addr = std::net::SocketAddr::from(([0, 0, 0, 0], port));
     let router = Router::new()
-        .route("/", get(hello))
+        .route("/", get(home))
+        .route("/query", get(query))
         .nest_service(
             "/assets",
             ServeDir::new(format!("{}/web/assets", assets_path.to_str().unwrap())),
         );
     let listener = TcpListener::bind(&addr).await.unwrap();
-    info!("router initialized, now listening on port {}", port);
+    debug!("router initialized, now listening on port {}", port);
+    info!("CoStEn started: http://localhost:{}", port);
     axum::serve(listener, router).await.unwrap();
 }
 
-async fn hello() -> impl IntoResponse {
-    let template = HelloTemplate {};
+async fn query() -> impl IntoResponse {
+    let template = QueryTemplate {};
+    HtmlTemplate(template)
+}
+
+async fn home() -> impl IntoResponse {
+    let template = HomeTemplate {};
     HtmlTemplate(template)
 }
 
 #[derive(Template)]
-#[template(path = "hello.html")]
-struct HelloTemplate;
+#[template(path = "home.html")]
+struct HomeTemplate;
+
+#[derive(Template)]
+#[template(path = "query.html")]
+struct QueryTemplate;
 
 /// A wrapper type that we'll use to encapsulate HTML parsed by askama into valid HTML for axum to serve.
 struct HtmlTemplate<T>(T);
