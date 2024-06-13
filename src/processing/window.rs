@@ -143,9 +143,9 @@ mod test {
 
         let (tx, rx) = channel();
 
-        station.add_out(0, tx);
+        station.add_out(0, tx).unwrap();
         station.operate();
-        station.send(Train::new(values.clone()));
+        station.send(Train::new(values.clone())).unwrap();
 
         let res = rx.recv();
         match res {

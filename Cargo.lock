@@ -11,7 +11,7 @@ dependencies = [
  "chrono",
  "ctrlc",
  "lazy_static",
-    "log",
+ "log",
  "logos",
  "tokio",
  "tower",

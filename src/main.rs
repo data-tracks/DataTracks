@@ -12,6 +12,7 @@ mod ui;
 mod util;
 mod processing;
 mod language;
+mod simulation;
 
 fn main() {
     setup_logging();

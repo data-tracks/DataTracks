@@ -125,6 +125,30 @@ impl PartialEq for Value {
     }
 }
 
+impl Into<Value> for i64 {
+    fn into(self) -> Value {
+        Value::int(self)
+    }
+}
+
+impl Into<Value> for f64 {
+    fn into(self) -> Value {
+        Value::float(self)
+    }
+}
+
+impl Into<Value> for &str {
+    fn into(self) -> Value {
+        Value::text(self)
+    }
+}
+
+impl Into<Value> for bool {
+    fn into(self) -> Value {
+        Value::bool(self)
+    }
+}
+
 
 impl Add for &Value {
     type Output = Value;
@@ -211,5 +235,15 @@ mod tests {
         assert_eq!(map.get("bool"), Some(&Value::bool(true)));
         assert_eq!(map.get("text"), Some(&Value::text("Hello")));
         assert_eq!(map.get("null"), Some(&Value::null()));
+    }
+
+    #[test]
+    fn into() {
+        let raws: Vec<Value> = vec![3.into(), 5.into(), 3.3.into(), "test".into(), false.into()];
+        let values = vec![Value::int(3), Value::int(5), Value::float(3.3), Value::text("test"), Value::bool(false)];
+
+        for (i, raw) in raws.iter().enumerate() {
+            assert_eq!(raw, &values[i])
+        }
     }
 }

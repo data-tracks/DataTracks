@@ -16,6 +16,7 @@ pub(crate) struct Plan {
     destinations: HashMap<i64, Box<dyn Destination>>,
 }
 
+
 impl Plan {
     pub(crate) fn default() -> Self {
         Plan::new(GLOBAL_ID.new_id())
@@ -28,6 +29,12 @@ impl Plan {
             stations: HashMap::new(),
             sources: HashMap::new(),
             destinations: HashMap::new(),
+        }
+    }
+
+    pub(crate) fn halt(&mut self) {
+        for (_, mut station) in &mut self.stations {
+            station.close();
         }
     }
 
@@ -51,7 +58,48 @@ impl Plan {
         dump
     }
 
-    pub fn parse(stencil: &str) -> Self {
+    pub(crate) fn operate(&mut self) {
+        self.connect_stops().unwrap();
+        self.connect_destinations().unwrap();
+        self.connect_sources().unwrap();
+        for station in &mut self.stations {
+            station.1.operate();
+        }
+
+        for destination in &mut self.destinations {
+            destination.1.operate();
+        }
+
+        for source in &mut self.sources {
+            source.1.operate();
+        }
+    }
+
+    fn connect_stops(&mut self) -> Result<(), String> {
+        for (line, stops) in &self.lines {
+            let mut stops_iter = stops.iter();
+
+            if let Some(first) = stops_iter.next() {
+                let mut last_station = first.clone();
+
+                for num in stops_iter {
+                    let next_station = self.stations.get_mut(num).ok_or("Could not find target station".to_string())?;
+                    let next_stop_id = next_station.stop.clone();
+
+
+                    let send = next_station.get_in();
+                    let last = self.stations.get_mut(&last_station).ok_or("Could not find target station".to_string())?;
+                    last.add_out(*line, send)?;
+
+                    last_station = next_stop_id;
+                }
+            }
+        }
+        Ok(())
+    }
+
+
+    pub(crate) fn parse(stencil: &str) -> Self {
         let mut plan = Plan::default();
 
         let lines = stencil.split("\n");
@@ -154,7 +202,28 @@ impl Plan {
         };
         self.stations.insert(station.stop, station);
     }
+    fn connect_destinations(&mut self) -> Result<(), String> {
+        for destination in &mut self.destinations {
+            let tx = destination.1.get_in();
+            let target = destination.1.get_stop();
+            if let Some(station) = self.stations.get_mut(&target) {
+                station.add_out(-1, tx)?;
+            }
+        }
+        Ok(())
+    }
+    fn connect_sources(&mut self) -> Result<(), String> {
+        for mut source in &mut self.sources {
+            let target = source.1.get_stop();
+            if let Some(station) = self.stations.get_mut(&target) {
+                let tx = station.get_in();
+                source.1.add_out(station.stop, tx)
+            }
+        }
+        Ok(())
+    }
 }
+
 
 struct StartEnd(char, char);
 
@@ -197,5 +266,102 @@ mod test {
             let plan = Plan::parse(stencil);
             assert_eq!(plan.dump(), stencil)
         }
+    }
+
+    #[test]
+    fn stencil_transform() {
+        let stencils = vec![
+            "1-2{sql|SELECT * FROM $1}",
+        ];
+
+        for stencil in stencils {
+            let plan = Plan::parse(stencil);
+            assert_eq!(plan.dump(), stencil)
+        }
+    }
+
+    #[test]
+    fn stencil_window() {
+        let stencils = vec![
+            "1-2(3s)",
+            "1-2(3s@13:15)",
+        ];
+
+        for stencil in stencils {
+            let plan = Plan::parse(stencil);
+            assert_eq!(plan.dump(), stencil)
+        }
+    }
+
+    #[test]
+    fn stencil_block() {
+        let stencils = vec![
+            "1-2-3\n4-|2",
+            "1-|2-3\n4-2",
+        ];
+
+        for stencil in stencils {
+            let plan = Plan::parse(stencil);
+            assert_eq!(plan.dump(), stencil)
+        }
+    }
+}
+
+#[cfg(test)]
+mod dummy {
+    use std::sync::mpsc;
+    use std::sync::mpsc::channel;
+
+    use crate::processing::plan::Plan;
+    use crate::processing::source::Source;
+    use crate::processing::station::Station;
+    use crate::processing::train::Train;
+    use crate::value::Value;
+
+    struct DummySource {}
+
+    impl Source for DummySource {
+        fn operate(&self) {
+            todo!()
+        }
+
+        fn add_out(&mut self, id: i64, out: mpsc::Sender<Train>) {
+            todo!()
+        }
+
+        fn get_stop(&self) -> i64 {
+            todo!()
+        }
+    }
+
+    #[test]
+    fn station_plan_train() {
+        let values = vec![3.into(), "test".into()];
+
+        let mut plan = Plan::default();
+        let mut first = Station::new(0);
+        let input = first.get_in();
+
+        let (output_tx, output_rx) = channel();
+
+        let mut second = Station::new(1);
+        second.add_out(0, output_tx).unwrap();
+
+        plan.build(0, first);
+        plan.build(0, second);
+
+        plan.operate();
+
+        input.send(Train::new(values.clone())).unwrap();
+
+        let res = output_rx.recv().unwrap();
+        assert_eq!(res.values, values);
+        assert_ne!(res.values, vec![Value::null()]);
+
+        assert!(output_rx.try_recv().is_err());
+
+
+        drop(input); // close the channel
+        plan.halt()
     }
 }
