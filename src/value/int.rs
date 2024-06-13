@@ -9,7 +9,7 @@ use crate::value::value::ValType::Integer;
 #[derive(PartialEq, Clone, Copy, Debug)]
 pub struct HoInt(pub(crate) i64);
 
-impl Valuable for HoInt{
+impl Valuable for HoInt {
     fn type_(&self) -> ValType {
         Integer
     }

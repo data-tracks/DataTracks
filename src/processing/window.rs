@@ -54,7 +54,6 @@ impl BackWindow {
     }
 
 
-
     pub(crate) fn get_window(&self) -> Box<dyn Fn(Train) -> Train + Send> {
         Box::new(|train: Train| -> Train{ train })
     }
@@ -93,21 +92,21 @@ fn parse_time_unit(time: String) -> TimeUnit {
 pub struct IntervalWindow {
     time: i64,
     time_unit: TimeUnit,
-    start: NaiveTime
+    start: NaiveTime,
 }
 
 impl IntervalWindow {
     fn new(time: i64, time_unit: TimeUnit, start: NaiveTime) -> IntervalWindow {
-        IntervalWindow{time, time_unit, start}
+        IntervalWindow { time, time_unit, start }
     }
     pub(crate) fn dump(&self) -> String {
-        "(".to_string() + &self.time.to_string() + self.time_unit.into() + "@" + &self.start.format("%H:%M").to_string()+ ")"
+        "(".to_string() + &self.time.to_string() + self.time_unit.into() + "@" + &self.start.format("%H:%M").to_string() + ")"
     }
     fn parse(input: String) -> IntervalWindow {
         match input.split_once('@') {
             None => todo!(),
             Some((interval, start)) => {
-                let(time, time_unit) = parse_interval(interval);
+                let (time, time_unit) = parse_interval(interval);
                 let start = parse_time(start).unwrap();
 
                 IntervalWindow::new(time, time_unit, start)

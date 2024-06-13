@@ -1,6 +1,6 @@
 use std::fmt::Formatter;
-use crate::value::{HoBool, HoFloat, HoInt};
 
+use crate::value::{HoBool, HoFloat, HoInt};
 use crate::value::value::{ValType, Valuable};
 use crate::value::value::ValType::Text;
 use crate::value::value::value_display;
@@ -8,9 +8,9 @@ use crate::value::value::value_display;
 #[derive(Debug, PartialEq, Clone)]
 pub struct HoString(pub String);
 
-impl Valuable for HoString{
+impl Valuable for HoString {
     fn type_(&self) -> ValType {
-        return Text
+        return Text;
     }
 }
 

@@ -1,5 +1,7 @@
 use std::vec;
+
 use logos::{Lexer, Logos};
+
 use crate::language::sql::buffer::BufferedLexer;
 use crate::language::sql::lex::Token::{As, Comma, From, GroupBy, Identifier, Semi, Star, Text, Where};
 use crate::language::sql::statement::{Sql, SqlIdentifier, SqlSelect, SqlSymbol, Statement};

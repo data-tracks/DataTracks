@@ -9,7 +9,6 @@ pub struct BufferedLexer<'source> {
 }
 
 impl<'source> BufferedLexer<'source> {
-
     pub(crate) fn consume_buffer(&mut self) -> Result<Token, String> {
         match self.buffer.pop() {
             None => Err("Not enough tokens".to_string()),

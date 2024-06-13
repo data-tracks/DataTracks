@@ -11,7 +11,7 @@ use crate::value::value::ValType::Float;
 pub struct HoFloat(pub f64);
 
 
-impl Valuable for HoFloat{
+impl Valuable for HoFloat {
     fn type_(&self) -> ValType {
         Float
     }
@@ -76,7 +76,7 @@ impl PartialEq<HoBool> for HoFloat {
 
 impl PartialEq<Box<HoString>> for HoFloat {
     fn eq(&self, other: &Box<HoString>) -> bool {
-        match other.0.parse::<f64>(){
+        match other.0.parse::<f64>() {
             Ok(f) => f == self.0,
             Err(_) => false
         }

@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::mpsc;
+
 use crate::processing::train::Train;
 
 pub(crate) struct Sender {
@@ -11,7 +12,7 @@ impl Sender {
         Sender { outs: HashMap::new() }
     }
 
-    pub(crate) fn add(&mut self, id: i64, sender: mpsc::Sender<Train>){
+    pub(crate) fn add(&mut self, id: i64, sender: mpsc::Sender<Train>) {
         self.outs.insert(id, sender);
     }
 

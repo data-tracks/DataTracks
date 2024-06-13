@@ -41,7 +41,7 @@ pub(crate) struct SqlSymbol {
 
 impl SqlSymbol {
     pub(crate) fn new(symbol: &str) -> SqlSymbol {
-        SqlSymbol{symbol: symbol.to_string()}
+        SqlSymbol { symbol: symbol.to_string() }
     }
 }
 

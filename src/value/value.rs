@@ -1,9 +1,10 @@
 use std::cmp::PartialEq;
-use std::fmt::{Display};
+use std::fmt::Display;
 use std::fmt::Formatter;
 use std::ops::Add;
 
 use crate::value::{HoBool, HoFloat, HoInt};
+use crate::value::null::HoNull;
 use crate::value::string::HoString;
 use crate::value::Value::{Bool, Float, Int, Null, Text};
 
@@ -12,7 +13,7 @@ pub enum ValType {
     Float,
     Text,
     Bool,
-    Null
+    Null,
 }
 
 #[derive(Clone, Debug)]
@@ -21,7 +22,7 @@ pub enum Value {
     Float(HoFloat),
     Bool(HoBool),
     Text(Box<HoString>),
-    Null(HoNull)
+    Null(HoNull),
 }
 
 
@@ -42,7 +43,7 @@ impl Value {
     }
 
     pub fn null() -> Value {
-        Null(HoNull{})
+        Null(HoNull {})
     }
 }
 
@@ -58,7 +59,6 @@ macro_rules! value_display {
 }
 
 pub(crate) use value_display;
-use crate::value::null::HoNull;
 
 impl Display for Value {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -160,6 +160,7 @@ pub trait Valuable {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+
     use crate::value::Value;
 
     #[test]

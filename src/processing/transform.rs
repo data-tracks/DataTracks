@@ -42,7 +42,7 @@ impl Transform {
 }
 
 pub trait Transformable {
-    fn get_transform(&mut self) -> Box<dyn Fn(Train) -> Train + Send + 'static>{
+    fn get_transform(&mut self) -> Box<dyn Fn(Train) -> Train + Send + 'static> {
         Box::new(|train: Train| {
             return train;
         })
@@ -61,14 +61,12 @@ pub struct LanguageTransform {
 }
 
 impl LanguageTransform {
-
     fn parse(language: Language, query: &str) -> LanguageTransform {
         LanguageTransform { language, query: query.to_string() }
     }
 }
 
 impl Transformable for LanguageTransform {
-
     fn dump(&self) -> String {
         "{".to_owned() + &self.language.name().clone() + "|" + &self.query.clone() + "}"
     }
@@ -91,13 +89,10 @@ impl FuncTransform {
             Train::new(values)
         })
     }
-
-
 }
 
 impl Transformable for FuncTransform {
-
-    fn get_transform(&mut self) -> Box<dyn Fn(Train) -> Train + Send + 'static>{
+    fn get_transform(&mut self) -> Box<dyn Fn(Train) -> Train + Send + 'static> {
         self.func.take().unwrap()
     }
 
