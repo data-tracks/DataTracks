@@ -1,4 +1,5 @@
 use logos::Lexer;
+
 use crate::language::sql::lex::Token;
 
 pub struct BufferedLexer<'source> {
@@ -7,8 +8,18 @@ pub struct BufferedLexer<'source> {
     error: Option<()>,
 }
 
-
 impl<'source> BufferedLexer<'source> {
+
+    pub(crate) fn consume_buffer(&mut self) -> Result<Token, String> {
+        match self.buffer.pop() {
+            None => Err("Not enough tokens".to_string()),
+            Some(t) => Ok(t)
+        }
+    }
+    pub(crate) fn buffer(&mut self, token: Token) {
+        self.buffer.push(token);
+    }
+
     pub fn next(&mut self) -> Result<Token, String> {
         match self.lexer.next() {
             None => Err("No more values".to_string()),

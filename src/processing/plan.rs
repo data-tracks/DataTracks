@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use crate::processing::block::Block;
 use crate::processing::destination::Destination;
 use crate::processing::plan::PlanStage::{BlockStage, Num, TransformStage, WindowStage};
 use crate::processing::source::Source;
@@ -45,7 +44,7 @@ impl Plan {
                 if stop.0 != 0 {
                     dump += "-";
                 }
-                dump += &self.stations[stop.1].dump()
+                dump += &self.stations[stop.1].dump(line.0)
             }
         }
 
@@ -69,19 +68,19 @@ impl Plan {
         let mut is_text = false;
 
         for char in stencil.chars() {
+            if is_text && char != '"' {
+                temp.push(char);
+                continue;
+            }
+
             match char {
                 '-' => {
-                    if is_text {
-                        temp.push(char);
-                        return;
-                    }
-
                     match stage {
                         Num => current.push((stage, temp.clone())),
                         _ => {}
                     };
 
-                    let station = self.parse_stop(current.clone());
+                    let station = self.parse_stop(line, current.clone());
                     self.build(line, station);
                     current.clear();
                     temp = "".to_string();
@@ -110,25 +109,34 @@ impl Plan {
                     is_text = !is_text;
                     temp.push(char);
                 }
-                _ => temp.push(char),
+                _ => {
+                    if let Num = stage {
+                        if char == '|' {
+                            current.push((BlockStage, "".to_string()));
+                            continue;
+                        }
+                    }
+
+                    temp.push(char);
+                }
             }
         }
         if !temp.is_empty() {
             current.push((stage, temp.clone()));
         }
         if !current.is_empty() {
-            let station = self.parse_stop(current.clone());
+            let station = self.parse_stop(line, current.clone());
             self.build(line, station);
         }
     }
 
-    fn parse_stop(&mut self, parts: Vec<(PlanStage, String)>) -> Station {
+    fn parse_stop(&mut self, line: i64, parts: Vec<(PlanStage, String)>) -> Station {
         let mut station: Station = Station::default();
         for stage in parts {
             match stage.0 {
                 WindowStage => station.window(Window::parse(stage.1)),
                 TransformStage => station.transform(Transform::parse(stage.1).unwrap()),
-                BlockStage => station.block(Block::parse(stage.1)),
+                BlockStage => station.block(line),
                 Num => station.stop(stage.1.parse::<i64>().unwrap()),
             }
         }
@@ -142,7 +150,7 @@ impl Plan {
             Some(mut other) => {
                 other.merge(station);
                 other
-            },
+            }
         };
         self.stations.insert(station.stop, station);
     }

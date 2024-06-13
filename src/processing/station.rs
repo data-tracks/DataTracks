@@ -2,7 +2,6 @@ use std::sync::mpsc;
 use std::sync::mpsc::{channel, Receiver};
 use std::thread;
 use std::thread::JoinHandle;
-use crate::processing::block::Block;
 
 use crate::processing::sender::Sender;
 use crate::processing::train::Train;
@@ -18,7 +17,7 @@ pub(crate) struct Station {
     sender: Option<Sender>,
     window: Window,
     transform: Transform,
-    block: Block,
+    block: Vec<i64>,
     handlers: Vec<JoinHandle<()>>,
 }
 
@@ -37,13 +36,15 @@ impl Station {
             sender: Some(Sender::new()),
             window: Window::default(),
             transform: Transform::default(),
-            block: Block::default(),
+            block: vec![],
             handlers: vec![],
         };
         station
     }
     pub(crate) fn merge(&mut self, other: Station) {
-        self.block = other.block;
+        for line in other.block {
+            self.block.push(line)
+        }
     }
 
     pub(crate) fn stop(&mut self, stop: i64) {
@@ -58,8 +59,8 @@ impl Station {
         self.transform = transform;
     }
 
-    pub(crate) fn block(&mut self, block: Block) {
-        self.block = block;
+    pub(crate) fn block(&mut self, line: i64) {
+        self.block.push(line);
     }
 
     pub(crate) fn add_out(&mut self, id: i64, out: mpsc::Sender<Train>) {
@@ -74,8 +75,12 @@ impl Station {
         self.send.send(train).unwrap();
     }
 
-    pub fn dump(&self) -> String {
-        let mut dump = self.stop.to_string();
+    pub fn dump(&self, line: &i64) -> String {
+        let mut dump = "".to_string();
+        if self.block.contains(line) {
+            dump += "|";
+        }
+        dump += &self.stop.to_string();
         dump += &self.window.dump();
         dump += &self.transform.dump();
         dump
@@ -151,7 +156,20 @@ mod tests {
     fn stencil_window() {
         let stencils = vec![
             "1-2(3s)",
-            "1-2(3s@13:15)"
+            "1-2(3s@13:15)",
+        ];
+
+        for stencil in stencils {
+            let plan = crate::processing::plan::Plan::parse(stencil);
+            assert_eq!(plan.dump(), stencil)
+        }
+    }
+
+    #[test]
+    fn stencil_block() {
+        let stencils = vec![
+            "1-2-3\n4-|2",
+            "1-|2-3\n4-2",
         ];
 
         for stencil in stencils {

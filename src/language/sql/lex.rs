@@ -1,14 +1,15 @@
-use logos::{Lexer, Logos, Source};
+use std::vec;
+use logos::{Lexer, Logos};
 use crate::language::sql::buffer::BufferedLexer;
-use crate::language::sql::lex::Token::{From, GroupBy, Semi, Where};
-use crate::language::sql::statement::{Sql, SqlSelect, Statement};
+use crate::language::sql::lex::Token::{As, Comma, From, GroupBy, Identifier, Semi, Star, Text, Where};
+use crate::language::sql::statement::{Sql, SqlIdentifier, SqlSelect, SqlSymbol, Statement};
 
 #[derive(Logos, Debug, PartialEq, Clone)]
 #[logos(skip r"[ \t\n\f]+")] // Ignore this regex pattern between tokens
 pub(crate) enum Token {
-    #[regex(r"[a-zA-Z_$][a-zA-Z_$0-9]*", | lex | trim_quotes(lex.slice()))]
+    #[regex(r"[a-zA-Z_$][a-zA-Z_$0-9]*", | lex | lex.slice().to_owned())]
     Identifier(String),
-    #[regex(r#"["|'][a-zA-Z]+["|']"#, | lex | lex.slice().to_owned())]
+    #[regex(r#"["|'][a-zA-Z]+["|']"#, | lex | trim_quotes(lex.slice()))]
     Text(String),
     #[token("false", | _ | false)]
     #[token("true", | _ | true)]
@@ -64,31 +65,68 @@ fn parse_query<'source>(lexer: &'source mut Lexer<'source, Token>) -> Result<Box
     let tok = buf.next()?;
     match tok {
         Token::Select => parse_select(&mut buf),
-        Token::Insert => parse_insert(&mut buf),
         _ => Err("Statement is not supported.".to_string())
     }
 }
 
-fn parse_insert(lexer: &mut BufferedLexer) -> Result<Box<dyn Statement>, String> {
-    todo!()
-}
-
 fn parse_select(lexer: &mut BufferedLexer) -> Result<Box<dyn Statement>, String> {
-    let columns = vec![];
-    while let Ok(tok) = lexer.next() {
-        if tok == From {
-            break;
+    let fields = parse_expressions(lexer, &vec![From])?;
+    let froms = parse_expressions(lexer, &vec![Semi, Where, GroupBy])?;
+
+    Ok(Box::new(SqlSelect::new(fields, froms)))
+}
+
+fn parse_expressions(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> Result<Vec<Box<dyn Sql>>, String> {
+    let mut expressions = vec![];
+    let mut stops = stops.clone();
+    stops.push(Comma);
+    expressions.push(parse_expression(lexer, &stops));
+
+    let tok = lexer.consume_buffer();
+    if let Ok(t) = tok { // ok to be empty, if no more tokens
+        if t == Comma {
+            expressions.append(&mut parse_expressions(lexer, &stops)?)
         }
     }
-    let froms = vec![];
+    Ok(expressions)
+}
+
+fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> Box<dyn Sql> {
+    let mut expression = vec![];
+    let mut is_alias = false;
     while let Ok(tok) = lexer.next() {
-        if vec![Semi, Where, GroupBy].contains(&tok){
+        if stops.contains(&tok) {
+            lexer.buffer(tok);
+            return Box::new(SqlIdentifier::new(expression, None));
+        }
+
+        if tok == Star {
+            return Box::new(SqlSymbol::new("*"));
+        }
+
+        if tok == As {
+            is_alias = true;
             break;
         }
+
+        match tok {
+            Identifier(i) => {
+                expression.push(i)
+            }
+            Text(t) => {
+                expression.push(t)
+            }
+            _ => {}
+        }
+    }
+    let mut alias = None;
+    if is_alias {
+        alias = Some(parse_expression(lexer, stops));
     }
 
-    Ok(Box::new(SqlSelect::new(columns, froms, )))
+    Box::new(SqlIdentifier::new(expression, alias))
 }
+
 
 fn crate_lexer(query: &str) -> Lexer<Token> {
     Token::lexer(query)
@@ -108,33 +146,43 @@ mod test {
     use crate::language::sql::lex::parse;
 
     #[test]
-    fn default_test() {
-        let queries = vec![
-            "SELECT * FROM $0",
-            "SELECT name, age FROM $0",
-            "SELECT name AS n, age FROM $0",
-            "Select 'name' AS n, age FROM $0",
-            "Select \"name\" AS n, age FROM $0",
-        ];
-
-        for query in queries {
-            let result = parse(query.to_string());
-            assert!(matches!(result, Ok(_)), "Expected Ok, but got {}", result.err().unwrap())
-        }
+    fn test_star() {
+        test_query("SELECT * FROM $0");
     }
 
     #[test]
-    fn parse_dump_test() {
-        let queries = vec![
-            "SELECT * FROM $0",
-            "SELECT name, age FROM $0",
-            "SELECT name AS n, age FROM $0",
-            "Select 'name' AS n, age FROM $0",
-            "Select \"name\" AS n, age FROM $0",
-        ];
+    fn test_single() {
+        test_query("SELECT name FROM $0");
+    }
 
-        for query in queries {
-            let result = parse(query.to_string());
-        }
+    #[test]
+    fn test_list() {
+        test_query("SELECT name, age FROM $0");
+    }
+
+    #[test]
+    fn test_as() {
+        test_query("SELECT name AS n, age FROM $0");
+    }
+
+    #[test]
+    fn test_as_mixed() {
+        test_query_diff("Select 'name' AS n, age FROM $0", "SELECT name AS n, age FROM $0");
+    }
+
+    #[test]
+    fn test_as_quote() {
+        test_query_diff("Select \"name\" AS n, age FROM $0", "SELECT name AS n, age FROM $0");
+    }
+
+    fn test_query(query: &str) {
+        test_query_diff(query, query)
+    }
+
+    fn test_query_diff(query: &str, expected: &str) {
+        let result = parse(query.to_string());
+        assert!(matches!(result, Ok(_)), "Expected Ok, but got {:?}", result.err().unwrap());
+        let parsed = result.ok().unwrap();
+        assert_eq!(parsed.dump(), expected, "Expected {:?}, but got {:?}", expected, parsed.dump())
     }
 }
