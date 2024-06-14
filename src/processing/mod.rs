@@ -1,3 +1,5 @@
+pub use train::Train;
+
 mod station;
 mod window;
 mod transform;

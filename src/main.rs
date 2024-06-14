@@ -13,6 +13,7 @@ mod util;
 mod processing;
 mod language;
 mod simulation;
+mod algebra;
 
 fn main() {
     setup_logging();
