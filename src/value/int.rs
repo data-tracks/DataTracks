@@ -6,7 +6,7 @@ use crate::value::number::Number;
 use crate::value::value::{ValType, Valuable, value_display};
 use crate::value::value::ValType::Integer;
 
-#[derive(PartialEq, Clone, Copy, Debug)]
+#[derive(Eq, Hash, PartialEq, Clone, Copy, Debug)]
 pub struct HoInt(pub(crate) i64);
 
 impl Valuable for HoInt {
@@ -47,7 +47,7 @@ impl Add<HoFloat> for HoInt {
     type Output = HoFloat;
 
     fn add(self, other: HoFloat) -> HoFloat {
-        HoFloat(self.0 as f64 + other.0)
+        HoFloat(self.0 + other.0, other.1)
     }
 }
 
@@ -56,7 +56,7 @@ impl Sub<HoFloat> for HoInt {
     type Output = HoFloat;
 
     fn sub(self, other: HoFloat) -> HoFloat {
-        HoFloat(self.0 as f64 - other.0)
+        HoFloat(self.0 - other.0, other.1)
     }
 }
 
@@ -78,7 +78,7 @@ impl Add<Box<HoString>> for HoInt {
 
 impl PartialEq<HoFloat> for HoInt {
     fn eq(&self, other: &HoFloat) -> bool {
-        self.0 as f64 == other.0
+        self.0 == other.0
     }
 }
 
@@ -96,8 +96,6 @@ impl PartialEq<Box<HoString>> for HoInt {
         }
     }
 }
-
-
 
 value_display!(HoInt);
 

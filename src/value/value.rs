@@ -1,13 +1,15 @@
 use std::cmp::PartialEq;
+use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::ops::Add;
 
 use crate::value::{HoBool, HoFloat, HoInt};
+use crate::value::map::HoMap;
 use crate::value::null::HoNull;
 use crate::value::string::HoString;
 use crate::value::tuple::HoTuple;
-use crate::value::Value::{Bool, Float, Int, Null, Text, Tuple};
+use crate::value::Value::{Bool, Float, Int, Map, Null, Text, Tuple};
 
 pub enum ValType {
     Integer,
@@ -15,17 +17,19 @@ pub enum ValType {
     Text,
     Bool,
     Tuple,
+    Map,
     Null,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Eq, Hash, Clone, Debug)]
 pub enum Value {
     Int(HoInt),
     Float(HoFloat),
     Bool(HoBool),
     Text(Box<HoString>),
-    Null(HoNull),
     Tuple(HoTuple),
+    Map(HoMap),
+    Null(HoNull),
 }
 
 
@@ -38,7 +42,7 @@ impl Value {
     }
 
     pub fn float(float: f64) -> Value {
-        Float(HoFloat(float))
+        Float(HoFloat::new(float))
     }
 
     pub fn bool(bool: bool) -> Value {
@@ -47,6 +51,10 @@ impl Value {
 
     pub fn tuple(tuple: Vec<Value>) -> Value {
         Tuple(HoTuple::new(tuple))
+    }
+
+    pub fn map(map: HashMap<Value, Value>) -> Value {
+        Map(HoMap::new(map))
     }
 
     pub fn null() -> Value {
@@ -76,6 +84,7 @@ impl Display for Value {
             Bool(v) => v.fmt(f),
             Tuple(v) => v.fmt(f),
             Null(v) => v.fmt(f),
+            Map(v) => v.fmt(f)
         }
     }
 }
@@ -90,8 +99,7 @@ impl PartialEq for Value {
                     Float(b) => a == b,
                     Bool(b) => a == b,
                     Text(b) => a == b,
-                    Tuple(_) => false,
-                    Null(_) => false
+                    _ => false
                 }
             }
             Float(a) => {
@@ -100,8 +108,7 @@ impl PartialEq for Value {
                     Float(b) => a == b,
                     Bool(b) => a == b,
                     Text(b) => a == b,
-                    Tuple(_) => false,
-                    Null(_) => false
+                    _ => false
                 }
             }
             Bool(a) => {
@@ -110,8 +117,7 @@ impl PartialEq for Value {
                     Float(b) => a == b,
                     Bool(b) => a == b,
                     Text(b) => a == b,
-                    Tuple(_) => false,
-                    Null(_) => false
+                    _ => false
                 }
             }
             Text(a) => {
@@ -120,28 +126,25 @@ impl PartialEq for Value {
                     Float(b) => a == b,
                     Bool(b) => a == b,
                     Text(b) => a == b,
-                    Tuple(_) => false,
-                    Null(_) => false,
+                    _ => false
                 }
             }
             Null(_) => {
                 match other {
-                    Int(_) => false,
-                    Float(_) => false,
-                    Bool(_) => false,
-                    Text(_) => false,
-                    Tuple(_) => false,
-                    Null(_) => true
+                    Null(_) => true,
+                    _ => false
                 }
             }
             Tuple(a) => {
                 match other {
-                    Int(_) => false,
-                    Float(_) => false,
-                    Bool(_) => false,
-                    Text(_) => false,
-                    Null(_) => false,
-                    Tuple(b) => b == a
+                    Tuple(b) => b == a,
+                    _ => false
+                }
+            }
+            Map(a) => {
+                match other {
+                    Map(b) => b == a,
+                    _ => false
                 }
             }
         }

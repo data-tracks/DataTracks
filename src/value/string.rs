@@ -5,7 +5,7 @@ use crate::value::value::{ValType, Valuable};
 use crate::value::value::ValType::Text;
 use crate::value::value::value_display;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Eq, Hash, Debug, PartialEq, Clone)]
 pub struct HoString(pub String);
 
 impl Valuable for HoString {

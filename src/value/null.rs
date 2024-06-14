@@ -2,7 +2,7 @@ use std::fmt::{Display, Formatter};
 
 use crate::value::value::{ValType, Valuable};
 
-#[derive(Clone, Debug)]
+#[derive(Eq, Hash, Clone, Debug, PartialEq)]
 pub struct HoNull {}
 
 impl Valuable for HoNull {

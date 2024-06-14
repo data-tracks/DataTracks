@@ -4,7 +4,7 @@ use crate::value::{HoFloat, HoInt, HoString};
 use crate::value::value::{ValType, Valuable};
 use crate::value::value::value_display;
 
-#[derive(Clone, Debug)]
+#[derive(Eq, Hash, Clone, Debug)]
 pub struct HoBool(pub bool);
 
 impl Valuable for HoBool {

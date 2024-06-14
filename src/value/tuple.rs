@@ -3,7 +3,7 @@ use std::fmt::Formatter;
 use crate::value::Value;
 use crate::value::value::{ValType, Valuable};
 
-#[derive(Clone, Debug)]
+#[derive(Eq, Hash, Clone, Debug)]
 pub struct HoTuple(Vec<Value>);
 
 impl HoTuple {
