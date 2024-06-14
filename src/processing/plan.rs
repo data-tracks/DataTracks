@@ -390,7 +390,7 @@ mod dummy {
 
     #[test]
     fn station_plan_split_train() {
-        let values = vec![3.into(), "test".into()];
+        let values = vec![3.into(), "test".into(), true.into(), Value::null()];
 
         let mut plan = Plan::default();
         let mut first = Station::new(0);

@@ -11,3 +11,4 @@ mod string;
 mod value;
 mod bool;
 mod null;
+mod tuple;

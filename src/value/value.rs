@@ -6,13 +6,15 @@ use std::ops::Add;
 use crate::value::{HoBool, HoFloat, HoInt};
 use crate::value::null::HoNull;
 use crate::value::string::HoString;
-use crate::value::Value::{Bool, Float, Int, Null, Text};
+use crate::value::tuple::HoTuple;
+use crate::value::Value::{Bool, Float, Int, Null, Text, Tuple};
 
 pub enum ValType {
     Integer,
     Float,
     Text,
     Bool,
+    Tuple,
     Null,
 }
 
@@ -23,6 +25,7 @@ pub enum Value {
     Bool(HoBool),
     Text(Box<HoString>),
     Null(HoNull),
+    Tuple(HoTuple),
 }
 
 
@@ -40,6 +43,10 @@ impl Value {
 
     pub fn bool(bool: bool) -> Value {
         Bool(HoBool(bool))
+    }
+
+    pub fn tuple(tuple: Vec<Value>) -> Value {
+        Tuple(HoTuple::new(tuple))
     }
 
     pub fn null() -> Value {
@@ -67,6 +74,7 @@ impl Display for Value {
             Float(v) => v.fmt(f),
             Text(v) => v.fmt(f),
             Bool(v) => v.fmt(f),
+            Tuple(v) => v.fmt(f),
             Null(v) => v.fmt(f),
         }
     }
@@ -82,6 +90,7 @@ impl PartialEq for Value {
                     Float(b) => a == b,
                     Bool(b) => a == b,
                     Text(b) => a == b,
+                    Tuple(_) => false,
                     Null(_) => false
                 }
             }
@@ -91,6 +100,7 @@ impl PartialEq for Value {
                     Float(b) => a == b,
                     Bool(b) => a == b,
                     Text(b) => a == b,
+                    Tuple(_) => false,
                     Null(_) => false
                 }
             }
@@ -100,6 +110,7 @@ impl PartialEq for Value {
                     Float(b) => a == b,
                     Bool(b) => a == b,
                     Text(b) => a == b,
+                    Tuple(_) => false,
                     Null(_) => false
                 }
             }
@@ -109,6 +120,7 @@ impl PartialEq for Value {
                     Float(b) => a == b,
                     Bool(b) => a == b,
                     Text(b) => a == b,
+                    Tuple(_) => false,
                     Null(_) => false,
                 }
             }
@@ -118,7 +130,18 @@ impl PartialEq for Value {
                     Float(_) => false,
                     Bool(_) => false,
                     Text(_) => false,
+                    Tuple(_) => false,
                     Null(_) => true
+                }
+            }
+            Tuple(a) => {
+                match other {
+                    Int(_) => false,
+                    Float(_) => false,
+                    Bool(_) => false,
+                    Text(_) => false,
+                    Null(_) => false,
+                    Tuple(b) => b == a
                 }
             }
         }
@@ -201,6 +224,10 @@ mod tests {
         assert_eq!(Value::text("Hello"), Value::text("Hello"));
         assert_ne!(Value::text("Hello"), Value::text("World"));
 
+        assert_eq!(Value::tuple(vec![3.into(), 5.5.into()]), Value::tuple(vec![3.into(), 5.5.into()]));
+        assert_ne!(Value::tuple(vec![5.5.into()]), Value::tuple(vec![3.into(), 5.5.into()]));
+        assert_ne!(Value::tuple(vec![3.into(), 5.5.into()]), Value::tuple(vec![5.5.into(), 3.into()]));
+
         assert_eq!(Value::null(), Value::null());
     }
 
@@ -212,6 +239,7 @@ mod tests {
             Value::bool(true),
             Value::text("Hello"),
             Value::null(),
+            Value::tuple(vec![3.into(), 7.into()]),
         ];
 
         assert_eq!(values[0], Value::int(42));
@@ -219,6 +247,7 @@ mod tests {
         assert_eq!(values[2], Value::bool(true));
         assert_eq!(values[3], Value::text("Hello"));
         assert_eq!(values[4], Value::null());
+        assert_eq!(values[5], Value::tuple(vec![3.into(), 7.into()]));
     }
 
     #[test]
@@ -239,8 +268,8 @@ mod tests {
 
     #[test]
     fn into() {
-        let raws: Vec<Value> = vec![3.into(), 5.into(), 3.3.into(), "test".into(), false.into()];
-        let values = vec![Value::int(3), Value::int(5), Value::float(3.3), Value::text("test"), Value::bool(false)];
+        let raws: Vec<Value> = vec![3.into(), 5.into(), 3.3.into(), "test".into(), false.into(), vec![3.into(), 7.into()].into()];
+        let values = vec![Value::int(3), Value::int(5), Value::float(3.3), Value::text("test"), Value::bool(false), Value::tuple(vec![3.into(), 7.into()])];
 
         for (i, raw) in raws.iter().enumerate() {
             assert_eq!(raw, &values[i])
