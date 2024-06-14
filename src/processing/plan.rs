@@ -33,7 +33,7 @@ impl Plan {
     }
 
     pub(crate) fn halt(&mut self) {
-        for (_, mut station) in &mut self.stations {
+        for (_, station) in &mut self.stations {
             station.close();
         }
     }
@@ -202,6 +202,12 @@ impl Plan {
         };
         self.stations.insert(station.stop, station);
     }
+
+    fn build_split(&mut self, line_num: i64, stop_num: i64) -> Result<(), String> {
+        self.lines.entry(line_num).or_insert_with(Vec::new).push(stop_num);
+        Ok(())
+    }
+
     fn connect_destinations(&mut self) -> Result<(), String> {
         for destination in &mut self.destinations {
             let tx = destination.1.get_in();
@@ -213,7 +219,7 @@ impl Plan {
         Ok(())
     }
     fn connect_sources(&mut self) -> Result<(), String> {
-        for mut source in &mut self.sources {
+        for source in &mut self.sources {
             let target = source.1.get_stop();
             if let Some(station) = self.stations.get_mut(&target) {
                 let tx = station.get_in();
@@ -309,8 +315,9 @@ mod test {
 
 #[cfg(test)]
 mod dummy {
-    use std::sync::mpsc;
-    use std::sync::mpsc::channel;
+    use std::sync::mpsc::{channel, Sender};
+    use std::thread::sleep;
+    use std::time::Duration;
 
     use crate::processing::plan::Plan;
     use crate::processing::source::Source;
@@ -318,19 +325,35 @@ mod dummy {
     use crate::processing::train::Train;
     use crate::value::Value;
 
-    struct DummySource {}
+    struct DummySource<'values> {
+        stop: i64,
+        values: &'values mut Vec<Vec<Value>>,
+        delay: Duration,
+        senders: Vec<Sender<Train>>,
+    }
 
-    impl Source for DummySource {
+    impl<'values> DummySource<'values> {
+        fn new(values: &'values mut Vec<Vec<Value>>, delay: Duration) -> Self {
+            DummySource { stop: -1, values, delay, senders: vec![] }
+        }
+    }
+
+    impl<'values> Source for DummySource<'values> {
         fn operate(&self) {
-            todo!()
+            for values in self.values.clone() {
+                for sender in &self.senders {
+                    sender.send(Train::new(values.clone())).unwrap();
+                }
+                sleep(self.delay);
+            }
         }
 
-        fn add_out(&mut self, id: i64, out: mpsc::Sender<Train>) {
-            todo!()
+        fn add_out(&mut self, id: i64, out: Sender<Train>) {
+            self.senders.push(out)
         }
 
         fn get_stop(&self) -> i64 {
-            todo!()
+            self.stop
         }
     }
 
@@ -359,6 +382,51 @@ mod dummy {
         assert_ne!(res.values, vec![Value::null()]);
 
         assert!(output_rx.try_recv().is_err());
+
+
+        drop(input); // close the channel
+        plan.halt()
+    }
+
+    #[test]
+    fn station_plan_split_train() {
+        let values = vec![3.into(), "test".into()];
+
+        let mut plan = Plan::default();
+        let mut first = Station::new(0);
+        let first_id = first.stop;
+        let input = first.get_in();
+
+        let (output1_tx, output1_rx) = channel();
+
+        let (output2_tx, output2_rx) = channel();
+
+        let mut second = Station::new(1);
+        second.add_out(0, output1_tx).unwrap();
+
+        let mut third = Station::new(2);
+        third.add_out(0, output2_tx).unwrap();
+
+        plan.build(0, first);
+        plan.build(0, second);
+        plan.build_split(1, first_id).unwrap();
+        plan.build(1, third);
+
+        plan.operate();
+
+        input.send(Train::new(values.clone())).unwrap();
+
+        let res = output1_rx.recv().unwrap();
+        assert_eq!(res.values, values);
+        assert_ne!(res.values, vec![Value::null()]);
+
+        assert!(output1_rx.try_recv().is_err());
+
+        let res = output2_rx.recv().unwrap();
+        assert_eq!(res.values, values);
+        assert_ne!(res.values, vec![Value::null()]);
+
+        assert!(output2_rx.try_recv().is_err());
 
 
         drop(input); // close the channel
