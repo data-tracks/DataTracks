@@ -1,6 +1,4 @@
-pub trait Statement {
-    fn dump(&self) -> String;
-}
+use crate::language::statement::Statement;
 
 pub trait Sql: Statement {}
 

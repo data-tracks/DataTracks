@@ -231,8 +231,6 @@ impl Plan {
 }
 
 
-struct StartEnd(char, char);
-
 #[derive(Clone, Copy)]
 enum PlanStage {
     WindowStage,

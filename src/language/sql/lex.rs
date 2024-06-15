@@ -4,7 +4,8 @@ use logos::{Lexer, Logos};
 
 use crate::language::sql::buffer::BufferedLexer;
 use crate::language::sql::lex::Token::{As, Comma, From, GroupBy, Identifier, Semi, Star, Text, Where};
-use crate::language::sql::statement::{Sql, SqlIdentifier, SqlSelect, SqlSymbol, Statement};
+use crate::language::sql::statement::{Sql, SqlIdentifier, SqlSelect, SqlSymbol};
+use crate::language::statement::Statement;
 
 #[derive(Logos, Debug, PartialEq, Clone)]
 #[logos(skip r"[ \t\n\f]+")] // Ignore this regex pattern between tokens
@@ -56,7 +57,7 @@ pub(crate) enum Token {
     Star,
 }
 
-pub fn parse(query: String) -> Result<Box<dyn Statement>, String> {
+pub fn parse(query: &str) -> Result<Box<dyn Statement>, String> {
     let mut lexer = crate_lexer(&query);
     parse_query(&mut lexer)
 }
@@ -182,7 +183,7 @@ mod test {
     }
 
     fn test_query_diff(query: &str, expected: &str) {
-        let result = parse(query.to_string());
+        let result = parse(query);
         assert!(matches!(result, Ok(_)), "Expected Ok, but got {:?}", result.err().unwrap());
         let parsed = result.ok().unwrap();
         assert_eq!(parsed.dump(), expected, "Expected {:?}, but got {:?}", expected, parsed.dump())

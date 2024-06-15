@@ -1,7 +1,6 @@
 use crate::language::Language;
 use crate::processing::train::Train;
 use crate::processing::transform::Transform::Func;
-use crate::util;
 use crate::value::Value;
 
 pub enum Transform {
@@ -21,13 +20,13 @@ impl Transform {
         Func(FuncTransform::default())
     }
 
-    pub fn parse(stencil: String) -> Result<Transform, util::Error> {
+    pub fn parse(stencil: String) -> Result<Transform, String> {
         match stencil.split_once("|") {
-            None => Err(util::Error::invalid_format("Wrong transform format.")),
+            None => Err("Wrong transform format.".to_string()),
             Some((module, logic)) => {
                 match Language::try_from(module) {
                     Ok(lang) => Ok(Transform::LanguageTransform(LanguageTransform::parse(lang, logic))),
-                    Err(_) => Err(util::Error::invalid_format("Wrong transform format."))
+                    Err(_) => Err("Wrong transform format.".to_string())
                 }
             }
         }
@@ -85,8 +84,8 @@ impl FuncTransform {
 
     pub(crate) fn new_val<F>(func: F) -> FuncTransform where F: Fn(Value) -> Value + Send + Clone + 'static {
         Self::new(move |t: Train| {
-            let values = t.values.into_iter().map(func.clone()).collect();
-            Train::new(values)
+            let values = t.values[&0].into_iter().map(func.clone()).collect();
+            Train::single(values)
         })
     }
 }
@@ -113,7 +112,7 @@ mod tests {
     use crate::value::Value;
 
     #[test]
-    fn transform_test() {
+    fn transform() {
         let mut station = Station::new(0);
 
         station.transform(Func(FuncTransform::new_val(|x| &x + &Value::int(3))));
@@ -124,7 +123,34 @@ mod tests {
 
         station.add_out(0, tx).unwrap();
         station.operate();
-        station.send(Train::new(values.clone())).unwrap();
+        station.send(Train::single(values.clone())).unwrap();
+
+        let res = rx.recv();
+        match res {
+            Ok(t) => {
+                assert_eq!(values.len(), t.values.len());
+                for (i, value) in t.values[0].iter().enumerate() {
+                    assert_eq!(*value, &values[i] + &Value::int(3));
+                    assert_ne!(Value::text(""), *value)
+                }
+            }
+            Err(..) => assert!(false),
+        }
+    }
+
+    #[test]
+    fn sql_transform() {
+        let mut station = Station::new(0);
+
+        station.transform(Func(FuncTransform::new_val(|x| &x + &Value::int(3))));
+
+        let values = vec![Value::float(3.3), Value::int(3)];
+
+        let (tx, rx) = channel();
+
+        station.add_out(0, tx).unwrap();
+        station.operate();
+        station.send(Train::single(values.clone())).unwrap();
 
         let res = rx.recv();
         match res {
