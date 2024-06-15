@@ -8,7 +8,7 @@ pub struct TrainScan {
 }
 
 impl TrainScan {
-    fn new(train: Train) -> Self {
+    pub(crate) fn new(train: Train) -> Self {
         TrainScan { train }
     }
 }
