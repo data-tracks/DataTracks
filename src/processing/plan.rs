@@ -228,6 +228,14 @@ impl Plan {
         }
         Ok(())
     }
+
+    fn add_source(&mut self, stop: i64, source: Box<dyn Source>) {
+        self.sources.insert(stop, source);
+    }
+
+    fn add_destination(&mut self, stop: i64, destination: Box<dyn Destination>) {
+        self.destinations.insert(stop, destination);
+    }
 }
 
 
@@ -313,38 +321,39 @@ mod test {
 
 #[cfg(test)]
 mod dummy {
-    use std::sync::mpsc::{channel, Sender};
-    use std::thread::sleep;
+    use std::sync::{Arc, Mutex};
+    use std::sync::mpsc::{channel, Receiver, Sender};
+    use std::thread::{sleep, spawn};
     use std::time::Duration;
 
-    use crate::processing::plan::Plan;
+    use crate::processing::destination::Destination;
     use crate::processing::source::Source;
-    use crate::processing::station::Station;
     use crate::processing::train::Train;
     use crate::value::Value;
 
-    struct DummySource<'values> {
+    pub struct DummySource {
         stop: i64,
-        values: &'values mut Vec<Vec<Value>>,
+        values: Vec<Vec<Value>>,
         delay: Duration,
         senders: Vec<Sender<Train>>,
     }
 
-    impl<'values> DummySource<'values> {
-        fn new(values: &'values mut Vec<Vec<Value>>, delay: Duration) -> Self {
-            DummySource { stop: -1, values, delay, senders: vec![] }
+    impl DummySource {
+        pub(crate) fn new(stop: i64, values: Vec<Vec<Value>>, delay: Duration) -> Self {
+            DummySource { stop, values, delay, senders: vec![] }
         }
     }
 
-    impl<'values> Source for DummySource<'values> {
+    impl Source for DummySource {
         fn operate(&self) {
-            for values in self.values.clone() {
+            for values in &self.values {
                 for sender in &self.senders {
                     sender.send(Train::single(values.clone())).unwrap();
                 }
                 sleep(self.delay);
             }
         }
+
 
         fn add_out(&mut self, id: i64, out: Sender<Train>) {
             self.senders.push(out)
@@ -354,6 +363,55 @@ mod dummy {
             self.stop
         }
     }
+
+    pub(crate) struct DummyDestination {
+        stop: i64,
+        pub(crate) results: Arc<Mutex<Vec<Train>>>,
+        receiver: Option<Receiver<Train>>,
+        sender: Sender<Train>,
+    }
+
+    impl DummyDestination {
+        pub(crate) fn new(stop: i64) -> Self {
+            let (tx, rx) = channel();
+            DummyDestination { stop, results: Arc::new(Mutex::new(vec![])), receiver: Some(rx), sender: tx }
+        }
+    }
+
+    impl Destination for DummyDestination {
+        fn operate(&mut self) {
+            let local = Arc::clone(&self.results);
+            let receiver = self.receiver.take().unwrap();
+            spawn(move || {
+                while let Ok(res) = receiver.recv() {
+                    let mut shared = local.lock().unwrap();
+                    shared.push(res);
+                }
+            });
+        }
+
+        fn get_in(&self) -> Sender<Train> {
+            self.sender.clone()
+        }
+
+        fn get_stop(&self) -> i64 {
+            self.stop
+        }
+    }
+}
+
+#[cfg(test)]
+mod stencil {
+    use std::sync::Arc;
+    use std::sync::mpsc::channel;
+    use std::thread::sleep;
+    use std::time::Duration;
+
+    use crate::processing::plan::dummy::{DummyDestination, DummySource};
+    use crate::processing::plan::Plan;
+    use crate::processing::station::Station;
+    use crate::processing::Train;
+    use crate::value::Value;
 
     #[test]
     fn station_plan_train() {
@@ -429,5 +487,39 @@ mod dummy {
 
         drop(input); // close the channel
         plan.halt()
+    }
+
+
+    #[test]
+    fn sql_parse_transform() {
+        let values = vec![vec![3.into(), "test".into(), true.into(), Value::null()]];
+        let stencil = "3{sql|Select * From $0}";
+
+        let mut plan = Plan::parse(stencil);
+
+        let source = DummySource::new(3, values.clone(), Duration::from_millis(3));
+
+        let destination = DummyDestination::new(3);
+        let clone = Arc::clone(&destination.results);
+
+        plan.add_source(3, Box::new(source));
+        plan.add_destination(3, Box::new(destination));
+
+
+        plan.operate();
+
+        loop {
+            let shared = clone.lock().unwrap();
+            if !shared.is_empty() {
+                plan.halt();
+                break;
+            }
+            drop(shared);
+            sleep(Duration::from_millis(5))
+        }
+        let results = clone.lock().unwrap();
+        for train in results.clone() {
+            assert_eq!(train.values.get(&0).unwrap(), values.get(0).unwrap())
+        }
     }
 }

@@ -214,7 +214,7 @@ mod tests {
     use crate::value::Value;
 
     #[test]
-    fn test_value_equality() {
+    fn value_equality() {
         assert_eq!(Value::int(42), Value::int(42));
         assert_ne!(Value::int(42), Value::int(7));
 
@@ -235,7 +235,7 @@ mod tests {
     }
 
     #[test]
-    fn test_value_in_vec() {
+    fn value_in_vec() {
         let values = vec![
             Value::int(42),
             Value::float(3.14),
@@ -254,7 +254,7 @@ mod tests {
     }
 
     #[test]
-    fn test_value_in_map() {
+    fn value_in_map() {
         let mut map = HashMap::new();
         map.insert("int", Value::int(42));
         map.insert("float", Value::float(3.14));
