@@ -55,8 +55,8 @@ impl<H: PartialEq + 'static> Algebra for TrainJoin<'_, H> {
                 let mut values = vec![];
                 let left = left();
                 let right = right();
-                let right_hashes: Vec<(&H, Value)> = right.values.iter().map(|value: &Value| (right_hash(value), value.clone())).collect();
-                for l_value in left.values {
+                let right_hashes: Vec<(&H, Value)> = right.values.get(&0).unwrap().iter().map(|value: &Value| (right_hash(value), value.clone())).collect();
+                for l_value in left.values.get(&0).unwrap() {
                     let l_hash = left_hash(&l_value);
                     for (r_hash, r_val) in &right_hashes {
                         if l_hash == *r_hash {
@@ -64,7 +64,7 @@ impl<H: PartialEq + 'static> Algebra for TrainJoin<'_, H> {
                         }
                     }
                 }
-                Train::new(values)
+                Train::single(values)
             }
         )
     }
@@ -90,8 +90,8 @@ mod test {
 
     #[test]
     fn one_match() {
-        let left = TrainScan::new(Train::new(vec![3.into(), 5.5.into()]));
-        let right = TrainScan::new(Train::new(vec![5.5.into(), "test".into()]));
+        let left = TrainScan::new(Train::single(vec![3.into(), 5.5.into()]));
+        let right = TrainScan::new(Train::single(vec![5.5.into(), "test".into()]));
 
         let join = TrainJoin::new(&left, &right, Box::new(|val: &Value| val), Box::new(|val: &Value| val), Box::new(|left: Value, right: Value| {
             vec![left.into(), right.into()].into()
@@ -99,14 +99,14 @@ mod test {
 
         let handle = join.get_handler();
         let res = handle();
-        assert_eq!(res.values, vec![vec![5.5.into(), 5.5.into()].into()]);
-        assert_ne!(res.values, vec![vec![].into()]);
+        assert_eq!(res.values.get(&0).unwrap(), &vec![vec![5.5.into(), 5.5.into()].into()]);
+        assert_ne!(res.values.get(&0).unwrap(), &vec![vec![].into()]);
     }
 
     #[test]
     fn multi_match() {
-        let left = TrainScan::new(Train::new(vec![3.into(), 5.5.into()]));
-        let right = TrainScan::new(Train::new(vec![5.5.into(), 5.5.into()]));
+        let left = TrainScan::new(Train::single(vec![3.into(), 5.5.into()]));
+        let right = TrainScan::new(Train::single(vec![5.5.into(), 5.5.into()]));
 
         let join = TrainJoin::new(&left, &right, Box::new(|val: &Value| val), Box::new(|val: &Value| val), Box::new(|left: Value, right: Value| {
             vec![left.into(), right.into()].into()
@@ -114,7 +114,7 @@ mod test {
 
         let handle = join.get_handler();
         let res = handle();
-        assert_eq!(res.values, vec![vec![5.5.into(), 5.5.into()].into(), vec![5.5.into(), 5.5.into()].into()]);
-        assert_ne!(res.values, vec![vec![].into()]);
+        assert_eq!(res.values.get(&0).unwrap(), &vec![vec![5.5.into(), 5.5.into()].into(), vec![5.5.into(), 5.5.into()].into()]);
+        assert_ne!(res.values.get(&0).unwrap(), &vec![vec![].into()]);
     }
 }

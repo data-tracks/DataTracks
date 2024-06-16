@@ -19,8 +19,8 @@ impl Algebra for TrainProject<'_> {
         let input = self.input.get_handler();
         Box::new(move || {
             let train = input();
-            let projected = train.values.into_iter().map(|value: Value| project(value)).collect();
-            Train::new(projected)
+            let projected = train.values.get(&0).unwrap().into_iter().map(|value: &Value| project(value.clone())).collect();
+            Train::single(projected)
         })
     }
 }

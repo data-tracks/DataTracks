@@ -19,8 +19,8 @@ impl Algebra for TrainFilter<'_> {
         let input = self.input.get_handler();
         Box::new(move || {
             let train = input();
-            let filtered = train.values.into_iter().filter(|v: &Value| condition(v)).collect();
-            Train::new(filtered)
+            let filtered = train.values.get(&0).unwrap().into_iter().filter(|v| condition(v)).cloned().collect();
+            Train::single(filtered)
         })
     }
 }

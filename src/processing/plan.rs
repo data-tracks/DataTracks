@@ -340,7 +340,7 @@ mod dummy {
         fn operate(&self) {
             for values in self.values.clone() {
                 for sender in &self.senders {
-                    sender.send(Train::new(values.clone())).unwrap();
+                    sender.send(Train::single(values.clone())).unwrap();
                 }
                 sleep(self.delay);
             }
@@ -373,11 +373,11 @@ mod dummy {
 
         plan.operate();
 
-        input.send(Train::new(values.clone())).unwrap();
+        input.send(Train::single(values.clone())).unwrap();
 
         let res = output_rx.recv().unwrap();
-        assert_eq!(res.values, values);
-        assert_ne!(res.values, vec![Value::null()]);
+        assert_eq!(res.values.get(&0).unwrap(), &values);
+        assert_ne!(res.values.get(&0).unwrap(), &vec![Value::null()]);
 
         assert!(output_rx.try_recv().is_err());
 
@@ -412,17 +412,17 @@ mod dummy {
 
         plan.operate();
 
-        input.send(Train::new(values.clone())).unwrap();
+        input.send(Train::single(values.clone())).unwrap();
 
         let res = output1_rx.recv().unwrap();
-        assert_eq!(res.values, values);
-        assert_ne!(res.values, vec![Value::null()]);
+        assert_eq!(res.values.get(&0).unwrap(), &values);
+        assert_ne!(res.values.get(&0).unwrap(), &vec![Value::null()]);
 
         assert!(output1_rx.try_recv().is_err());
 
         let res = output2_rx.recv().unwrap();
-        assert_eq!(res.values, values);
-        assert_ne!(res.values, vec![Value::null()]);
+        assert_eq!(res.values.get(&0).unwrap(), &values);
+        assert_ne!(res.values.get(&0).unwrap(), &vec![Value::null()]);
 
         assert!(output2_rx.try_recv().is_err());
 

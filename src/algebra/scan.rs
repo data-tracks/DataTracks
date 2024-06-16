@@ -32,7 +32,7 @@ mod test {
 
     #[test]
     fn simple_scan() {
-        let train = Train::new(vec![3.into(), "test".into()]);
+        let train = Train::single(vec![3.into(), "test".into()]);
 
         let scan = TrainScan::new(train);
 
@@ -40,7 +40,7 @@ mod test {
 
         let train_2 = handler();
 
-        assert_eq!(train_2.values.clone(), vec![3.into(), "test".into()]);
-        assert_ne!(train_2.values, vec![8.into(), "test".into()]);
+        assert_eq!(train_2.values.get(&0).unwrap(), &vec![3.into(), "test".into()]);
+        assert_ne!(train_2.values.get(&0).unwrap(), &vec![8.into(), "test".into()]);
     }
 }

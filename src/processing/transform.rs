@@ -84,7 +84,7 @@ impl FuncTransform {
 
     pub(crate) fn new_val<F>(func: F) -> FuncTransform where F: Fn(Value) -> Value + Send + Clone + 'static {
         Self::new(move |t: Train| {
-            let values = t.values[&0].into_iter().map(func.clone()).collect();
+            let values = t.values.get(&0).unwrap().into_iter().map(|value: &Value| func.clone()(value.clone())).collect();
             Train::single(values)
         })
     }
@@ -128,8 +128,8 @@ mod tests {
         let res = rx.recv();
         match res {
             Ok(t) => {
-                assert_eq!(values.len(), t.values.len());
-                for (i, value) in t.values[0].iter().enumerate() {
+                assert_eq!(values.len(), t.values.get(&0).unwrap().len());
+                for (i, value) in t.values.get(&0).unwrap().iter().enumerate() {
                     assert_eq!(*value, &values[i] + &Value::int(3));
                     assert_ne!(Value::text(""), *value)
                 }
@@ -155,8 +155,8 @@ mod tests {
         let res = rx.recv();
         match res {
             Ok(t) => {
-                assert_eq!(values.len(), t.values.len());
-                for (i, value) in t.values.iter().enumerate() {
+                assert_eq!(values.len(), t.values.get(&0).unwrap().len());
+                for (i, value) in t.values.get(&0).unwrap().iter().enumerate() {
                     assert_eq!(*value, &values[i] + &Value::int(3));
                     assert_ne!(Value::text(""), *value)
                 }

@@ -141,15 +141,15 @@ mod tests {
 
         station.add_out(0, tx).unwrap();
         station.operate();
-        station.sender_in.take().unwrap().send(Train::new(values.clone())).unwrap();
+        station.sender_in.take().unwrap().send(Train::single(values.clone())).unwrap();
 
         let res = rx.recv();
         match res {
             Ok(t) => {
-                assert_eq!(values.len(), t.values.len());
-                for (i, value) in t.values.iter().enumerate() {
-                    assert_eq!(*value, values[i]);
-                    assert_ne!(Value::text(""), *value)
+                assert_eq!(values.len(), t.values.get(&0).unwrap().len());
+                for (i, value) in t.values.get(&0).unwrap().iter().enumerate() {
+                    assert_eq!(value, &values[i]);
+                    assert_ne!(&Value::text(""), value)
                 }
             }
             Err(..) => assert!(false),
@@ -175,11 +175,11 @@ mod tests {
         first.operate();
         second.operate();
 
-        input.send(Train::new(values.clone())).unwrap();
+        input.send(Train::single(values.clone())).unwrap();
 
         let res = output_rx.recv().unwrap();
-        assert_eq!(res.values, values);
-        assert_ne!(res.values, vec![Value::null()]);
+        assert_eq!(res.values.get(&0).unwrap(), &values);
+        assert_ne!(res.values.get(&0).unwrap(), &vec![Value::null()]);
 
         assert!(output_rx.try_recv().is_err());
 
