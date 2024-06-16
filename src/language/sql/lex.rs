@@ -3,9 +3,8 @@ use std::vec;
 use logos::{Lexer, Logos};
 
 use crate::language::sql::buffer::BufferedLexer;
-use crate::language::sql::lex::Token::{As, Comma, From, GroupBy, Identifier, Semi, Star, Text, Where};
-use crate::language::sql::statement::{Sql, SqlIdentifier, SqlSelect, SqlSymbol};
-use crate::language::statement::Statement;
+use crate::language::sql::lex::Token::{As, Comma, From, GroupBy, Identifier, Select, Semi, Star, Text, Where};
+use crate::language::sql::statement::{SqlIdentifier, SqlSelect, SqlStatement, SqlSymbol};
 
 #[derive(Logos, Debug, PartialEq, Clone)]
 #[logos(skip r"[ \t\n\f]+")] // Ignore this regex pattern between tokens
@@ -57,29 +56,29 @@ pub(crate) enum Token {
     Star,
 }
 
-pub fn parse(query: &str) -> Result<Box<dyn Statement>, String> {
+pub fn parse(query: &str) -> Result<SqlStatement, String> {
     let mut lexer = crate_lexer(&query);
     parse_query(&mut lexer)
 }
 
-fn parse_query<'source>(lexer: &'source mut Lexer<'source, Token>) -> Result<Box<dyn Statement>, String> {
+fn parse_query<'source>(lexer: &'source mut Lexer<'source, Token>) -> Result<SqlStatement, String> {
     let mut buf = BufferedLexer::new(lexer);
 
     let tok = buf.next()?;
     match tok {
-        Token::Select => parse_select(&mut buf),
+        Select => parse_select(&mut buf),
         _ => Err("Statement is not supported.".to_string())
     }
 }
 
-fn parse_select(lexer: &mut BufferedLexer) -> Result<Box<dyn Statement>, String> {
+fn parse_select(lexer: &mut BufferedLexer) -> Result<SqlStatement, String> {
     let fields = parse_expressions(lexer, &vec![From])?;
     let froms = parse_expressions(lexer, &vec![Semi, Where, GroupBy])?;
 
-    Ok(Box::new(SqlSelect::new(fields, froms)))
+    Ok(SqlStatement::Select(SqlSelect::new(fields, froms)))
 }
 
-fn parse_expressions(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> Result<Vec<Box<dyn Sql>>, String> {
+fn parse_expressions(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> Result<Vec<SqlStatement>, String> {
     let mut expressions = vec![];
     let mut stops = stops.clone();
     stops.push(Comma);
@@ -94,17 +93,17 @@ fn parse_expressions(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> Result<Ve
     Ok(expressions)
 }
 
-fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> Box<dyn Sql> {
+fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> SqlStatement {
     let mut expression = vec![];
     let mut is_alias = false;
     while let Ok(tok) = lexer.next() {
         if stops.contains(&tok) {
             lexer.buffer(tok);
-            return Box::new(SqlIdentifier::new(expression, None));
+            return SqlStatement::Identifier(SqlIdentifier::new(expression, None));
         }
 
         if tok == Star {
-            return Box::new(SqlSymbol::new("*"));
+            return SqlStatement::Symbol(SqlSymbol::new("*"));
         }
 
         if tok == As {
@@ -127,7 +126,7 @@ fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> Box<dyn Sq
         alias = Some(parse_expression(lexer, stops));
     }
 
-    Box::new(SqlIdentifier::new(expression, alias))
+    SqlStatement::Identifier(SqlIdentifier::new(expression, alias))
 }
 
 

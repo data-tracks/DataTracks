@@ -2,14 +2,30 @@ use crate::language::statement::Statement;
 
 pub trait Sql: Statement {}
 
+pub(crate) enum SqlStatement {
+    Identifier(SqlIdentifier),
+    Select(SqlSelect),
+    Symbol(SqlSymbol),
+}
+
+impl SqlStatement {
+    pub(crate) fn dump(&self) -> String {
+        match self {
+            SqlStatement::Identifier(i) => i.dump(),
+            SqlStatement::Select(s) => s.dump(),
+            SqlStatement::Symbol(s) => s.dump()
+        }
+    }
+}
+
 pub struct SqlIdentifier {
-    names: Vec<String>,
-    alias: Option<Box<dyn Sql>>,
+    pub(crate) names: Vec<String>,
+    pub(crate) alias: Option<Box<SqlStatement>>,
 }
 
 impl SqlIdentifier {
-    pub fn new(names: Vec<String>, alias: Option<Box<dyn Sql>>) -> Self {
-        SqlIdentifier { names, alias }
+    pub fn new(names: Vec<String>, alias: Option<SqlStatement>) -> Self {
+        SqlIdentifier { names, alias: alias.map_or(None, |a| Some(Box::new(a))) }
     }
 }
 
@@ -26,11 +42,11 @@ impl Statement for SqlIdentifier {
 impl Sql for SqlIdentifier {}
 
 pub(crate) struct SqlSelect {
-    columns: Vec<Box<dyn Sql>>,
-    froms: Vec<Box<dyn Sql>>,
-    wheres: Vec<Box<dyn Sql>>,
-    orders: Vec<Box<dyn Sql>>,
-    groups: Vec<Box<dyn Sql>>,
+    pub(crate) columns: Vec<SqlStatement>,
+    pub(crate) froms: Vec<SqlStatement>,
+    pub(crate) wheres: Vec<SqlStatement>,
+    pub(crate) orders: Vec<SqlStatement>,
+    pub(crate) groups: Vec<SqlStatement>,
 }
 
 pub(crate) struct SqlSymbol {
@@ -53,7 +69,7 @@ impl Sql for SqlSymbol {}
 
 
 impl SqlSelect {
-    pub(crate) fn new(columns: Vec<Box<dyn Sql>>, froms: Vec<Box<dyn Sql>>) -> SqlSelect {
+    pub(crate) fn new(columns: Vec<SqlStatement>, froms: Vec<SqlStatement>) -> SqlSelect {
         SqlSelect { columns, froms, wheres: vec![], orders: vec![], groups: vec![] }
     }
 }

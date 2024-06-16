@@ -1,8 +1,10 @@
 pub mod sql {
+    use crate::algebra::AlgebraType;
     use crate::language::sql::lex::parse;
-    use crate::language::statement::Statement;
+    use crate::language::sql::translate::translate;
 
-    pub fn transform(query: &str) -> Result<Box<dyn Statement>, String> {
-        parse(query)
+    pub fn transform(query: &str) -> Result<AlgebraType, String> {
+        let parse = parse(query)?;
+        translate(parse)
     }
 }

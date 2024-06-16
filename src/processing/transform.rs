@@ -1,7 +1,10 @@
+use crate::{algebra, language};
 use crate::language::Language;
 use crate::processing::train::Train;
 use crate::processing::transform::Transform::Func;
 use crate::value::Value;
+
+pub struct Transformer(pub Box<dyn Fn(Train) -> Train + Send + 'static>);
 
 pub enum Transform {
     Func(FuncTransform),
@@ -9,7 +12,7 @@ pub enum Transform {
 }
 
 impl Transform {
-    pub fn transformer(&mut self) -> Box<dyn Fn(Train) -> Train + Send + 'static> {
+    pub fn transformer(&mut self) -> Transformer {
         match self {
             Func(t) => t.get_transform(),
             Transform::LanguageTransform(t) => t.get_transform()
@@ -41,10 +44,10 @@ impl Transform {
 }
 
 pub trait Transformable {
-    fn get_transform(&mut self) -> Box<dyn Fn(Train) -> Train + Send + 'static> {
-        Box::new(|train: Train| {
+    fn get_transform(&mut self) -> Transformer {
+        Transformer(Box::new(|train: Train| {
             return train;
-        })
+        }))
     }
 
     fn dump(&self) -> String;
@@ -57,15 +60,29 @@ pub trait Transformable {
 pub struct LanguageTransform {
     language: Language,
     query: String,
+    func: Transformer,
 }
 
 impl LanguageTransform {
     fn parse(language: Language, query: &str) -> LanguageTransform {
-        LanguageTransform { language, query: query.to_string() }
+        let func = build_transformer(&language, query).unwrap();
+        LanguageTransform { language, query: query.to_string(), func }
     }
 }
 
+fn build_transformer(language: &Language, query: &str) -> Result<Transformer, String> {
+    let algebra = match language {
+        Language::SQL => language::sql(query)?,
+        Language::MQL => Err("Not supported.")?
+    };
+    algebra::funtionize(algebra)
+}
+
 impl Transformable for LanguageTransform {
+    fn get_transform(&mut self) -> Transformer {
+        todo!()
+    }
+
     fn dump(&self) -> String {
         "{".to_owned() + &self.language.name().clone() + "|" + &self.query.clone() + "}"
     }
@@ -73,16 +90,22 @@ impl Transformable for LanguageTransform {
 
 
 pub struct FuncTransform {
-    pub func: Option<Box<dyn Fn(Train) -> Train + Send + 'static>>,
+    pub func: Option<Transformer>,
 }
 
 
 impl FuncTransform {
-    pub(crate) fn new<F>(func: F) -> Self where F: Fn(Train) -> Train + Send + 'static {
-        FuncTransform { func: Some(Box::new(func)) }
+    pub(crate) fn new<F>(func: F) -> Self
+    where
+        F: Fn(Train) -> Train + Send + 'static,
+    {
+        FuncTransform { func: Some(Transformer(Box::new(func))) }
     }
 
-    pub(crate) fn new_val<F>(func: F) -> FuncTransform where F: Fn(Value) -> Value + Send + Clone + 'static {
+    pub(crate) fn new_val<F>(func: F) -> FuncTransform
+    where
+        F: Fn(Value) -> Value + Send + Clone + 'static,
+    {
         Self::new(move |t: Train| {
             let values = t.values.get(&0).unwrap().into_iter().map(|value: &Value| func.clone()(value.clone())).collect();
             Train::single(values)
@@ -91,7 +114,7 @@ impl FuncTransform {
 }
 
 impl Transformable for FuncTransform {
-    fn get_transform(&mut self) -> Box<dyn Fn(Train) -> Train + Send + 'static> {
+    fn get_transform(&mut self) -> Transformer {
         self.func.take().unwrap()
     }
 
