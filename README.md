@@ -2,7 +2,7 @@
 <img alt="Logo" height="300" src="/admin/logo.jpeg?raw=true" title="DataTrack" width="300"/>
 </p>
 
-# 🚂DataTrack
+# 🚂 DataTrack
 
 DataTracks simplifies the process of setting up and managing data streams, whether the data is structured or unstructured. It is aimed at developers and data engineers who need a reliable and scalable solution for handling diverse data types and streaming workloads.
 

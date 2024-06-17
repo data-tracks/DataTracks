@@ -141,7 +141,7 @@ mod tests {
 
         station.add_out(0, tx).unwrap();
         station.operate();
-        station.sender_in.take().unwrap().send(Train::single(values.clone())).unwrap();
+        station.sender_in.take().unwrap().send(Train::single(0, values.clone())).unwrap();
 
         let res = rx.recv();
         match res {
@@ -175,7 +175,7 @@ mod tests {
         first.operate();
         second.operate();
 
-        input.send(Train::single(values.clone())).unwrap();
+        input.send(Train::single(0, values.clone())).unwrap();
 
         let res = output_rx.recv().unwrap();
         assert_eq!(res.values.get(&0).unwrap(), &values);

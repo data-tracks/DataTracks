@@ -104,13 +104,13 @@ impl FuncTransform {
         FuncTransform { func: Some(Box::new(func)) }
     }
 
-    pub(crate) fn new_val<F>(func: F) -> FuncTransform
+    pub(crate) fn new_val<F>(stop: i64, func: F) -> FuncTransform
     where
         F: Fn(Value) -> Value + Send + Clone + Sync + 'static,
     {
         Self::new(move |t: Train| {
-            let values = t.values.get(&0).unwrap().into_iter().map(|value: &Value| func.clone()(value.clone())).collect();
-            Train::single(values)
+            let values = t.values.get(&0).unwrap().take().unwrap().into_iter().map(|value: &Value| func.clone()(value.clone())).collect();
+            Train::single(stop, values)
         })
     }
 }
@@ -140,7 +140,7 @@ mod tests {
     fn transform() {
         let mut station = Station::new(0);
 
-        station.transform(Func(FuncTransform::new_val(|x| &x + &Value::int(3))));
+        station.transform(Func(FuncTransform::new_val(0, |x| &x + &Value::int(3))));
 
         let values = vec![Value::float(3.3), Value::int(3)];
 
