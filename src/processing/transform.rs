@@ -4,12 +4,14 @@ use crate::processing::train::Train;
 use crate::processing::transform::Transform::Func;
 use crate::value::Value;
 
-pub struct Transformer(pub Box<dyn Fn(Train) -> Train + Send + 'static>);
+pub type Transformer = Box<dyn Fn(Train) -> Train + Send + Sync + 'static>;
+
 
 pub enum Transform {
     Func(FuncTransform),
     LanguageTransform(LanguageTransform),
 }
+
 
 impl Transform {
     pub fn transformer(&mut self) -> Transformer {
@@ -45,9 +47,9 @@ impl Transform {
 
 pub trait Transformable {
     fn get_transform(&mut self) -> Transformer {
-        Transformer(Box::new(|train: Train| {
+        Box::new(|train: Train| {
             return train;
-        }))
+        })
     }
 
     fn dump(&self) -> String;
@@ -60,13 +62,13 @@ pub trait Transformable {
 pub struct LanguageTransform {
     language: Language,
     query: String,
-    func: Transformer,
+    func: Option<Transformer>,
 }
 
 impl LanguageTransform {
     fn parse(language: Language, query: &str) -> LanguageTransform {
         let func = build_transformer(&language, query).unwrap();
-        LanguageTransform { language, query: query.to_string(), func }
+        LanguageTransform { language, query: query.to_string(), func: Some(func) }
     }
 }
 
@@ -80,7 +82,7 @@ fn build_transformer(language: &Language, query: &str) -> Result<Transformer, St
 
 impl Transformable for LanguageTransform {
     fn get_transform(&mut self) -> Transformer {
-        todo!()
+        self.func.take().unwrap()
     }
 
     fn dump(&self) -> String {
@@ -97,14 +99,14 @@ pub struct FuncTransform {
 impl FuncTransform {
     pub(crate) fn new<F>(func: F) -> Self
     where
-        F: Fn(Train) -> Train + Send + 'static,
+        F: Fn(Train) -> Train + Send + 'static + Sync,
     {
-        FuncTransform { func: Some(Transformer(Box::new(func))) }
+        FuncTransform { func: Some(Box::new(func)) }
     }
 
     pub(crate) fn new_val<F>(func: F) -> FuncTransform
     where
-        F: Fn(Value) -> Value + Send + Clone + 'static,
+        F: Fn(Value) -> Value + Send + Clone + Sync + 'static,
     {
         Self::new(move |t: Train| {
             let values = t.values.get(&0).unwrap().into_iter().map(|value: &Value| func.clone()(value.clone())).collect();

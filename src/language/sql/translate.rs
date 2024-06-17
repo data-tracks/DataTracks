@@ -3,12 +3,16 @@ use crate::algebra::AlgebraType::Scan;
 use crate::language::sql::statement::{SqlIdentifier, SqlSelect, SqlStatement};
 
 pub(crate) fn translate(query: SqlStatement) -> Result<AlgebraType, String> {
-    let scans = match query {
+    let mut scans = match query {
         SqlStatement::Select(s) => handle_select(s)?,
         _ => Err("Could not translate SQL query".to_string())?
     };
-    match scans.as_slice() {
-        [mut entry] => Ok(entry),
+
+    if scans.len() == 1 {
+        return Ok(scans.pop().unwrap())
+    }
+
+    match scans {
         _ => Err("Not supported.".to_string())
     }
 }

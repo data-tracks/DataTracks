@@ -16,9 +16,9 @@ where
 {
     left: Box<AlgebraType>,
     right: Box<AlgebraType>,
-    left_hash: Arc<Box<dyn Fn(&Value) -> &Hash>>,
-    right_hash: Arc<Box<dyn Fn(&Value) -> &Hash>>,
-    out: Arc<Box<dyn Fn(Value, Value) -> Value>>,
+    left_hash: Arc<Box<dyn Fn(&Value) -> &Hash + Send + Sync>>,
+    right_hash: Arc<Box<dyn Fn(&Value) -> &Hash + Send + Sync>>,
+    out: Arc<Box<dyn Fn(Value, Value) -> Value + Send + Sync>>,
 }
 
 impl<H> TrainJoin<H>
@@ -28,9 +28,9 @@ where
     pub(crate) fn new(
         left: AlgebraType,
         right: AlgebraType,
-        left_hash: Box<dyn Fn(&Value) -> &H>,
-        right_hash: Box<dyn Fn(&Value) -> &H>,
-        out: Box<dyn Fn(Value, Value) -> Value>,
+        left_hash: Box<dyn Fn(&Value) -> &H + Send + Sync>,
+        right_hash: Box<dyn Fn(&Value) -> &H + Send + Sync>,
+        out: Box<dyn Fn(Value, Value) -> Value + Send + Sync>,
     ) -> Self {
         TrainJoin {
             left: Box::new(left),
@@ -51,11 +51,11 @@ impl<H: PartialEq + 'static> Algebra for TrainJoin<H> {
         let left = self.left.get_handler();
         let right = self.right.get_handler();
 
-        Transformer(Box::new(
-            move || {
+        Box::new(
+            move |train: Train| {
                 let mut values = vec![];
-                let left = left.0();
-                let right = right.0();
+                let left = left(train.clone());
+                let right = right(train);
                 let right_hashes: Vec<(&H, Value)> = right.values.get(&0).unwrap().iter().map(|value: &Value| (right_hash(value), value.clone())).collect();
                 for l_value in left.values.get(&0).unwrap() {
                     let l_hash = left_hash(&l_value);
@@ -67,7 +67,7 @@ impl<H: PartialEq + 'static> Algebra for TrainJoin<H> {
                 }
                 Train::single(values)
             }
-        ))
+        )
     }
 }
 
@@ -108,7 +108,7 @@ mod test {
         }));
 
         let handle = join.get_handler();
-        let res = handle.0(train);
+        let res = handle(train);
         assert_eq!(res.values.get(&0).unwrap(), &vec![vec![5.5.into(), 5.5.into()].into()]);
         assert_ne!(res.values.get(&0).unwrap(), &vec![vec![].into()]);
     }
@@ -127,7 +127,7 @@ mod test {
         }));
 
         let handle = join.get_handler();
-        let res = handle.0(train);
+        let res = handle(train);
         assert_eq!(res.values.get(&0).unwrap(), &vec![vec![5.5.into(), 5.5.into()].into(), vec![5.5.into(), 5.5.into()].into()]);
         assert_ne!(res.values.get(&0).unwrap(), &vec![vec![].into()]);
     }

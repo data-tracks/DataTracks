@@ -15,9 +15,9 @@ impl TrainScan {
 
 impl Algebra for TrainScan {
     fn get_handler(&self) -> Transformer {
-        Transformer(Box::new(move |train: Train| {
+        Box::new(move |train: Train| {
             train
-        }))
+        })
     }
 }
 
@@ -37,7 +37,7 @@ mod test {
 
         let handler = scan.get_handler();
 
-        let train_2 = handler.0(train);
+        let train_2 = handler(train);
 
         assert_eq!(train_2.values.get(&0).unwrap(), &vec![3.into(), "test".into()]);
         assert_ne!(train_2.values.get(&0).unwrap(), &vec![8.into(), "test".into()]);

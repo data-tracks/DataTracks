@@ -110,7 +110,7 @@ impl Station {
 
         thread::spawn(move || {
             while let Ok(train) = receiver.recv() {
-                let transformed = transform.0(window(train));
+                let transformed = transform(window(train));
                 sender.send(transformed)
             }
         })

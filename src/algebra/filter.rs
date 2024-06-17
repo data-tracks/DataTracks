@@ -11,18 +11,18 @@ pub trait Filter: Algebra {
 
 pub struct TrainFilter {
     input: Box<AlgebraType>,
-    condition: Arc<Box<dyn Fn(&Value) -> bool>>,
+    condition: Arc<Box<dyn Fn(&Value) -> bool + Sync + Send>>,
 }
 
 impl Algebra for TrainFilter {
     fn get_handler(&self) -> Transformer {
         let condition = Arc::clone(&self.condition);
         let input = self.input.get_handler();
-        Transformer(Box::new(move |train: Train| {
-            let train = input.0(train);
+        Box::new(move |train: Train| {
+            let train = input(train);
             let filtered = train.values.get(&0).unwrap().into_iter().filter(|v| condition(v)).cloned().collect();
             Train::single(filtered)
-        }))
+        })
     }
 }
 

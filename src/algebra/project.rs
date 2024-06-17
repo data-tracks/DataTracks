@@ -11,18 +11,18 @@ pub trait Project: Algebra {
 
 pub struct TrainProject {
     input: Box<AlgebraType>,
-    project: Arc<Box<dyn Fn(Value) -> Value>>,
+    project: Arc<Box<dyn Fn(Value) -> Value + Send + Sync + 'static>>,
 }
 
 impl Algebra for TrainProject {
     fn get_handler(&self) -> Transformer {
         let project = Arc::clone(&self.project);
-        let input = Arc::new(self.input.get_handler());
-        Transformer(Box::new(move |train: Train| {
-            let train = input.0(train);
+        let input = self.input.get_handler();
+        Box::new(move |train: Train| {
+            let train = input(train);
             let projected = train.values.get(&0).unwrap().into_iter().map(|value: &Value| project(value.clone())).collect();
             Train::single(projected)
-        }))
+        })
     }
 }
 
