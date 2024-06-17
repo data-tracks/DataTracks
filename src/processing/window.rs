@@ -1,7 +1,8 @@
 use chrono::NaiveTime;
 
 use crate::processing::train::Train;
-use crate::processing::Transformer;
+use crate::processing::Referencer;
+use crate::processing::transform::Taker;
 use crate::processing::window::Window::{Back, Interval};
 use crate::util::TimeUnit;
 
@@ -16,7 +17,7 @@ impl Window {
         Back(BackWindow::new(0, TimeUnit::Millis))
     }
 
-    pub(crate) fn windowing(&self) -> Transformer {
+    pub(crate) fn windowing(&self) -> Taker {
         match self {
             Back(w) => w.get_window(),
             Interval(w) => w.get_window()
@@ -55,8 +56,8 @@ impl BackWindow {
     }
 
 
-    pub(crate) fn get_window(&self) -> Transformer {
-        Box::new(|train: Train| -> Train{ train })
+    pub(crate) fn get_window(&self) -> Taker {
+        Box::new(|train: Train| train)
     }
 
     pub(crate) fn dump(&self) -> String {
@@ -115,10 +116,8 @@ impl IntervalWindow {
         }
     }
 
-    pub(crate) fn get_window(&self) -> Transformer {
-        Box::new(|train: Train| {
-            return train;
-        })
+    pub(crate) fn get_window(&self) -> Taker {
+        Box::new(|train: Train| train)
     }
 }
 
@@ -146,7 +145,7 @@ mod test {
 
         station.add_out(0, tx).unwrap();
         station.operate();
-        station.send(Train::single(values.clone())).unwrap();
+        station.send(Train::default(values.clone())).unwrap();
 
         let res = rx.recv();
         match res {

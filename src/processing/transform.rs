@@ -1,20 +1,23 @@
+use std::collections::HashMap;
 use crate::{algebra, language};
 use crate::language::Language;
-use crate::processing::train::Train;
+use crate::processing::train::{Train};
 use crate::processing::transform::Transform::Func;
 use crate::value::Value;
 
-pub type Transformer = Box<dyn Fn(Train) -> Train + Send + Sync + 'static>;
+pub type Referencer<'a> = Box<dyn Fn(&'a mut Train) -> Train + Send + Sync + 'a>;
+
+pub type Taker<'a> = Box<dyn Fn(Train) -> Train + Send + Sync + 'a>;
 
 
-pub enum Transform {
-    Func(FuncTransform),
-    LanguageTransform(LanguageTransform),
+pub enum Transform<'a> {
+    Func(FuncTransform<'a>),
+    LanguageTransform(LanguageTransform<'a>),
 }
 
 
-impl Transform {
-    pub fn transformer(&mut self) -> Transformer {
+impl<'a> Transform<'a> {
+    pub fn transformer(&mut self) -> Referencer {
         match self {
             Func(t) => t.get_transform(),
             Transform::LanguageTransform(t) => t.get_transform()
@@ -25,7 +28,7 @@ impl Transform {
         Func(FuncTransform::default())
     }
 
-    pub fn parse(stencil: String) -> Result<Transform, String> {
+    pub fn parse(stencil: String) -> Result<Transform<'a>, String> {
         match stencil.split_once("|") {
             None => Err("Wrong transform format.".to_string()),
             Some((module, logic)) => {
@@ -46,33 +49,31 @@ impl Transform {
 }
 
 pub trait Transformable {
-    fn get_transform(&mut self) -> Transformer {
-        Box::new(|train: Train| {
-            return train;
-        })
+    fn get_transform(&mut self) -> Referencer {
+        Box::new(|train: &mut Train| Train::from(train))
     }
 
     fn dump(&self) -> String;
 
-    fn default() -> FuncTransform {
-        FuncTransform::new(|f| f)
+    fn default<'a>() -> FuncTransform<'a> {
+        FuncTransform::new(|f| Train::from(f))
     }
 }
 
-pub struct LanguageTransform {
+pub struct LanguageTransform<'a> {
     language: Language,
     query: String,
-    func: Option<Transformer>,
+    func: Option<Referencer<'a>>,
 }
 
-impl LanguageTransform {
+impl<'a> LanguageTransform<'a> {
     fn parse(language: Language, query: &str) -> LanguageTransform {
         let func = build_transformer(&language, query).unwrap();
         LanguageTransform { language, query: query.to_string(), func: Some(func) }
     }
 }
 
-fn build_transformer(language: &Language, query: &str) -> Result<Transformer, String> {
+fn build_transformer<'a>(language: &'a Language, query: &'a str) -> Result<Referencer<'a>, String> {
     let algebra = match language {
         Language::SQL => language::sql(query)?,
         Language::MQL => Err("Not supported.")?
@@ -80,8 +81,8 @@ fn build_transformer(language: &Language, query: &str) -> Result<Transformer, St
     algebra::funtionize(algebra)
 }
 
-impl Transformable for LanguageTransform {
-    fn get_transform(&mut self) -> Transformer {
+impl<'a> Transformable for LanguageTransform<'a> {
+    fn get_transform(&mut self) -> Referencer {
         self.func.take().unwrap()
     }
 
@@ -91,32 +92,35 @@ impl Transformable for LanguageTransform {
 }
 
 
-pub struct FuncTransform {
-    pub func: Option<Transformer>,
+pub struct FuncTransform<'a> {
+    pub func: Option<Referencer<'a>>,
 }
 
 
-impl FuncTransform {
+impl<'a> FuncTransform<'a> {
     pub(crate) fn new<F>(func: F) -> Self
     where
-        F: Fn(Train) -> Train + Send + 'static + Sync,
+        F: Fn(&mut Train) -> Train + Send + 'a + Sync,
     {
         FuncTransform { func: Some(Box::new(func)) }
     }
 
-    pub(crate) fn new_val<F>(stop: i64, func: F) -> FuncTransform
+    pub(crate) fn new_val<F>(stop: i64, func: F) -> FuncTransform<'a>
     where
-        F: Fn(Value) -> Value + Send + Clone + Sync + 'static,
+        F: Fn(Value) -> Value + Send + Clone + Sync + 'a,
     {
-        Self::new(move |t: Train| {
-            let values = t.values.get(&0).unwrap().take().unwrap().into_iter().map(|value: &Value| func.clone()(value.clone())).collect();
-            Train::single(stop, values)
+        Self::new(move |t: &mut Train| {
+            let mut  values = HashMap::new();
+            for (stop, value) in &mut t.values {
+                values.insert(stop.clone(), value.take().unwrap().into_iter().map(func.clone()).collect());
+            }
+            Train::new(values)
         })
     }
 }
 
-impl Transformable for FuncTransform {
-    fn get_transform(&mut self) -> Transformer {
+impl<'a> Transformable for FuncTransform<'a> {
+    fn get_transform(&mut self) -> Referencer {
         self.func.take().unwrap()
     }
 
@@ -148,7 +152,7 @@ mod tests {
 
         station.add_out(0, tx).unwrap();
         station.operate();
-        station.send(Train::single(values.clone())).unwrap();
+        station.send(Train::single(0, values.clone())).unwrap();
 
         let res = rx.recv();
         match res {
@@ -167,7 +171,7 @@ mod tests {
     fn sql_transform() {
         let mut station = Station::new(0);
 
-        station.transform(Func(FuncTransform::new_val(|x| &x + &Value::int(3))));
+        station.transform(Func(FuncTransform::new_val(0, |x| &x + &Value::int(3))));
 
         let values = vec![Value::float(3.3), Value::int(3)];
 
@@ -175,7 +179,7 @@ mod tests {
 
         station.add_out(0, tx).unwrap();
         station.operate();
-        station.send(Train::single(values.clone())).unwrap();
+        station.send(Train::single(0, values.clone())).unwrap();
 
         let res = rx.recv();
         match res {

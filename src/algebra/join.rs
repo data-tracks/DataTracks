@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::algebra::algebra::Algebra;
 use crate::algebra::AlgebraType;
-use crate::processing::{Train, Transformer};
+use crate::processing::{Train, Referencer};
 use crate::value::Value;
 
 pub trait Join: Algebra {
@@ -43,7 +43,7 @@ where
 }
 
 impl<H: PartialEq + 'static> Algebra for TrainJoin<H> {
-    fn get_handler(&self) -> Transformer {
+    fn get_handler(&self) -> Referencer {
         let left_hash = Arc::clone(&self.left_hash);
         let right_hash = Arc::clone(&self.right_hash);
         let out = Arc::clone(&self.out);
@@ -52,12 +52,12 @@ impl<H: PartialEq + 'static> Algebra for TrainJoin<H> {
         let right = self.right.get_handler();
 
         Box::new(
-            move |train: Train| {
+            move |train: &mut Train| {
                 let mut values = vec![];
-                let left = left(train.clone());
+                let left = left(train);
                 let right = right(train);
-                let right_hashes: Vec<(&H, Value)> = right.values.get(&0).unwrap().iter().map(|value: &Value| (right_hash(value), value.clone())).collect();
-                for l_value in left.values.get(&0).unwrap() {
+                let right_hashes: Vec<(&H, Value)> = right.values.get(&0).unwrap().take().unwrap().into_iter().map(|value: Value| (right_hash(&value), value)).collect();
+                for l_value in left.values.get(&0).unwrap().take().unwrap() {
                     let l_hash = left_hash(&l_value);
                     for (r_hash, r_val) in &right_hashes {
                         if l_hash == *r_hash {
@@ -65,7 +65,7 @@ impl<H: PartialEq + 'static> Algebra for TrainJoin<H> {
                         }
                     }
                 }
-                Train::single(values)
+                Train::default(values)
             }
         )
     }
@@ -94,7 +94,7 @@ mod test {
 
     #[test]
     fn one_match() {
-        let train = Train::new(HashMap::from([
+        let mut train = Train::new(HashMap::from([
             (0, vec![3.into(), 5.5.into()]),
             (1, vec![5.5.into(), "test".into()])
         ]));
@@ -108,14 +108,14 @@ mod test {
         }));
 
         let handle = join.get_handler();
-        let res = handle(train);
+        let res = handle(&mut train);
         assert_eq!(res.values.get(&0).unwrap(), &vec![vec![5.5.into(), 5.5.into()].into()]);
         assert_ne!(res.values.get(&0).unwrap(), &vec![vec![].into()]);
     }
 
     #[test]
     fn multi_match() {
-        let train = Train::new(HashMap::from([
+        let mut train = Train::new(HashMap::from([
             (0, vec![3.into(), 5.5.into()]),
             (1, vec![5.5.into(), 5.5.into()])
         ]));
@@ -127,7 +127,7 @@ mod test {
         }));
 
         let handle = join.get_handler();
-        let res = handle(train);
+        let res = handle(&mut train);
         assert_eq!(res.values.get(&0).unwrap(), &vec![vec![5.5.into(), 5.5.into()].into(), vec![5.5.into(), 5.5.into()].into()]);
         assert_ne!(res.values.get(&0).unwrap(), &vec![vec![].into()]);
     }

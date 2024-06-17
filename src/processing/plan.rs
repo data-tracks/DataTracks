@@ -8,16 +8,16 @@ use crate::processing::transform::Transform;
 use crate::processing::window::Window;
 use crate::util::GLOBAL_ID;
 
-pub(crate) struct Plan {
+pub(crate) struct Plan<'a> {
     id: i64,
     lines: HashMap<i64, Vec<i64>>,
-    stations: HashMap<i64, Station>,
+    stations: HashMap<i64, Station<'a>>,
     sources: HashMap<i64, Box<dyn Source>>,
     destinations: HashMap<i64, Box<dyn Destination>>,
 }
 
 
-impl Plan {
+impl<'a> Plan<'a> {
     pub(crate) fn default() -> Self {
         Plan::new(GLOBAL_ID.new_id())
     }
@@ -58,7 +58,7 @@ impl Plan {
         dump
     }
 
-    pub(crate) fn operate(&mut self) {
+    pub(crate) fn operate(&'a mut self) {
         self.connect_stops().unwrap();
         self.connect_destinations().unwrap();
         self.connect_sources().unwrap();
@@ -348,7 +348,7 @@ mod dummy {
         fn operate(&self) {
             for values in &self.values {
                 for sender in &self.senders {
-                    sender.send(Train::single(values.clone())).unwrap();
+                    sender.send(Train::default(values.clone())).unwrap();
                 }
                 sleep(self.delay);
             }
@@ -431,7 +431,7 @@ mod stencil {
 
         plan.operate();
 
-        input.send(Train::single(values.clone())).unwrap();
+        input.send(Train::default(values.clone())).unwrap();
 
         let res = output_rx.recv().unwrap();
         assert_eq!(res.values.get(&0).unwrap(), &values);
@@ -470,7 +470,7 @@ mod stencil {
 
         plan.operate();
 
-        input.send(Train::single(values.clone())).unwrap();
+        input.send(Train::default(values.clone())).unwrap();
 
         let res = output1_rx.recv().unwrap();
         assert_eq!(res.values.get(&0).unwrap(), &values);

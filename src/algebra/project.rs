@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::algebra::algebra::Algebra;
 use crate::algebra::AlgebraType;
-use crate::processing::{Train, Transformer};
+use crate::processing::{Train, Referencer};
 use crate::value::Value;
 
 pub trait Project: Algebra {
@@ -15,13 +15,13 @@ pub struct TrainProject {
 }
 
 impl Algebra for TrainProject {
-    fn get_handler(&self) -> Transformer {
+    fn get_handler(&self) -> Referencer {
         let project = Arc::clone(&self.project);
         let input = self.input.get_handler();
-        Box::new(move |train: Train| {
-            let train = input(train);
-            let projected = train.values.get(&0).unwrap().into_iter().map(|value: &Value| project(value.clone())).collect();
-            Train::single(projected)
+        Box::new(move |train: &mut Train| {
+            let mut train = input(train);
+            let projected = train.values.get_mut(&0).unwrap().take().unwrap().into_iter().map(|value: Value| project(value)).collect();
+            Train::default(projected)
         })
     }
 }

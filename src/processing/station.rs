@@ -4,24 +4,24 @@ use std::thread;
 use std::thread::JoinHandle;
 
 use crate::processing::sender::Sender;
-use crate::processing::train::Train;
+use crate::processing::train::{Train};
 use crate::processing::transform::Transform;
 use crate::processing::window::Window;
 use crate::util::GLOBAL_ID;
 
-pub(crate) struct Station {
+pub(crate) struct Station<'a> {
     id: i64,
     pub stop: i64,
     sender_in: Option<mpsc::Sender<Train>>, // to hang up
     receiver: Option<Receiver<Train>>,
     sender: Option<Sender>,
     window: Window,
-    transform: Transform,
+    transform: Transform<'a>,
     block: Vec<i64>,
 }
 
 
-impl Station {
+impl<'a> Station<'a> {
     pub(crate) fn default() -> Self {
         Self::new(-1)
     }
@@ -58,7 +58,7 @@ impl Station {
         self.window = window;
     }
 
-    pub(crate) fn transform(&mut self, transform: Transform) {
+    pub(crate) fn transform(&'a mut self, transform: Transform<'a>) {
         self.transform = transform;
     }
 
@@ -102,7 +102,7 @@ impl Station {
         cloned_sender
     }
 
-    pub(crate) fn operate(&mut self) -> JoinHandle<()> {
+    pub(crate) fn operate(&'a mut self) -> JoinHandle<()> {
         let receiver = self.receiver.take().unwrap();
         let sender = self.sender.take().unwrap();
         let transform = self.transform.transformer();
@@ -110,7 +110,8 @@ impl Station {
 
         thread::spawn(move || {
             while let Ok(train) = receiver.recv() {
-                let transformed = transform(window(train));
+                let mut temp = window(train);
+                let transformed = transform(&mut temp);
                 sender.send(transformed)
             }
         })
