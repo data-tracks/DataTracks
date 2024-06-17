@@ -3,25 +3,6 @@
 version = 3
 
 [[package]]
-name = "HoStEn"
-version = "0.1.0"
-dependencies = [
- "askama",
- "axum",
- "chrono",
- "ctrlc",
- "lazy_static",
- "log",
- "logos",
- "tokio",
- "tower",
- "tower-http",
- "tracing",
- "tracing-subscriber",
- "uuid",
-]
-
-[[package]]
 name = "addr2line"
 version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -270,6 +251,25 @@ checksum = "672465ae37dc1bc6380a6547a8883d5dd397b0f1faaad4f265726cc7042a5345"
 dependencies = [
  "nix",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "data_tracks"
+version = "0.1.0"
+dependencies = [
+ "askama",
+ "axum",
+ "chrono",
+ "ctrlc",
+ "lazy_static",
+ "log",
+ "logos",
+ "tokio",
+ "tower",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]
