@@ -1,4 +1,4 @@
-![Logo](/admin/logo.jpeg?raw=true "Optional Title")
+<img alt="Logo" height="300" src="/admin/logo.jpeg?raw=true" title="DataTrack" width="300"/>
 
 # DataTrack
 
