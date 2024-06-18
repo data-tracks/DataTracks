@@ -8,16 +8,16 @@ use crate::processing::transform::Transform;
 use crate::processing::window::Window;
 use crate::util::GLOBAL_ID;
 
-pub(crate) struct Plan<'a> {
+pub(crate) struct Plan {
     id: i64,
     lines: HashMap<i64, Vec<i64>>,
-    stations: HashMap<i64, Station<'a>>,
+    stations: HashMap<i64, Station>,
     sources: HashMap<i64, Box<dyn Source>>,
     destinations: HashMap<i64, Box<dyn Destination>>,
 }
 
 
-impl<'a> Plan<'a> {
+impl Plan {
     pub(crate) fn default() -> Self {
         Plan::new(GLOBAL_ID.new_id())
     }
@@ -58,7 +58,7 @@ impl<'a> Plan<'a> {
         dump
     }
 
-    pub(crate) fn operate(&'a mut self) {
+    pub(crate) fn operate(&mut self) {
         self.connect_stops().unwrap();
         self.connect_destinations().unwrap();
         self.connect_sources().unwrap();

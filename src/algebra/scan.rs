@@ -1,5 +1,5 @@
-use crate::algebra::algebra::Algebra;
-use crate::processing::{Train, Referencer};
+use crate::algebra::algebra::{Algebra, Handler, RefHandler};
+use crate::processing::Train;
 
 pub trait Scan: Algebra {}
 
@@ -13,11 +13,19 @@ impl TrainScan {
     }
 }
 
+pub struct ScanHandler {
+    index: i64,
+}
+
+impl RefHandler for ScanHandler {
+    fn process(&self, train: &mut Train) -> Train {
+        Train::default(train.values.get_mut(&self.index).unwrap().take().unwrap())
+    }
+}
+
 impl Algebra for TrainScan {
-    fn get_handler(&self) -> Referencer {
-        Box::new(move |train: &mut Train| {
-            Train::default(train.values.get_mut(&self.index).unwrap().take().unwrap())
-        })
+    fn get_handler(&mut self) -> Box<dyn RefHandler> {
+        Box::new(ScanHandler { index: self.index })
     }
 }
 
@@ -33,7 +41,7 @@ mod test {
     fn simple_scan() {
         let mut train = Train::default(vec![3.into(), "test".into()]);
 
-        let scan = TrainScan::new(0);
+        let mut scan = TrainScan::new(0);
 
         let handler = scan.get_handler();
 

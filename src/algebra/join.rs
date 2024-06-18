@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::algebra::algebra::Algebra;
+use crate::algebra::algebra::{Algebra, Handler, RefHandler};
 use crate::algebra::AlgebraType;
 use crate::processing::{Train, Referencer};
 use crate::value::Value;
@@ -16,9 +16,9 @@ where
 {
     left: Box<AlgebraType>,
     right: Box<AlgebraType>,
-    left_hash: Arc<Box<dyn Fn(&Value) -> &Hash + Send + Sync>>,
-    right_hash: Arc<Box<dyn Fn(&Value) -> &Hash + Send + Sync>>,
-    out: Arc<Box<dyn Fn(Value, Value) -> Value + Send + Sync>>,
+    left_hash: Option<fn(&Value) -> &Hash>,
+    right_hash: Option<fn(&Value) -> &Hash>,
+    out: Option<fn(Value, Value) -> Value>,
 }
 
 impl<H> TrainJoin<H>
@@ -28,46 +28,55 @@ where
     pub(crate) fn new(
         left: AlgebraType,
         right: AlgebraType,
-        left_hash: Box<dyn Fn(&Value) -> &H + Send + Sync>,
-        right_hash: Box<dyn Fn(&Value) -> &H + Send + Sync>,
-        out: Box<dyn Fn(Value, Value) -> Value + Send + Sync>,
+        left_hash: fn(&Value) -> &H,
+        right_hash: fn(&Value) -> &H,
+        out: fn(Value, Value) -> Value,
     ) -> Self {
         TrainJoin {
             left: Box::new(left),
             right: Box::new(right),
-            left_hash: Arc::new(left_hash),
-            right_hash: Arc::new(right_hash),
-            out: Arc::new(out),
+            left_hash: Some(left_hash),
+            right_hash: Some(right_hash),
+            out: Some(out),
         }
     }
 }
 
+pub struct JoinHandler<H> where H: PartialEq{
+    left_hash: fn(&Value) -> &H,
+    right_hash: fn(&Value) -> &H,
+    left: Box<dyn RefHandler>,
+    right: Box<dyn RefHandler>,
+    out: fn(Value, Value) -> Value,
+}
+
+impl<H> RefHandler for JoinHandler<H> where H: PartialEq {
+    fn process(&self, train: &mut Train) -> Train {
+        let mut values = vec![];
+        let left = self.left.process(train);
+        let right = self.right.process(train);
+        let right_hashes: Vec<(&H, Value)> = right.values.get(&0).unwrap().take().unwrap().into_iter().map(|value: Value| (self.right_hash(&value), value)).collect();
+        for l_value in left.values.get(&0).unwrap().take().unwrap() {
+            let l_hash = self.left_hash(&l_value);
+            for (r_hash, r_val) in &right_hashes {
+                if l_hash == *r_hash {
+                    values.push(self.out(l_value.clone(), r_val.clone()));
+                }
+            }
+        }
+        Train::default(values)
+    }
+}
+
 impl<H: PartialEq + 'static> Algebra for TrainJoin<H> {
-    fn get_handler(&self) -> Referencer {
-        let left_hash = Arc::clone(&self.left_hash);
-        let right_hash = Arc::clone(&self.right_hash);
-        let out = Arc::clone(&self.out);
+    fn get_handler(&mut self) -> Box<dyn RefHandler> {
+        let left_hash = self.left_hash.take().unwrap();
+        let right_hash = self.right_hash.take().unwrap();
+        let out = self.out.take().unwrap();
 
         let left = self.left.get_handler();
         let right = self.right.get_handler();
-
-        Box::new(
-            move |train: &mut Train| {
-                let mut values = vec![];
-                let left = left(train);
-                let right = right(train);
-                let right_hashes: Vec<(&H, Value)> = right.values.get(&0).unwrap().take().unwrap().into_iter().map(|value: Value| (right_hash(&value), value)).collect();
-                for l_value in left.values.get(&0).unwrap().take().unwrap() {
-                    let l_hash = left_hash(&l_value);
-                    for (r_hash, r_val) in &right_hashes {
-                        if l_hash == *r_hash {
-                            values.push(out(l_value.clone(), r_val.clone()));
-                        }
-                    }
-                }
-                Train::default(values)
-            }
-        )
+        Box::new(JoinHandler{left_hash, right_hash, left, right, out})
     }
 }
 
@@ -103,9 +112,9 @@ mod test {
 
         let right = TrainScan::new(1);
 
-        let join = TrainJoin::new(Scan(left), Scan(right), Box::new(|val: &Value| val), Box::new(|val: &Value| val), Box::new(|left: Value, right: Value| {
+        let mut join = TrainJoin::new(Scan(left), Scan(right), |val: &Value| val, |val: &Value| val, |left: Value, right: Value| {
             vec![left.into(), right.into()].into()
-        }));
+        });
 
         let handle = join.get_handler();
         let res = handle(&mut train);
@@ -122,9 +131,9 @@ mod test {
         let left = TrainScan::new(0);
         let right = TrainScan::new(1);
 
-        let join = TrainJoin::new(Scan(left), Scan(right), Box::new(|val: &Value| val), Box::new(|val: &Value| val), Box::new(|left: Value, right: Value| {
+        let mut join = TrainJoin::new(Scan(left), Scan(right), |val: &Value| val, |val: &Value| val, |left: Value, right: Value| {
             vec![left.into(), right.into()].into()
-        }));
+        });
 
         let handle = join.get_handler();
         let res = handle(&mut train);

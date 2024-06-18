@@ -1,23 +1,25 @@
 use std::collections::HashMap;
+
 use crate::{algebra, language};
+use crate::algebra::RefHandler;
 use crate::language::Language;
-use crate::processing::train::{Train};
+use crate::processing::train::Train;
 use crate::processing::transform::Transform::Func;
 use crate::value::Value;
 
-pub type Referencer<'a> = Box<dyn Fn(&'a mut Train) -> Train + Send + Sync + 'a>;
+pub type Referencer = fn(&mut Train) -> Train;
 
-pub type Taker<'a> = Box<dyn Fn(Train) -> Train + Send + Sync + 'a>;
+pub type Taker = fn(Train) -> Train;
 
 
-pub enum Transform<'a> {
-    Func(FuncTransform<'a>),
-    LanguageTransform(LanguageTransform<'a>),
+pub enum Transform {
+    Func(FuncTransform),
+    LanguageTransform(LanguageTransform),
 }
 
 
-impl<'a> Transform<'a> {
-    pub fn transformer(&mut self) -> Referencer {
+impl Transform {
+    pub fn transformer(&mut self) -> Box<dyn RefHandler> {
         match self {
             Func(t) => t.get_transform(),
             Transform::LanguageTransform(t) => t.get_transform()
@@ -28,7 +30,7 @@ impl<'a> Transform<'a> {
         Func(FuncTransform::default())
     }
 
-    pub fn parse(stencil: String) -> Result<Transform<'a>, String> {
+    pub fn parse(stencil: String) -> Result<Transform, String> {
         match stencil.split_once("|") {
             None => Err("Wrong transform format.".to_string()),
             Some((module, logic)) => {
@@ -49,40 +51,40 @@ impl<'a> Transform<'a> {
 }
 
 pub trait Transformable {
-    fn get_transform(&mut self) -> Referencer {
-        Box::new(|train: &mut Train| Train::from(train))
+    fn get_transform(&mut self) -> Box<dyn RefHandler> {
+        Box::new( FuncTransformHandler{func: |train: &mut Train| Train::from(train)})
     }
 
     fn dump(&self) -> String;
 
-    fn default<'a>() -> FuncTransform<'a> {
+    fn default() -> FuncTransform {
         FuncTransform::new(|f| Train::from(f))
     }
 }
 
-pub struct LanguageTransform<'a> {
+pub struct LanguageTransform {
     language: Language,
     query: String,
-    func: Option<Referencer<'a>>,
+    func: Option<Box<dyn RefHandler>>,
 }
 
-impl<'a> LanguageTransform<'a> {
+impl LanguageTransform {
     fn parse(language: Language, query: &str) -> LanguageTransform {
         let func = build_transformer(&language, query).unwrap();
         LanguageTransform { language, query: query.to_string(), func: Some(func) }
     }
 }
 
-fn build_transformer<'a>(language: &'a Language, query: &'a str) -> Result<Referencer<'a>, String> {
+fn build_transformer(language: &Language, query: &str) -> Result<Box<dyn RefHandler>, String> {
     let algebra = match language {
         Language::SQL => language::sql(query)?,
         Language::MQL => Err("Not supported.")?
     };
-    algebra::funtionize(algebra)
+    algebra::functionize(algebra)
 }
 
-impl<'a> Transformable for LanguageTransform<'a> {
-    fn get_transform(&mut self) -> Referencer {
+impl Transformable for LanguageTransform {
+    fn get_transform(&mut self) -> Box<dyn RefHandler> {
         self.func.take().unwrap()
     }
 
@@ -92,25 +94,32 @@ impl<'a> Transformable for LanguageTransform<'a> {
 }
 
 
-pub struct FuncTransform<'a> {
-    pub func: Option<Referencer<'a>>,
+struct FuncTransformHandler {
+    func: fn(&mut Train) -> Train,
+}
+
+impl RefHandler for FuncTransformHandler {
+    fn process(&self, train: &mut Train) -> Train {
+        self.func(train)
+    }
+}
+
+pub struct FuncTransform {
+    pub func: Option<Box<dyn RefHandler>>,
 }
 
 
-impl<'a> FuncTransform<'a> {
-    pub(crate) fn new<F>(func: F) -> Self
-    where
-        F: Fn(&mut Train) -> Train + Send + 'a + Sync,
-    {
-        FuncTransform { func: Some(Box::new(func)) }
+impl FuncTransform {
+    pub(crate) fn new(func: fn(&mut Train) -> Train) -> Self {
+        FuncTransform { func: Some(Box::new(FuncTransformHandler { func })) }
     }
 
-    pub(crate) fn new_val<F>(stop: i64, func: F) -> FuncTransform<'a>
+    pub(crate) fn new_val<F>(stop: i64, func: F) -> FuncTransform
     where
-        F: Fn(Value) -> Value + Send + Clone + Sync + 'a,
+        F: Fn(Value) -> Value + Send + Clone + Sync + 'static,
     {
         Self::new(move |t: &mut Train| {
-            let mut  values = HashMap::new();
+            let mut values = HashMap::new();
             for (stop, value) in &mut t.values {
                 values.insert(stop.clone(), value.take().unwrap().into_iter().map(func.clone()).collect());
             }
@@ -119,8 +128,8 @@ impl<'a> FuncTransform<'a> {
     }
 }
 
-impl<'a> Transformable for FuncTransform<'a> {
-    fn get_transform(&mut self) -> Referencer {
+impl Transformable for FuncTransform {
+    fn get_transform(&mut self) -> Box<dyn RefHandler> {
         self.func.take().unwrap()
     }
 

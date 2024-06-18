@@ -1,4 +1,4 @@
-use std::sync::mpsc;
+use std::sync::{Arc, mpsc};
 use std::sync::mpsc::{channel, Receiver};
 use std::thread;
 use std::thread::JoinHandle;
@@ -9,19 +9,19 @@ use crate::processing::transform::Transform;
 use crate::processing::window::Window;
 use crate::util::GLOBAL_ID;
 
-pub(crate) struct Station<'a> {
+pub(crate) struct Station {
     id: i64,
     pub stop: i64,
     sender_in: Option<mpsc::Sender<Train>>, // to hang up
     receiver: Option<Receiver<Train>>,
     sender: Option<Sender>,
     window: Window,
-    transform: Transform<'a>,
+    transform: Transform,
     block: Vec<i64>,
 }
 
 
-impl<'a> Station<'a> {
+impl Station {
     pub(crate) fn default() -> Self {
         Self::new(-1)
     }
@@ -58,7 +58,7 @@ impl<'a> Station<'a> {
         self.window = window;
     }
 
-    pub(crate) fn transform(&'a mut self, transform: Transform<'a>) {
+    pub(crate) fn transform(&mut self, transform: Transform) {
         self.transform = transform;
     }
 
@@ -102,16 +102,16 @@ impl<'a> Station<'a> {
         cloned_sender
     }
 
-    pub(crate) fn operate(&'a mut self) -> JoinHandle<()> {
+    pub(crate) fn operate(&mut self) -> JoinHandle<()> {
         let receiver = self.receiver.take().unwrap();
         let sender = self.sender.take().unwrap();
-        let transform = self.transform.transformer();
+        let transform = Arc::new(self.transform.transformer());
         let window = self.window.windowing();
 
         thread::spawn(move || {
             while let Ok(train) = receiver.recv() {
                 let mut temp = window(train);
-                let transformed = transform(&mut temp);
+                let transformed = transform.process(&mut temp);
                 sender.send(transformed)
             }
         })
