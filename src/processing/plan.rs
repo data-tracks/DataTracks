@@ -433,9 +433,9 @@ mod stencil {
 
         input.send(Train::default(values.clone())).unwrap();
 
-        let res = output_rx.recv().unwrap();
-        assert_eq!(res.values.get(&0).unwrap(), &values);
-        assert_ne!(res.values.get(&0).unwrap(), &vec![Value::null()]);
+        let mut res = output_rx.recv().unwrap();
+        assert_eq!(res.values.get(&0).unwrap().clone().unwrap(), values);
+        assert_ne!(res.values.get_mut(&0).unwrap().take().unwrap(), vec![Value::null()]);
 
         assert!(output_rx.try_recv().is_err());
 
@@ -472,15 +472,15 @@ mod stencil {
 
         input.send(Train::default(values.clone())).unwrap();
 
-        let res = output1_rx.recv().unwrap();
-        assert_eq!(res.values.get(&0).unwrap(), &values);
-        assert_ne!(res.values.get(&0).unwrap(), &vec![Value::null()]);
+        let mut res = output1_rx.recv().unwrap();
+        assert_eq!(res.values.get(&0).unwrap().clone().unwrap(), values);
+        assert_ne!(res.values.get_mut(&0).unwrap().take().unwrap(), vec![Value::null()]);
 
         assert!(output1_rx.try_recv().is_err());
 
-        let res = output2_rx.recv().unwrap();
-        assert_eq!(res.values.get(&0).unwrap(), &values);
-        assert_ne!(res.values.get(&0).unwrap(), &vec![Value::null()]);
+        let mut res = output2_rx.recv().unwrap();
+        assert_eq!(res.values.get(&0).unwrap().clone().unwrap(), values);
+        assert_ne!(res.values.get_mut(&0).unwrap().take().unwrap(), vec![Value::null()]);
 
         assert!(output2_rx.try_recv().is_err());
 
@@ -518,8 +518,8 @@ mod stencil {
             sleep(Duration::from_millis(5))
         }
         let results = clone.lock().unwrap();
-        for train in results.clone() {
-            assert_eq!(train.values.get(&0).unwrap(), values.get(0).unwrap())
+        for mut train in results.clone() {
+            assert_eq!(train.values.get_mut(&0).unwrap().take().unwrap(), *values.get(0).unwrap())
         }
     }
 }

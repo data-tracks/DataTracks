@@ -1,10 +1,10 @@
-use std::sync::{Arc, mpsc};
+use std::sync::mpsc;
 use std::sync::mpsc::{channel, Receiver};
 use std::thread;
 use std::thread::JoinHandle;
 
 use crate::processing::sender::Sender;
-use crate::processing::train::{Train};
+use crate::processing::train::Train;
 use crate::processing::transform::Transform;
 use crate::processing::window::Window;
 use crate::util::GLOBAL_ID;
@@ -105,7 +105,7 @@ impl Station {
     pub(crate) fn operate(&mut self) -> JoinHandle<()> {
         let receiver = self.receiver.take().unwrap();
         let sender = self.sender.take().unwrap();
-        let transform = Arc::new(self.transform.transformer());
+        let transform = self.transform.transformer();
         let window = self.window.windowing();
 
         thread::spawn(move || {
@@ -146,9 +146,9 @@ mod tests {
 
         let res = rx.recv();
         match res {
-            Ok(t) => {
-                assert_eq!(values.len(), t.values.get(&0).unwrap().len());
-                for (i, value) in t.values.get(&0).unwrap().iter().enumerate() {
+            Ok(mut t) => {
+                assert_eq!(values.len(), t.values.get(&0).unwrap().clone().map_or(usize::MAX, |values| values.len()));
+                for (i, value) in t.values.get_mut(&0).unwrap().take().unwrap().iter().enumerate() {
                     assert_eq!(value, &values[i]);
                     assert_ne!(&Value::text(""), value)
                 }
@@ -179,8 +179,8 @@ mod tests {
         input.send(Train::single(0, values.clone())).unwrap();
 
         let res = output_rx.recv().unwrap();
-        assert_eq!(res.values.get(&0).unwrap(), &values);
-        assert_ne!(res.values.get(&0).unwrap(), &vec![Value::null()]);
+        assert_eq!(res.values.get(&0).unwrap().clone().unwrap(), values);
+        assert_ne!(res.values.get(&0).unwrap().clone().unwrap(), vec![Value::null()]);
 
         assert!(output_rx.try_recv().is_err());
 

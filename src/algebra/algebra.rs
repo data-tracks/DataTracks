@@ -2,7 +2,7 @@ use crate::algebra::filter::TrainFilter;
 use crate::algebra::join::TrainJoin;
 use crate::algebra::project::TrainProject;
 use crate::algebra::scan::TrainScan;
-use crate::processing::{Referencer, Train};
+use crate::processing::Train;
 use crate::value::Value;
 
 pub enum AlgebraType {
@@ -31,7 +31,7 @@ pub fn functionize(mut algebra: AlgebraType) -> Result<Box<dyn RefHandler>, Stri
     Ok(algebra.get_handler())
 }
 
-pub trait RefHandler {
+pub trait RefHandler: Send {
     fn process(&self, train: &mut Train) -> Train;
 }
 

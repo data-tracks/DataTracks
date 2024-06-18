@@ -52,7 +52,7 @@ impl Transform {
 
 pub trait Transformable {
     fn get_transform(&mut self) -> Box<dyn RefHandler> {
-        Box::new( FuncTransformHandler{func: |train: &mut Train| Train::from(train)})
+        Box::new(FuncTransformHandler { func: |train: &mut Train| Train::from(train) })
     }
 
     fn dump(&self) -> String;
@@ -100,7 +100,21 @@ struct FuncTransformHandler {
 
 impl RefHandler for FuncTransformHandler {
     fn process(&self, train: &mut Train) -> Train {
-        self.func(train)
+        (self.func)(train)
+    }
+}
+
+struct FuncValueHandler {
+    func: fn(train: Value) -> Value,
+}
+
+impl RefHandler for FuncValueHandler {
+    fn process(&self, train: &mut Train) -> Train {
+        let mut values = HashMap::new();
+        for (stop, value) in &mut train.values {
+            values.insert(stop.clone(), value.take().unwrap().into_iter().map(|value: Value| (self.func)(value)).collect());
+        }
+        Train::new(values)
     }
 }
 
@@ -114,17 +128,8 @@ impl FuncTransform {
         FuncTransform { func: Some(Box::new(FuncTransformHandler { func })) }
     }
 
-    pub(crate) fn new_val<F>(stop: i64, func: F) -> FuncTransform
-    where
-        F: Fn(Value) -> Value + Send + Clone + Sync + 'static,
-    {
-        Self::new(move |t: &mut Train| {
-            let mut values = HashMap::new();
-            for (stop, value) in &mut t.values {
-                values.insert(stop.clone(), value.take().unwrap().into_iter().map(func.clone()).collect());
-            }
-            Train::new(values)
-        })
+    pub(crate) fn new_val(stop: i64, func: fn(Value) -> Value) -> FuncTransform {
+        FuncTransform { func: Some(Box::new(FuncValueHandler { func })) }
     }
 }
 
@@ -165,11 +170,11 @@ mod tests {
 
         let res = rx.recv();
         match res {
-            Ok(t) => {
-                assert_eq!(values.len(), t.values.get(&0).unwrap().len());
-                for (i, value) in t.values.get(&0).unwrap().iter().enumerate() {
-                    assert_eq!(*value, &values[i] + &Value::int(3));
-                    assert_ne!(Value::text(""), *value)
+            Ok(mut t) => {
+                assert_eq!(values.len(), t.values.get(&0).unwrap().clone().map_or(usize::MAX, |vec: Vec<Value>| vec.len()));
+                for (i, value) in t.values.get_mut(&0).unwrap().take().unwrap().into_iter().enumerate() {
+                    assert_eq!(value, &values[i] + &Value::int(3));
+                    assert_ne!(Value::text(""), value)
                 }
             }
             Err(..) => assert!(false),
@@ -193,10 +198,10 @@ mod tests {
         let res = rx.recv();
         match res {
             Ok(t) => {
-                assert_eq!(values.len(), t.values.get(&0).unwrap().len());
-                for (i, value) in t.values.get(&0).unwrap().iter().enumerate() {
-                    assert_eq!(*value, &values[i] + &Value::int(3));
-                    assert_ne!(Value::text(""), *value)
+                assert_eq!(values.len(), t.values.get(&0).unwrap().clone().map(|vec: Vec<Value>| vec.len()).unwrap());
+                for (i, value) in t.values.get(&0).unwrap().clone().unwrap().into_iter().enumerate() {
+                    assert_eq!(value, &values[i] + &Value::int(3));
+                    assert_ne!(Value::text(""), value)
                 }
             }
             Err(..) => assert!(false),

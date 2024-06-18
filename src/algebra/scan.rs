@@ -45,9 +45,9 @@ mod test {
 
         let handler = scan.get_handler();
 
-        let train_2 = handler(&mut train);
+        let mut train_2 = handler.process(&mut train);
 
-        assert_eq!(train_2.values.get(&0).unwrap(), &vec![3.into(), "test".into()]);
-        assert_ne!(train_2.values.get(&0).unwrap(), &vec![8.into(), "test".into()]);
+        assert_eq!(train_2.values.get(&0).unwrap().clone().unwrap(), vec![3.into(), "test".into()]);
+        assert_ne!(train_2.values.get_mut(&0).unwrap().take().unwrap(), vec![8.into(), "test".into()]);
     }
 }

@@ -1,8 +1,6 @@
-use std::sync::Arc;
-
 use crate::algebra::algebra::{Algebra, Handler, RefHandler};
 use crate::algebra::AlgebraType;
-use crate::processing::{Train, Referencer};
+use crate::processing::Train;
 use crate::value::Value;
 
 pub trait Join: Algebra {
@@ -16,8 +14,8 @@ where
 {
     left: Box<AlgebraType>,
     right: Box<AlgebraType>,
-    left_hash: Option<fn(&Value) -> &Hash>,
-    right_hash: Option<fn(&Value) -> &Hash>,
+    left_hash: Option<fn(&Value) -> Hash>,
+    right_hash: Option<fn(&Value) -> Hash>,
     out: Option<fn(Value, Value) -> Value>,
 }
 
@@ -28,8 +26,8 @@ where
     pub(crate) fn new(
         left: AlgebraType,
         right: AlgebraType,
-        left_hash: fn(&Value) -> &H,
-        right_hash: fn(&Value) -> &H,
+        left_hash: fn(&Value) -> H,
+        right_hash: fn(&Value) -> H,
         out: fn(Value, Value) -> Value,
     ) -> Self {
         TrainJoin {
@@ -43,24 +41,30 @@ where
 }
 
 pub struct JoinHandler<H> where H: PartialEq{
-    left_hash: fn(&Value) -> &H,
-    right_hash: fn(&Value) -> &H,
+    left_hash: fn(&Value) -> H,
+    right_hash: fn(&Value) -> H,
     left: Box<dyn RefHandler>,
     right: Box<dyn RefHandler>,
     out: fn(Value, Value) -> Value,
 }
 
-impl<H> RefHandler for JoinHandler<H> where H: PartialEq {
+impl<'a, H> RefHandler for JoinHandler<H>
+where
+    H: PartialEq,
+{
     fn process(&self, train: &mut Train) -> Train {
         let mut values = vec![];
-        let left = self.left.process(train);
-        let right = self.right.process(train);
-        let right_hashes: Vec<(&H, Value)> = right.values.get(&0).unwrap().take().unwrap().into_iter().map(|value: Value| (self.right_hash(&value), value)).collect();
-        for l_value in left.values.get(&0).unwrap().take().unwrap() {
-            let l_hash = self.left_hash(&l_value);
+        let mut left = self.left.process(train);
+        let mut right = self.right.process(train);
+        let right_hashes: Vec<(H, Value)> = right.values.get_mut(&0).unwrap().take().unwrap().into_iter().map(|value: Value| {
+            let hash = (self.right_hash)(&value);
+            (hash, value)
+        }).collect();
+        for l_value in left.values.get_mut(&0).unwrap().take().unwrap() {
+            let l_hash = (self.left_hash)(&l_value);
             for (r_hash, r_val) in &right_hashes {
                 if l_hash == *r_hash {
-                    values.push(self.out(l_value.clone(), r_val.clone()));
+                    values.push((self.out)(l_value.clone(), r_val.clone()));
                 }
             }
         }
@@ -112,14 +116,14 @@ mod test {
 
         let right = TrainScan::new(1);
 
-        let mut join = TrainJoin::new(Scan(left), Scan(right), |val: &Value| val, |val: &Value| val, |left: Value, right: Value| {
+        let mut join = TrainJoin::new(Scan(left), Scan(right), |val: &Value| val.clone(), |val: &Value| val.clone(), |left: Value, right: Value| {
             vec![left.into(), right.into()].into()
         });
 
         let handle = join.get_handler();
-        let res = handle(&mut train);
-        assert_eq!(res.values.get(&0).unwrap(), &vec![vec![5.5.into(), 5.5.into()].into()]);
-        assert_ne!(res.values.get(&0).unwrap(), &vec![vec![].into()]);
+        let mut res = handle.process(&mut train);
+        assert_eq!(res.values.get(&0).unwrap().clone().unwrap(), vec![vec![5.5.into(), 5.5.into()].into()]);
+        assert_ne!(res.values.get_mut(&0).unwrap().take().unwrap(), vec![vec![].into()]);
     }
 
     #[test]
@@ -131,13 +135,13 @@ mod test {
         let left = TrainScan::new(0);
         let right = TrainScan::new(1);
 
-        let mut join = TrainJoin::new(Scan(left), Scan(right), |val: &Value| val, |val: &Value| val, |left: Value, right: Value| {
+        let mut join = TrainJoin::new(Scan(left), Scan(right), |val: &Value| val.clone(), |val: &Value| val.clone(), |left: Value, right: Value| {
             vec![left.into(), right.into()].into()
         });
 
         let handle = join.get_handler();
-        let res = handle(&mut train);
-        assert_eq!(res.values.get(&0).unwrap(), &vec![vec![5.5.into(), 5.5.into()].into(), vec![5.5.into(), 5.5.into()].into()]);
-        assert_ne!(res.values.get(&0).unwrap(), &vec![vec![].into()]);
+        let mut res = handle.process(&mut train);
+        assert_eq!(res.values.get(&0).unwrap().clone().unwrap(), vec![vec![5.5.into(), 5.5.into()].into(), vec![5.5.into(), 5.5.into()].into()]);
+        assert_ne!(res.values.get_mut(&0).unwrap().take().unwrap(), vec![vec![].into()]);
     }
 }

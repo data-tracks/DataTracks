@@ -1,9 +1,6 @@
-use std::collections::HashMap;
-use std::sync::Arc;
-
 use crate::algebra::algebra::{Algebra, RefHandler};
 use crate::algebra::AlgebraType;
-use crate::processing::{Train, Referencer};
+use crate::processing::Train;
 use crate::value::Value;
 
 pub trait Filter: Algebra {
@@ -23,7 +20,7 @@ struct FilterHandler{
 impl RefHandler for  FilterHandler{
     fn process(&self, train: &mut Train) -> Train{
         let mut train = self.input.process(train);
-        let filtered = train.values.get_mut(&0).unwrap().take().unwrap().into_iter().filter(|v| self.condition(v)).collect();
+        let filtered = train.values.get_mut(&0).unwrap().take().unwrap().into_iter().filter(|v| (self.condition)(v)).collect();
         Train::default(filtered)
     }
 }
