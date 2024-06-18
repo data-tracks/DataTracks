@@ -182,10 +182,10 @@ impl Plan {
         let mut station: Station = Station::default();
         for stage in parts {
             match stage.0 {
-                WindowStage => station.window(Window::parse(stage.1)),
-                TransformStage => station.transform(Transform::parse(stage.1).unwrap()),
-                BlockStage => station.block(line),
-                Num => station.stop(stage.1.parse::<i64>().unwrap()),
+                WindowStage => station.set_window(Window::parse(stage.1)),
+                TransformStage => station.set_transform(Transform::parse(stage.1).unwrap()),
+                BlockStage => station.add_block(line),
+                Num => station.set_stop(stage.1.parse::<i64>().unwrap()),
             }
         }
         station

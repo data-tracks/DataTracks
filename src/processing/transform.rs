@@ -33,12 +33,10 @@ impl Transform {
     pub fn parse(stencil: String) -> Result<Transform, String> {
         match stencil.split_once("|") {
             None => Err("Wrong transform format.".to_string()),
-            Some((module, logic)) => {
-                match Language::try_from(module) {
-                    Ok(lang) => Ok(Transform::LanguageTransform(LanguageTransform::parse(lang, logic))),
-                    Err(_) => Err("Wrong transform format.".to_string())
-                }
-            }
+            Some((module, logic)) => match Language::try_from(module) {
+                Ok(lang) => Ok(Transform::LanguageTransform(LanguageTransform::parse(lang, logic))),
+                Err(_) => Err("Wrong transform format.".to_string())
+            },
         }
     }
 
@@ -89,7 +87,7 @@ impl Transformable for LanguageTransform {
     }
 
     fn dump(&self) -> String {
-        "{".to_owned() + &self.language.name().clone() + "|" + &self.query.clone() + "}"
+        format!("{{{}|{}}}", self.language.name(), &self.query)
     }
 }
 
@@ -112,7 +110,7 @@ impl RefHandler for FuncValueHandler {
     fn process(&self, train: &mut Train) -> Train {
         let mut values = HashMap::new();
         for (stop, value) in &mut train.values {
-            values.insert(stop.clone(), value.take().unwrap().into_iter().map(|value: Value| (self.func)(value)).collect());
+            values.insert(stop.clone(), value.take().unwrap().into_iter().map(|value| (self.func)(value)).collect());
         }
         Train::new(values)
     }
@@ -158,7 +156,7 @@ mod tests {
     fn transform() {
         let mut station = Station::new(0);
 
-        station.transform(Func(FuncTransform::new_val(0, |x| &x + &Value::int(3))));
+        station.set_transform(Func(FuncTransform::new_val(0, |x| &x + &Value::int(3))));
 
         let values = vec![Value::float(3.3), Value::int(3)];
 
@@ -185,7 +183,7 @@ mod tests {
     fn sql_transform() {
         let mut station = Station::new(0);
 
-        station.transform(Func(FuncTransform::new_val(0, |x| &x + &Value::int(3))));
+        station.set_transform(Func(FuncTransform::new_val(0, |x| &x + &Value::int(3))));
 
         let values = vec![Value::float(3.3), Value::int(3)];
 
@@ -197,14 +195,18 @@ mod tests {
 
         let res = rx.recv();
         match res {
-            Ok(t) => {
-                assert_eq!(values.len(), t.values.get(&0).unwrap().clone().map(|vec: Vec<Value>| vec.len()).unwrap());
-                for (i, value) in t.values.get(&0).unwrap().clone().unwrap().into_iter().enumerate() {
-                    assert_eq!(value, &values[i] + &Value::int(3));
-                    assert_ne!(Value::text(""), value)
+            Ok(mut t) => {
+                if let Some(vec) = t.values.get_mut(&0).unwrap().take() {
+                    assert_eq!(values.len(), vec.len());
+                    for (i, value) in vec.into_iter().enumerate() {
+                        assert_eq!(value, (values.get(i).unwrap() + &Value::int(3)));
+                        assert_ne!(Value::text(""), value);
+                    }
+                } else {
+                    panic!("Expected values for key 0");
                 }
             }
-            Err(..) => assert!(false),
+            Err(e) => panic!("Failed to receive: {:?}", e),
         }
     }
 }

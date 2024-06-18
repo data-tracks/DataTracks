@@ -50,38 +50,29 @@ impl Station {
         drop(self.sender_in.take())
     }
 
-    pub(crate) fn stop(&mut self, stop: i64) {
+    pub(crate) fn set_stop(&mut self, stop: i64) {
         self.stop = stop
     }
 
-    pub(crate) fn window(&mut self, window: Window) {
+    pub(crate) fn set_window(&mut self, window: Window) {
         self.window = window;
     }
 
-    pub(crate) fn transform(&mut self, transform: Transform) {
+    pub(crate) fn set_transform(&mut self, transform: Transform) {
         self.transform = transform;
     }
 
-    pub(crate) fn block(&mut self, line: i64) {
+    pub(crate) fn add_block(&mut self, line: i64) {
         self.block.push(line);
     }
 
     pub(crate) fn add_out(&mut self, id: i64, out: mpsc::Sender<Train>) -> Result<(), String> {
-        if let Some(sender) = self.sender.as_mut() {
-            sender.add(id, out);
-            Ok(())
-        } else {
-            Err("Could not register sender.".to_string())
-        }
+        self.sender.as_mut().ok_or("Could not register sender.".to_string())?.add(id, out);
+        Ok(())
     }
 
     pub(crate) fn send(&mut self, train: Train) -> Result<(), String> {
-        if let Some(sender) = self.sender_in.as_mut() {
-            sender.send(train).map_err(|e| e.to_string())?;
-            Ok(())
-        } else {
-            Err("Sender already disconnected.".to_string())
-        }
+        self.sender_in.as_ref().ok_or("sender already disconnected.".to_string())?.send(train).map_err(|e| e.to_string())
     }
 
     pub fn dump(&self, line: &i64) -> String {
