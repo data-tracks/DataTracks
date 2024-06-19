@@ -4,14 +4,12 @@ use crate::processing::destination::Destination;
 use crate::processing::plan::PlanStage::{BlockStage, Num, TransformStage, WindowStage};
 use crate::processing::source::Source;
 use crate::processing::station::Station;
-use crate::processing::transform::Transform;
-use crate::processing::window::Window;
 use crate::util::GLOBAL_ID;
 
 pub(crate) struct Plan {
     id: i64,
     lines: HashMap<i64, Vec<i64>>,
-    stations: HashMap<i64, Station>,
+    pub(crate) stations: HashMap<i64, Station>,
     sources: HashMap<i64, Box<dyn Source>>,
     destinations: HashMap<i64, Box<dyn Destination>>,
 }
@@ -47,11 +45,13 @@ impl Plan {
                 dump += "\n"
             }
 
+            let mut last = -1;
             for stop in line.1.iter().enumerate() {
                 if stop.0 != 0 {
                     dump += "-";
                 }
-                dump += &self.stations[stop.1].dump(line.0)
+                dump += &self.stations[stop.1].dump(last);
+                last = *stop.1
             }
         }
 
@@ -128,7 +128,7 @@ impl Plan {
                         _ => {}
                     };
 
-                    let station = self.parse_stop(line, current.clone());
+                    let station = Station::parse(self.lines.get(&line).map(|vec: &Vec<i64>| vec.last().cloned()).flatten(), current.clone());
                     self.build(line, station);
                     current.clear();
                     temp = "".to_string();
@@ -173,22 +173,9 @@ impl Plan {
             current.push((stage, temp.clone()));
         }
         if !current.is_empty() {
-            let station = self.parse_stop(line, current.clone());
+            let station = Station::parse(self.lines.get(&line).map(|vec: &Vec<i64>| vec.last().cloned()).flatten(), current.clone());
             self.build(line, station);
         }
-    }
-
-    fn parse_stop(&mut self, line: i64, parts: Vec<(PlanStage, String)>) -> Station {
-        let mut station: Station = Station::default();
-        for stage in parts {
-            match stage.0 {
-                WindowStage => station.set_window(Window::parse(stage.1)),
-                TransformStage => station.set_transform(Transform::parse(stage.1).unwrap()),
-                BlockStage => station.add_block(line),
-                Num => station.set_stop(stage.1.parse::<i64>().unwrap()),
-            }
-        }
-        station
     }
     fn build(&mut self, line_num: i64, station: Station) {
         self.lines.entry(line_num).or_insert_with(Vec::new).push(station.stop);
@@ -240,7 +227,7 @@ impl Plan {
 
 
 #[derive(Clone, Copy)]
-enum PlanStage {
+pub(crate) enum PlanStage {
     WindowStage,
     TransformStage,
     BlockStage,

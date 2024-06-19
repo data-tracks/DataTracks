@@ -168,6 +168,11 @@ mod test {
     }
 
     #[test]
+    fn test_implicit_join() {
+        test_query("SELECT name AS n, age FROM $0, $1");
+    }
+
+    #[test]
     fn test_as_mixed() {
         test_query_diff("Select 'name' AS n, age FROM $0", "SELECT name AS n, age FROM $0");
     }

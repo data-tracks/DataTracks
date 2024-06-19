@@ -3,6 +3,7 @@ use std::sync::mpsc::{channel, Receiver};
 use std::thread;
 use std::thread::JoinHandle;
 
+use crate::processing::plan::PlanStage;
 use crate::processing::sender::Sender;
 use crate::processing::train::Train;
 use crate::processing::transform::Transform;
@@ -40,6 +41,20 @@ impl Station {
         };
         station
     }
+
+    pub(crate) fn parse(last: Option<i64>, parts: Vec<(PlanStage, String)>) -> Self {
+        let mut station: Station = Station::default();
+        for stage in parts {
+            match stage.0 {
+                PlanStage::WindowStage => station.set_window(Window::parse(stage.1)),
+                PlanStage::TransformStage => station.set_transform(Transform::parse(stage.1).unwrap()),
+                PlanStage::BlockStage => station.add_block(last.unwrap_or(-1)),
+                PlanStage::Num => station.set_stop(stage.1.parse::<i64>().unwrap()),
+            }
+        }
+        station
+    }
+
     pub(crate) fn merge(&mut self, other: Station) {
         for line in other.block {
             self.block.push(line)
@@ -75,9 +90,9 @@ impl Station {
         self.sender_in.as_ref().ok_or("sender already disconnected.".to_string())?.send(train).map_err(|e| e.to_string())
     }
 
-    pub fn dump(&self, line: &i64) -> String {
+    pub fn dump(&self, line: i64) -> String {
         let mut dump = "".to_string();
-        if self.block.contains(line) {
+        if self.block.contains(&line) {
             dump += "|";
         }
         dump += &self.stop.to_string();
@@ -114,6 +129,7 @@ impl Station {
 mod tests {
     use std::sync::mpsc::channel;
 
+    use crate::processing::plan::Plan;
     use crate::processing::station::Station;
     use crate::processing::train::Train;
     use crate::value::Value;
@@ -179,5 +195,16 @@ mod tests {
         drop(input); // close the channel
         first.close();
         second.close();
+    }
+
+    #[test]
+    fn sql_parse_block() {
+        let stencil = "1-|3{sql|Select * From $1}";
+
+        let mut plan = Plan::parse(stencil);
+
+        let station = plan.stations.get(&3).unwrap();
+
+        assert!(station.block.contains(&1)); //block on line 0
     }
 }

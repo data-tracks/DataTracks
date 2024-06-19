@@ -1,4 +1,4 @@
-use crate::algebra::algebra::{Algebra, Handler, RefHandler};
+use crate::algebra::algebra::{Algebra, RefHandler};
 use crate::processing::Train;
 
 pub trait Scan: Algebra {}

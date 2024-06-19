@@ -7,8 +7,6 @@ use crate::processing::train::Train;
 use crate::processing::transform::Transform::Func;
 use crate::value::Value;
 
-pub type Referencer = fn(&mut Train) -> Train;
-
 pub type Taker = fn(Train) -> Train;
 
 
