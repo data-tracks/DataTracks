@@ -18,10 +18,10 @@ struct FilterHandler{
 }
 
 impl RefHandler for  FilterHandler{
-    fn process(&self, train: &mut Train) -> Train{
-        let mut train = self.input.process(train);
-        let filtered = train.values.get_mut(&0).unwrap().take().unwrap().into_iter().filter(|v| (self.condition)(v)).collect();
-        Train::default(filtered)
+    fn process(&self, stop: i64, wagons: &mut Vec<Train>) -> Train {
+        let mut train = self.input.process(stop, wagons);
+        let filtered = train.values.take().unwrap().into_iter().filter(|v| (self.condition)(v)).collect();
+        Train::new(stop, filtered)
     }
 }
 

@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::{algebra, language};
 use crate::algebra::RefHandler;
 use crate::language::Language;
@@ -48,13 +46,13 @@ impl Transform {
 
 pub trait Transformable {
     fn get_transform(&mut self) -> Box<dyn RefHandler> {
-        Box::new(FuncTransformHandler { func: |train: &mut Train| Train::from(train) })
+        Box::new(FuncTransformHandler { func: |stop, trains| Train::from(trains) })
     }
 
     fn dump(&self) -> String;
 
     fn default() -> FuncTransform {
-        FuncTransform::new(|f| Train::from(f))
+        FuncTransform::new(|stop, mut trains| Train::from(trains.pop().unwrap()))
     }
 }
 
@@ -91,12 +89,12 @@ impl Transformable for LanguageTransform {
 
 
 struct FuncTransformHandler {
-    func: fn(&mut Train) -> Train,
+    func: fn(stop: i64, wagons: &mut Vec<Train>) -> Train,
 }
 
 impl RefHandler for FuncTransformHandler {
-    fn process(&self, train: &mut Train) -> Train {
-        (self.func)(train)
+    fn process(&self, stop: i64, wagons: &mut Vec<Train>) -> Train {
+        (self.func)(stop, wagons)
     }
 }
 
@@ -105,12 +103,14 @@ struct FuncValueHandler {
 }
 
 impl RefHandler for FuncValueHandler {
-    fn process(&self, train: &mut Train) -> Train {
-        let mut values = HashMap::new();
-        for (stop, value) in &mut train.values {
-            values.insert(stop.clone(), value.take().unwrap().into_iter().map(|value| (self.func)(value)).collect());
+    fn process(&self, stop: i64, wagons: &mut Vec<Train>) -> Train {
+        let mut values: Vec<Value> = vec![];
+        for mut train in wagons {
+            let mut vals = train.values.take().unwrap().into_iter().map(|v| (self.func)(v)).collect();
+            values.append(&mut vals);
         }
-        Train::new(values)
+
+        Train::new(stop, values)
     }
 }
 
@@ -120,11 +120,11 @@ pub struct FuncTransform {
 
 
 impl FuncTransform {
-    pub(crate) fn new(func: fn(&mut Train) -> Train) -> Self {
+    pub(crate) fn new(func: fn(stop: i64, wagons: &mut Vec<Train>) -> Train) -> Self {
         FuncTransform { func: Some(Box::new(FuncTransformHandler { func })) }
     }
 
-    pub(crate) fn new_val(stop: i64, func: fn(Value) -> Value) -> FuncTransform {
+    pub(crate) fn new_val(_stop: i64, func: fn(Value) -> Value) -> FuncTransform {
         FuncTransform { func: Some(Box::new(FuncValueHandler { func })) }
     }
 }
@@ -162,13 +162,13 @@ mod tests {
 
         station.add_out(0, tx).unwrap();
         station.operate();
-        station.send(Train::single(0, values.clone())).unwrap();
+        station.send(Train::new(0, values.clone())).unwrap();
 
         let res = rx.recv();
         match res {
             Ok(mut t) => {
-                assert_eq!(values.len(), t.values.get(&0).unwrap().clone().map_or(usize::MAX, |vec: Vec<Value>| vec.len()));
-                for (i, value) in t.values.get_mut(&0).unwrap().take().unwrap().into_iter().enumerate() {
+                assert_eq!(values.len(), t.values.clone().map_or(usize::MAX, |vec: Vec<Value>| vec.len()));
+                for (i, value) in t.values.take().unwrap().into_iter().enumerate() {
                     assert_eq!(value, &values[i] + &Value::int(3));
                     assert_ne!(Value::text(""), value)
                 }
@@ -189,12 +189,12 @@ mod tests {
 
         station.add_out(0, tx).unwrap();
         station.operate();
-        station.send(Train::single(0, values.clone())).unwrap();
+        station.send(Train::new(0, values.clone())).unwrap();
 
         let res = rx.recv();
         match res {
             Ok(mut t) => {
-                if let Some(vec) = t.values.get_mut(&0).unwrap().take() {
+                if let Some(vec) = t.values.take() {
                     assert_eq!(values.len(), vec.len());
                     for (i, value) in vec.into_iter().enumerate() {
                         assert_eq!(value, (values.get(i).unwrap() + &Value::int(3)));

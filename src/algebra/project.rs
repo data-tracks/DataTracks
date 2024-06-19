@@ -19,10 +19,10 @@ struct ProjectHandler{
 }
 
 impl RefHandler for ProjectHandler {
-    fn process(&self, train: &mut Train) -> Train {
-        let mut train = self.input.process(train);
-        let projected = train.values.get_mut(&0).unwrap().take().unwrap().into_iter().map(|value: Value| (self.project)(value)).collect();
-        Train::default(projected)
+    fn process(&self, stop: i64, wagons: &mut Vec<Train>) -> Train {
+        let mut train = self.input.process(stop, wagons);
+        let projected = train.values.take().unwrap().into_iter().map(|value: Value| (self.project)(value)).collect();
+        Train::new(stop, projected)
     }
 }
 

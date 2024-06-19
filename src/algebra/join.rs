@@ -40,7 +40,10 @@ where
     }
 }
 
-pub struct JoinHandler<H> where H: PartialEq{
+pub struct JoinHandler<H>
+where
+    H: PartialEq,
+{
     left_hash: fn(&Value) -> H,
     right_hash: fn(&Value) -> H,
     left: Box<dyn RefHandler>,
@@ -52,15 +55,15 @@ impl<'a, H> RefHandler for JoinHandler<H>
 where
     H: PartialEq,
 {
-    fn process(&self, train: &mut Train) -> Train {
+    fn process(&self, stop: i64, wagons: &mut Vec<Train>) -> Train {
         let mut values = vec![];
-        let mut left = self.left.process(train);
-        let mut right = self.right.process(train);
-        let right_hashes: Vec<(H, Value)> = right.values.get_mut(&0).unwrap().take().unwrap().into_iter().map(|value: Value| {
+        let mut left = self.left.process(stop, wagons);
+        let mut right = self.right.process(stop, wagons);
+        let right_hashes: Vec<(H, Value)> = right.values.take().unwrap().into_iter().map(|value: Value| {
             let hash = (self.right_hash)(&value);
             (hash, value)
         }).collect();
-        for l_value in left.values.get_mut(&0).unwrap().take().unwrap() {
+        for l_value in left.values.take().unwrap() {
             let l_hash = (self.left_hash)(&l_value);
             for (r_hash, r_val) in &right_hashes {
                 if l_hash == *r_hash {
@@ -68,7 +71,7 @@ where
                 }
             }
         }
-        Train::default(values)
+        Train::new(stop, values)
     }
 }
 
@@ -80,7 +83,7 @@ impl<H: PartialEq + 'static> Algebra for TrainJoin<H> {
 
         let left = self.left.get_handler();
         let right = self.right.get_handler();
-        Box::new(JoinHandler{left_hash, right_hash, left, right, out})
+        Box::new(JoinHandler { left_hash, right_hash, left, right, out })
     }
 }
 
@@ -96,8 +99,6 @@ impl<H: PartialEq + 'static> Join for TrainJoin<H> {
 
 #[cfg(test)]
 mod test {
-    use std::collections::HashMap;
-
     use crate::algebra::algebra::Algebra;
     use crate::algebra::AlgebraType::Scan;
     use crate::algebra::join::TrainJoin;
@@ -107,10 +108,8 @@ mod test {
 
     #[test]
     fn one_match() {
-        let mut train = Train::new(HashMap::from([
-            (0, vec![3.into(), 5.5.into()]),
-            (1, vec![5.5.into(), "test".into()])
-        ]));
+        let train0 = Train::new(0, vec![3.into(), 5.5.into()]);
+        let train1 = Train::new(1, vec![5.5.into(), "test".into()]);
 
         let left = TrainScan::new(0);
 
@@ -121,17 +120,16 @@ mod test {
         });
 
         let handle = join.get_handler();
-        let mut res = handle.process(&mut train);
-        assert_eq!(res.values.get(&0).unwrap().clone().unwrap(), vec![vec![5.5.into(), 5.5.into()].into()]);
-        assert_ne!(res.values.get_mut(&0).unwrap().take().unwrap(), vec![vec![].into()]);
+        let mut res = handle.process(0, &mut vec![train0, train1]);
+        assert_eq!(res.values.clone().unwrap(), vec![vec![5.5.into(), 5.5.into()].into()]);
+        assert_ne!(res.values.take().unwrap(), vec![vec![].into()]);
     }
 
     #[test]
     fn multi_match() {
-        let mut train = Train::new(HashMap::from([
-            (0, vec![3.into(), 5.5.into()]),
-            (1, vec![5.5.into(), 5.5.into()])
-        ]));
+        let train0 = Train::new(0, vec![3.into(), 5.5.into()]);
+        let train1 = Train::new(1, vec![5.5.into(), 5.5.into()]);
+
         let left = TrainScan::new(0);
         let right = TrainScan::new(1);
 
@@ -140,8 +138,8 @@ mod test {
         });
 
         let handle = join.get_handler();
-        let mut res = handle.process(&mut train);
-        assert_eq!(res.values.get(&0).unwrap().clone().unwrap(), vec![vec![5.5.into(), 5.5.into()].into(), vec![5.5.into(), 5.5.into()].into()]);
-        assert_ne!(res.values.get_mut(&0).unwrap().take().unwrap(), vec![vec![].into()]);
+        let mut res = handle.process(0, &mut vec![train0, train1]);
+        assert_eq!(res.values.clone().unwrap(), vec![vec![5.5.into(), 5.5.into()].into(), vec![5.5.into(), 5.5.into()].into()]);
+        assert_ne!(res.values.take().unwrap(), vec![vec![].into()]);
     }
 }

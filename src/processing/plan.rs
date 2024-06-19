@@ -335,7 +335,7 @@ mod dummy {
         fn operate(&self) {
             for values in &self.values {
                 for sender in &self.senders {
-                    sender.send(Train::default(values.clone())).unwrap();
+                    sender.send(Train::new(0, values.clone())).unwrap();
                 }
                 sleep(self.delay);
             }
@@ -418,11 +418,11 @@ mod stencil {
 
         plan.operate();
 
-        input.send(Train::default(values.clone())).unwrap();
+        input.send(Train::new(0, values.clone())).unwrap();
 
         let mut res = output_rx.recv().unwrap();
-        assert_eq!(res.values.get(&0).unwrap().clone().unwrap(), values);
-        assert_ne!(res.values.get_mut(&0).unwrap().take().unwrap(), vec![Value::null()]);
+        assert_eq!(res.values.clone().unwrap(), values);
+        assert_ne!(res.values.take().unwrap(), vec![Value::null()]);
 
         assert!(output_rx.try_recv().is_err());
 
@@ -457,17 +457,17 @@ mod stencil {
 
         plan.operate();
 
-        input.send(Train::default(values.clone())).unwrap();
+        input.send(Train::new(0, values.clone())).unwrap();
 
         let mut res = output1_rx.recv().unwrap();
-        assert_eq!(res.values.get(&0).unwrap().clone().unwrap(), values);
-        assert_ne!(res.values.get_mut(&0).unwrap().take().unwrap(), vec![Value::null()]);
+        assert_eq!(res.values.clone().unwrap(), values);
+        assert_ne!(res.values.take().unwrap(), vec![Value::null()]);
 
         assert!(output1_rx.try_recv().is_err());
 
         let mut res = output2_rx.recv().unwrap();
-        assert_eq!(res.values.get(&0).unwrap().clone().unwrap(), values);
-        assert_ne!(res.values.get_mut(&0).unwrap().take().unwrap(), vec![Value::null()]);
+        assert_eq!(res.values.clone().unwrap(), values);
+        assert_ne!(res.values.take().unwrap(), vec![Value::null()]);
 
         assert!(output2_rx.try_recv().is_err());
 
@@ -506,7 +506,46 @@ mod stencil {
         }
         let results = clone.lock().unwrap();
         for mut train in results.clone() {
-            assert_eq!(train.values.get_mut(&0).unwrap().take().unwrap(), *values.get(0).unwrap())
+            assert_eq!(train.values.take().unwrap(), *values.get(0).unwrap())
+        }
+    }
+
+    #[test]
+    fn sql_parse_block_one() {
+        let stencil = "1-|2-3\n4-2";
+
+        let mut plan = Plan::parse(stencil);
+        let mut values1 = vec![vec![3.3.into()], vec![3.1.into()]];
+        let source1 = DummySource::new(1, values1.clone(), Duration::from_millis(1));
+        let mut values4 = vec![vec![3.into()]];
+        let source4 = DummySource::new(1, values4.clone(), Duration::from_millis(5));
+
+        let destination = DummyDestination::new(3);
+        let clone = Arc::clone(&destination.results);
+
+        plan.add_source(1, Box::new(source1));
+        plan.add_source(4, Box::new(source4));
+        plan.add_destination(3, Box::new(destination));
+
+        let station = plan.stations.get(&3).unwrap();
+
+        plan.operate();
+
+        loop {
+            let shared = clone.lock().unwrap();
+            if !shared.is_empty() {
+                plan.halt();
+                break;
+            }
+            drop(shared);
+            sleep(Duration::from_millis(5))
+        }
+        let mut res = vec![];
+        res.append(&mut values1);
+        res.append(&mut values4);
+        let results = clone.lock().unwrap();
+        for (i, mut train) in results.clone().into_iter().enumerate() {
+            assert_eq!(train.values.take().unwrap(), res[i])
         }
     }
 }

@@ -144,13 +144,13 @@ mod test {
 
         station.add_out(0, tx).unwrap();
         station.operate();
-        station.send(Train::default(values.clone())).unwrap();
+        station.send(Train::new(0, values.clone())).unwrap();
 
         let res = rx.recv();
         match res {
             Ok(mut t) => {
-                assert_eq!(values.len(), t.values.get(&0).unwrap().clone().map_or(usize::MAX, |vec: Vec<Value>| vec.len()));
-                for (i, value) in t.values.get_mut(&0).unwrap().take().unwrap().into_iter().enumerate() {
+                assert_eq!(values.len(), t.values.clone().map_or(usize::MAX, |vec: Vec<Value>| vec.len()));
+                for (i, value) in t.values.take().unwrap().into_iter().enumerate() {
                     assert_eq!(value, values[i]);
                     assert_ne!(Value::text(""), value)
                 }
