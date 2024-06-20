@@ -1,6 +1,5 @@
 use chrono::NaiveTime;
 
-use crate::processing::train::Train;
 use crate::processing::transform::Taker;
 use crate::processing::window::Window::{Back, Interval};
 use crate::util::TimeUnit;
@@ -56,7 +55,7 @@ impl BackWindow {
 
 
     pub(crate) fn get_window(&self) -> Taker {
-        |train: Train| train
+        |trains| trains
     }
 
     pub(crate) fn dump(&self) -> String {
@@ -116,7 +115,7 @@ impl IntervalWindow {
     }
 
     pub(crate) fn get_window(&self) -> Taker {
-        |train: Train| train
+        |trains| trains
     }
 }
 

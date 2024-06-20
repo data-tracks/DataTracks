@@ -3,6 +3,7 @@ use std::sync::mpsc::{channel, Receiver};
 use std::thread;
 use std::thread::JoinHandle;
 
+use crate::processing::block::Block;
 use crate::processing::plan::PlanStage;
 use crate::processing::sender::Sender;
 use crate::processing::train::Train;
@@ -19,6 +20,7 @@ pub(crate) struct Station {
     window: Window,
     transform: Transform,
     block: Vec<i64>,
+    ins: Vec<i64>,
 }
 
 
@@ -38,6 +40,7 @@ impl Station {
             window: Window::default(),
             transform: Transform::default(),
             block: vec![],
+            ins: vec![],
         };
         station
     }
@@ -114,13 +117,18 @@ impl Station {
         let transform = self.transform.transformer();
         let window = self.window.windowing();
         let stop = self.stop;
+        let blocks = self.block.clone();
+        let inputs = self.ins.clone();
 
         thread::spawn(move || {
-            let block = Block::new();
-            while let Ok(train) = receiver.recv() {
-                let temp = window(train);
-                let transformed = transform.process(stop, &mut vec![temp]);
+            let process = |trains: &mut Vec<Train>| {
+                let transformed = transform.process(stop, window(trains));
                 sender.send(transformed)
+            };
+            let block = Block::new(inputs, blocks, process);
+
+            while let Ok(train) = receiver.recv() {
+                block.next(train) // window takes precidence to
             }
         })
     }

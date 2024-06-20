@@ -5,7 +5,7 @@ use crate::processing::train::Train;
 use crate::processing::transform::Transform::Func;
 use crate::value::Value;
 
-pub type Taker = fn(Train) -> Train;
+pub type Taker = fn(&mut Vec<Train>) -> &mut Vec<Train>;
 
 
 pub enum Transform {
