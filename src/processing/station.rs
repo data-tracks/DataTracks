@@ -20,7 +20,7 @@ pub(crate) struct Station {
     window: Window,
     transform: Transform,
     block: Vec<i64>,
-    ins: Vec<i64>,
+    inputs: Vec<i64>,
 }
 
 
@@ -40,7 +40,7 @@ impl Station {
             window: Window::default(),
             transform: Transform::default(),
             block: vec![],
-            ins: vec![],
+            inputs: vec![],
         };
         station
     }
@@ -56,6 +56,10 @@ impl Station {
             }
         }
         station
+    }
+
+    pub(crate) fn add_insert(&mut self, input: i64){
+        self.inputs.push(input);
     }
 
     pub(crate) fn merge(&mut self, other: Station) {
@@ -118,17 +122,18 @@ impl Station {
         let window = self.window.windowing();
         let stop = self.stop;
         let blocks = self.block.clone();
-        let inputs = self.ins.clone();
+        let inputs = self.inputs.clone();
 
         thread::spawn(move || {
-            let process = |trains: &mut Vec<Train>| {
-                let transformed = transform.process(stop, window(trains));
+            let process = move |trains: &mut Vec<Train>| {
+                let mut transformed = transform.process(stop, window(trains));
+                transformed.last = stop;
                 sender.send(transformed)
             };
-            let block = Block::new(inputs, blocks, process);
+            let mut block = Block::new(inputs, blocks, Box::new(process));
 
             while let Ok(train) = receiver.recv() {
-                block.next(train) // window takes precidence to
+                block.next(train) // window takes precedence to
             }
         })
     }

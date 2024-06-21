@@ -86,6 +86,7 @@ impl Plan {
                     let next_station = self.stations.get_mut(num).ok_or("Could not find target station".to_string())?;
                     let next_stop_id = next_station.stop.clone();
 
+                    next_station.add_insert(last_station);
 
                     let send = next_station.get_in();
                     let last = self.stations.get_mut(&last_station).ok_or("Could not find target station".to_string())?;
@@ -308,7 +309,7 @@ mod test {
 
 #[cfg(test)]
 mod dummy {
-    use std::sync::{Arc, Mutex};
+    use std::sync::{Arc, Condvar, Mutex};
     use std::sync::mpsc::{channel, Receiver, Sender};
     use std::thread::{sleep, spawn};
     use std::time::Duration;
@@ -320,30 +321,58 @@ mod dummy {
 
     pub struct DummySource {
         stop: i64,
-        values: Vec<Vec<Value>>,
+        values: Option<Vec<Vec<Value>>>,
         delay: Duration,
-        senders: Vec<Sender<Train>>,
+        initial_delay: Duration,
+        senders: Option<Vec<Sender<Train>>>,
+        start_signal: Arc<(Mutex<bool>, Condvar)>,
     }
 
     impl DummySource {
         pub(crate) fn new(stop: i64, values: Vec<Vec<Value>>, delay: Duration) -> Self {
-            DummySource { stop, values, delay, senders: vec![] }
+            Self::new_with_initial(stop, values, delay, Duration::from_millis(0))
+        }
+
+        pub(crate) fn new_with_initial(stop: i64, values: Vec<Vec<Value>>, delay: Duration, initial_delay:Duration) -> Self{
+            DummySource{stop, values: Some(values), delay, initial_delay, senders: Some(vec![]), start_signal: Arc::new((Mutex::new(true), Condvar::new())) }
+        }
+
+        pub(crate) fn set_signal(&mut self, signal_pair: &Arc<(Mutex<bool>, Condvar)>){
+            self.start_signal = Arc::clone(signal_pair);
         }
     }
 
     impl Source for DummySource {
-        fn operate(&self) {
-            for values in &self.values {
-                for sender in &self.senders {
-                    sender.send(Train::new(0, values.clone())).unwrap();
+        fn operate(&mut self) {
+            let pair = Arc::clone(&self.start_signal);
+            let initial_delay = self.initial_delay;
+            let delay = self.delay;
+            let values = self.values.take().unwrap();
+            let senders = self.senders.take().unwrap();
+
+            spawn(move || {
+                let (lock, con) = &*pair;
+                let mut started = lock.lock().unwrap();
+                while !*started{
+                    // wait till we can start
+                    started = con.wait(started).unwrap();
                 }
-                sleep(self.delay);
-            }
+                drop(started);
+
+                sleep(initial_delay);
+
+                for values in &values {
+                    for sender in &senders {
+                        sender.send(Train::new(0, values.clone())).unwrap();
+                    }
+                    sleep(delay);
+                }
+            });
         }
 
 
         fn add_out(&mut self, id: i64, out: Sender<Train>) {
-            self.senders.push(out)
+            self.senders.as_mut().unwrap_or(&mut vec![]).push(out)
         }
 
         fn get_stop(&self) -> i64 {
@@ -389,7 +418,7 @@ mod dummy {
 
 #[cfg(test)]
 mod stencil {
-    use std::sync::Arc;
+    use std::sync::{Arc, Condvar, Mutex};
     use std::sync::mpsc::channel;
     use std::thread::sleep;
     use std::time::Duration;
@@ -514,11 +543,16 @@ mod stencil {
     fn sql_parse_block_one() {
         let stencil = "1-|2-3\n4-2";
 
+        let start_signal = Arc::new((Mutex::new(false), Condvar::new() ));
+
         let mut plan = Plan::parse(stencil);
         let mut values1 = vec![vec![3.3.into()], vec![3.1.into()]];
-        let source1 = DummySource::new(1, values1.clone(), Duration::from_millis(1));
+        let mut source1 = DummySource::new(1, values1.clone(), Duration::from_millis(1));
+        source1.set_signal(&start_signal);
+
         let mut values4 = vec![vec![3.into()]];
-        let source4 = DummySource::new(1, values4.clone(), Duration::from_millis(5));
+        let mut source4 = DummySource::new_with_initial(4, values4.clone(), Duration::from_millis(1), Duration::from_millis(2));
+        source4.set_signal(&start_signal);
 
         let destination = DummyDestination::new(3);
         let clone = Arc::clone(&destination.results);
@@ -531,6 +565,15 @@ mod stencil {
 
         plan.operate();
 
+        // let threads start
+        sleep(Duration::from_millis(10));
+        let (lock, con) = &*start_signal;
+        let mut signal = lock.lock().unwrap();
+        // start the sending
+        *signal = true;
+        con.notify_all();
+        drop(signal);
+
         loop {
             let shared = clone.lock().unwrap();
             if !shared.is_empty() {
@@ -541,11 +584,15 @@ mod stencil {
             sleep(Duration::from_millis(5))
         }
         let mut res = vec![];
-        res.append(&mut values1);
-        res.append(&mut values4);
-        let results = clone.lock().unwrap();
-        for (i, mut train) in results.clone().into_iter().enumerate() {
-            assert_eq!(train.values.take().unwrap(), res[i])
+
+        values1.into_iter().for_each(|mut values| res.append(&mut values));
+        values4.into_iter().for_each(|mut values| res.append(&mut values));
+
+        let mut results = clone.lock().unwrap();
+        let mut train = results.pop().unwrap();
+        assert_eq!(train.values.clone().unwrap().len(), res.len());
+        for (i, value) in train.values.take().unwrap().into_iter().enumerate() {
+            assert!(res.contains(&value))
         }
     }
 }

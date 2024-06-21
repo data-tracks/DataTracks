@@ -52,7 +52,7 @@ pub trait Transformable {
     fn dump(&self) -> String;
 
     fn default() -> FuncTransform {
-        FuncTransform::new(|stop, mut trains| Train::from(trains.pop().unwrap()))
+        FuncTransform::new(|stop, mut trains| Train::from(trains))
     }
 }
 
