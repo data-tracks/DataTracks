@@ -1,4 +1,4 @@
-use crate::algebra::algebra::{Algebra, Handler, RefHandler};
+use crate::algebra::algebra::{Algebra, RefHandler};
 use crate::algebra::AlgebraType;
 use crate::processing::Train;
 use crate::value::Value;
