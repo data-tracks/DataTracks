@@ -46,13 +46,18 @@ impl Transform {
 
 pub trait Transformable {
     fn get_transform(&mut self) -> Box<dyn RefHandler> {
-        Box::new(FuncTransformHandler { func: |stop, trains| Train::from(trains) })
+        Box::new(FuncTransformHandler { func: |stop, trains| {
+            let mut train = Train::from(trains);
+            train.last = stop;
+            train
+        }
+        })
     }
 
     fn dump(&self) -> String;
 
     fn default() -> FuncTransform {
-        FuncTransform::new(|stop, mut trains| Train::from(trains))
+        FuncTransform::new(|stop, trains| Train::from(trains))
     }
 }
 
