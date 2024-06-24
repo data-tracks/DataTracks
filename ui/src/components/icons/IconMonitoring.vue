@@ -1,9 +1,15 @@
 <script setup lang="ts">
+export interface IconProps {
+  size?: number
+}
 
+withDefaults(defineProps<IconProps>(), {
+  size: 30
+});
 </script>
 
 <template>
-  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <svg :width="size" :height="size" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path d="M6 4H18M4 11H20M3 18L21 18M9.0002 3.00005L4.00009 21M20 21L15 3" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
   </svg>
 </template>
