@@ -67,7 +67,7 @@ export const usePlanStore = defineStore('plan', () => {
 
     async function submitPlan(name: string, plan: string) {
         try {
-            await axios.post('/plans', {name: name, plan: plan})
+            await axios.post('http://localhost:2666' + '/plans/create', {name: name, plan: plan})
             toast.addToast('Successfully created plan: ' + name + '.')
         } catch (error) {
             toast.addToast(error as string, ToastType.error)

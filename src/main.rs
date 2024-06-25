@@ -1,4 +1,4 @@
-use std::sync::mpsc;
+use std::sync::{Arc, mpsc};
 use std::sync::mpsc::Receiver;
 use std::thread;
 use std::thread::JoinHandle;
@@ -7,6 +7,8 @@ use std::time::Duration;
 use tracing::Level;
 use tracing_subscriber::FmtSubscriber;
 
+use crate::ui::start;
+
 mod value;
 mod ui;
 mod util;
@@ -14,6 +16,7 @@ mod processing;
 mod language;
 mod simulation;
 mod algebra;
+mod mangagement;
 
 fn main() {
     setup_logging();
@@ -27,8 +30,12 @@ fn main() {
         tx.send(()).expect("Could not send signal on shutdown.");
     }).expect("Error setting Ctrl-C handler");
 
+    let storage = mangagement::start();
+
+    let copy = Arc::clone(&storage);
+
     // Spawn a new thread
-    let handle = thread::spawn(ui::start);
+    let handle = thread::spawn(|| start(copy));
 
 
     shutdown_hook(rx, handle);

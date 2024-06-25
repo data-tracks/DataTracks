@@ -1,13 +1,17 @@
 use std::collections::HashMap;
 
+use serde::{Deserialize, Serialize, Serializer};
+use serde::ser::SerializeStruct;
+
 use crate::processing::destination::Destination;
 use crate::processing::plan::PlanStage::{BlockStage, Num, TransformStage, WindowStage};
 use crate::processing::source::Source;
 use crate::processing::station::Station;
 use crate::util::GLOBAL_ID;
 
-pub(crate) struct Plan {
-    id: i64,
+pub struct Plan {
+    pub id: i64,
+    name: String,
     lines: HashMap<i64, Vec<i64>>,
     pub(crate) stations: HashMap<i64, Station>,
     sources: HashMap<i64, Box<dyn Source>>,
@@ -23,6 +27,7 @@ impl Plan {
     fn new(id: i64) -> Self {
         Plan {
             id,
+            name: id.to_string(),
             lines: HashMap::new(),
             stations: HashMap::new(),
             sources: HashMap::new(),
@@ -235,6 +240,57 @@ pub(crate) enum PlanStage {
     Num,
 }
 
+
+impl Serialize for Plan {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_struct("Plan", 3)?;
+        state.serialize_field("name", &self.name)?;
+
+        let mut lines = HashMap::new();
+        for (num, stops) in &self.lines {
+            lines.insert(
+                num.to_string(),
+                Line {
+                    num: *num,
+                    stops: stops.clone(),
+                },
+            );
+        }
+
+        state.serialize_field("lines", &lines)?;
+
+        let mut stops = HashMap::new();
+        for (num, stop) in &self.stations {
+            stops.insert(
+                num.to_string(),
+                Stop {
+                    num: *num,
+                    transform: stop.transform.dump().clone(),
+                },
+            );
+        }
+
+        state.serialize_field("stops", &stops)?;
+        state.end()
+    }
+}
+
+#[derive(Serialize)]
+struct Line {
+    num: i64,
+    stops: Vec<i64>,
+}
+
+#[derive(Serialize)]
+struct Stop {
+    num: i64,
+    transform: String,
+}
+
+
 #[cfg(test)]
 mod test {
     use crate::processing::plan::Plan;
@@ -415,6 +471,7 @@ mod dummy {
         }
     }
 }
+
 
 #[cfg(test)]
 mod stencil {

@@ -1,11 +1,13 @@
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use axum::{Json, Router};
 use axum::handler::HandlerWithoutStateExt;
 use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse};
 use axum::routing::{get, post};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize, Serializer};
+use serde::ser::SerializeStruct;
 use serde_json::json;
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
@@ -13,16 +15,19 @@ use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
 use tracing::{debug, info};
 
-pub fn start() {
+use crate::mangagement::Storage;
+use crate::processing::Plan;
+
+pub fn start(storage: Arc<Storage>) {
     // Create a new Tokio runtime
     let rt = Runtime::new().unwrap();
 
     rt.block_on(async {
-        startup().await;
+        startup(storage).await;
     })
 }
 
-pub async fn startup() {
+pub async fn startup(storage: Arc<Storage>) {
     info!("initializing router...");
 
 
@@ -132,3 +137,4 @@ struct CreatePlanPayload {
     name: String,
     plan: String,
 }
+

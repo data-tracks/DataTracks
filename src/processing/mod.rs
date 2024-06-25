@@ -1,3 +1,4 @@
+pub use plan::Plan;
 pub use train::Train;
 
 mod station;

@@ -18,7 +18,7 @@ pub(crate) struct Station {
     receiver: Option<Receiver<Train>>,
     sender: Option<Sender>,
     window: Window,
-    transform: Transform,
+    pub(crate) transform: Transform,
     block: Vec<i64>,
     inputs: Vec<i64>,
 }
