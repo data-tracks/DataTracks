@@ -1,6 +1,4 @@
 <script setup lang="ts">
-
-import Button from '@/components/Button.vue'
 import { RouterLink } from 'vue-router'
 import IconMonitoring from '@/components/icons/IconMonitoring.vue'
 import IconPlan from '@/components/icons/IconPlan.vue'

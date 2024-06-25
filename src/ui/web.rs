@@ -4,10 +4,12 @@ use axum::{Json, Router};
 use axum::handler::HandlerWithoutStateExt;
 use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse};
-use axum::routing::get;
+use axum::routing::{get, post};
+use serde::Deserialize;
 use serde_json::json;
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
+use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
 use tracing::{debug, info};
 
@@ -23,6 +25,7 @@ pub fn start() {
 pub async fn startup() {
     info!("initializing router...");
 
+
     // We could also read our port in from the environment as well
     let assets_path = std::env::current_dir().unwrap();
     let port = 2666_u16;
@@ -33,6 +36,9 @@ pub async fn startup() {
     let app = Router::new()
         .route("/html", get(html))
         .route("/json", get(json))
+        .route("/plans", get(get_plans))
+        .route("/plans/create", post(create_plan))
+        .layer(CorsLayer::permissive())
         .nest_service("/", serve_dir);
 
     let listener = TcpListener::bind(&addr).await.unwrap();
@@ -61,4 +67,68 @@ async fn json() -> impl IntoResponse {
     Json(data)
 }
 
+async fn get_plans() -> impl IntoResponse {
+    let plans = json!(
+        {"plans":[{
+                "name": "Plan Simple",
+                "lines": {
+                    "0": {
+                        "num": 0,
+                        "stops": [0, 1, 3]
+                    },
+                    "1": {
+                        "num": 1,
+                        "stops": [4, 1]
+                    },
+                    "2": {
+                        "num": 2,
+                        "stops": [5, 1]
+                    },
+                    "3": {
+                        "num": 3,
+                        "stops": [6, 7]
+                    }
+                },
+                "stops": {
+                    "0": {
+                        "num": 0,
+                        "inputs": [8]
+                    },
+                    "1": {
+                        "num": 1,
+                        "transform": {
+                            "language": "SQL",
+                            "query": "SELECT * FROM $1, $4, $5"
+                        }
+                    },
+                    "3": {
+                        "num": 3,
+                        "outputs": [4]
+                    },
+                    "4": {
+                        "num": 4
+                    },
+                    "5": {
+                        "num": 5
+                    },
+                    "6": {
+                        "num": 6
+                    },
+                    "7": {
+                        "num": 7
+                    }
+                }
+            }]
+        });
+    Json(plans)
+}
 
+async fn create_plan(Json(payload): Json<CreatePlanPayload>) {
+    println!("{:?}", payload)
+}
+
+#[derive(Deserialize, Debug)]
+struct CreatePlanPayload {
+    name: String,
+    plan: String,
+}

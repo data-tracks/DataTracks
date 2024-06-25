@@ -1,17 +1,17 @@
 <script setup lang="ts">
 import DefaultLayout from '@/layout/DefaultLayout.vue'
 import Plan from '@/components/Plan.vue'
-import Card from '@/components/Card.vue'
-import { type Network, usePlanStore } from '@/stores/plan'
-import { computed, onMounted } from 'vue'
+import Card from '@/components/default/Card.vue'
+import { usePlanStore } from '@/stores/plan'
+import { onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
 
 let store = usePlanStore()
 
-const { plans } = storeToRefs(store)
+const {plans} = storeToRefs(store)
 
-onMounted(() => {
-  store.fetchPlans()
+onMounted(async () => {
+  await store.fetchPlans()
 })
 
 </script>
