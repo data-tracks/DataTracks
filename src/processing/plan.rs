@@ -35,6 +35,10 @@ impl Plan {
         }
     }
 
+    pub(crate) fn set_name(&mut self, name: String) {
+        self.name = name;
+    }
+
     pub(crate) fn halt(&mut self) {
         for (_, station) in &mut self.stations {
             station.close();

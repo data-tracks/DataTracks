@@ -75,6 +75,7 @@ const render = () => {
     .select('.editor-' + id)
     .append('div')
     .attr('class', 'editor-wrapper-' + id)
+    .classed("editor-wrapper", true)
     .append('svg')
     .attr('preserveAspectRatio', 'xMinYMin meet')
     .attr('width', 200)
