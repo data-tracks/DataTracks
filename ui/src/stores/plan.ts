@@ -3,6 +3,8 @@ import {type Ref, ref} from 'vue'
 import axios from 'axios'
 import {ToastType, useToastStore} from '@/stores/toast'
 
+const PORT = import.meta.env.VITE_PORT || 8080
+
 type Line = {
     num: number;
     stops: number[];
@@ -67,7 +69,7 @@ export const usePlanStore = defineStore('plan', () => {
 
     async function submitPlan(name: string, plan: string) {
         try {
-            await axios.post('http://localhost:2666' + '/plans/create', {name: name, plan: plan})
+            await axios.post('http://localhost:' + PORT + '/plans/create', {name: name, plan: plan})
             toast.addToast('Successfully created plan: ' + name + '.')
         } catch (error) {
             toast.addToast(error as string, ToastType.error)
@@ -75,8 +77,9 @@ export const usePlanStore = defineStore('plan', () => {
     }
 
     async function fetchPlans() {
+        console.log(PORT)
         try {
-            const {data, status} = await axios.get<GetPlansResponse>('http://localhost:2666' + '/plans')
+            const {data, status} = await axios.get<GetPlansResponse>('http://localhost:' + PORT + '/plans')
 
             if (status !== 200 || !data.plans) {
                 return
@@ -92,7 +95,7 @@ export const usePlanStore = defineStore('plan', () => {
     return {plans, submitPlan, fetchPlans}
 })
 
-const dummyData: any[] = [{
+const _dummyData: any[] = [{
     name: 'Plan Simple',
     lines: {
         0: {

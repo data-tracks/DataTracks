@@ -85,7 +85,8 @@ async fn get_plans(State(mut state): State<WebState>) -> impl IntoResponse {
 async fn create_plan(State(mut state): State<WebState>, Json(payload): Json<CreatePlanPayload>) -> impl IntoResponse {
     println!("{:?}", payload);
 
-    let plan = Plan::parse(payload.plan.as_str());
+    let mut plan = Plan::parse(payload.plan.as_str());
+    plan.set_name(payload.name);
     state.storage.lock().unwrap().add_plan(plan);
 
     // Return a response
