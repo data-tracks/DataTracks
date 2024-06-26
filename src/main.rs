@@ -1,4 +1,4 @@
-use std::sync::{Arc, mpsc};
+use std::sync::{Arc, mpsc, Mutex};
 use std::sync::mpsc::Receiver;
 use std::thread;
 use std::thread::JoinHandle;
@@ -32,10 +32,8 @@ fn main() {
 
     let storage = mangagement::start();
 
-    let copy = Arc::clone(&storage);
-
     // Spawn a new thread
-    let handle = thread::spawn(|| start(copy));
+    let handle = thread::spawn(|| start(storage));
 
 
     shutdown_hook(rx, handle);

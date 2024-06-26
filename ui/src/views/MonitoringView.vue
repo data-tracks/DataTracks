@@ -18,7 +18,7 @@ onMounted(async () => {
 
 <template>
   <default-layout title="Monitoring">
-    <div v-for="network in plans" :key="network.name">
+    <div class="pb-6" v-for="network in plans" :key="network.name">
       <Card>
         <template v-slot:left>
           {{network.name}}

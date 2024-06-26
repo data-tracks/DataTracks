@@ -2,10 +2,13 @@
 import * as d3 from 'd3'
 import { onMounted, ref, watchEffect } from 'vue'
 import { type Link, type Network, type Node } from '@/stores/plan'
+import { v4 } from 'uuid'
 
 const X_GAP = 100
 const Y_GAP = 60
 const RADIUS = 20
+
+const id: string = v4()
 
 const props = defineProps<{
   network: Network
@@ -69,9 +72,9 @@ const render = () => {
   }
 
   let svg = d3
-    .select('.editor')
+    .select('.editor-' + id)
     .append('div')
-    .attr('class', 'editor-wrapper')
+    .attr('class', 'editor-wrapper-' + id)
     .append('svg')
     .attr('preserveAspectRatio', 'xMinYMin meet')
     .attr('width', 200)
@@ -153,7 +156,7 @@ const render = () => {
 
   // create a tooltip
   const Tooltip = d3
-    .select('.editor-wrapper')
+    .select('.editor-wrapper-'+id)
     .append('div')
     .style('opacity', 0)
     .attr('class', 'tooltip')
@@ -186,7 +189,7 @@ watchEffect(() => {
 </script>
 
 <template>
-  <div class="editor flex justify-center"></div>
+  <div :class="'editor-'+id" class="editor flex justify-center"></div>
 </template>
 
 <style lang="scss">

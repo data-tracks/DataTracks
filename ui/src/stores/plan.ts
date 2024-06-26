@@ -78,7 +78,7 @@ export const usePlanStore = defineStore('plan', () => {
         try {
             const {data, status} = await axios.get<GetPlansResponse>('http://localhost:2666' + '/plans')
 
-            if (status !== 200) {
+            if (status !== 200 || !data.plans) {
                 return
             }
 
