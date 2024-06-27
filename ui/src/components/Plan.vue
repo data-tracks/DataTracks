@@ -3,12 +3,13 @@ import * as d3 from 'd3'
 import { onMounted, ref, watchEffect } from 'vue'
 import { type Link, type Network, type Node, type Stop } from '@/stores/plan'
 import { v4 } from 'uuid'
+import { useModalStore } from '@/stores/modal'
 
 const X_GAP = 100
 const Y_GAP = 60
-const RADIUS = 20
+const WIDTH = 40
 const PADDING = 10
-const TOTAL = RADIUS + PADDING
+const TOTAL = WIDTH/2 + PADDING
 
 const id: string = v4()
 
@@ -18,6 +19,9 @@ const props = defineProps<{
 
 const isRendered = ref(false)
 const isMounted = ref(false)
+
+const modal = useModalStore();
+
 
 
 const extractNodes = (network: Network): Node[] => {
@@ -83,11 +87,6 @@ function renderNodesAndTooltip(svg: d3.Selection<SVGGElement, unknown, HTMLEleme
     .append('div')
     .style('opacity', 0)
     .attr('class', 'tooltip')
-    .style('background-color', 'white')
-    .style('border', 'solid')
-    .style('border-width', '2px')
-    .style('border-radius', '5px')
-    .style('padding', '5px')
 
 
   // Three function that change the tooltip when user hover / move / leave a cell
@@ -107,9 +106,9 @@ function renderNodesAndTooltip(svg: d3.Selection<SVGGElement, unknown, HTMLEleme
     d3.select(target).style('opacity', 0.8)
   }
   const mousemove = (e: MouseEvent, d: Node) => {
-    Tooltip.style('left', d.x + 2 * RADIUS + PADDING + 'px').style(
-      'top',
-      d.y + 2 * RADIUS + PADDING + 'px'
+    Tooltip
+      .style('left', d.x + WIDTH + PADDING + 'px')
+      .style('top', d.y + WIDTH + PADDING + 'px'
     )
   }
   const mouseleave = (e: MouseEvent, d: Node) => {
@@ -126,18 +125,17 @@ function renderNodesAndTooltip(svg: d3.Selection<SVGGElement, unknown, HTMLEleme
     .attr('stroke-width', 1.5)
     .selectAll()
     .data(nodes)
-    .join('circle')
-    .attr('cx', (d) => d.x)
-    .attr('cy', (d) => d.y)
-    .attr('r', RADIUS)
-    /*.join('image')
-    .attr('xlink:href', '/src/assets/house.svg')
-    .attr('height', 30)*/
-    .classed('node', true)
-    .attr('class', (d) => color(d))
+    .join('rect')
+    .attr('x', (d) => d.x - WIDTH/2)
+    .attr('y', (d) => d.y - WIDTH/2)
+    .attr('width', WIDTH)
+    .attr('height', WIDTH)
+    .attr('rx', 4)
+    .attr('class', (d) => 'station '+color(d))
     .on('mouseover', mouseover)
     .on('mousemove', mousemove)
     .on('mouseleave', mouseleave)
+    .on( 'click', () => modal.toggle())
 }
 
 const color = (d: any) => {
@@ -157,7 +155,7 @@ function renderInputs(svg: d3.Selection<SVGGElement, unknown, HTMLElement, any>,
     .selectAll()
     .data(nodes.filter(n => getStop(n)?.inputs))
     .join('circle')
-    .attr('cx', (d) => d.x - RADIUS)
+    .attr('cx', (d) => d.x - WIDTH/2)
     .attr('cy', (d) => d.y + 2)
     .attr('r', 10)
     .classed('stop', true)
@@ -173,7 +171,7 @@ function renderOutputs(svg: d3.Selection<SVGGElement, unknown, HTMLElement, any>
     .selectAll()
     .data(nodes.filter(n => getStop(n)?.outputs))
     .join('circle')
-    .attr('cx', (d) => d.x + RADIUS)
+    .attr('cx', (d) => d.x + WIDTH/2)
     .attr('cy', (d) => d.y + 2)
     .attr('r', 10)
     .classed('stop', true)
@@ -288,6 +286,10 @@ text.num {
 .tooltip {
   z-index: 2;
   position: absolute;
+  background-color: #e5e7eb;
+  padding: .5rem;
+  border-radius: .3rem;
+  white-space: nowrap;
 }
 
 p {
@@ -300,6 +302,10 @@ p {
 
 .trans {
   fill: $melon;
+}
+
+.station{
+  cursor: pointer;
 }
 
 circle {

@@ -31,7 +31,6 @@ pub fn start(storage: Arc<Mutex<Storage>>) {
 pub async fn startup(storage: Arc<Mutex<Storage>>) {
     info!("initializing router...");
 
-
     // We could also read our port in from the environment as well
     let assets_path = std::env::current_dir().unwrap();
     let port = 2666_u16;
@@ -42,8 +41,6 @@ pub async fn startup(storage: Arc<Mutex<Storage>>) {
     let state = WebState { storage };
 
     let app = Router::new()
-        .route("/html", get(html))
-        .route("/json", get(json))
         .route("/plans", get(get_plans))
         .route("/plans/create", post(create_plan))
         .with_state(state)
@@ -64,21 +61,23 @@ async fn fallback_handler() -> impl IntoResponse {
     }
 }
 
-async fn html() -> impl IntoResponse {
-    Html("<h1>Hello, World!</h1>")
-}
+async fn get_plans(state: Arc<Mutex<WebState>>) -> impl IntoResponse {
+    // Acquire the lock and handle the possible error
+    let plans = match state.lock().await {
+        Ok(guard) => guard.storage.plans.lock().unwrap().values().cloned().collect::<Vec<_>>(),
+        Err(_) => return Json(json!({"error": "Failed to acquire state lock"})),
+    };
 
-async fn json() -> impl IntoResponse {
-    let data = json!({
-        "message": "Hello, this is your data!",
-        "status": "success"
-    });
-    Json(data)
-}
+    // Convert plans to JSON
+    let plans_json: Vec<Value> = match plans.into_iter().map(|plan| serde_json::to_value(&plan)).collect() {
+        Ok(plans) => plans,
+        Err(_) => return Json(json!({"error": "Failed to serialize plans"})),
+    };
 
-async fn get_plans(State(mut state): State<WebState>) -> impl IntoResponse {
-    let plans = state.storage.lock().unwrap().plans.lock().unwrap().values().into_iter().map(|plan| serde_json::to_value(&plan).unwrap()).collect::<Value>();
-    let msg = json!( {"plans": &plans});
+    // Create response message
+    let msg = json!({ "plans": plans_json });
+
+    // Return the JSON response
     Json(msg)
 }
 
@@ -103,55 +102,4 @@ struct CreatePlanPayload {
 struct WebState {
     pub storage: Arc<Mutex<Storage>>,
 }
-
-/*const DUMMY: Value= json!({"plans":[{
-    "name": "Plan Simple",
-    "lines": {
-        "0": {
-            "num": 0,
-            "stops": [0, 1, 3]
-        },
-        "1": {
-            "num": 1,
-            "stops": [4, 1]
-        },
-        "2": {
-            "num": 2,
-            "stops": [5, 1]
-        },
-        "3": {
-            "num": 3,
-            "stops": [6, 7]
-        }
-    },
-    "stops": {
-        "0": {
-            "num": 0,
-            "inputs": [8]
-        },
-        "1": {
-            "num": 1,
-            "transform": {
-                "language": "SQL",
-                "query": "SELECT * FROM $1, $4, $5"
-            }
-        },
-        "3": {
-            "num": 3,
-            "outputs": [4]
-        },
-        "4": {
-            "num": 4
-        },
-        "5": {
-            "num": 5
-        },
-        "6": {
-            "num": 6
-        },
-        "7": {
-            "num": 7
-        }
-    }
-}]});*/
 
