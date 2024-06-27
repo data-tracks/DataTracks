@@ -4,13 +4,14 @@ import axios from 'axios'
 import {ToastType, useToastStore} from '@/stores/toast'
 
 const PORT = import.meta.env.VITE_PORT || 8080
+const IS_DUMMY_MODE = import.meta.env.VITE_MODE == "dummy" || false
 
 type Line = {
     num: number;
     stops: number[];
 }
 
-type Stop = {
+export type Stop = {
     num: number;
     transform: Transform;
     inputs?: number[],
@@ -77,7 +78,11 @@ export const usePlanStore = defineStore('plan', () => {
     }
 
     async function fetchPlans() {
-        console.log(PORT)
+        if (IS_DUMMY_MODE) {
+            plans.value = _dummyData.map(d => transformNetwork(d));
+            return
+        }
+
         try {
             const {data, status} = await axios.get<GetPlansResponse>('http://localhost:' + PORT + '/plans')
 
@@ -117,7 +122,12 @@ const _dummyData: any[] = [{
     },
     stops: {
         0: {
-            num: 0
+            num: 0,
+            inputs: [
+                {
+                    name: 'mongo',
+                }
+            ]
         },
         1: {
             num: 1,
@@ -139,7 +149,12 @@ const _dummyData: any[] = [{
             num: 6
         },
         7: {
-            num: 7
+            num: 7,
+            outputs: [
+                {
+                    name: "mqtt"
+                }
+            ]
         }
     }
 }]

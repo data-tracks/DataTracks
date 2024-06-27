@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import * as d3 from 'd3'
 import { onMounted, ref, watchEffect } from 'vue'
-import { type Link, type Network, type Node } from '@/stores/plan'
+import { type Link, type Network, type Node, type Stop } from '@/stores/plan'
 import { v4 } from 'uuid'
 
 const X_GAP = 100
 const Y_GAP = 60
 const RADIUS = 20
+const PADDING = 10
+const TOTAL = RADIUS + PADDING
 
 const id: string = v4()
 
@@ -16,6 +18,7 @@ const props = defineProps<{
 
 const isRendered = ref(false)
 const isMounted = ref(false)
+
 
 const extractNodes = (network: Network): Node[] => {
   const nodes = []
@@ -53,33 +56,39 @@ const extractLinks = (network: Network, nodes: Node[]): Link[] => {
   return links
 }
 
-const render = () => {
-  // we have to wait that the component is mounted and that the data is actually loaded
-  if (!isMounted.value || !props.network || isRendered.value) {
-    return
-  }
-  isRendered.value = true
+const getStop = (node: Node): Stop | undefined => {
+  return props.network.stops.get(node.num)
+}
 
-  const nodes = extractNodes(props.network)
-  const links = extractLinks(props.network, nodes)
+function renderLines(svg: d3.Selection<SVGGElement, unknown, HTMLElement, any>, links: Link[]): void {
+  // connections lines
+  svg
+    .append('g')
+    .attr('stroke', 'black')
+    .attr('stroke-opacity', 0.6)
+    .selectAll()
+    .data(links)
+    .join('line')
+    .attr('x1', (d) => d.source.x)
+    .attr('y1', (d) => d.source.y)
+    .attr('x2', (d) => d.target.x)
+    .attr('y2', (d) => d.target.y)
+    .attr('stroke-width', 5)
+}
 
-  const color = (d: any) => {
-    const stop = props.network.stops.get(d.num)
-    if (stop && stop.transform) {
-      return 'trans'
-    }
-    return 'default'
-  }
-
-  let svg = d3
-    .select('.editor-' + id)
+function renderNodesAndTooltip(svg: d3.Selection<SVGGElement, unknown, HTMLElement, any>, nodes: Node[]) {
+  // create a tooltip
+  const Tooltip = d3
+    .select('.editor-wrapper-' + id)
     .append('div')
-    .attr('class', 'editor-wrapper-' + id)
-    .classed("editor-wrapper", true)
-    .append('svg')
-    .attr('preserveAspectRatio', 'xMinYMin meet')
-    .attr('width', 200)
-    .attr('height', 200)
+    .style('opacity', 0)
+    .attr('class', 'tooltip')
+    .style('background-color', 'white')
+    .style('border', 'solid')
+    .style('border-width', '2px')
+    .style('border-radius', '5px')
+    .style('padding', '5px')
+
 
   // Three function that change the tooltip when user hover / move / leave a cell
   const mouseover = (e: MouseEvent, d: Node) => {
@@ -98,9 +107,9 @@ const render = () => {
     d3.select(target).style('opacity', 0.8)
   }
   const mousemove = (e: MouseEvent, d: Node) => {
-    Tooltip.style('left', d.x + 2 * RADIUS + 'px').style(
+    Tooltip.style('left', d.x + 2 * RADIUS + PADDING + 'px').style(
       'top',
-      d.y + 2 * RADIUS + 'px'
+      d.y + 2 * RADIUS + PADDING + 'px'
     )
   }
   const mouseleave = (e: MouseEvent, d: Node) => {
@@ -109,19 +118,6 @@ const render = () => {
     d3.select(target).style('opacity', 1)
   }
 
-  // connections lines
-  svg
-    .append('g')
-    .attr('stroke', 'black')
-    .attr('stroke-opacity', 0.6)
-    .selectAll()
-    .data(links)
-    .join('line')
-    .attr('x1', (d) => d.source.x + RADIUS)
-    .attr('y1', (d) => d.source.y + RADIUS)
-    .attr('x2', (d) => d.target.x + RADIUS)
-    .attr('y2', (d) => d.target.y + RADIUS)
-    .attr('stroke-width', 5)
 
   // nodes
   svg
@@ -131,14 +127,60 @@ const render = () => {
     .selectAll()
     .data(nodes)
     .join('circle')
-    .attr('cx', (d) => d.x + RADIUS)
-    .attr('cy', (d) => d.y + RADIUS)
+    .attr('cx', (d) => d.x)
+    .attr('cy', (d) => d.y)
     .attr('r', RADIUS)
+    /*.join('image')
+    .attr('xlink:href', '/src/assets/house.svg')
+    .attr('height', 30)*/
+    .classed('node', true)
     .attr('class', (d) => color(d))
     .on('mouseover', mouseover)
     .on('mousemove', mousemove)
     .on('mouseleave', mouseleave)
+}
 
+const color = (d: any) => {
+  const stop = props.network.stops.get(d.num)
+  if (stop && stop.transform) {
+    return 'trans'
+  }
+  return 'default'
+}
+
+function renderInputs(svg: d3.Selection<SVGGElement, unknown, HTMLElement, any>, nodes: Node[]) {
+  // inputs
+  svg
+    .append('g')
+    .attr('stroke', '#fff')
+    .attr('stroke-width', 1.5)
+    .selectAll()
+    .data(nodes.filter(n => getStop(n)?.inputs))
+    .join('circle')
+    .attr('cx', (d) => d.x - RADIUS)
+    .attr('cy', (d) => d.y + 2)
+    .attr('r', 10)
+    .classed('stop', true)
+    .attr('fill', 'black')
+}
+
+function renderOutputs(svg: d3.Selection<SVGGElement, unknown, HTMLElement, any>, nodes: Node[]) {
+  // outputs
+  svg
+    .append('g')
+    .attr('stroke', '#fff')
+    .attr('stroke-width', 1.5)
+    .selectAll()
+    .data(nodes.filter(n => getStop(n)?.outputs))
+    .join('circle')
+    .attr('cx', (d) => d.x + RADIUS)
+    .attr('cy', (d) => d.y + 2)
+    .attr('r', 10)
+    .classed('stop', true)
+    .attr('fill', 'red')
+}
+
+function renderNumbers(svg: d3.Selection<SVGGElement, unknown, HTMLElement, any>, nodes: Node[]) {
   // stop number
   svg
     .append('g')
@@ -148,26 +190,50 @@ const render = () => {
     .enter()
     .append('text')
     .attr('class', 'num')
-    .attr('dx', (d) => d.x + RADIUS)
-    .attr('dy', (d) => d.y + RADIUS)
+    .attr('dx', (d) => d.x)
+    .attr('dy', (d) => d.y)
     .style('text-anchor', 'middle')
     .text((d) => {
       return d.num
     })
+}
 
-  // create a tooltip
-  const Tooltip = d3
-    .select('.editor-wrapper-'+id)
+const render = () => {
+  // we have to wait that the component is mounted and that the data is actually loaded
+  if (!isMounted.value || !props.network || isRendered.value) {
+    return
+  }
+  isRendered.value = true
+
+  const nodes = extractNodes(props.network)
+  const links = extractLinks(props.network, nodes)
+
+  let initialSvg = d3
+    .select('.editor-' + id)
     .append('div')
-    .style('opacity', 0)
-    .attr('class', 'tooltip')
-    .style('background-color', 'white')
-    .style('border', 'solid')
-    .style('border-width', '2px')
-    .style('border-radius', '5px')
-    .style('padding', '5px')
+    .attr('class', 'editor-wrapper-' + id)
+    .classed('editor-wrapper', true)
+    .append('svg')
+    .attr('preserveAspectRatio', 'xMinYMin meet')
+    .attr('width', 200)
+    .attr('height', 200)
 
-  scale(svg)
+  let svg = initialSvg
+    .append("g")
+    .classed("elements_wrapper", true)
+    // shift so all nodes ar in the visible area
+    .attr("transform", `translate(${TOTAL},${TOTAL})`)
+
+
+
+  renderLines(svg, links)
+  renderNodesAndTooltip(svg, nodes)
+  renderInputs(svg, nodes)
+  renderOutputs(svg, nodes)
+  renderNumbers(svg, nodes)
+
+
+  scale(initialSvg)
 }
 
 const scale = (svg: d3.Selection<SVGSVGElement, unknown, HTMLElement, any>) => {
@@ -175,8 +241,8 @@ const scale = (svg: d3.Selection<SVGSVGElement, unknown, HTMLElement, any>) => {
   if (!box) {
     return
   }
-  svg.attr('height', box.height)
-  svg.attr('width', box.width)
+  svg.attr('height', box.height + PADDING)
+  svg.attr('width', box.width + PADDING)
 }
 
 onMounted(() => {
