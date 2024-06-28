@@ -329,7 +329,7 @@ mod test {
     }
 
     #[test]
-    fn stencil_transform() {
+    fn stencil_transform_sql() {
         let stencils = vec![
             "1-2{sql|SELECT * FROM $1}",
         ];
@@ -339,6 +339,19 @@ mod test {
             assert_eq!(plan.dump(), stencil)
         }
     }
+
+    #[test]
+    fn stencil_transform_mql() {
+        let stencils = vec![
+            "1-2{sql|db.$1.find({})}",
+        ];
+
+        for stencil in stencils {
+            let plan = Plan::parse(stencil);
+            assert_eq!(plan.dump(), stencil)
+        }
+    }
+
 
     #[test]
     fn stencil_window() {

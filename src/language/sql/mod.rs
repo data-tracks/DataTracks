@@ -1,4 +1,4 @@
-pub use parse::sql;
+pub use parse::transform;
 
 mod parse;
 mod lex;

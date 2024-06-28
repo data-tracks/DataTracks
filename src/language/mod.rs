@@ -1,6 +1,6 @@
 pub use language::Language;
-pub use sql::sql::transform as sql;
 
 mod language;
-mod sql;
+pub mod sql;
 mod statement;
+pub(crate) mod mql;

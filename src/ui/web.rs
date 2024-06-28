@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use axum::{Json, Router};
 use axum::extract::State;
@@ -7,7 +7,7 @@ use axum::handler::HandlerWithoutStateExt;
 use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse};
 use axum::routing::{get, post};
-use serde::{Deserialize, Serialize, Serializer};
+use serde::Deserialize;
 use serde::ser::SerializeStruct;
 use serde_json::{json, Value};
 use tokio::net::TcpListener;
@@ -61,23 +61,9 @@ async fn fallback_handler() -> impl IntoResponse {
     }
 }
 
-async fn get_plans(state: Arc<Mutex<WebState>>) -> impl IntoResponse {
-    // Acquire the lock and handle the possible error
-    let plans = match state.lock().await {
-        Ok(guard) => guard.storage.plans.lock().unwrap().values().cloned().collect::<Vec<_>>(),
-        Err(_) => return Json(json!({"error": "Failed to acquire state lock"})),
-    };
-
-    // Convert plans to JSON
-    let plans_json: Vec<Value> = match plans.into_iter().map(|plan| serde_json::to_value(&plan)).collect() {
-        Ok(plans) => plans,
-        Err(_) => return Json(json!({"error": "Failed to serialize plans"})),
-    };
-
-    // Create response message
-    let msg = json!({ "plans": plans_json });
-
-    // Return the JSON response
+async fn get_plans(State(mut state): State<WebState>) -> impl IntoResponse {
+    let plans = state.storage.lock().unwrap().plans.lock().unwrap().values().into_iter().map(|plan| serde_json::to_value(&plan).unwrap()).collect::<Value>();
+    let msg = json!( {"plans": &plans});
     Json(msg)
 }
 

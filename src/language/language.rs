@@ -1,6 +1,6 @@
 use crate::algebra::AlgebraType;
+use crate::language::{mql, sql};
 use crate::language::Language::{MQL, SQL};
-use crate::language::sql::sql;
 
 pub enum Language {
     SQL,
@@ -18,6 +18,7 @@ impl Language {
     fn parse(&self, query: &str) -> Result<AlgebraType, String> {
         match self {
             SQL => sql::transform(query),
+            MQL => mql::transform(query),
             _ => Err("Language not supported.".to_string())
         }
     }

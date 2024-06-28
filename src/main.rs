@@ -1,4 +1,4 @@
-use std::sync::{Arc, mpsc, Mutex};
+use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::thread;
 use std::thread::JoinHandle;

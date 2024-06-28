@@ -76,8 +76,8 @@ impl LanguageTransform {
 
 fn build_transformer(language: &Language, query: &str) -> Result<Box<dyn RefHandler>, String> {
     let algebra = match language {
-        Language::SQL => language::sql(query)?,
-        Language::MQL => Err("Not supported.")?
+        Language::SQL => language::sql::transform(query)?,
+        Language::MQL => language::mql::transform(query)?
     };
     algebra::functionize(algebra)
 }
