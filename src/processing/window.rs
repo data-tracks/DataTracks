@@ -4,16 +4,21 @@ use crate::processing::transform::Taker;
 use crate::processing::window::Window::{Back, Interval};
 use crate::util::TimeUnit;
 
+#[derive(Clone)]
 pub enum Window {
     Back(BackWindow),
     Interval(IntervalWindow),
 }
 
 
-impl Window {
-    pub(crate) fn default() -> Self {
+impl Default for Window {
+    fn default() -> Self {
         Back(BackWindow::new(0, TimeUnit::Millis))
     }
+}
+
+
+impl Window {
 
     pub(crate) fn windowing(&self) -> Taker {
         match self {
@@ -38,6 +43,7 @@ impl Window {
 }
 
 
+#[derive(Clone)]
 pub struct BackWindow {
     time: i64,
     time_unit: TimeUnit,
@@ -89,6 +95,7 @@ fn parse_time_unit(time: String) -> TimeUnit {
     }
 }
 
+#[derive(Clone)]
 pub struct IntervalWindow {
     time: i64,
     time_unit: TimeUnit,
@@ -126,6 +133,7 @@ fn parse_time(time_str: &str) -> Result<NaiveTime, chrono::ParseError> {
 
 #[cfg(test)]
 mod test {
+    use std::sync::Arc;
     use std::sync::mpsc::channel;
 
     use crate::processing::station::Station;
@@ -141,7 +149,7 @@ mod test {
 
         let (tx, rx) = channel();
 
-        station.add_out(0, tx).unwrap();
+        station.add_out(0, Arc::new(tx)).unwrap();
         station.operate();
         station.send(Train::new(0, values.clone())).unwrap();
 

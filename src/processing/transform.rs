@@ -14,16 +14,19 @@ pub enum Transform {
 }
 
 
+impl Default for Transform {
+    fn default() -> Self {
+        Func(FuncTransform::default())
+    }
+}
+
+
 impl Transform {
     pub fn transformer(&mut self) -> Box<dyn RefHandler> {
         match self {
             Func(t) => t.get_transform(),
             Transform::LanguageTransform(t) => t.get_transform()
         }
-    }
-
-    pub fn default() -> Self {
-        Func(FuncTransform::default())
     }
 
     pub fn parse(stencil: String) -> Result<Transform, String> {
@@ -44,6 +47,7 @@ impl Transform {
     }
 }
 
+
 pub trait Transformable {
     fn get_transform(&mut self) -> Box<dyn RefHandler> {
         Box::new(FuncTransformHandler { func: |stop, trains| {
@@ -56,9 +60,6 @@ pub trait Transformable {
 
     fn dump(&self) -> String;
 
-    fn default() -> FuncTransform {
-        FuncTransform::new(|stop, trains| Train::from(trains))
-    }
 }
 
 pub struct LanguageTransform {
@@ -92,7 +93,7 @@ impl Transformable for LanguageTransform {
     }
 }
 
-
+#[derive(Clone)]
 struct FuncTransformHandler {
     func: fn(stop: i64, wagons: &mut Vec<Train>) -> Train,
 }
@@ -103,9 +104,11 @@ impl RefHandler for FuncTransformHandler {
     }
 }
 
+#[derive(Clone)]
 struct FuncValueHandler {
     func: fn(train: Value) -> Value,
 }
+
 
 impl RefHandler for FuncValueHandler {
     fn process(&self, stop: i64, wagons: &mut Vec<Train>) -> Train {
@@ -123,6 +126,11 @@ pub struct FuncTransform {
     pub func: Option<Box<dyn RefHandler>>,
 }
 
+impl Default for FuncTransform {
+    fn default() -> Self {
+        Self::new(|stop, trains| Train::from(trains))
+    }
+}
 
 impl FuncTransform {
     pub(crate) fn new(func: fn(stop: i64, wagons: &mut Vec<Train>) -> Train) -> Self {
@@ -147,7 +155,7 @@ impl Transformable for FuncTransform {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::mpsc::channel;
+    use crossbeam::channel::unbounded;
 
     use crate::processing::station::Station;
     use crate::processing::train::Train;
@@ -163,7 +171,7 @@ mod tests {
 
         let values = vec![Value::float(3.3), Value::int(3)];
 
-        let (tx, rx) = channel();
+        let (tx, rx) = unbounded();
 
         station.add_out(0, tx).unwrap();
         station.operate();
@@ -190,7 +198,7 @@ mod tests {
 
         let values = vec![Value::float(3.3), Value::int(3)];
 
-        let (tx, rx) = channel();
+        let (tx, rx) = unbounded();
 
         station.add_out(0, tx).unwrap();
         station.operate();

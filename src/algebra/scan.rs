@@ -13,6 +13,7 @@ impl TrainScan {
     }
 }
 
+#[derive(Clone)]
 pub struct ScanHandler {
     index: i64,
 }

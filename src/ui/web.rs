@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex};
 
 use axum::{Json, Router};
 use axum::extract::State;
@@ -8,7 +8,6 @@ use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse};
 use axum::routing::{get, post};
 use serde::Deserialize;
-use serde::ser::SerializeStruct;
 use serde_json::{json, Value};
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;

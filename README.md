@@ -4,6 +4,8 @@
 
 # 🚂 DataTracks
 
+### Blazingly fast stream processing that tracks!
+
 DataTracks is a streaming engine, which simplifies the setup up and management of data stream processing, whether the data is structured or unstructured. It is aimed at developers and data engineers who need a reliable and scalable solution for handling diverse data types and streaming workloads.
 
 ## Features
@@ -12,7 +14,8 @@ DataTracks is a streaming engine, which simplifies the setup up and management o
 - **Flexibility**: Supports both structured and unstructured data in various data formats.
 - **Prototype System**: Currently in the prototype stage, providing a foundational system for further development.
 
-DataTracks is a prototype entgin, which provides easy creation and management of complex data streaming workloads for various degrees of structured and unstructured data.
+DataTracks is a prototype engine, which provides simple creation and management of complex data streaming workloads for
+various degrees of structured and unstructured data.
 
 
 ## License

@@ -2,6 +2,7 @@ use crate::algebra::AlgebraType;
 use crate::language::{mql, sql};
 use crate::language::Language::{MQL, SQL};
 
+#[derive(Clone)]
 pub enum Language {
     SQL,
     MQL,

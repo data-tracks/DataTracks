@@ -1,7 +1,9 @@
-use std::sync::mpsc;
-use std::sync::mpsc::{channel, Receiver};
+use std::sync::Arc;
 use std::thread;
 use std::thread::JoinHandle;
+
+use crossbeam::channel;
+use crossbeam::channel::{Receiver, unbounded};
 
 use crate::processing::block::Block;
 use crate::processing::plan::PlanStage;
@@ -14,33 +16,54 @@ use crate::util::GLOBAL_ID;
 pub(crate) struct Station {
     id: i64,
     pub stop: i64,
-    sender_in: Option<mpsc::Sender<Train>>, // to hang up
-    receiver: Option<Receiver<Train>>,
-    sender: Option<Sender>,
+    incoming: (channel::Sender<Train>, Receiver<Train>),
+    outgoing: Arc<Sender>,
     window: Window,
-    pub(crate) transform: Transform,
+    pub(crate) transform: &'static Transform,
     block: Vec<i64>,
     inputs: Vec<i64>,
+    control: (channel::Sender<Command>, Receiver<Command>),
+}
+
+
+impl Clone for Station {
+    fn clone(&self) -> Self {
+        Station {
+            id: GLOBAL_ID.new_id(),
+            stop: self.stop,
+            incoming: (self.incoming.0.clone(), self.incoming.1.clone()),
+            outgoing: Arc::clone(&self.outgoing),
+            window: self.window.clone(),
+            transform: self.transform.clone(),
+            block: self.block.clone(),
+            inputs: self.inputs.clone(),
+            control: (self.control.0.clone(), self.control.1.clone()),
+        }
+    }
+}
+
+
+impl<'a> Default for Station {
+    fn default() -> Self {
+        Self::new(-1)
+    }
 }
 
 
 impl Station {
-    pub(crate) fn default() -> Self {
-        Self::new(-1)
-    }
-
     pub(crate) fn new(stop: i64) -> Self {
-        let (tx, rx) = channel();
+        let incoming = unbounded();
+        let control = unbounded();
         let station = Station {
             id: GLOBAL_ID.new_id(),
             stop,
-            sender_in: Some(tx),
-            receiver: Some(rx),
-            sender: Some(Sender::new()),
+            incoming: (incoming.0, incoming.1),
+            outgoing: Arc::new(Sender::default()),
             window: Window::default(),
-            transform: Transform::default(),
+            transform: &Transform::default(),
             block: vec![],
             inputs: vec![],
+            control: (control.0.clone(), control.1.clone()),
         };
         station
     }
@@ -58,7 +81,7 @@ impl Station {
         station
     }
 
-    pub(crate) fn add_insert(&mut self, input: i64){
+    pub(crate) fn add_insert(&mut self, input: i64) {
         self.inputs.push(input);
     }
 
@@ -69,7 +92,7 @@ impl Station {
     }
 
     pub(crate) fn close(&mut self) {
-        drop(self.sender_in.take())
+        self.control.0.send(Command::STOP).expect(todo!());
     }
 
     pub(crate) fn set_stop(&mut self, stop: i64) {
@@ -81,20 +104,20 @@ impl Station {
     }
 
     pub(crate) fn set_transform(&mut self, transform: Transform) {
-        self.transform = transform;
+        self.transform = &transform;
     }
 
     pub(crate) fn add_block(&mut self, line: i64) {
         self.block.push(line);
     }
 
-    pub(crate) fn add_out(&mut self, id: i64, out: mpsc::Sender<Train>) -> Result<(), String> {
-        self.sender.as_mut().ok_or("Could not register sender.".to_string())?.add(id, out);
+    pub(crate) fn add_out(&mut self, id: i64, out: channel::Sender<Train>) -> Result<(), String> {
+        self.outgoing.add(id, out);
         Ok(())
     }
 
     pub(crate) fn send(&mut self, train: Train) -> Result<(), String> {
-        self.sender_in.as_ref().ok_or("sender already disconnected.".to_string())?.send(train).map_err(|e| e.to_string())
+        self.incoming.0.send(train).map_err(|e| e.to_string())
     }
 
     pub fn dump(&self, line: i64) -> String {
@@ -108,16 +131,13 @@ impl Station {
         dump
     }
 
-    pub(crate) fn get_in(&mut self) -> mpsc::Sender<Train> {
-        let sender = self.sender_in.take().unwrap();
-        let cloned_sender = sender.clone();
-        self.sender_in = Some(sender);
-        cloned_sender
+    pub(crate) fn get_in(&mut self) -> channel::Sender<Train> {
+        self.incoming.0.clone()
     }
 
     pub(crate) fn operate(&mut self) -> JoinHandle<()> {
-        let receiver = self.receiver.take().unwrap();
-        let sender = self.sender.take().unwrap();
+        let receiver = self.incoming.1.clone();
+        let sender = self.outgoing.clone();
         let transform = self.transform.transformer();
         let window = self.window.windowing();
         let stop = self.stop;
@@ -139,10 +159,15 @@ impl Station {
     }
 }
 
+pub(crate) enum Command {
+    STOP,
+    READY,
+}
+
 
 #[cfg(test)]
 mod tests {
-    use std::sync::mpsc::channel;
+    use crossbeam::channel::unbounded;
 
     use crate::processing::plan::Plan;
     use crate::processing::station::Station;
@@ -160,11 +185,11 @@ mod tests {
         }
 
 
-        let (tx, rx) = channel();
+        let (tx, rx) = unbounded();
 
         station.add_out(0, tx).unwrap();
         station.operate();
-        station.sender_in.take().unwrap().send(Train::new(0, values.clone())).unwrap();
+        station.send(Train::new(0, values.clone())).unwrap();
 
         let res = rx.recv();
         match res {
@@ -187,7 +212,7 @@ mod tests {
         let mut first = Station::new(0);
         let input = first.get_in();
 
-        let (output_tx, output_rx) = channel();
+        let (output_tx, output_rx) = unbounded();
 
         let mut second = Station::new(1);
         second.add_out(0, output_tx).unwrap();

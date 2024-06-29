@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Serialize, Serializer};
 use serde::ser::SerializeStruct;
 
 use crate::processing::destination::Destination;
@@ -18,12 +18,14 @@ pub struct Plan {
     destinations: HashMap<i64, Box<dyn Destination>>,
 }
 
-
-impl Plan {
-    pub(crate) fn default() -> Self {
+impl Default for Plan {
+    fn default() -> Self {
         Plan::new(GLOBAL_ID.new_id())
     }
+}
 
+
+impl Plan {
     fn new(id: i64) -> Self {
         Plan {
             id,
@@ -406,11 +408,11 @@ mod dummy {
             Self::new_with_initial(stop, values, delay, Duration::from_millis(0))
         }
 
-        pub(crate) fn new_with_initial(stop: i64, values: Vec<Vec<Value>>, delay: Duration, initial_delay:Duration) -> Self{
-            DummySource{stop, values: Some(values), delay, initial_delay, senders: Some(vec![]), start_signal: Arc::new((Mutex::new(true), Condvar::new())) }
+        pub(crate) fn new_with_initial(stop: i64, values: Vec<Vec<Value>>, delay: Duration, initial_delay: Duration) -> Self {
+            DummySource { stop, values: Some(values), delay, initial_delay, senders: Some(vec![]), start_signal: Arc::new((Mutex::new(true), Condvar::new())) }
         }
 
-        pub(crate) fn set_signal(&mut self, signal_pair: &Arc<(Mutex<bool>, Condvar)>){
+        pub(crate) fn set_signal(&mut self, signal_pair: &Arc<(Mutex<bool>, Condvar)>) {
             self.start_signal = Arc::clone(signal_pair);
         }
     }
@@ -426,7 +428,7 @@ mod dummy {
             spawn(move || {
                 let (lock, con) = &*pair;
                 let mut started = lock.lock().unwrap();
-                while !*started{
+                while !*started {
                     // wait till we can start
                     started = con.wait(started).unwrap();
                 }
@@ -444,7 +446,7 @@ mod dummy {
         }
 
 
-        fn add_out(&mut self, id: i64, out: Sender<Train>) {
+        fn add_out(&mut self, id: i64, out: Arc<Sender<Train>>) {
             self.senders.as_mut().unwrap_or(&mut vec![]).push(out)
         }
 
@@ -496,6 +498,7 @@ mod stencil {
     use std::sync::mpsc::channel;
     use std::thread::sleep;
     use std::time::Duration;
+    use std::vec;
 
     use crate::processing::plan::dummy::{DummyDestination, DummySource};
     use crate::processing::plan::Plan;
@@ -617,7 +620,7 @@ mod stencil {
     fn sql_parse_block_one() {
         let stencil = "1-|2-3\n4-2";
 
-        let start_signal = Arc::new((Mutex::new(false), Condvar::new() ));
+        let start_signal = Arc::new((Mutex::new(false), Condvar::new()));
 
         let mut plan = Plan::parse(stencil);
         let mut values1 = vec![vec![3.3.into()], vec![3.1.into()]];
@@ -668,5 +671,27 @@ mod stencil {
         for (i, value) in train.values.take().unwrap().into_iter().enumerate() {
             assert!(res.contains(&value))
         }
+    }
+
+    #[test]
+    fn divide_workload() {
+        let station = Station::new(0);
+
+        let mut values = vec![];
+
+        for num in 0..1000 {
+            values.push(vec![Value::int(3)]);
+        }
+
+        let source = DummySource::new(0, vec![vec![Value::int(3)]], Duration::from_nanos(3));
+
+        let mut plan = Plan::new(0);
+
+        plan.build(0, station);
+
+        plan.add_source(0, Box::new(source));
+
+
+        plan.operate();
     }
 }

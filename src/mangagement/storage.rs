@@ -7,6 +7,13 @@ pub struct Storage {
     pub plans: Mutex<HashMap<i64, Plan>>,
 }
 
+impl Default for Storage {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+
 impl Storage {
     pub(crate) fn new() -> Storage {
         Storage { plans: Mutex::new(HashMap::new()) }

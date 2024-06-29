@@ -7,6 +7,7 @@ pub trait Filter: Algebra {
     fn get_input(&self) -> &AlgebraType;
 }
 
+
 pub struct TrainFilter {
     input: Box<AlgebraType>,
     condition: Option<fn(&Value) -> bool>,
