@@ -1,12 +1,13 @@
 use std::sync::Arc;
 use std::thread;
-use std::thread::JoinHandle;
+use std::thread::{JoinHandle, sleep};
 
 use crossbeam::channel;
 use crossbeam::channel::{Receiver, unbounded};
 
 use crate::processing::block::Block;
 use crate::processing::plan::PlanStage;
+use crate::processing::plattform::Platform;
 use crate::processing::sender::Sender;
 use crate::processing::train::Train;
 use crate::processing::transform::Transform;
@@ -16,34 +17,18 @@ use crate::util::GLOBAL_ID;
 pub(crate) struct Station {
     id: i64,
     pub stop: i64,
-    incoming: (channel::Sender<Train>, Receiver<Train>),
-    outgoing: Arc<Sender>,
-    window: Window,
-    pub(crate) transform: &'static Transform,
-    block: Vec<i64>,
-    inputs: Vec<i64>,
+    pub(crate) incoming: (channel::Sender<Train>, Receiver<Train>),
+    pub(crate) outgoing: Sender,
+    pub(crate) window: Window,
+    pub(crate) transform: Transform,
+    pub(crate) block: Vec<i64>,
+    pub(crate) inputs: Vec<i64>,
     control: (channel::Sender<Command>, Receiver<Command>),
 }
 
 
-impl Clone for Station {
-    fn clone(&self) -> Self {
-        Station {
-            id: GLOBAL_ID.new_id(),
-            stop: self.stop,
-            incoming: (self.incoming.0.clone(), self.incoming.1.clone()),
-            outgoing: Arc::clone(&self.outgoing),
-            window: self.window.clone(),
-            transform: self.transform.clone(),
-            block: self.block.clone(),
-            inputs: self.inputs.clone(),
-            control: (self.control.0.clone(), self.control.1.clone()),
-        }
-    }
-}
 
-
-impl<'a> Default for Station {
+impl Default for Station {
     fn default() -> Self {
         Self::new(-1)
     }
@@ -58,9 +43,9 @@ impl Station {
             id: GLOBAL_ID.new_id(),
             stop,
             incoming: (incoming.0, incoming.1),
-            outgoing: Arc::new(Sender::default()),
+            outgoing: Sender::default(),
             window: Window::default(),
-            transform: &Transform::default(),
+            transform: Transform::default(),
             block: vec![],
             inputs: vec![],
             control: (control.0.clone(), control.1.clone()),
@@ -104,7 +89,7 @@ impl Station {
     }
 
     pub(crate) fn set_transform(&mut self, transform: Transform) {
-        self.transform = &transform;
+        self.transform = transform;
     }
 
     pub(crate) fn add_block(&mut self, line: i64) {
@@ -136,25 +121,10 @@ impl Station {
     }
 
     pub(crate) fn operate(&mut self) -> JoinHandle<()> {
-        let receiver = self.incoming.1.clone();
-        let sender = self.outgoing.clone();
-        let transform = self.transform.transformer();
-        let window = self.window.windowing();
-        let stop = self.stop;
-        let blocks = self.block.clone();
-        let inputs = self.inputs.clone();
+        let platform = Platform::build(self);
 
         thread::spawn(move || {
-            let process = move |trains: &mut Vec<Train>| {
-                let mut transformed = transform.process(stop, window(trains));
-                transformed.last = stop;
-                sender.send(transformed)
-            };
-            let mut block = Block::new(inputs, blocks, Box::new(process));
-
-            while let Ok(train) = receiver.recv() {
-                block.next(train) // window takes precedence to
-            }
+            platform.operate()
         })
     }
 }
@@ -163,6 +133,7 @@ pub(crate) enum Command {
     STOP,
     READY,
 }
+
 
 
 #[cfg(test)]

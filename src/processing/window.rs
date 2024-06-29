@@ -135,7 +135,7 @@ fn parse_time(time_str: &str) -> Result<NaiveTime, chrono::ParseError> {
 mod test {
     use std::sync::Arc;
     use std::sync::mpsc::channel;
-
+    use crossbeam::channel::unbounded;
     use crate::processing::station::Station;
     use crate::processing::train::Train;
     use crate::value::Value;
@@ -147,9 +147,9 @@ mod test {
 
         let values = vec![Value::float(3.3), Value::int(3)];
 
-        let (tx, rx) = channel();
+        let (tx, rx) = unbounded();
 
-        station.add_out(0, Arc::new(tx)).unwrap();
+        station.add_out(0, tx).unwrap();
         station.operate();
         station.send(Train::new(0, values.clone())).unwrap();
 

@@ -4,6 +4,7 @@ use crossbeam::channel;
 
 use crate::processing::train::Train;
 
+#[derive(Clone)]
 pub(crate) struct Sender {
     outs: HashMap<i64, channel::Sender<Train>>,
 }

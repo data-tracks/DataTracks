@@ -385,10 +385,10 @@ mod test {
 #[cfg(test)]
 mod dummy {
     use std::sync::{Arc, Condvar, Mutex};
-    use std::sync::mpsc::{channel, Receiver, Sender};
     use std::thread::{sleep, spawn};
     use std::time::Duration;
-
+    use crossbeam::channel;
+    use crossbeam::channel::{Receiver, unbounded};
     use crate::processing::destination::Destination;
     use crate::processing::source::Source;
     use crate::processing::train::Train;
@@ -399,7 +399,7 @@ mod dummy {
         values: Option<Vec<Vec<Value>>>,
         delay: Duration,
         initial_delay: Duration,
-        senders: Option<Vec<Sender<Train>>>,
+        senders: Option<Vec<channel::Sender<Train>>>,
         start_signal: Arc<(Mutex<bool>, Condvar)>,
     }
 
@@ -446,7 +446,7 @@ mod dummy {
         }
 
 
-        fn add_out(&mut self, id: i64, out: Arc<Sender<Train>>) {
+        fn add_out(&mut self, id: i64, out: channel::Sender<Train>) {
             self.senders.as_mut().unwrap_or(&mut vec![]).push(out)
         }
 
@@ -459,12 +459,12 @@ mod dummy {
         stop: i64,
         pub(crate) results: Arc<Mutex<Vec<Train>>>,
         receiver: Option<Receiver<Train>>,
-        sender: Sender<Train>,
+        sender: channel::Sender<Train>,
     }
 
     impl DummyDestination {
         pub(crate) fn new(stop: i64) -> Self {
-            let (tx, rx) = channel();
+            let (tx, rx) = unbounded();
             DummyDestination { stop, results: Arc::new(Mutex::new(vec![])), receiver: Some(rx), sender: tx }
         }
     }
@@ -481,7 +481,7 @@ mod dummy {
             });
         }
 
-        fn get_in(&self) -> Sender<Train> {
+        fn get_in(&self) -> channel::Sender<Train> {
             self.sender.clone()
         }
 
@@ -499,7 +499,7 @@ mod stencil {
     use std::thread::sleep;
     use std::time::Duration;
     use std::vec;
-
+    use crossbeam::channel::unbounded;
     use crate::processing::plan::dummy::{DummyDestination, DummySource};
     use crate::processing::plan::Plan;
     use crate::processing::station::Station;
@@ -514,7 +514,7 @@ mod stencil {
         let mut first = Station::new(0);
         let input = first.get_in();
 
-        let (output_tx, output_rx) = channel();
+        let (output_tx, output_rx) = unbounded();
 
         let mut second = Station::new(1);
         second.add_out(0, output_tx).unwrap();
@@ -546,9 +546,9 @@ mod stencil {
         let first_id = first.stop;
         let input = first.get_in();
 
-        let (output1_tx, output1_rx) = channel();
+        let (output1_tx, output1_rx) = unbounded();
 
-        let (output2_tx, output2_rx) = channel();
+        let (output2_tx, output2_rx) = unbounded();
 
         let mut second = Station::new(1);
         second.add_out(0, output1_tx).unwrap();
