@@ -113,7 +113,7 @@ struct FuncValueHandler {
 impl RefHandler for FuncValueHandler {
     fn process(&self, stop: i64, wagons: &mut Vec<Train>) -> Train {
         let mut values: Vec<Value> = vec![];
-        for mut train in wagons {
+        for train in wagons {
             let mut vals = train.values.take().unwrap().into_iter().map(|v| (self.func)(v)).collect();
             values.append(&mut vals);
         }
@@ -155,6 +155,8 @@ impl Transformable for FuncTransform {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use crossbeam::channel::unbounded;
 
     use crate::processing::station::Station;
@@ -167,6 +169,8 @@ mod tests {
     fn transform() {
         let mut station = Station::new(0);
 
+        let control = unbounded();
+
         station.set_transform(Func(FuncTransform::new_val(0, |x| &x + &Value::int(3))));
 
         let values = vec![Value::float(3.3), Value::int(3)];
@@ -174,7 +178,7 @@ mod tests {
         let (tx, rx) = unbounded();
 
         station.add_out(0, tx).unwrap();
-        station.operate();
+        station.operate(Arc::new(control.0));
         station.send(Train::new(0, values.clone())).unwrap();
 
         let res = rx.recv();
@@ -194,6 +198,8 @@ mod tests {
     fn sql_transform() {
         let mut station = Station::new(0);
 
+        let control = unbounded();
+
         station.set_transform(Func(FuncTransform::new_val(0, |x| &x + &Value::int(3))));
 
         let values = vec![Value::float(3.3), Value::int(3)];
@@ -201,7 +207,7 @@ mod tests {
         let (tx, rx) = unbounded();
 
         station.add_out(0, tx).unwrap();
-        station.operate();
+        station.operate(Arc::new(control.0));
         station.send(Train::new(0, values.clone())).unwrap();
 
         let res = rx.recv();

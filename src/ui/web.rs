@@ -60,13 +60,13 @@ async fn fallback_handler() -> impl IntoResponse {
     }
 }
 
-async fn get_plans(State(mut state): State<WebState>) -> impl IntoResponse {
+async fn get_plans(State(state): State<WebState>) -> impl IntoResponse {
     let plans = state.storage.lock().unwrap().plans.lock().unwrap().values().into_iter().map(|plan| serde_json::to_value(&plan).unwrap()).collect::<Value>();
     let msg = json!( {"plans": &plans});
     Json(msg)
 }
 
-async fn create_plan(State(mut state): State<WebState>, Json(payload): Json<CreatePlanPayload>) -> impl IntoResponse {
+async fn create_plan(State(state): State<WebState>, Json(payload): Json<CreatePlanPayload>) -> impl IntoResponse {
     println!("{:?}", payload);
 
     let mut plan = Plan::parse(payload.plan.as_str());

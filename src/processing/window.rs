@@ -134,8 +134,9 @@ fn parse_time(time_str: &str) -> Result<NaiveTime, chrono::ParseError> {
 #[cfg(test)]
 mod test {
     use std::sync::Arc;
-    use std::sync::mpsc::channel;
+
     use crossbeam::channel::unbounded;
+
     use crate::processing::station::Station;
     use crate::processing::train::Train;
     use crate::value::Value;
@@ -144,13 +145,15 @@ mod test {
     fn default_behavior() {
         let mut station = Station::new(0);
 
+        let control = unbounded();
 
         let values = vec![Value::float(3.3), Value::int(3)];
 
         let (tx, rx) = unbounded();
 
+
         station.add_out(0, tx).unwrap();
-        station.operate();
+        station.operate(Arc::new(control.0));
         station.send(Train::new(0, values.clone())).unwrap();
 
         let res = rx.recv();

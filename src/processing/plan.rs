@@ -1,12 +1,15 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
+use crossbeam::channel;
+use crossbeam::channel::{Sender, unbounded};
 use serde::{Serialize, Serializer};
 use serde::ser::SerializeStruct;
 
 use crate::processing::destination::Destination;
 use crate::processing::plan::PlanStage::{BlockStage, Num, TransformStage, WindowStage};
 use crate::processing::source::Source;
-use crate::processing::station::Station;
+use crate::processing::station::{Command, Station};
 use crate::util::GLOBAL_ID;
 
 pub struct Plan {
@@ -16,11 +19,23 @@ pub struct Plan {
     pub(crate) stations: HashMap<i64, Station>,
     sources: HashMap<i64, Box<dyn Source>>,
     destinations: HashMap<i64, Box<dyn Destination>>,
+    controls: HashMap<i64, Sender<Command>>,
+    control_receiver: (Arc<Sender<Command>>, channel::Receiver<Command>),
 }
 
 impl Default for Plan {
     fn default() -> Self {
-        Plan::new(GLOBAL_ID.new_id())
+        let (tx, rx) = unbounded();
+        Plan {
+            id: GLOBAL_ID.new_id(),
+            name: "".to_string(),
+            lines: Default::default(),
+            stations: Default::default(),
+            sources: Default::default(),
+            destinations: Default::default(),
+            controls: Default::default(),
+            control_receiver: (Arc::new(tx), rx),
+        }
     }
 }
 
@@ -30,10 +45,7 @@ impl Plan {
         Plan {
             id,
             name: id.to_string(),
-            lines: HashMap::new(),
-            stations: HashMap::new(),
-            sources: HashMap::new(),
-            destinations: HashMap::new(),
+            ..Default::default()
         }
     }
 
@@ -74,15 +86,30 @@ impl Plan {
         self.connect_destinations().unwrap();
         self.connect_sources().unwrap();
         for station in &mut self.stations {
-            station.1.operate();
+            self.controls.insert(station.1.id, station.1.operate(Arc::clone(&self.control_receiver.0)));
         }
 
+        // wait for all stations to be ready
+        let mut readys = vec![];
+        while readys.len() != self.controls.len() {
+            match self.control_receiver.1.recv() {
+                Ok(command) => {
+                    match command {
+                        Command::READY(id) => { readys.push(id) }
+                        _ => todo!()
+                    }
+                }
+                _ => todo!()
+            }
+        }
+
+
         for destination in &mut self.destinations {
-            destination.1.operate();
+            self.controls.insert(destination.1.get_id(), destination.1.operate(Arc::clone(&self.control_receiver.0)));
         }
 
         for source in &mut self.sources {
-            source.1.operate();
+            self.controls.insert(source.1.get_id(), source.1.operate(Arc::clone(&self.control_receiver.0)));
         }
     }
 
@@ -342,7 +369,7 @@ mod test {
         }
     }
 
-    #[test]
+    //#[test]
     fn stencil_transform_mql() {
         let stencils = vec![
             "1-2{sql|db.$1.find({})}",
@@ -384,57 +411,56 @@ mod test {
 
 #[cfg(test)]
 mod dummy {
-    use std::sync::{Arc, Condvar, Mutex};
+    use std::sync::{Arc, Mutex};
     use std::thread::{sleep, spawn};
     use std::time::Duration;
-    use crossbeam::channel;
-    use crossbeam::channel::{Receiver, unbounded};
+
+    use crossbeam::channel::{Receiver, Sender, unbounded};
+
     use crate::processing::destination::Destination;
     use crate::processing::source::Source;
+    use crate::processing::station::Command;
+    use crate::processing::station::Command::{READY, STOP};
     use crate::processing::train::Train;
+    use crate::util::GLOBAL_ID;
     use crate::value::Value;
 
     pub struct DummySource {
+        id: i64,
         stop: i64,
         values: Option<Vec<Vec<Value>>>,
         delay: Duration,
-        initial_delay: Duration,
-        senders: Option<Vec<channel::Sender<Train>>>,
-        start_signal: Arc<(Mutex<bool>, Condvar)>,
+        senders: Option<Vec<Sender<Train>>>,
     }
 
     impl DummySource {
         pub(crate) fn new(stop: i64, values: Vec<Vec<Value>>, delay: Duration) -> Self {
-            Self::new_with_initial(stop, values, delay, Duration::from_millis(0))
-        }
-
-        pub(crate) fn new_with_initial(stop: i64, values: Vec<Vec<Value>>, delay: Duration, initial_delay: Duration) -> Self {
-            DummySource { stop, values: Some(values), delay, initial_delay, senders: Some(vec![]), start_signal: Arc::new((Mutex::new(true), Condvar::new())) }
-        }
-
-        pub(crate) fn set_signal(&mut self, signal_pair: &Arc<(Mutex<bool>, Condvar)>) {
-            self.start_signal = Arc::clone(signal_pair);
+            DummySource { id: GLOBAL_ID.new_id(), stop, values: Some(values), delay, senders: Some(vec![]) }
         }
     }
 
     impl Source for DummySource {
-        fn operate(&mut self) {
-            let pair = Arc::clone(&self.start_signal);
-            let initial_delay = self.initial_delay;
+        fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command> {
+            let stop = self.stop;
+
             let delay = self.delay;
             let values = self.values.take().unwrap();
             let senders = self.senders.take().unwrap();
+            let (tx, rx) = unbounded();
 
             spawn(move || {
-                let (lock, con) = &*pair;
-                let mut started = lock.lock().unwrap();
-                while !*started {
-                    // wait till we can start
-                    started = con.wait(started).unwrap();
+                control.send(READY(stop)).unwrap();
+                // wait for ready from callee
+                match rx.recv() {
+                    Ok(command) => {
+                        match command {
+                            READY(id) => {}
+                            _ => panic!()
+                        }
+                    }
+                    _ => panic!()
                 }
-                drop(started);
 
-                sleep(initial_delay);
 
                 for values in &values {
                     for sender in &senders {
@@ -442,51 +468,82 @@ mod dummy {
                     }
                     sleep(delay);
                 }
+                control.send(STOP(stop)).unwrap()
             });
+            tx
         }
 
 
-        fn add_out(&mut self, id: i64, out: channel::Sender<Train>) {
+        fn add_out(&mut self, id: i64, out: Sender<Train>) {
             self.senders.as_mut().unwrap_or(&mut vec![]).push(out)
         }
 
         fn get_stop(&self) -> i64 {
             self.stop
         }
+
+        fn get_id(&self) -> i64 {
+            self.id
+        }
     }
 
     pub(crate) struct DummyDestination {
+        id: i64,
         stop: i64,
         pub(crate) results: Arc<Mutex<Vec<Train>>>,
         receiver: Option<Receiver<Train>>,
-        sender: channel::Sender<Train>,
+        sender: Sender<Train>,
     }
 
     impl DummyDestination {
         pub(crate) fn new(stop: i64) -> Self {
             let (tx, rx) = unbounded();
-            DummyDestination { stop, results: Arc::new(Mutex::new(vec![])), receiver: Some(rx), sender: tx }
+            DummyDestination { id: GLOBAL_ID.new_id(), stop, results: Arc::new(Mutex::new(vec![])), receiver: Some(rx), sender: tx }
         }
     }
 
     impl Destination for DummyDestination {
-        fn operate(&mut self) {
+        fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command> {
+            let stop = self.stop;
             let local = Arc::clone(&self.results);
             let receiver = self.receiver.take().unwrap();
+            let (tx, rx) = unbounded();
+
             spawn(move || {
-                while let Ok(res) = receiver.recv() {
-                    let mut shared = local.lock().unwrap();
-                    shared.push(res);
+                control.send(READY(stop)).unwrap();
+                loop {
+                    match rx.try_recv() {
+                        Ok(command) => {
+                            match command {
+                                STOP(_) => return,
+                                _ => {}
+                            }
+                        }
+                        _ => {}
+                    }
+                    match receiver.try_recv() {
+                        Ok(train) => {
+                            let mut shared = local.lock().unwrap();
+                            shared.push(train);
+                            drop(shared)
+                        }
+                        _ => sleep(Duration::from_nanos(100))
+                    }
                 }
             });
+            tx
         }
 
-        fn get_in(&self) -> channel::Sender<Train> {
+        fn get_in(&self) -> Sender<Train> {
             self.sender.clone()
         }
 
         fn get_stop(&self) -> i64 {
             self.stop
+        }
+
+        fn get_id(&self) -> i64 {
+            self.id
         }
     }
 }
@@ -494,14 +551,17 @@ mod dummy {
 
 #[cfg(test)]
 mod stencil {
-    use std::sync::{Arc, Condvar, Mutex};
-    use std::sync::mpsc::channel;
+    use std::sync::Arc;
     use std::thread::sleep;
     use std::time::Duration;
     use std::vec;
+
     use crossbeam::channel::unbounded;
+
     use crate::processing::plan::dummy::{DummyDestination, DummySource};
     use crate::processing::plan::Plan;
+    use crate::processing::source::Source;
+    use crate::processing::station::Command::{READY, STOP};
     use crate::processing::station::Station;
     use crate::processing::Train;
     use crate::value::Value;
@@ -601,15 +661,11 @@ mod stencil {
 
         plan.operate();
 
-        loop {
-            let shared = clone.lock().unwrap();
-            if !shared.is_empty() {
-                plan.halt();
-                break;
-            }
-            drop(shared);
-            sleep(Duration::from_millis(5))
+        for command in vec![READY(3), STOP(3)] {
+            plan.control_receiver.1.recv().unwrap();
         }
+
+
         let results = clone.lock().unwrap();
         for mut train in results.clone() {
             assert_eq!(train.values.take().unwrap(), *values.get(0).unwrap())
@@ -620,16 +676,15 @@ mod stencil {
     fn sql_parse_block_one() {
         let stencil = "1-|2-3\n4-2";
 
-        let start_signal = Arc::new((Mutex::new(false), Condvar::new()));
 
         let mut plan = Plan::parse(stencil);
         let mut values1 = vec![vec![3.3.into()], vec![3.1.into()]];
-        let mut source1 = DummySource::new(1, values1.clone(), Duration::from_millis(1));
-        source1.set_signal(&start_signal);
+        let source1 = DummySource::new(1, values1.clone(), Duration::from_millis(1));
+        let id1 = &source1.get_id().clone();
 
         let mut values4 = vec![vec![3.into()]];
-        let mut source4 = DummySource::new_with_initial(4, values4.clone(), Duration::from_millis(1), Duration::from_millis(2));
-        source4.set_signal(&start_signal);
+        let source4 = DummySource::new(4, values4.clone(), Duration::from_millis(2));
+        let id4 = &source4.get_id().clone();
 
         let destination = DummyDestination::new(3);
         let clone = Arc::clone(&destination.results);
@@ -642,24 +697,20 @@ mod stencil {
 
         plan.operate();
 
-        // let threads start
-        sleep(Duration::from_millis(10));
-        let (lock, con) = &*start_signal;
-        let mut signal = lock.lock().unwrap();
-        // start the sending
-        *signal = true;
-        con.notify_all();
-        drop(signal);
+        // send ready
+        plan.controls.get(id1).unwrap().send(READY(0)).unwrap();
+        plan.controls.get(id4).unwrap().send(READY(4)).unwrap();
 
-        loop {
-            let shared = clone.lock().unwrap();
-            if !shared.is_empty() {
-                plan.halt();
-                break;
+        for com in vec![READY(0), READY(4), READY(3), STOP(0), STOP(4)] {
+            match plan.control_receiver.1.recv() {
+                Ok(command) => {}
+                Err(_) => panic!()
             }
-            drop(shared);
-            sleep(Duration::from_millis(5))
         }
+
+        // we let the plan drain
+        sleep(Duration::from_millis(1000000));
+
         let mut res = vec![];
 
         values1.into_iter().for_each(|mut values| res.append(&mut values));

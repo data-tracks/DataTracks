@@ -1,13 +1,11 @@
 use std::sync::Arc;
 use std::thread;
-use std::thread::{JoinHandle, sleep};
 
 use crossbeam::channel;
 use crossbeam::channel::{Receiver, unbounded};
 
-use crate::processing::block::Block;
 use crate::processing::plan::PlanStage;
-use crate::processing::plattform::Platform;
+use crate::processing::platform::Platform;
 use crate::processing::sender::Sender;
 use crate::processing::train::Train;
 use crate::processing::transform::Transform;
@@ -15,7 +13,7 @@ use crate::processing::window::Window;
 use crate::util::GLOBAL_ID;
 
 pub(crate) struct Station {
-    id: i64,
+    pub(crate) id: i64,
     pub stop: i64,
     pub(crate) incoming: (channel::Sender<Train>, Receiver<Train>),
     pub(crate) outgoing: Sender,
@@ -77,7 +75,7 @@ impl Station {
     }
 
     pub(crate) fn close(&mut self) {
-        self.control.0.send(Command::STOP).expect(todo!());
+        self.control.0.send(Command::STOP(0)).expect("TODO: panic message");
     }
 
     pub(crate) fn set_stop(&mut self, stop: i64) {
@@ -120,24 +118,27 @@ impl Station {
         self.incoming.0.clone()
     }
 
-    pub(crate) fn operate(&mut self) -> JoinHandle<()> {
-        let platform = Platform::build(self);
+    pub(crate) fn operate(&mut self, control: Arc<channel::Sender<Command>>) -> channel::Sender<Command> {
+        let (mut platform, sender) = Platform::new(self);
 
         thread::spawn(move || {
-            platform.operate()
-        })
+            platform.operate(control)
+        });
+        sender
     }
 }
 
 pub(crate) enum Command {
-    STOP,
-    READY,
+    STOP(i64),
+    READY(i64),
 }
 
 
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use crossbeam::channel::unbounded;
 
     use crate::processing::plan::Plan;
@@ -149,6 +150,8 @@ mod tests {
     fn start_stop_test() {
         let mut station = Station::new(0);
 
+        let control = unbounded();
+
         let mut values = vec![Value::text("test"), Value::bool(true), Value::float(3.3), Value::null()];
 
         for x in 0..1_000_000 {
@@ -159,7 +162,7 @@ mod tests {
         let (tx, rx) = unbounded();
 
         station.add_out(0, tx).unwrap();
-        station.operate();
+        station.operate(Arc::new(control.0));
         station.send(Train::new(0, values.clone())).unwrap();
 
         let res = rx.recv();
@@ -179,6 +182,8 @@ mod tests {
     #[test]
     fn station_two_train() {
         let values = vec![3.into()];
+        let (tx, rx) = unbounded();
+        let control = Arc::new(tx);
 
         let mut first = Station::new(0);
         let input = first.get_in();
@@ -191,8 +196,8 @@ mod tests {
         let tx = second.get_in();
         first.add_out(1, tx).unwrap();
 
-        first.operate();
-        second.operate();
+        first.operate(Arc::clone(&control));
+        second.operate(Arc::clone(&control));
 
         input.send(Train::new(0, values.clone())).unwrap();
 
@@ -212,7 +217,7 @@ mod tests {
     fn sql_parse_block() {
         let stencil = "1-|3{sql|Select * From $1}";
 
-        let mut plan = Plan::parse(stencil);
+        let plan = Plan::parse(stencil);
 
         let station = plan.stations.get(&3).unwrap();
 
