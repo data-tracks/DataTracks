@@ -22,7 +22,7 @@ impl Sender {
 
     pub(crate) fn send(&self, train: Train) {
         for out in &self.outs {
-            out.1.send(train.clone()).unwrap();
+            out.1.send(train.clone()).expect(&("Error on :".to_owned() + &out.0.to_string()));
         }
     }
 }

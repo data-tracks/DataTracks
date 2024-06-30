@@ -45,7 +45,7 @@ impl Platform {
         let timeout = Duration::from_nanos(10);
 
         let process = Box::new(move |trains: &mut Vec<Train>| {
-            let mut transformed = transform.process(stop, (window)(trains));
+            let mut transformed = transform.process(stop, window(trains));
             transformed.last = stop;
             sender.send(transformed)
         });

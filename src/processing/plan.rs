@@ -240,6 +240,8 @@ impl Plan {
             let target = destination.1.get_stop();
             if let Some(station) = self.stations.get_mut(&target) {
                 station.add_out(-1, tx)?;
+            } else {
+                todo!()
             }
         }
         Ok(())
@@ -430,12 +432,17 @@ mod dummy {
         stop: i64,
         values: Option<Vec<Vec<Value>>>,
         delay: Duration,
+        initial_delay: Duration,
         senders: Option<Vec<Sender<Train>>>,
     }
 
     impl DummySource {
         pub(crate) fn new(stop: i64, values: Vec<Vec<Value>>, delay: Duration) -> Self {
-            DummySource { id: GLOBAL_ID.new_id(), stop, values: Some(values), delay, senders: Some(vec![]) }
+            Self::new_with_delay(stop, values, Duration::from_millis(0), delay)
+        }
+
+        pub(crate) fn new_with_delay(stop: i64, values: Vec<Vec<Value>>, initial_delay: Duration, delay: Duration) -> Self {
+            DummySource { id: GLOBAL_ID.new_id(), stop, values: Some(values), initial_delay, delay, senders: Some(vec![]) }
         }
     }
 
@@ -444,6 +451,7 @@ mod dummy {
             let stop = self.stop;
 
             let delay = self.delay;
+            let initial_delay = self.initial_delay;
             let values = self.values.take().unwrap();
             let senders = self.senders.take().unwrap();
             let (tx, rx) = unbounded();
@@ -460,6 +468,7 @@ mod dummy {
                     }
                     _ => panic!()
                 }
+                sleep(initial_delay);
 
 
                 for values in &values {
@@ -513,12 +522,10 @@ mod dummy {
                 control.send(READY(stop)).unwrap();
                 loop {
                     match rx.try_recv() {
-                        Ok(command) => {
-                            match command {
-                                STOP(_) => return,
-                                _ => {}
-                            }
-                        }
+                        Ok(command) => match command {
+                            STOP(_) => return,
+                            _ => {}
+                        },
                         _ => {}
                     }
                     match receiver.try_recv() {
@@ -558,6 +565,7 @@ mod stencil {
 
     use crossbeam::channel::unbounded;
 
+    use crate::processing::destination::Destination;
     use crate::processing::plan::dummy::{DummyDestination, DummySource};
     use crate::processing::plan::Plan;
     use crate::processing::source::Source;
@@ -683,17 +691,18 @@ mod stencil {
         let id1 = &source1.get_id().clone();
 
         let mut values4 = vec![vec![3.into()]];
-        let source4 = DummySource::new(4, values4.clone(), Duration::from_millis(2));
+        let source4 = DummySource::new_with_delay(4, values4.clone(), Duration::from_millis(3), Duration::from_millis(1));
         let id4 = &source4.get_id().clone();
 
         let destination = DummyDestination::new(3);
+        let id3 = &destination.get_id();
         let clone = Arc::clone(&destination.results);
 
         plan.add_source(1, Box::new(source1));
         plan.add_source(4, Box::new(source4));
         plan.add_destination(3, Box::new(destination));
 
-        let station = plan.stations.get(&3).unwrap();
+        //let station = plan.stations.get(&3).unwrap();
 
         plan.operate();
 
@@ -709,15 +718,19 @@ mod stencil {
         }
 
         // we let the plan drain
-        sleep(Duration::from_millis(1000000));
+        sleep(Duration::from_millis(100));
+        // stop the destination
+        plan.controls.get(id3).unwrap().send(STOP(3)).unwrap();
 
         let mut res = vec![];
 
         values1.into_iter().for_each(|mut values| res.append(&mut values));
         values4.into_iter().for_each(|mut values| res.append(&mut values));
 
-        let mut results = clone.lock().unwrap();
-        let mut train = results.pop().unwrap();
+        let mut lock = clone.lock().unwrap();
+        let mut train = lock.clone().pop().unwrap();
+        drop(lock);
+
         assert_eq!(train.values.clone().unwrap().len(), res.len());
         for (i, value) in train.values.take().unwrap().into_iter().enumerate() {
             assert!(res.contains(&value))
