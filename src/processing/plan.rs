@@ -499,15 +499,23 @@ mod dummy {
     pub(crate) struct DummyDestination {
         id: i64,
         stop: i64,
+        result_amount: usize,
         pub(crate) results: Arc<Mutex<Vec<Train>>>,
         receiver: Option<Receiver<Train>>,
         sender: Sender<Train>,
     }
 
     impl DummyDestination {
-        pub(crate) fn new(stop: i64) -> Self {
+        pub(crate) fn new(stop: i64, wait_result: usize) -> Self {
             let (tx, rx) = unbounded();
-            DummyDestination { id: GLOBAL_ID.new_id(), stop, results: Arc::new(Mutex::new(vec![])), receiver: Some(rx), sender: tx }
+            DummyDestination {
+                id: GLOBAL_ID.new_id(),
+                stop,
+                result_amount: wait_result,
+                results: Arc::new(Mutex::new(vec![])),
+                receiver: Some(rx),
+                sender: tx,
+            }
         }
     }
 
@@ -516,27 +524,32 @@ mod dummy {
             let stop = self.stop;
             let local = Arc::clone(&self.results);
             let receiver = self.receiver.take().unwrap();
+            let result_amount = self.result_amount as usize;
             let (tx, rx) = unbounded();
 
             spawn(move || {
                 control.send(READY(stop)).unwrap();
+                let mut shared = local.lock().unwrap();
                 loop {
                     match rx.try_recv() {
                         Ok(command) => match command {
-                            STOP(_) => return,
+                            STOP(_) => break,
                             _ => {}
                         },
                         _ => {}
                     }
                     match receiver.try_recv() {
                         Ok(train) => {
-                            let mut shared = local.lock().unwrap();
                             shared.push(train);
-                            drop(shared)
+                            if shared.len() == result_amount {
+                                break;
+                            }
                         }
                         _ => sleep(Duration::from_nanos(100))
                     }
                 }
+                drop(shared);
+                control.send(STOP(stop))
             });
             tx
         }
@@ -560,7 +573,7 @@ mod dummy {
 mod stencil {
     use std::sync::Arc;
     use std::thread::sleep;
-    use std::time::Duration;
+    use std::time::{Duration, SystemTime};
     use std::vec;
 
     use crossbeam::channel::unbounded;
@@ -572,6 +585,7 @@ mod stencil {
     use crate::processing::station::Command::{READY, STOP};
     use crate::processing::station::Station;
     use crate::processing::Train;
+    use crate::processing::transform::{FuncTransform, Transform};
     use crate::value::Value;
 
     #[test]
@@ -659,8 +673,9 @@ mod stencil {
         let mut plan = Plan::parse(stencil);
 
         let source = DummySource::new(3, values.clone(), Duration::from_millis(3));
+        let id = &source.get_id();
 
-        let destination = DummyDestination::new(3);
+        let destination = DummyDestination::new(3, values.len());
         let clone = Arc::clone(&destination.results);
 
         plan.add_source(3, Box::new(source));
@@ -669,7 +684,11 @@ mod stencil {
 
         plan.operate();
 
-        for command in vec![READY(3), STOP(3)] {
+        // start dummy source
+        plan.controls.get(id).unwrap().send(READY(3)).unwrap();
+
+        // source ready + stop, destination ready + stop
+        for command in vec![READY(3), STOP(3), READY(3), STOP(3)] {
             plan.control_receiver.1.recv().unwrap();
         }
 
@@ -694,7 +713,7 @@ mod stencil {
         let source4 = DummySource::new_with_delay(4, values4.clone(), Duration::from_millis(3), Duration::from_millis(1));
         let id4 = &source4.get_id().clone();
 
-        let destination = DummyDestination::new(3);
+        let destination = DummyDestination::new(3, 1);
         let id3 = &destination.get_id();
         let clone = Arc::clone(&destination.results);
 
@@ -702,7 +721,6 @@ mod stencil {
         plan.add_source(4, Box::new(source4));
         plan.add_destination(3, Box::new(destination));
 
-        //let station = plan.stations.get(&3).unwrap();
 
         plan.operate();
 
@@ -710,24 +728,20 @@ mod stencil {
         plan.controls.get(id1).unwrap().send(READY(0)).unwrap();
         plan.controls.get(id4).unwrap().send(READY(4)).unwrap();
 
-        for com in vec![READY(0), READY(4), READY(3), STOP(0), STOP(4)] {
+        // source 1 ready + stop, source 4 ready + stop, destination ready + stop
+        for com in vec![READY(1), STOP(1), READY(4), STOP(4), READY(3), STOP(3)] {
             match plan.control_receiver.1.recv() {
                 Ok(command) => {}
                 Err(_) => panic!()
             }
         }
 
-        // we let the plan drain
-        sleep(Duration::from_millis(100));
-        // stop the destination
-        plan.controls.get(id3).unwrap().send(STOP(3)).unwrap();
-
         let mut res = vec![];
 
         values1.into_iter().for_each(|mut values| res.append(&mut values));
         values4.into_iter().for_each(|mut values| res.append(&mut values));
 
-        let mut lock = clone.lock().unwrap();
+        let lock = clone.lock().unwrap();
         let mut train = lock.clone().pop().unwrap();
         drop(lock);
 
@@ -739,23 +753,50 @@ mod stencil {
 
     #[test]
     fn divide_workload() {
-        let station = Station::new(0);
+        let mut station = Station::new(0);
+        station.transform = Transform::Func(FuncTransform::new(|num, train| {
+            sleep(Duration::from_millis(100));
+            Train::from(train)
+        }));
 
         let mut values = vec![];
 
-        for num in 0..1000 {
+        let numbers = 0..1_000;
+        let length = numbers.len();
+
+        for num in numbers {
             values.push(vec![Value::int(3)]);
         }
 
-        let source = DummySource::new(0, vec![vec![Value::int(3)]], Duration::from_nanos(3));
-
         let mut plan = Plan::new(0);
+
+        let source = DummySource::new(0, values, Duration::from_nanos(3));
+        let id = &source.get_id();
+
 
         plan.build(0, station);
 
         plan.add_source(0, Box::new(source));
 
+        let destination = DummyDestination::new(0, length);
+        plan.add_destination(0, Box::new(destination));
 
+
+        let now = SystemTime::now();
         plan.operate();
+        plan.controls.get(id).unwrap().send(READY(0)).unwrap();
+
+        let result_size = 0;
+
+        // source 1 ready + stop, destination ready + stop
+        for com in vec![READY(1), STOP(1), READY(0), STOP(0)] {
+            match plan.control_receiver.1.recv() {
+                Ok(command) => {}
+                Err(_) => panic!()
+            }
+        }
+
+
+        println!("time: {} millis", now.elapsed().unwrap().as_millis())
     }
 }

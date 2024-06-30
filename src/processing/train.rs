@@ -25,6 +25,10 @@ impl From<&mut Train> for Train {
 
 impl From<&mut Vec<Train>> for Train {
     fn from(wagons: &mut Vec<Train>) -> Self {
+        if wagons.len() == 1 {
+            return Train::from(wagons[0].clone());
+        }
+
         let mut values = vec![];
         for train in wagons {
             values.append(train.values.take().unwrap().as_mut());
