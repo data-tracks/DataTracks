@@ -1,5 +1,5 @@
 use crate::{algebra, language};
-use crate::algebra::RefHandler;
+use crate::algebra::{CloneableRefHandler, RefHandler};
 use crate::language::Language;
 use crate::processing::train::Train;
 use crate::processing::transform::Transform::Func;
@@ -50,16 +50,16 @@ impl Transform {
 
 pub trait Transformable {
     fn get_transform(&mut self) -> Box<dyn RefHandler> {
-        Box::new(FuncTransformHandler { func: |stop, trains| {
-            let mut train = Train::from(trains);
-            train.last = stop;
-            train
-        }
+        Box::new(FuncTransformHandler {
+            func: |stop, trains| {
+                let mut train = Train::from(trains);
+                train.last = stop;
+                train
+            }
         })
     }
 
     fn dump(&self) -> String;
-
 }
 
 pub struct LanguageTransform {
@@ -104,6 +104,12 @@ impl RefHandler for FuncTransformHandler {
     }
 }
 
+impl CloneableRefHandler for FuncTransformHandler {
+    fn clone(&self) -> Box<dyn RefHandler> {
+        return Box::new(FuncTransformHandler { func: self.func.clone() })
+    }
+}
+
 #[derive(Clone)]
 struct FuncValueHandler {
     func: fn(train: Value) -> Value,
@@ -122,8 +128,14 @@ impl RefHandler for FuncValueHandler {
     }
 }
 
+impl CloneableRefHandler for FuncValueHandler {
+    fn clone(&self) -> Box<dyn RefHandler> {
+        Box::new(FuncValueHandler { func: self.func.clone() })
+    }
+}
+
 pub struct FuncTransform {
-    pub func: Option<Box<dyn RefHandler>>,
+    pub func: Box<dyn CloneableRefHandler>,
 }
 
 impl Default for FuncTransform {
@@ -134,17 +146,17 @@ impl Default for FuncTransform {
 
 impl FuncTransform {
     pub(crate) fn new(func: fn(stop: i64, wagons: &mut Vec<Train>) -> Train) -> Self {
-        FuncTransform { func: Some(Box::new(FuncTransformHandler { func })) }
+        FuncTransform { func: Box::new(FuncTransformHandler { func }) }
     }
 
     pub(crate) fn new_val(_stop: i64, func: fn(Value) -> Value) -> FuncTransform {
-        FuncTransform { func: Some(Box::new(FuncValueHandler { func })) }
+        FuncTransform { func: Box::new(FuncValueHandler { func }) }
     }
 }
 
 impl Transformable for FuncTransform {
     fn get_transform(&mut self) -> Box<dyn RefHandler> {
-        self.func.take().unwrap()
+        self.func.clone()
     }
 
     fn dump(&self) -> String {

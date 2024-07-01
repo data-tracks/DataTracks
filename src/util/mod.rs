@@ -5,4 +5,5 @@ pub use timeunit::TimeUnit;
 mod logo;
 mod id;
 mod timeunit;
+mod channel;
 

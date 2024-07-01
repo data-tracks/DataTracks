@@ -12,8 +12,10 @@ use crate::processing::station::{Command, Station};
 use crate::processing::station::Command::READY;
 use crate::processing::Train;
 use crate::processing::transform::Taker;
+use crate::util::GLOBAL_ID;
 
 pub(crate) struct Platform {
+    id: i64,
     control: Receiver<Command>,
     receiver: Receiver<Train>,
     sender: Option<Sender>,
@@ -35,7 +37,7 @@ impl Platform {
         let inputs = station.inputs.clone();
         let control = unbounded();
 
-        (Platform { control: control.1, receiver, sender: Some(sender), transform: Some(transform), window: Some(window), stop, blocks, inputs }, control.0)
+        (Platform { id: GLOBAL_ID.new_id(), control: control.1, receiver, sender: Some(sender), transform: Some(transform), window: Some(window), stop, blocks, inputs }, control.0)
     }
     pub(crate) fn operate(&mut self, control: Arc<channel::Sender<Command>>) {
         let transform = self.transform.take().unwrap();
@@ -66,7 +68,7 @@ impl Platform {
             };
             match self.receiver.try_recv() {
                 Ok(train) => {
-                    block.next(train) // window takes precedence to
+                    block.next(train); // window takes precedence to
                 }
                 _ => {
                     thread::sleep(timeout) // wait again

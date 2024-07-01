@@ -19,7 +19,7 @@ pub struct Plan {
     pub(crate) stations: HashMap<i64, Station>,
     sources: HashMap<i64, Box<dyn Source>>,
     destinations: HashMap<i64, Box<dyn Destination>>,
-    controls: HashMap<i64, Sender<Command>>,
+    controls: HashMap<i64, Vec<Sender<Command>>>,
     control_receiver: (Arc<Sender<Command>>, channel::Receiver<Command>),
 }
 
@@ -81,12 +81,16 @@ impl Plan {
         dump
     }
 
+    pub(crate) fn send_control(&mut self, num: &i64, command: Command) {
+        self.controls.get_mut(num).unwrap_or(&mut Vec::new()).iter().for_each(|c| c.send(command.clone()).unwrap())
+    }
+
     pub(crate) fn operate(&mut self) {
         self.connect_stops().unwrap();
         self.connect_destinations().unwrap();
         self.connect_sources().unwrap();
         for station in &mut self.stations {
-            self.controls.insert(station.1.id, station.1.operate(Arc::clone(&self.control_receiver.0)));
+            self.controls.entry(station.1.id).or_insert_with(Vec::new).push(station.1.operate(Arc::clone(&self.control_receiver.0)));
         }
 
         // wait for all stations to be ready
@@ -105,12 +109,17 @@ impl Plan {
 
 
         for destination in &mut self.destinations {
-            self.controls.insert(destination.1.get_id(), destination.1.operate(Arc::clone(&self.control_receiver.0)));
+            self.controls.entry(destination.1.get_id()).or_insert_with(Vec::new).push(destination.1.operate(Arc::clone(&self.control_receiver.0)));
         }
 
         for source in &mut self.sources {
-            self.controls.insert(source.1.get_id(), source.1.operate(Arc::clone(&self.control_receiver.0)));
+            self.controls.entry(source.1.get_id()).or_insert_with(Vec::new).push(source.1.operate(Arc::clone(&self.control_receiver.0)));
         }
+    }
+
+    pub(crate) fn clone_platform(&mut self, num: i64) {
+        let station = self.stations.get_mut(&num).unwrap();
+        self.controls.entry(num).or_insert_with(Vec::new).push(station.operate(Arc::clone(&self.control_receiver.0)))
     }
 
     fn connect_stops(&mut self) -> Result<(), String> {
@@ -685,7 +694,7 @@ mod stencil {
         plan.operate();
 
         // start dummy source
-        plan.controls.get(id).unwrap().send(READY(3)).unwrap();
+        plan.send_control(id, READY(3));
 
         // source ready + stop, destination ready + stop
         for command in vec![READY(3), STOP(3), READY(3), STOP(3)] {
@@ -725,8 +734,8 @@ mod stencil {
         plan.operate();
 
         // send ready
-        plan.controls.get(id1).unwrap().send(READY(0)).unwrap();
-        plan.controls.get(id4).unwrap().send(READY(4)).unwrap();
+        plan.send_control(id1, READY(0));
+        plan.send_control(id4, READY(4));
 
         // source 1 ready + stop, source 4 ready + stop, destination ready + stop
         for com in vec![READY(1), STOP(1), READY(4), STOP(4), READY(3), STOP(3)] {
@@ -754,6 +763,7 @@ mod stencil {
     #[test]
     fn divide_workload() {
         let mut station = Station::new(0);
+        let station_id = station.id;
         station.transform = Transform::Func(FuncTransform::new(|num, train| {
             sleep(Duration::from_millis(100));
             Train::from(train)
@@ -781,15 +791,18 @@ mod stencil {
         let destination = DummyDestination::new(0, length);
         plan.add_destination(0, Box::new(destination));
 
-
-        let now = SystemTime::now();
         plan.operate();
-        plan.controls.get(id).unwrap().send(READY(0)).unwrap();
+        let now = SystemTime::now();
+        plan.send_control(id, READY(0));
+        plan.clone_platform(0);
+        plan.clone_platform(0);
+        plan.clone_platform(0);
+
 
         let result_size = 0;
 
-        // source 1 ready + stop, destination ready + stop
-        for com in vec![READY(1), STOP(1), READY(0), STOP(0)] {
+        // source 1 ready + stop, each platform ready, destination ready (+ stop only after stopped)
+        for com in vec![READY(1), STOP(1), READY(0), READY(0), READY(0), READY(0), READY(0)] {
             match plan.control_receiver.1.recv() {
                 Ok(command) => {}
                 Err(_) => panic!()

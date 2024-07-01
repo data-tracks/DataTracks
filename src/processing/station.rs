@@ -128,9 +128,11 @@ impl Station {
     }
 }
 
+#[derive(Clone)]
 pub(crate) enum Command {
     STOP(i64),
     READY(i64),
+    OVERFLOW(i64)
 }
 
 
