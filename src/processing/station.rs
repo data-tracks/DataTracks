@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
 use std::thread;
 
 use crossbeam::channel;
@@ -10,12 +11,12 @@ use crate::processing::sender::Sender;
 use crate::processing::train::Train;
 use crate::processing::transform::Transform;
 use crate::processing::window::Window;
-use crate::util::GLOBAL_ID;
+use crate::util::{GLOBAL_ID, new_channel, Rx, Tx};
 
 pub(crate) struct Station {
     pub(crate) id: i64,
     pub stop: i64,
-    pub(crate) incoming: (channel::Sender<Train>, Receiver<Train>),
+    pub(crate) incoming: (Tx<Train>, Arc<AtomicU64>, Rx<Train>),
     pub(crate) outgoing: Sender,
     pub(crate) window: Window,
     pub(crate) transform: Transform,
@@ -23,7 +24,6 @@ pub(crate) struct Station {
     pub(crate) inputs: Vec<i64>,
     control: (channel::Sender<Command>, Receiver<Command>),
 }
-
 
 
 impl Default for Station {
@@ -35,12 +35,12 @@ impl Default for Station {
 
 impl Station {
     pub(crate) fn new(stop: i64) -> Self {
-        let incoming = unbounded();
+        let incoming = new_channel();
         let control = unbounded();
         let station = Station {
             id: GLOBAL_ID.new_id(),
             stop,
-            incoming: (incoming.0, incoming.1),
+            incoming: (incoming.0, incoming.1, incoming.2),
             outgoing: Sender::default(),
             window: Window::default(),
             transform: Transform::default(),
@@ -94,7 +94,7 @@ impl Station {
         self.block.push(line);
     }
 
-    pub(crate) fn add_out(&mut self, id: i64, out: channel::Sender<Train>) -> Result<(), String> {
+    pub(crate) fn add_out(&mut self, id: i64, out: Tx<Train>) -> Result<(), String> {
         self.outgoing.add(id, out);
         Ok(())
     }
@@ -114,7 +114,7 @@ impl Station {
         dump
     }
 
-    pub(crate) fn get_in(&mut self) -> channel::Sender<Train> {
+    pub(crate) fn get_in(&mut self) -> Tx<Train> {
         self.incoming.0.clone()
     }
 
@@ -128,24 +128,31 @@ impl Station {
     }
 }
 
-#[derive(Clone)]
+
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Command {
     STOP(i64),
     READY(i64),
-    OVERFLOW(i64)
+    OVERFLOW(i64),
+    THRESHOLD(i64),
+    OKAY(i64),
 }
-
 
 
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
+    use std::thread::sleep;
+    use std::time::Duration;
 
     use crossbeam::channel::unbounded;
 
     use crate::processing::plan::Plan;
+    use crate::processing::station::Command::{OKAY, READY, THRESHOLD};
     use crate::processing::station::Station;
     use crate::processing::train::Train;
+    use crate::processing::transform::{FuncTransform, Transform};
+    use crate::util::new_channel;
     use crate::value::Value;
 
     #[test]
@@ -161,7 +168,7 @@ mod tests {
         }
 
 
-        let (tx, rx) = unbounded();
+        let (tx, num, rx) = new_channel();
 
         station.add_out(0, tx).unwrap();
         station.operate(Arc::new(control.0));
@@ -190,7 +197,7 @@ mod tests {
         let mut first = Station::new(0);
         let input = first.get_in();
 
-        let (output_tx, output_rx) = unbounded();
+        let (output_tx, num, output_rx) = new_channel();
 
         let mut second = Station::new(1);
         second.add_out(0, output_tx).unwrap();
@@ -224,5 +231,57 @@ mod tests {
         let station = plan.stations.get(&3).unwrap();
 
         assert!(station.block.contains(&1));
+    }
+
+    #[test]
+    fn too_high() {
+        let mut station = Station::new(0);
+        let train_sender = station.get_in();
+
+        station.transform = Transform::Func(FuncTransform::new(|num, train| {
+            sleep(Duration::from_millis(100));
+            Train::from(train)
+        }));
+
+        let (c_tx, c_rx) = unbounded();
+
+        let a_tx = Arc::new(c_tx);
+        let sender = station.operate(Arc::clone(&a_tx));
+
+        for _ in 0..1_000 {
+            train_sender.send(Train::new(0, vec![Value::int(3)])).unwrap();
+        }
+
+        // the station should start, the threshold should be reached and after some time be balanced
+        for state in vec![READY(0), THRESHOLD(0), OKAY(0)] {
+            assert_eq!(state, c_rx.recv().unwrap())
+        }
+    }
+
+    #[test]
+    fn too_high_two() {
+        let mut station = Station::new(0);
+        let train_sender = station.get_in();
+
+        station.transform = Transform::Func(FuncTransform::new(|num, train| {
+            sleep(Duration::from_millis(100));
+            Train::from(train)
+        }));
+
+        let (c_tx, c_rx) = unbounded();
+
+        let a_tx = Arc::new(c_tx);
+        let sender = station.operate(Arc::clone(&a_tx));
+        sender.send(THRESHOLD(3)).unwrap();
+        station.operate(Arc::clone(&a_tx));
+
+        for _ in 0..1_000 {
+            train_sender.send(Train::new(0, vec![Value::int(3)])).unwrap();
+        }
+
+        // the station should open a platform, the station starts another platform,  the threshold should be reached and after some time be balanced
+        for state in vec![READY(0), READY(0), THRESHOLD(0), OKAY(0)] {
+            assert_eq!(state, c_rx.recv().unwrap())
+        }
     }
 }

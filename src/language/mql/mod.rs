@@ -5,6 +5,6 @@ mod parse;
 mod translate;
 mod statement;
 
-pub(crate) fn transform(p0: &str) -> Result<AlgebraType, String> {
+pub(crate) fn transform(_query: &str) -> Result<AlgebraType, String> {
     todo!()
 }

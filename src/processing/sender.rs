@@ -1,12 +1,11 @@
 use std::collections::HashMap;
 
-use crossbeam::channel;
-
 use crate::processing::train::Train;
+use crate::util::Tx;
 
 #[derive(Clone)]
 pub(crate) struct Sender {
-    outs: HashMap<i64, channel::Sender<Train>>,
+    outs: HashMap<i64, Tx<Train>>,
 }
 
 impl Default for Sender {
@@ -16,7 +15,7 @@ impl Default for Sender {
 }
 
 impl Sender {
-    pub(crate) fn add(&mut self, id: i64, sender: channel::Sender<Train>) {
+    pub(crate) fn add(&mut self, id: i64, sender: Tx<Train>) {
         self.outs.insert(id, sender.into());
     }
 

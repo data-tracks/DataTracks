@@ -106,7 +106,7 @@ impl RefHandler for FuncTransformHandler {
 
 impl CloneableRefHandler for FuncTransformHandler {
     fn clone(&self) -> Box<dyn RefHandler> {
-        return Box::new(FuncTransformHandler { func: self.func.clone() })
+        return Box::new(FuncTransformHandler { func: self.func.clone() });
     }
 }
 
@@ -175,6 +175,7 @@ mod tests {
     use crate::processing::train::Train;
     use crate::processing::transform::FuncTransform;
     use crate::processing::transform::Transform::Func;
+    use crate::util::new_channel;
     use crate::value::Value;
 
     #[test]
@@ -187,7 +188,7 @@ mod tests {
 
         let values = vec![Value::float(3.3), Value::int(3)];
 
-        let (tx, rx) = unbounded();
+        let (tx, num, rx) = new_channel();
 
         station.add_out(0, tx).unwrap();
         station.operate(Arc::new(control.0));
@@ -216,7 +217,7 @@ mod tests {
 
         let values = vec![Value::float(3.3), Value::int(3)];
 
-        let (tx, rx) = unbounded();
+        let (tx, num, rx) = new_channel();
 
         station.add_out(0, tx).unwrap();
         station.operate(Arc::new(control.0));

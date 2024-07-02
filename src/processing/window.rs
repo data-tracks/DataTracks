@@ -19,7 +19,6 @@ impl Default for Window {
 
 
 impl Window {
-
     pub(crate) fn windowing(&self) -> Taker {
         match self {
             Back(w) => w.get_window(),
@@ -139,6 +138,7 @@ mod test {
 
     use crate::processing::station::Station;
     use crate::processing::train::Train;
+    use crate::util::new_channel;
     use crate::value::Value;
 
     #[test]
@@ -149,7 +149,7 @@ mod test {
 
         let values = vec![Value::float(3.3), Value::int(3)];
 
-        let (tx, rx) = unbounded();
+        let (tx, num, rx) = new_channel();
 
 
         station.add_out(0, tx).unwrap();

@@ -1,16 +1,196 @@
-use crossbeam::channel::{Receiver, Sender};
+use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::thread::sleep;
+use std::time::Duration;
 
-#[derive(Clone)]
-pub(crate) struct Channel<F>
+pub struct Channel<F>
 where
     F: Send,
 {
-    sender_in: Sender<F>,
-    receiver_in: Receiver<F>,
-    sender_out: Sender<F>,
-    receiver_out: Receiver<F>,
+    size: Arc<AtomicU64>,
+    buffer: Mutex<Vec<F>>,
 }
 
-impl<F> Channel<F> {
-    pub(crate) fn operate() {}
+
+pub fn new_channel<F>() -> (Tx<F>, Arc<AtomicU64>, Rx<F>)
+where
+    F: Send,
+{
+    let channel = Arc::new(
+        Channel {
+            size: Arc::new(AtomicU64::default()),
+            buffer: Mutex::new(vec![]),
+        });
+
+    let rx = Rx { channel: Arc::clone(&channel) };
+    let tx = Tx { channel: Arc::clone(&channel) };
+    (tx, Arc::clone(&channel.size), rx)
+}
+
+
+#[derive(Clone)]
+pub struct Rx<F>
+where
+    F: Send,
+{
+    channel: Arc<Channel<F>>,
+}
+
+impl<F> Rx<F>
+where
+    F: Send,
+{
+    pub(crate) fn recv(&self) -> Result<F, String> {
+        loop {
+            let mut vec = self.channel.buffer.lock().unwrap();
+            if !vec.is_empty() {
+                let element = vec.pop();
+                drop(vec);
+                match element {
+                    None => {}
+                    Some(e) => {
+                        self.channel.size.fetch_sub(1, Ordering::SeqCst);
+                        return Ok(e);
+                    }
+                }
+            }
+            sleep(Duration::from_nanos(10))
+        }
+    }
+    pub(crate) fn try_recv(&self) -> Result<F, String> {
+        let mut vec = self.channel.buffer.lock().unwrap();
+        if !vec.is_empty() {
+            let element = vec.pop();
+            drop(vec);
+            return match element {
+                None => Err("Could not get error".to_string()),
+                Some(e) => {
+                    self.channel.size.fetch_sub(1, Ordering::SeqCst);
+                    Ok(e)
+                }
+            };
+        } else {
+            Err("Could not get error".to_string())
+        }
+    }
+}
+
+
+#[derive(Clone)]
+pub struct Tx<F>
+where
+    F: Send,
+{
+    channel: Arc<Channel<F>>,
+}
+
+impl<F> Tx<F>
+where
+    F: Send,
+{
+    pub(crate) fn send(&self, msg: F) -> Result<(), String> {
+        match self.channel.buffer.lock() {
+            Ok(mut b) => {
+                self.channel.size.fetch_add(1, Ordering::SeqCst);
+                Ok(b.push(msg))
+            }
+            Err(e) => Err(e.to_string())
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::thread::spawn;
+
+    use rand::random;
+
+    use crate::util::channel::new_channel;
+
+    #[test]
+    fn receive() {
+        let value = 3i64;
+        let (tx, _counter, rx) = new_channel();
+
+        tx.send(value.clone()).unwrap();
+
+        assert_eq!(3, rx.recv().unwrap())
+    }
+
+    #[test]
+    fn keep_track() {
+        let (tx, counter, rx) = new_channel();
+
+        tx.send(3i64).unwrap();
+
+        assert_eq!(counter.load(Ordering::SeqCst), 1u64);
+
+        let _ = rx.recv().unwrap();
+
+        assert_eq!(counter.load(Ordering::SeqCst), 0u64);
+    }
+
+    #[test]
+    fn keep_track_hugh() {
+        let (tx, mut counter, mut rx) = new_channel();
+
+        let num = 1_000_000u64;
+        let mut size = 1_000_000u64;
+
+        for _ in 0..num {
+            tx.send(3i64).unwrap();
+        }
+
+
+        for _ in 0..num {
+            if random() {
+                tx.send(3i64).unwrap();
+                size += 1;
+            } else {
+                let _ = rx.recv().unwrap();
+                size -= 1;
+            }
+        }
+
+        assert_eq!(counter.load(Ordering::SeqCst), size);
+    }
+
+    #[test]
+    fn keep_track_multi_thread() {
+        let (tx, mut counter, mut rx) = new_channel();
+
+        let num = 1_000_000u64;
+        let mut size = Arc::new(AtomicU64::new(1_000_000u64));
+
+        for _ in 0..num {
+            tx.send(3i64).unwrap();
+        }
+
+        let mut ths = vec![];
+
+
+        for _ in 0..100 {
+            let clone_tx = tx.clone();
+            let mut clone_rx = rx.clone();
+            let clone_size = Arc::clone(&size);
+            let handler = spawn(move || {
+                for num in 0..num {
+                    if random() {
+                        clone_tx.send(3i64).unwrap();
+                        clone_size.fetch_add(1, Ordering::SeqCst);
+                    } else {
+                        let _ = clone_rx.recv().unwrap();
+                        clone_size.fetch_sub(1, Ordering::SeqCst);
+                    }
+                }
+            });
+            ths.push(handler);
+        }
+        ths.into_iter().for_each(|mut t| t.join().unwrap());
+
+
+        assert_eq!(counter.load(Ordering::SeqCst), size.load(Ordering::SeqCst));
+    }
 }

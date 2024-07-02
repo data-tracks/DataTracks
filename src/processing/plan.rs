@@ -426,14 +426,14 @@ mod dummy {
     use std::thread::{sleep, spawn};
     use std::time::Duration;
 
-    use crossbeam::channel::{Receiver, Sender, unbounded};
+    use crossbeam::channel::{Sender, unbounded};
 
     use crate::processing::destination::Destination;
     use crate::processing::source::Source;
     use crate::processing::station::Command;
     use crate::processing::station::Command::{READY, STOP};
     use crate::processing::train::Train;
-    use crate::util::GLOBAL_ID;
+    use crate::util::{GLOBAL_ID, new_channel, Rx, Tx};
     use crate::value::Value;
 
     pub struct DummySource {
@@ -442,7 +442,7 @@ mod dummy {
         values: Option<Vec<Vec<Value>>>,
         delay: Duration,
         initial_delay: Duration,
-        senders: Option<Vec<Sender<Train>>>,
+        senders: Option<Vec<Tx<Train>>>,
     }
 
     impl DummySource {
@@ -492,7 +492,7 @@ mod dummy {
         }
 
 
-        fn add_out(&mut self, id: i64, out: Sender<Train>) {
+        fn add_out(&mut self, id: i64, out: Tx<Train>) {
             self.senders.as_mut().unwrap_or(&mut vec![]).push(out)
         }
 
@@ -510,13 +510,13 @@ mod dummy {
         stop: i64,
         result_amount: usize,
         pub(crate) results: Arc<Mutex<Vec<Train>>>,
-        receiver: Option<Receiver<Train>>,
-        sender: Sender<Train>,
+        receiver: Option<Rx<Train>>,
+        sender: Tx<Train>,
     }
 
     impl DummyDestination {
         pub(crate) fn new(stop: i64, wait_result: usize) -> Self {
-            let (tx, rx) = unbounded();
+            let (tx, num, rx) = new_channel();
             DummyDestination {
                 id: GLOBAL_ID.new_id(),
                 stop,
@@ -563,7 +563,7 @@ mod dummy {
             tx
         }
 
-        fn get_in(&self) -> Sender<Train> {
+        fn get_in(&self) -> Tx<Train> {
             self.sender.clone()
         }
 
@@ -585,8 +585,6 @@ mod stencil {
     use std::time::{Duration, SystemTime};
     use std::vec;
 
-    use crossbeam::channel::unbounded;
-
     use crate::processing::destination::Destination;
     use crate::processing::plan::dummy::{DummyDestination, DummySource};
     use crate::processing::plan::Plan;
@@ -595,6 +593,7 @@ mod stencil {
     use crate::processing::station::Station;
     use crate::processing::Train;
     use crate::processing::transform::{FuncTransform, Transform};
+    use crate::util::new_channel;
     use crate::value::Value;
 
     #[test]
@@ -605,7 +604,7 @@ mod stencil {
         let mut first = Station::new(0);
         let input = first.get_in();
 
-        let (output_tx, output_rx) = unbounded();
+        let (output_tx, nums, output_rx) = new_channel();
 
         let mut second = Station::new(1);
         second.add_out(0, output_tx).unwrap();
@@ -637,9 +636,9 @@ mod stencil {
         let first_id = first.stop;
         let input = first.get_in();
 
-        let (output1_tx, output1_rx) = unbounded();
+        let (output1_tx, num, output1_rx) = new_channel();
 
-        let (output2_tx, output2_rx) = unbounded();
+        let (output2_tx, num, output2_rx) = new_channel();
 
         let mut second = Station::new(1);
         second.add_out(0, output1_tx).unwrap();
