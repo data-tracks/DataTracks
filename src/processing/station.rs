@@ -239,7 +239,7 @@ mod tests {
         let train_sender = station.get_in();
 
         station.transform = Transform::Func(FuncTransform::new(|num, train| {
-            sleep(Duration::from_millis(100));
+            sleep(Duration::from_millis(10));
             Train::from(train)
         }));
 
@@ -247,6 +247,7 @@ mod tests {
 
         let a_tx = Arc::new(c_tx);
         let sender = station.operate(Arc::clone(&a_tx));
+        sender.send(THRESHOLD(3)).unwrap();
 
         for _ in 0..1_000 {
             train_sender.send(Train::new(0, vec![Value::int(3)])).unwrap();
@@ -284,4 +285,42 @@ mod tests {
             assert_eq!(state, c_rx.recv().unwrap())
         }
     }
+
+    #[test]
+    fn remove_during_op() {
+        let mut station = Station::new(0);
+        let train_sender = station.get_in();
+        let (tx, _, rx) = new_channel();
+        let train_receiver = station.add_out(0, tx);
+
+        station.transform = Transform::Func(FuncTransform::new(|num, train| {
+            sleep(Duration::from_millis(10));
+            Train::from(train)
+        }));
+
+        let (c_tx, c_rx) = unbounded();
+
+        let a_tx = Arc::new(c_tx);
+        let sender = station.operate(Arc::clone(&a_tx));
+
+        for _ in 0..500 {
+            train_sender.send(Train::new(0, vec![Value::int(3)])).unwrap();
+        }
+        station.operate(Arc::clone(&a_tx));
+        for _ in 0..500 {
+            train_sender.send(Train::new(0, vec![Value::int(3)])).unwrap();
+        }
+
+        // the station should open a platform, the station starts another platform,  the threshold should be reached and after some time be balanced
+        for state in vec![READY(0), READY(0)] {
+            assert_eq!(state, c_rx.recv().unwrap())
+        }
+        let mut values = vec![];
+
+        while values.len() >= 1_000 {
+            println!("{} values ", &values.len().to_string());
+            values.push(rx.recv().unwrap())
+        }
+    }
+
 }

@@ -71,13 +71,14 @@ impl Platform {
         let mut block = Block::new(self.inputs.clone(), self.blocks.clone(), process);
 
         control.send(READY(stop)).unwrap();
+        let mut i = 0;
         loop {
             // are we struggling to handle incoming
             let current = self.incoming.load(Ordering::SeqCst);
             if current > threshold && !too_high {
                 control.send(THRESHOLD(stop)).unwrap();
                 too_high = true;
-            } else if too_high {
+            } else if current < threshold && too_high {
                 control.send(OKAY(stop)).unwrap();
                 too_high = false;
             }
@@ -98,6 +99,9 @@ impl Platform {
             match self.receiver.try_recv() {
                 Ok(train) => {
                     block.next(train); // window takes precedence to
+
+                    println!("send {}", i);
+                    i += 1;
                 }
                 _ => {
                     thread::sleep(timeout) // wait again
