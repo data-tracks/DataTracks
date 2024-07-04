@@ -13,7 +13,7 @@ pub struct TrainProject {
 }
 
 struct ProjectHandler{
-    input: Box<dyn RefHandler>,
+    input: Box<dyn RefHandler + Send>,
     project: fn(Value) -> Value
     
 }
@@ -24,10 +24,14 @@ impl RefHandler for ProjectHandler {
         let projected = train.values.take().unwrap().into_iter().map(|value: Value| (self.project)(value)).collect();
         Train::new(stop, projected)
     }
+
+    fn clone(&self) -> Box<dyn RefHandler + Send + 'static> {
+        RefHandler::clone(self)
+    }
 }
 
 impl Algebra for TrainProject {
-    fn get_handler(&mut self) -> Box<dyn RefHandler> {
+    fn get_handler(&mut self) -> Box<dyn RefHandler + Send> {
         let project = self.project.take().unwrap();
         let input = self.input.get_handler();
         Box::new(ProjectHandler{input, project})

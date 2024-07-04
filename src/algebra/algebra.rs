@@ -13,7 +13,7 @@ pub enum AlgebraType {
 }
 
 impl Algebra for AlgebraType {
-    fn get_handler(&mut self) -> Box<dyn RefHandler> {
+    fn get_handler(&mut self) -> Box<dyn RefHandler + Send> {
         match self {
             AlgebraType::Scan(s) => s.get_handler(),
             AlgebraType::Project(p) => p.get_handler(),
@@ -24,16 +24,19 @@ impl Algebra for AlgebraType {
 }
 
 pub(crate) trait Algebra {
-    fn get_handler(&mut self) -> Box<dyn RefHandler>;
+    fn get_handler(&mut self) -> Box<dyn RefHandler + Send>;
 }
 
-pub fn functionize(mut algebra: AlgebraType) -> Result<Box<dyn RefHandler>, String> {
+pub fn functionize(mut algebra: AlgebraType) -> Result<Box<dyn RefHandler + Send + 'static>, String> {
     Ok(algebra.get_handler())
 }
 
 pub trait RefHandler: Send {
     fn process(&self, stop: i64, wagons: &mut Vec<Train>) -> Train;
+
+    fn clone(&self) -> Box<dyn RefHandler + Send + 'static>;
 }
+
 
 pub trait CloneableRefHandler: RefHandler {
     fn clone(&self) -> Box<dyn RefHandler>;

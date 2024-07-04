@@ -24,10 +24,14 @@ impl RefHandler for ScanHandler {
         wagons.into_iter().filter(|w| w.last == self.index).for_each(|t| values.append(t.values.take().unwrap().as_mut()));
         Train::new(self.index, values)
     }
+
+    fn clone(&self) -> Box<dyn RefHandler + Send + 'static> {
+        RefHandler::clone(self)
+    }
 }
 
 impl Algebra for TrainScan {
-    fn get_handler(&mut self) -> Box<dyn RefHandler> {
+    fn get_handler(&mut self) -> Box<dyn RefHandler + Send> {
         Box::new(ScanHandler { index: self.index })
     }
 }

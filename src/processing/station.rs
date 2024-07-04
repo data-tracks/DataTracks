@@ -145,14 +145,14 @@ mod tests {
     use std::thread::sleep;
     use std::time::Duration;
 
-    use crossbeam::channel::unbounded;
+    use crossbeam::channel::{Receiver, Sender, unbounded};
 
     use crate::processing::plan::Plan;
+    use crate::processing::station::{Command, Station};
     use crate::processing::station::Command::{OKAY, READY, THRESHOLD};
-    use crate::processing::station::Station;
     use crate::processing::train::Train;
     use crate::processing::transform::{FuncTransform, Transform};
-    use crate::util::new_channel;
+    use crate::util::{new_channel, Rx, Tx};
     use crate::value::Value;
 
     #[test]
@@ -235,17 +235,8 @@ mod tests {
 
     #[test]
     fn too_high() {
-        let mut station = Station::new(0);
-        let train_sender = station.get_in();
+        let (mut station, train_sender, rx, c_rx, a_tx) = create_test_station(10);
 
-        station.transform = Transform::Func(FuncTransform::new(|num, train| {
-            sleep(Duration::from_millis(10));
-            Train::from(train)
-        }));
-
-        let (c_tx, c_rx) = unbounded();
-
-        let a_tx = Arc::new(c_tx);
         let sender = station.operate(Arc::clone(&a_tx));
         sender.send(THRESHOLD(3)).unwrap();
 
@@ -261,17 +252,8 @@ mod tests {
 
     #[test]
     fn too_high_two() {
-        let mut station = Station::new(0);
-        let train_sender = station.get_in();
+        let (mut station, train_sender, rx, c_rx, a_tx) = create_test_station(100);
 
-        station.transform = Transform::Func(FuncTransform::new(|num, train| {
-            sleep(Duration::from_millis(100));
-            Train::from(train)
-        }));
-
-        let (c_tx, c_rx) = unbounded();
-
-        let a_tx = Arc::new(c_tx);
         let sender = station.operate(Arc::clone(&a_tx));
         sender.send(THRESHOLD(3)).unwrap();
         station.operate(Arc::clone(&a_tx));
@@ -288,19 +270,7 @@ mod tests {
 
     #[test]
     fn remove_during_op() {
-        let mut station = Station::new(0);
-        let train_sender = station.get_in();
-        let (tx, _, rx) = new_channel();
-        let train_receiver = station.add_out(0, tx);
-
-        station.transform = Transform::Func(FuncTransform::new(|num, train| {
-            sleep(Duration::from_millis(10));
-            Train::from(train)
-        }));
-
-        let (c_tx, c_rx) = unbounded();
-
-        let a_tx = Arc::new(c_tx);
+        let (mut station, train_sender, rx, c_rx, a_tx) = create_test_station(10);
         let sender = station.operate(Arc::clone(&a_tx));
 
         for _ in 0..500 {
@@ -323,4 +293,21 @@ mod tests {
         }
     }
 
+    fn create_test_station(duration: u64) -> (Station, Tx<Train>, Rx<Train>, Receiver<Command>, Arc<Sender<Command>>) {
+        let mut station = Station::new(0);
+        let train_sender = station.get_in();
+        let (tx, _, rx) = new_channel();
+        let train_receiver = station.add_out(0, tx);
+        let time = duration.clone();
+
+        station.transform = Transform::Func(FuncTransform::new(Arc::new(move |num, train| {
+            sleep(Duration::from_millis(time));
+            Train::from(train)
+        })));
+
+        let (c_tx, c_rx) = unbounded();
+
+        let a_tx = Arc::new(c_tx);
+        (station, train_sender, rx, c_rx, a_tx)
+    }
 }

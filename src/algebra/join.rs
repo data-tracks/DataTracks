@@ -52,6 +52,7 @@ where
 }
 
 
+
 impl<'a, H> RefHandler for JoinHandler<H>
 where
     H: PartialEq,
@@ -74,10 +75,14 @@ where
         }
         Train::new(stop, values)
     }
+
+    fn clone(&self) -> Box<dyn RefHandler + Send + 'static> {
+        RefHandler::clone(self)
+    }
 }
 
 impl<H: PartialEq + 'static> Algebra for TrainJoin<H> {
-    fn get_handler(&mut self) -> Box<dyn RefHandler> {
+    fn get_handler(&mut self) -> Box<dyn RefHandler + Send> {
         let left_hash = self.left_hash.take().unwrap();
         let right_hash = self.right_hash.take().unwrap();
         let out = self.out.take().unwrap();

@@ -763,7 +763,7 @@ mod stencil {
     fn divide_workload() {
         let mut station = Station::new(0);
         let station_id = station.id;
-        station.transform = Transform::Func(FuncTransform::new(|num, train| {
+        station.transform = Transform::Func(FuncTransform::new_boxed(|num, train| {
             sleep(Duration::from_millis(100));
             Train::from(train)
         }));

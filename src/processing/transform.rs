@@ -1,16 +1,18 @@
+use std::sync::Arc;
+
 use crate::{algebra, language};
-use crate::algebra::{CloneableRefHandler, RefHandler};
+use crate::algebra::RefHandler;
 use crate::language::Language;
 use crate::processing::train::Train;
-use crate::processing::transform::Transform::Func;
+use crate::processing::transform::Transform::{Func, Lang};
 use crate::value::Value;
 
 pub type Taker = fn(&mut Vec<Train>) -> &mut Vec<Train>;
 
-
+#[derive(Clone)]
 pub enum Transform {
     Func(FuncTransform),
-    LanguageTransform(LanguageTransform),
+    Lang(LanguageTransform),
 }
 
 
@@ -22,18 +24,11 @@ impl Default for Transform {
 
 
 impl Transform {
-    pub fn transformer(&mut self) -> Box<dyn RefHandler> {
-        match self {
-            Func(t) => t.get_transform(),
-            Transform::LanguageTransform(t) => t.get_transform()
-        }
-    }
-
     pub fn parse(stencil: String) -> Result<Transform, String> {
         match stencil.split_once("|") {
             None => Err("Wrong transform format.".to_string()),
             Some((module, logic)) => match Language::try_from(module) {
-                Ok(lang) => Ok(Transform::LanguageTransform(LanguageTransform::parse(lang, logic))),
+                Ok(lang) => Ok(Lang(LanguageTransform::parse(lang, logic))),
                 Err(_) => Err("Wrong transform format.".to_string())
             },
         }
@@ -42,50 +37,35 @@ impl Transform {
     pub fn dump(&self) -> String {
         match self {
             Func(f) => f.dump(),
-            Transform::LanguageTransform(f) => f.dump()
+            Lang(f) => f.dump()
+        }
+    }
+
+    pub fn apply(&self, stop: i64, wagons: &mut Vec<Train>) -> Train {
+        match self {
+            Func(f) => (f.func)(stop, wagons),
+            Lang(f) => f.func.process(stop, wagons)
         }
     }
 }
 
 
-pub trait Transformable {
-    fn get_transform(&mut self) -> Box<dyn RefHandler> {
-        Box::new(FuncTransformHandler {
-            func: |stop, trains| {
-                let mut train = Train::from(trains);
-                train.last = stop;
-                train
-            }
-        })
-    }
-
-    fn dump(&self) -> String;
-}
-
 pub struct LanguageTransform {
     language: Language,
     query: String,
-    func: Option<Box<dyn RefHandler>>,
+    func: Box<dyn RefHandler + Send>,
+}
+
+impl Clone for LanguageTransform {
+    fn clone(&self) -> Self {
+        LanguageTransform { language: self.language.clone(), query: self.query.clone(), func: self.func.clone() }
+    }
 }
 
 impl LanguageTransform {
     fn parse(language: Language, query: &str) -> LanguageTransform {
         let func = build_transformer(&language, query).unwrap();
-        LanguageTransform { language, query: query.to_string(), func: Some(func) }
-    }
-}
-
-fn build_transformer(language: &Language, query: &str) -> Result<Box<dyn RefHandler>, String> {
-    let algebra = match language {
-        Language::SQL => language::sql::transform(query)?,
-        Language::MQL => language::mql::transform(query)?
-    };
-    algebra::functionize(algebra)
-}
-
-impl Transformable for LanguageTransform {
-    fn get_transform(&mut self) -> Box<dyn RefHandler> {
-        self.func.take().unwrap()
+        LanguageTransform { language, query: query.to_string(), func }
     }
 
     fn dump(&self) -> String {
@@ -93,22 +73,14 @@ impl Transformable for LanguageTransform {
     }
 }
 
-#[derive(Clone)]
-struct FuncTransformHandler {
-    func: fn(stop: i64, wagons: &mut Vec<Train>) -> Train,
+fn build_transformer(language: &Language, query: &str) -> Result<Box<dyn RefHandler + Send + 'static>, String> {
+    let algebra = match language {
+        Language::SQL => language::sql::transform(query)?,
+        Language::MQL => language::mql::transform(query)?
+    };
+    algebra::functionize(algebra)
 }
 
-impl RefHandler for FuncTransformHandler {
-    fn process(&self, stop: i64, wagons: &mut Vec<Train>) -> Train {
-        (self.func)(stop, wagons)
-    }
-}
-
-impl CloneableRefHandler for FuncTransformHandler {
-    fn clone(&self) -> Box<dyn RefHandler> {
-        return Box::new(FuncTransformHandler { func: self.func.clone() });
-    }
-}
 
 #[derive(Clone)]
 struct FuncValueHandler {
@@ -126,37 +98,42 @@ impl RefHandler for FuncValueHandler {
 
         Train::new(stop, values)
     }
-}
 
-impl CloneableRefHandler for FuncValueHandler {
-    fn clone(&self) -> Box<dyn RefHandler> {
+    fn clone(&self) -> Box<dyn RefHandler + Send + 'static> {
         Box::new(FuncValueHandler { func: self.func.clone() })
     }
 }
 
+#[derive(Clone)]
 pub struct FuncTransform {
-    pub func: Box<dyn CloneableRefHandler>,
+    pub func: Arc<dyn Fn(i64, &mut Vec<Train>) -> Train + Send + Sync>,
 }
 
 impl Default for FuncTransform {
     fn default() -> Self {
-        Self::new(|stop, trains| Train::from(trains))
+        Self::new(Arc::new(|stop, trains| Train::from(trains)))
     }
 }
 
 impl FuncTransform {
-    pub(crate) fn new(func: fn(stop: i64, wagons: &mut Vec<Train>) -> Train) -> Self {
-        FuncTransform { func: Box::new(FuncTransformHandler { func }) }
+    pub(crate) fn new_boxed(func: fn(i64, &mut Vec<Train>) -> Train) -> Self {
+        return Self::new(Arc::new(func));
+    }
+
+    pub(crate) fn new(func: Arc<(dyn Fn(i64, &mut Vec<Train>) -> Train + Send + Sync)>) -> Self {
+        FuncTransform { func }
     }
 
     pub(crate) fn new_val(_stop: i64, func: fn(Value) -> Value) -> FuncTransform {
-        FuncTransform { func: Box::new(FuncValueHandler { func }) }
-    }
-}
+        Self::new(Arc::new(move |stop, wagons: &mut Vec<Train>| {
+            let mut values: Vec<Value> = vec![];
+            for train in wagons {
+                let mut vals = train.values.take().unwrap().into_iter().map(|v| func(v)).collect();
+                values.append(&mut vals);
+            }
 
-impl Transformable for FuncTransform {
-    fn get_transform(&mut self) -> Box<dyn RefHandler> {
-        self.func.clone()
+            Train::new(stop, values)
+        }))
     }
 
     fn dump(&self) -> String {
@@ -229,7 +206,7 @@ mod tests {
                 if let Some(vec) = t.values.take() {
                     assert_eq!(values.len(), vec.len());
                     for (i, value) in vec.into_iter().enumerate() {
-                        assert_eq!(value, (values.get(i).unwrap() + &Value::int(3)));
+                        assert_eq!(value, values.get(i).unwrap() + &Value::int(3));
                         assert_ne!(Value::text(""), value);
                     }
                 } else {

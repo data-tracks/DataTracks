@@ -6,13 +6,12 @@ use std::time::Duration;
 use crossbeam::channel;
 use crossbeam::channel::{Receiver, unbounded};
 
-use crate::algebra::RefHandler;
 use crate::processing::block::Block;
 use crate::processing::sender::Sender;
 use crate::processing::station::{Command, Station};
 use crate::processing::station::Command::{OKAY, READY, THRESHOLD};
 use crate::processing::Train;
-use crate::processing::transform::Taker;
+use crate::processing::transform::{Taker, Transform};
 use crate::util::{GLOBAL_ID, Rx};
 
 pub(crate) struct Platform {
@@ -20,7 +19,7 @@ pub(crate) struct Platform {
     control: Receiver<Command>,
     receiver: Rx<Train>,
     sender: Option<Sender>,
-    transform: Option<Box<dyn RefHandler>>,
+    transform: Option<Transform>,
     window: Option<Taker>,
     stop: i64,
     blocks: Vec<i64>,
@@ -33,7 +32,7 @@ impl Platform {
         let receiver = station.incoming.2.clone();
         let counter = station.incoming.1.clone();
         let sender = station.outgoing.clone();
-        let transform = station.transform.transformer();
+        let transform = station.transform.clone();
         let window = station.window.windowing();
         let stop = station.stop;
         let blocks = station.block.clone();
@@ -63,7 +62,7 @@ impl Platform {
         let mut too_high = false;
 
         let process = Box::new(move |trains: &mut Vec<Train>| {
-            let mut transformed = transform.process(stop, window(trains));
+            let mut transformed = transform.apply(stop, window(trains));
             transformed.last = stop;
             sender.send(transformed)
         });
