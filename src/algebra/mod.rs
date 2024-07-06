@@ -1,5 +1,4 @@
 pub use algebra::AlgebraType;
-pub use algebra::CloneableRefHandler;
 pub use algebra::functionize;
 pub use algebra::RefHandler;
 pub use scan::TrainScan;

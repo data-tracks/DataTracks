@@ -143,7 +143,7 @@ pub(crate) enum Command {
 mod tests {
     use std::sync::Arc;
     use std::thread::sleep;
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
 
     use crossbeam::channel::{Receiver, Sender, unbounded};
 
@@ -287,10 +287,42 @@ mod tests {
         }
         let mut values = vec![];
 
-        while values.len() >= 1_000 {
-            println!("{} values ", &values.len().to_string());
+        while values.len() < 1_000 {
             values.push(rx.recv().unwrap())
         }
+        assert_eq!(values.len(), 1_000)
+    }
+
+    #[test]
+    fn minimal_overhead() {
+        let (mut station, train_sender, rx, c_rx, a_tx) = create_test_station(0);
+
+        let sender = station.operate(Arc::clone(&a_tx));
+
+        let mut trains = vec![];
+
+        for _ in 0..1_000 {
+            trains.push(Train::new(0, vec![Value::int(3)]));
+        }
+
+        // the station should open a platform
+        for state in vec![READY(0)] {
+            assert_eq!(state, c_rx.recv().unwrap())
+        }
+        let time = Instant::now();
+
+        for train in trains {
+            train_sender.send(train).unwrap();
+        }
+
+        let mut values: i32 = 0;
+
+        while values < 1_000 {
+            rx.recv().unwrap();
+            values += 1;
+        }
+        let elapsed = time.elapsed().as_millis();
+        println!("time: {}ms, per entry {}ms", elapsed, elapsed/1000 );
     }
 
     fn create_test_station(duration: u64) -> (Station, Tx<Train>, Rx<Train>, Receiver<Command>, Arc<Sender<Command>>) {
@@ -300,10 +332,19 @@ mod tests {
         let train_receiver = station.add_out(0, tx);
         let time = duration.clone();
 
-        station.transform = Transform::Func(FuncTransform::new(Arc::new(move |num, train| {
-            sleep(Duration::from_millis(time));
-            Train::from(train)
-        })));
+
+        station.transform = match duration  {
+            0 => {
+                Transform::Func(FuncTransform::new(Arc::new(move |num, train| {
+                    Train::from(train)
+                })))
+            },
+            _ => {
+                Transform::Func(FuncTransform::new(Arc::new(move |num, train| {
+                    sleep(Duration::from_millis(time));
+                    Train::from(train)
+                })))
+        } };
 
         let (c_tx, c_rx) = unbounded();
 

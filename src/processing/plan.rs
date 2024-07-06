@@ -696,7 +696,7 @@ mod stencil {
         plan.send_control(id, READY(3));
 
         // source ready + stop, destination ready + stop
-        for command in vec![READY(3), STOP(3), READY(3), STOP(3)] {
+        for _command in vec![READY(3), STOP(3), READY(3), STOP(3)] {
             plan.control_receiver.1.recv().unwrap();
         }
 
@@ -797,8 +797,6 @@ mod stencil {
         plan.clone_platform(0);
         plan.clone_platform(0);
 
-
-        let result_size = 0;
 
         // source 1 ready + stop, each platform ready, destination ready (+ stop only after stopped)
         for com in vec![READY(1), STOP(1), READY(0), READY(0), READY(0), READY(0), READY(0)] {

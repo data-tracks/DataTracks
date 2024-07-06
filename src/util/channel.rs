@@ -134,7 +134,7 @@ mod test {
 
     #[test]
     fn keep_track_hugh() {
-        let (tx, mut counter, mut rx) = new_channel();
+        let (tx, counter, rx) = new_channel();
 
         let num = 1_000_000u64;
         let mut size = 1_000_000u64;
@@ -159,10 +159,10 @@ mod test {
 
     #[test]
     fn keep_track_multi_thread() {
-        let (tx, mut counter, mut rx) = new_channel();
+        let (tx, counter, rx) = new_channel();
 
         let num = 1_000_000u64;
-        let mut size = Arc::new(AtomicU64::new(1_000_000u64));
+        let size = Arc::new(AtomicU64::new(1_000_000u64));
 
         for _ in 0..num {
             tx.send(3i64).unwrap();
@@ -173,10 +173,10 @@ mod test {
 
         for _ in 0..100 {
             let clone_tx = tx.clone();
-            let mut clone_rx = rx.clone();
+            let clone_rx = rx.clone();
             let clone_size = Arc::clone(&size);
             let handler = spawn(move || {
-                for num in 0..num {
+                for _num in 0..num {
                     if random() {
                         clone_tx.send(3i64).unwrap();
                         clone_size.fetch_add(1, Ordering::SeqCst);
@@ -188,7 +188,7 @@ mod test {
             });
             ths.push(handler);
         }
-        ths.into_iter().for_each(|mut t| t.join().unwrap());
+        ths.into_iter().for_each(|t| t.join().unwrap());
 
 
         assert_eq!(counter.load(Ordering::SeqCst), size.load(Ordering::SeqCst));
