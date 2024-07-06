@@ -103,7 +103,9 @@ where
 mod test {
     use std::sync::Arc;
     use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::mpsc::channel;
     use std::thread::spawn;
+    use std::time::Instant;
 
     use rand::random;
 
@@ -192,5 +194,31 @@ mod test {
 
 
         assert_eq!(counter.load(Ordering::SeqCst), size.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn performance() {
+        let (tx, rc) = channel();
+
+        let mut instant = Instant::now();
+        for _ in 0..1_000_000 {
+            tx.send(3).unwrap();
+            let val = rc.recv().unwrap();
+        }
+        let std = instant.elapsed();
+
+        let (tx, counter, rc) = new_channel();
+
+        instant = Instant::now();
+        for _ in 0..1_000_000 {
+            tx.send(3).unwrap();
+            let val = rc.recv().unwrap();
+        }
+        let new_time = instant.elapsed();
+
+
+        println!("std: {}ms vs counted: {}ms", std.as_millis(), new_time.as_millis());
+
+        assert!((1.10 * std.as_millis() as f64) as u128 >= new_time.as_millis())
     }
 }

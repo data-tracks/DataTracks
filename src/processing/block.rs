@@ -126,3 +126,39 @@ impl AllBlock {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use std::sync::mpsc::channel;
+    use std::time::Instant;
+
+    use crate::processing::block::Block;
+    use crate::processing::Train;
+
+    #[test]
+    fn overhead() {
+        let (tx, rx) = channel();
+
+        let process = Box::new(move |trains: &mut Vec<Train>| {
+            tx.send(trains.clone()).unwrap();
+        });
+        let mut block = Block::new(vec![], vec![], process);
+
+        let mut trains = vec![];
+        for _ in 0..1000 {
+            trains.push(Train::new(0, vec![3.into()]))
+        }
+
+        let instant = Instant::now();
+        for train in trains {
+            block.next(train)
+        }
+
+        for _ in 0..1000 {
+            rx.recv().unwrap();
+        }
+        let elapsed = instant.elapsed();
+
+        println!("time {}ms", elapsed.as_millis())
+    }
+}
