@@ -322,7 +322,7 @@ mod tests {
             values += 1;
         }
         let elapsed = time.elapsed().as_millis();
-        println!("time: {}ms, per entry {}ms", elapsed, elapsed/1000 );
+        println!("time: {}ms, per entry {}ms", elapsed, elapsed/1_000 );
     }
 
     fn create_test_station(duration: u64) -> (Station, Tx<Train>, Rx<Train>, Receiver<Command>, Arc<Sender<Command>>) {

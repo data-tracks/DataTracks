@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crossbeam::channel;
 use crossbeam::channel::{Receiver, unbounded};
@@ -62,9 +62,11 @@ impl Platform {
         let mut too_high = false;
 
         let process = Box::new(move |trains: &mut Vec<Train>| {
+            let instant = Instant::now();
             let mut transformed = transform.apply(stop, window(trains));
             transformed.last = stop;
-            sender.send(transformed)
+            sender.send(transformed);
+            println!("{}", instant.elapsed().as_millis())
         });
 
         let mut block = Block::new(self.inputs.clone(), self.blocks.clone(), process);
@@ -100,7 +102,7 @@ impl Platform {
                     block.next(train); // window takes precedence to
                 }
                 _ => {
-                    thread::sleep(timeout) // wait again
+                    thread::sleep(timeout); // wait again
                 }
             };
         }

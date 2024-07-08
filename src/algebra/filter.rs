@@ -27,7 +27,7 @@ impl RefHandler for  FilterHandler{
     }
 
     fn clone(&self) -> Box<dyn RefHandler + Send + 'static> {
-        RefHandler::clone(self)
+        Box::new(FilterHandler{ input: self.input.clone(), condition: self.condition.clone() })
     }
 }
 

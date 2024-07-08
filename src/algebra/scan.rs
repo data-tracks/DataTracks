@@ -19,14 +19,14 @@ pub struct ScanHandler {
 }
 
 impl RefHandler for ScanHandler {
-    fn process(&self, stop: i64, wagons: &mut Vec<Train>) -> Train {
+    fn process(&self, _stop: i64, wagons: &mut Vec<Train>) -> Train {
         let mut values = vec![];
         wagons.into_iter().filter(|w| w.last == self.index).for_each(|t| values.append(t.values.take().unwrap().as_mut()));
         Train::new(self.index, values)
     }
 
     fn clone(&self) -> Box<dyn RefHandler + Send + 'static> {
-        RefHandler::clone(self)
+        Box::new(ScanHandler{ index: 0 })
     }
 }
 

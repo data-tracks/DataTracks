@@ -1,7 +1,5 @@
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::thread::sleep;
-use std::time::Duration;
 
 pub struct Channel<F>
 where
@@ -9,6 +7,7 @@ where
 {
     size: Arc<AtomicU64>,
     buffer: Mutex<Vec<F>>,
+    condvar: Condvar
 }
 
 
@@ -20,6 +19,7 @@ where
         Channel {
             size: Arc::new(AtomicU64::default()),
             buffer: Mutex::new(vec![]),
+            condvar: Condvar::new()
         });
 
     let rx = Rx { channel: Arc::clone(&channel) };
@@ -41,27 +41,19 @@ where
     F: Send,
 {
     pub(crate) fn recv(&self) -> Result<F, String> {
+        let mut vec = self.channel.buffer.lock().unwrap();
         loop {
-            let mut vec = self.channel.buffer.lock().unwrap();
-            if !vec.is_empty() {
-                let element = vec.pop();
-                drop(vec);
-                match element {
-                    None => {}
-                    Some(e) => {
-                        self.channel.size.fetch_sub(1, Ordering::SeqCst);
-                        return Ok(e);
-                    }
-                }
+            if let Some(element) = vec.pop(){
+                self.channel.size.fetch_sub(1, Ordering::SeqCst);
+                return Ok(element);
             }
-            sleep(Duration::from_nanos(10))
+            vec = self.channel.condvar.wait(vec).unwrap()
         }
     }
     pub(crate) fn try_recv(&self) -> Result<F, String> {
         let mut vec = self.channel.buffer.lock().unwrap();
         if !vec.is_empty() {
             let element = vec.pop();
-            drop(vec);
             return match element {
                 None => Err("Could not get error".to_string()),
                 Some(e) => {
@@ -92,7 +84,9 @@ where
         match self.channel.buffer.lock() {
             Ok(mut b) => {
                 self.channel.size.fetch_add(1, Ordering::SeqCst);
-                Ok(b.push(msg))
+                b.push(msg);
+                self.channel.condvar.notify_one();
+                Ok(())
             }
             Err(e) => Err(e.to_string())
         }
@@ -212,7 +206,7 @@ mod test {
         instant = Instant::now();
         for _ in 0..1_000_000 {
             tx.send(3).unwrap();
-            let val = rc.recv().unwrap();
+            rc.recv().unwrap();
         }
         let new_time = instant.elapsed();
 

@@ -42,7 +42,7 @@ where
 
 pub struct JoinHandler<H>
 where
-    H: PartialEq,
+    H: PartialEq + 'static,
 {
     left_hash: fn(&Value) -> H,
     right_hash: fn(&Value) -> H,
@@ -55,7 +55,7 @@ where
 
 impl<'a, H> RefHandler for JoinHandler<H>
 where
-    H: PartialEq,
+    H: PartialEq + 'static,
 {
     fn process(&self, stop: i64, wagons: &mut Vec<Train>) -> Train {
         let mut values = vec![];
@@ -77,7 +77,13 @@ where
     }
 
     fn clone(&self) -> Box<dyn RefHandler + Send + 'static> {
-        RefHandler::clone(self)
+        Box::new(JoinHandler{
+            left_hash: self.left_hash.clone(),
+            right_hash: self.right_hash.clone(),
+            left: self.left.clone(),
+            right: self.right.clone(),
+            out: self.out.clone(),
+        })
     }
 }
 
