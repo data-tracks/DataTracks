@@ -7,7 +7,7 @@ use serde::{Serialize, Serializer};
 use serde::ser::SerializeStruct;
 
 use crate::processing::destination::Destination;
-use crate::processing::plan::PlanStage::{BlockStage, Num, TransformStage, WindowStage};
+use crate::processing::plan::PlanStage::{OutputStage, Num, TransformStage, WindowStage};
 use crate::processing::source::Source;
 use crate::processing::station::{Command, Station};
 use crate::util::GLOBAL_ID;
@@ -191,8 +191,8 @@ impl Plan {
                         _ => {}
                     };
                     match char {
-                        '[' => stage = BlockStage,
-                        '(' => stage = WindowStage,
+                        '[' => stage = WindowStage,
+                        '(' => stage = OutputStage,
                         '{' => stage = TransformStage,
                         _ => {}
                     }
@@ -208,7 +208,7 @@ impl Plan {
                 _ => {
                     if let Num = stage {
                         if char == '|' {
-                            current.push((BlockStage, "".to_string()));
+                            current.push((OutputStage, "".to_string()));
                             continue;
                         }
                     }
@@ -280,7 +280,7 @@ impl Plan {
 pub(crate) enum PlanStage {
     WindowStage,
     TransformStage,
-    BlockStage,
+    OutputStage,
     Num,
 }
 

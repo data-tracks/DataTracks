@@ -62,11 +62,9 @@ impl Platform {
         let mut too_high = false;
 
         let process = Box::new(move |trains: &mut Vec<Train>| {
-            let instant = Instant::now();
             let mut transformed = transform.apply(stop, window(trains));
             transformed.last = stop;
             sender.send(transformed);
-            println!("{}", instant.elapsed().as_millis())
         });
 
         let mut block = Block::new(self.inputs.clone(), self.blocks.clone(), process);

@@ -57,7 +57,7 @@ impl Station {
             match stage.0 {
                 PlanStage::WindowStage => station.set_window(Window::parse(stage.1)),
                 PlanStage::TransformStage => station.set_transform(Transform::parse(stage.1).unwrap()),
-                PlanStage::BlockStage => station.add_block(last.unwrap_or(-1)),
+                PlanStage::OutputStage => station.add_block(last.unwrap_or(-1)),
                 PlanStage::Num => station.set_stop(stage.1.parse::<i64>().unwrap()),
             }
         }
@@ -234,6 +234,32 @@ mod tests {
     }
 
     #[test]
+    fn sql_parse_different_outs() {
+        /*let stencil = "1-3{sql|Select $1.0 From $1}";
+        let stencil = "1-3{sql|Select $1.name From $1}";
+
+        let plan = Plan::parse(stencil);
+
+        let station = plan.stations.get(&3).unwrap();*/
+    }
+
+    #[test]
+    fn sql_parse_output() {
+        let stencils = vec![
+            //"1(type:float)",// scalar
+            //"1({name:(type:string), temperature:(type:number)})", // named tuple
+            //"1([type:number, length:3])" // limited array
+        ];
+
+        for stencil in stencils {
+            let plan = Plan::parse(stencil);
+
+            let station = plan.stations.get(&1).unwrap();
+        }
+
+    }
+
+    #[test]
     fn too_high() {
         let (mut station, train_sender, rx, c_rx, a_tx) = create_test_station(10);
 
@@ -321,8 +347,8 @@ mod tests {
             rx.recv().unwrap();
             values += 1;
         }
-        let elapsed = time.elapsed().as_millis();
-        println!("time: {}ms, per entry {}ms", elapsed, elapsed/1_000 );
+        let elapsed = time.elapsed().as_nanos();
+        println!("time: {}nanos, per entry {}ns", elapsed, elapsed/1_000 );
     }
 
     fn create_test_station(duration: u64) -> (Station, Tx<Train>, Rx<Train>, Receiver<Command>, Arc<Sender<Command>>) {
@@ -351,4 +377,5 @@ mod tests {
         let a_tx = Arc::new(c_tx);
         (station, train_sender, rx, c_rx, a_tx)
     }
+
 }

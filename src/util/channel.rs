@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::sync::{Arc, Condvar, Mutex};
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -6,7 +7,7 @@ where
     F: Send,
 {
     size: Arc<AtomicU64>,
-    buffer: Mutex<Vec<F>>,
+    buffer: Mutex<VecDeque<F>>,
     condvar: Condvar
 }
 
@@ -18,7 +19,7 @@ where
     let channel = Arc::new(
         Channel {
             size: Arc::new(AtomicU64::default()),
-            buffer: Mutex::new(vec![]),
+            buffer: Mutex::new(VecDeque::new()),
             condvar: Condvar::new()
         });
 
@@ -43,7 +44,7 @@ where
     pub(crate) fn recv(&self) -> Result<F, String> {
         let mut vec = self.channel.buffer.lock().unwrap();
         loop {
-            if let Some(element) = vec.pop(){
+            if let Some(element) = vec.pop_front(){
                 self.channel.size.fetch_sub(1, Ordering::SeqCst);
                 return Ok(element);
             }
@@ -53,7 +54,7 @@ where
     pub(crate) fn try_recv(&self) -> Result<F, String> {
         let mut vec = self.channel.buffer.lock().unwrap();
         if !vec.is_empty() {
-            let element = vec.pop();
+            let element = vec.pop_front();
             return match element {
                 None => Err("Could not get error".to_string()),
                 Some(e) => {
@@ -84,7 +85,7 @@ where
         match self.channel.buffer.lock() {
             Ok(mut b) => {
                 self.channel.size.fetch_add(1, Ordering::SeqCst);
-                b.push(msg);
+                b.push_back(msg);
                 self.channel.condvar.notify_one();
                 Ok(())
             }

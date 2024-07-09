@@ -7,7 +7,7 @@ use crate::processing::train::Train;
 use crate::processing::transform::Transform::{Func, Lang};
 use crate::value::Value;
 
-pub type Taker = fn(&mut Vec<Train>) -> &mut Vec<Train>;
+pub type Taker = dyn Fn(&mut Train) -> &mut Train;
 
 #[derive(Clone)]
 pub enum Transform {

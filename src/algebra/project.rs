@@ -9,7 +9,7 @@ pub trait Project: Algebra {
 
 pub struct TrainProject {
     input: Box<AlgebraType>,
-    project: Option<fn(Value) -> Value>,
+    project: fn(Value) -> Value,
 }
 
 struct ProjectHandler{
@@ -33,7 +33,7 @@ impl RefHandler for ProjectHandler {
 
 impl Algebra for TrainProject {
     fn get_handler(&mut self) -> Box<dyn RefHandler + Send> {
-        let project = self.project.take().unwrap();
+        let project = self.project.clone();
         let input = self.input.get_handler();
         Box::new(ProjectHandler{input, project})
     }
