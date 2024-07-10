@@ -32,7 +32,7 @@ pub fn functionize(mut algebra: AlgebraType) -> Result<Box<dyn RefHandler + Send
 }
 
 pub trait RefHandler: Send {
-    fn process(&self, stop: i64, wagons: &mut Vec<Train>) -> Train;
+    fn process(&self, stop: i64, wagons: Vec<Train>) -> Train;
 
     fn clone(&self) -> Box<dyn RefHandler + Send + 'static>;
 }

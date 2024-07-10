@@ -20,7 +20,6 @@ impl Language {
         match self {
             SQL => sql::transform(query),
             MQL => mql::transform(query),
-            _ => Err("Language not supported.".to_string())
         }
     }
 }

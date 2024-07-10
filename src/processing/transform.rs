@@ -7,7 +7,9 @@ use crate::processing::train::Train;
 use crate::processing::transform::Transform::{Func, Lang};
 use crate::value::Value;
 
-pub type Taker = dyn Fn(&mut Train) -> &mut Train;
+pub trait Taker: Send {
+    fn take(&mut self, wagons: &mut Vec<Train>) -> Vec<Train>;
+}
 
 #[derive(Clone)]
 pub enum Transform {
@@ -41,7 +43,7 @@ impl Transform {
         }
     }
 
-    pub fn apply(&self, stop: i64, wagons: &mut Vec<Train>) -> Train {
+    pub fn apply(&self, stop: i64, wagons: Vec<Train>) -> Train {
         match self {
             Func(f) => (f.func)(stop, wagons),
             Lang(f) => f.func.process(stop, wagons)
@@ -89,9 +91,9 @@ struct FuncValueHandler {
 
 
 impl RefHandler for FuncValueHandler {
-    fn process(&self, stop: i64, wagons: &mut Vec<Train>) -> Train {
+    fn process(&self, stop: i64, wagons: Vec<Train>) -> Train {
         let mut values: Vec<Value> = vec![];
-        for train in wagons {
+        for mut train in wagons {
             let mut vals = train.values.take().unwrap().into_iter().map(|v| (self.func)(v)).collect();
             values.append(&mut vals);
         }
@@ -106,7 +108,7 @@ impl RefHandler for FuncValueHandler {
 
 #[derive(Clone)]
 pub struct FuncTransform {
-    pub func: Arc<dyn Fn(i64, &mut Vec<Train>) -> Train + Send + Sync>,
+    pub func: Arc<dyn Fn(i64, Vec<Train>) -> Train + Send + Sync>,
 }
 
 impl Default for FuncTransform {
@@ -116,18 +118,18 @@ impl Default for FuncTransform {
 }
 
 impl FuncTransform {
-    pub(crate) fn new_boxed(func: fn(i64, &mut Vec<Train>) -> Train) -> Self {
+    pub(crate) fn new_boxed(func: fn(i64, Vec<Train>) -> Train) -> Self {
         return Self::new(Arc::new(func));
     }
 
-    pub(crate) fn new(func: Arc<(dyn Fn(i64, &mut Vec<Train>) -> Train + Send + Sync)>) -> Self {
+    pub(crate) fn new(func: Arc<(dyn Fn(i64, Vec<Train>) -> Train + Send + Sync)>) -> Self {
         FuncTransform { func }
     }
 
     pub(crate) fn new_val(_stop: i64, func: fn(Value) -> Value) -> FuncTransform {
-        Self::new(Arc::new(move |stop, wagons: &mut Vec<Train>| {
+        Self::new(Arc::new(move |stop, wagons: Vec<Train>| {
             let mut values: Vec<Value> = vec![];
-            for train in wagons {
+            for mut train in wagons {
                 let mut vals = train.values.take().unwrap().into_iter().map(|v| func(v)).collect();
                 values.append(&mut vals);
             }

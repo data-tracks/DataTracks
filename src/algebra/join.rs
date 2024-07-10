@@ -57,9 +57,9 @@ impl<'a, H> RefHandler for JoinHandler<H>
 where
     H: PartialEq + 'static,
 {
-    fn process(&self, stop: i64, wagons: &mut Vec<Train>) -> Train {
+    fn process(&self, stop: i64, wagons: Vec<Train>) -> Train {
         let mut values = vec![];
-        let mut left = self.left.process(stop, wagons);
+        let mut left = self.left.process(stop, wagons.clone());
         let mut right = self.right.process(stop, wagons);
         let right_hashes: Vec<(H, Value)> = right.values.take().unwrap().into_iter().map(|value: Value| {
             let hash = (self.right_hash)(&value);
@@ -132,7 +132,7 @@ mod test {
         });
 
         let handle = join.get_handler();
-        let mut res = handle.process(0, &mut vec![train0, train1]);
+        let mut res = handle.process(0, vec![train0, train1]);
         assert_eq!(res.values.clone().unwrap(), vec![vec![5.5.into(), 5.5.into()].into()]);
         assert_ne!(res.values.take().unwrap(), vec![vec![].into()]);
     }
@@ -150,7 +150,7 @@ mod test {
         });
 
         let handle = join.get_handler();
-        let mut res = handle.process(0, &mut vec![train0, train1]);
+        let mut res = handle.process(0, vec![train0, train1]);
         assert_eq!(res.values.clone().unwrap(), vec![vec![5.5.into(), 5.5.into()].into(), vec![5.5.into(), 5.5.into()].into()]);
         assert_ne!(res.values.take().unwrap(), vec![vec![].into()]);
     }

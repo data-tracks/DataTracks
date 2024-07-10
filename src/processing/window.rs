@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 use std::time::Instant;
+
 use chrono::{Duration, NaiveTime};
 use crate::processing::Train;
 use crate::processing::transform::Taker;
@@ -21,10 +22,10 @@ impl Default for Window {
 
 
 impl Window {
-    pub(crate) fn windowing(&self) -> Box<Taker> {
+    pub(crate) fn windowing(&self) -> Box<dyn Taker> {
         match self {
-            Back(w) => w.get_window(),
-            Interval(w) => w.get_window()
+            Back(w) => Box::new(w.clone()),
+            Interval(w) => Box::new(w.clone())
         }
     }
 
@@ -49,11 +50,12 @@ pub struct BackWindow {
     duration: Duration,
     time: i64,
     time_unit: TimeUnit,
+    buffer: VecDeque<(Instant, Vec<Train>)>
 }
 
 impl BackWindow {
     pub fn new(time: i64, time_unit: TimeUnit) -> Self {
-        BackWindow { time, time_unit, duration: get_duration(time, time_unit) }
+        BackWindow { time, time_unit, duration: get_duration(time, time_unit), buffer: VecDeque::new() }
     }
     fn parse(stencil: String) -> Self {
         let (digit, time_unit) = parse_interval(stencil.as_str());
@@ -62,32 +64,30 @@ impl BackWindow {
     }
 
 
-    pub(crate) fn get_window(& self) -> Box<Taker> {
-        let mut buffer = VecDeque::new();
-        let duration = self.duration.clone();
-        Box::new(|train| {
-            let instant = Instant::now();
-            buffer.push_back((instant, train.values.clone().unwrap()));
-
-            let mut values = vec![];
-            let mut new_buffer = VecDeque::new();
-            for (i, value) in buffer {
-                if instant.checked_duration_since(i).unwrap().as_millis() < duration.num_milliseconds() as u128 {
-                    values.append(value.clone().as_mut());
-                    new_buffer.push_back((i, value))
-                }
-            }
-            buffer = new_buffer;
-
-            &mut Train::new(0, values)
-        })
-    }
-
     pub(crate) fn dump(&self) -> String {
         if self.time == 0 {
             return "".to_string();
         }
         "[".to_string() + &self.time.to_string() + self.time_unit.into() + "]"
+    }
+}
+
+impl Taker for BackWindow {
+    fn take(&mut self, trains: &mut Vec<Train>) -> Vec<Train> {
+        let instant = Instant::now();
+        self.buffer.push_back((instant, trains.clone()));
+
+        let mut values = vec![];
+        let mut new_buffer = VecDeque::new();
+        for (i, value) in self.buffer.clone() {
+            if instant.checked_duration_since(i).unwrap().as_millis() <= self.duration.num_milliseconds() as u128 {
+                values.append(value.clone().as_mut());
+                new_buffer.push_back((i, value))
+            }
+        }
+        self.buffer = new_buffer;
+
+        values
     }
 }
 
@@ -129,11 +129,12 @@ pub struct IntervalWindow {
     time: i64,
     time_unit: TimeUnit,
     start: NaiveTime,
+    buffer: VecDeque<Vec<Train>>
 }
 
 impl IntervalWindow {
     fn new(time: i64, time_unit: TimeUnit, start: NaiveTime) -> IntervalWindow {
-        IntervalWindow { time, time_unit, start }
+        IntervalWindow { time, time_unit, start, buffer: VecDeque::new() }
     }
     pub(crate) fn dump(&self) -> String {
         "(".to_string() + &self.time.to_string() + self.time_unit.into() + "@" + &self.start.format("%H:%M").to_string() + ")"
@@ -150,12 +151,12 @@ impl IntervalWindow {
         }
     }
 
-    pub(crate) fn get_window(&self) -> Box<Taker> {
-        let mut buffer = VecDeque::new();
-        Box::new(|train| {
-            buffer.push_back(train);
-            train
-        })
+}
+
+impl Taker for IntervalWindow{
+    fn take(&mut self, wagons: &mut Vec<Train>) -> Vec<Train> {
+        self.buffer.push_back(wagons.clone());
+        wagons.clone()
     }
 }
 
@@ -167,7 +168,8 @@ fn parse_time(time_str: &str) -> Result<NaiveTime, chrono::ParseError> {
 #[cfg(test)]
 mod test {
     use std::sync::Arc;
-
+    use std::thread::sleep;
+    use std::time::Duration;
     use crossbeam::channel::unbounded;
 
     use crate::processing::station::Command::READY;
@@ -214,6 +216,7 @@ mod test {
         let control = unbounded();
 
         let values = vec![Value::float(3.3), Value::int(3)];
+        let after = vec!["test".into()];
 
         let (tx, num, rx) = new_channel();
 
@@ -226,12 +229,17 @@ mod test {
         for value in &values {
             station.send(Train::new(0, vec![value.clone()])).unwrap();
         }
+        sleep(Duration::from_millis(4));
+        station.send(Train::new(0, after.clone())).unwrap();
 
         let mut res = rx.recv().unwrap();
         assert_eq!(res.values.take().unwrap().get(0).unwrap(), values.get(0).unwrap());
 
         let mut res = rx.recv().unwrap();
         assert_eq!(res.values.take().unwrap(), values);
+
+        let mut res = rx.recv().unwrap();
+        assert_eq!(res.values.take().unwrap(), after);
 
     }
 }

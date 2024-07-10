@@ -713,11 +713,11 @@ mod stencil {
 
 
         let mut plan = Plan::parse(stencil);
-        let mut values1 = vec![vec![3.3.into()], vec![3.1.into()]];
+        let values1 = vec![vec![3.3.into()], vec![3.1.into()]];
         let source1 = DummySource::new(1, values1.clone(), Duration::from_millis(1));
         let id1 = &source1.get_id().clone();
 
-        let mut values4 = vec![vec![3.into()]];
+        let values4 = vec![vec![3.into()]];
         let source4 = DummySource::new_with_delay(4, values4.clone(), Duration::from_millis(3), Duration::from_millis(1));
         let id4 = &source4.get_id().clone();
 
@@ -764,7 +764,7 @@ mod stencil {
         let mut station = Station::new(0);
         let station_id = station.id;
         station.transform = Transform::Func(FuncTransform::new_boxed(|num, train| {
-            sleep(Duration::from_millis(100));
+            sleep(Duration::from_millis(10));
             Train::from(train)
         }));
 

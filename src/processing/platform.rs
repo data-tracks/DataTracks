@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use crossbeam::channel;
 use crossbeam::channel::{Receiver, unbounded};
@@ -12,6 +12,7 @@ use crate::processing::station::{Command, Station};
 use crate::processing::station::Command::{OKAY, READY, THRESHOLD};
 use crate::processing::Train;
 use crate::processing::transform::{Taker, Transform};
+use crate::processing::window::Window;
 use crate::util::{GLOBAL_ID, Rx};
 
 pub(crate) struct Platform {
@@ -20,7 +21,7 @@ pub(crate) struct Platform {
     receiver: Rx<Train>,
     sender: Option<Sender>,
     transform: Option<Transform>,
-    window: Option<Taker>,
+    window: Option<Window>,
     stop: i64,
     blocks: Vec<i64>,
     inputs: Vec<i64>,
@@ -33,7 +34,7 @@ impl Platform {
         let counter = station.incoming.1.clone();
         let sender = station.outgoing.clone();
         let transform = station.transform.clone();
-        let window = station.window.windowing();
+        let window = station.window.clone();
         let stop = station.stop;
         let blocks = station.block.clone();
         let inputs = station.inputs.clone();
@@ -55,14 +56,15 @@ impl Platform {
     pub(crate) fn operate(&mut self, control: Arc<channel::Sender<Command>>) {
         let transform = self.transform.take().unwrap();
         let stop = self.stop.clone();
-        let window = self.window.take().unwrap();
+        let mut window = self.window.take().unwrap().windowing();
         let sender = self.sender.take().unwrap();
         let timeout = Duration::from_nanos(10);
         let mut threshold = 2000;
         let mut too_high = false;
 
         let process = Box::new(move |trains: &mut Vec<Train>| {
-            let mut transformed = transform.apply(stop, window(trains));
+            let windowed = window.take(trains);
+            let mut transformed = transform.apply(stop, windowed);
             transformed.last = stop;
             sender.send(transformed);
         });

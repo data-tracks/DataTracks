@@ -13,7 +13,7 @@ pub(crate) enum Block {
 
 
 impl Block {
-    pub(crate) fn new(inputs: Vec<i64>, blocks: Vec<i64>, next: Box<dyn Fn(&mut Vec<Train>)>) -> Self {
+    pub(crate) fn new(inputs: Vec<i64>, blocks: Vec<i64>, next: Box<dyn FnMut(&mut Vec<Train>)>) -> Self {
         if blocks.is_empty() {
             return Non(NonBlock { func: next });
         } else if same_vecs(&blocks, &inputs) {
@@ -47,11 +47,11 @@ fn same_vecs(a: &Vec<i64>, b: &Vec<i64>) -> bool {
 }
 
 pub(crate) struct NonBlock {
-    func: Box<dyn Fn(&mut Vec<Train>)>,
+    func: Box<dyn FnMut(&mut Vec<Train>)>,
 }
 
 impl NonBlock {
-    fn next(&self, train: Train) {
+    fn next(&mut self, train: Train) {
         (self.func)(&mut vec![train])
     }
 }
@@ -59,13 +59,13 @@ impl NonBlock {
 pub(crate) struct SpecificBlock {
     input: Vec<i64>,
     blocks: Vec<i64>,
-    func: Box< dyn Fn(&mut Vec<Train>)>,
+    func: Box< dyn FnMut(&mut Vec<Train>)>,
     buffer: HashMap<i64, Vec<Value>>,
 }
 
 impl SpecificBlock {
 
-    fn new(input: Vec<i64>, blocks: Vec<i64>, func: Box<dyn Fn(&mut Vec<Train>)>) -> Self{
+    fn new(input: Vec<i64>, blocks: Vec<i64>, func: Box<dyn FnMut(&mut Vec<Train>)>) -> Self{
         let mut buffer = HashMap::new();
         blocks.iter().for_each(|b| {
             buffer.insert(b.clone(), vec![]);
@@ -94,7 +94,7 @@ fn merge_buffer(drain: Drain<i64, Vec<Value>>) -> Vec<Train> {
 
 pub(crate) struct AllBlock {
     input: Vec<i64>,
-    func: Box<dyn Fn(&mut Vec<Train>)>,
+    func: Box<dyn FnMut(&mut Vec<Train>)>,
     buffer: HashMap<i64, Vec<Value>>,
     switch: HashMap<i64, bool>
 }
@@ -103,7 +103,7 @@ pub(crate) struct AllBlock {
 
 impl AllBlock {
 
-    fn new(input: Vec<i64>, func: Box<dyn Fn(&mut Vec<Train>)>) -> Self{
+    fn new(input: Vec<i64>, func: Box<dyn FnMut(&mut Vec<Train>)>) -> Self{
         let mut buffer = HashMap::new();
         let mut switch = HashMap::new();
         input.iter().for_each(|i|{
