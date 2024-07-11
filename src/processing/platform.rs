@@ -11,7 +11,7 @@ use crate::processing::sender::Sender;
 use crate::processing::station::{Command, Station};
 use crate::processing::station::Command::{OKAY, READY, THRESHOLD};
 use crate::processing::Train;
-use crate::processing::transform::{Taker, Transform};
+use crate::processing::transform::{Transform};
 use crate::processing::window::Window;
 use crate::util::{GLOBAL_ID, Rx};
 

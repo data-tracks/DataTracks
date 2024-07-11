@@ -1,10 +1,19 @@
-#[derive(Copy, Clone)]
+use std::fmt::{Display, Formatter};
+
+#[derive( Clone)]
 pub enum TimeUnit {
     Millis,
     Seconds,
     Minutes,
     Hours,
     Days,
+}
+
+impl Display for TimeUnit{
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.into()).unwrap();
+        Ok(())
+    }
 }
 
 const TIME_UNIT_MS: &'static str = "ms";
@@ -17,7 +26,7 @@ const TIME_UNIT_H: &'static str = "h";
 
 const TIME_UNIT_D: &'static str = "d";
 
-impl Into<&str> for TimeUnit {
+impl Into<&str> for &TimeUnit {
     fn into(self) -> &'static str {
         match self {
             TimeUnit::Millis => TIME_UNIT_MS,

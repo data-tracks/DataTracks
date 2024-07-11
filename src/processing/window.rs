@@ -2,6 +2,7 @@ use std::collections::VecDeque;
 use std::time::Instant;
 
 use chrono::{Duration, NaiveTime};
+
 use crate::processing::Train;
 use crate::processing::transform::Taker;
 use crate::processing::window::Window::{Back, Interval};
@@ -55,7 +56,7 @@ pub struct BackWindow {
 
 impl BackWindow {
     pub fn new(time: i64, time_unit: TimeUnit) -> Self {
-        BackWindow { time, time_unit, duration: get_duration(time, time_unit), buffer: VecDeque::new() }
+        BackWindow { time, time_unit: time_unit.clone(), duration: get_duration(time, time_unit), buffer: VecDeque::new() }
     }
     fn parse(stencil: String) -> Self {
         let (digit, time_unit) = parse_interval(stencil.as_str());
@@ -68,7 +69,7 @@ impl BackWindow {
         if self.time == 0 {
             return "".to_string();
         }
-        "[".to_string() + &self.time.to_string() + self.time_unit.into() + "]"
+        format!("[{}{}]", &self.time, self.time_unit )
     }
 }
 
@@ -137,7 +138,7 @@ impl IntervalWindow {
         IntervalWindow { time, time_unit, start, buffer: VecDeque::new() }
     }
     pub(crate) fn dump(&self) -> String {
-        "(".to_string() + &self.time.to_string() + self.time_unit.into() + "@" + &self.start.format("%H:%M").to_string() + ")"
+        format!("[{}{}@{}]", &self.time, self.time_unit, &self.start.format("%H:%M") )
     }
     fn parse(input: String) -> IntervalWindow {
         match input.split_once('@') {
@@ -170,6 +171,7 @@ mod test {
     use std::sync::Arc;
     use std::thread::sleep;
     use std::time::Duration;
+
     use crossbeam::channel::unbounded;
 
     use crate::processing::station::Command::READY;

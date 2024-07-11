@@ -396,8 +396,8 @@ mod test {
     #[test]
     fn stencil_window() {
         let stencils = vec![
-            "1-2(3s)",
-            "1-2(3s@13:15)",
+            "1-2[3s]",
+            "1-2[3s@13:15]",
         ];
 
         for stencil in stencils {

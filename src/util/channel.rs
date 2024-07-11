@@ -198,7 +198,7 @@ mod test {
         let mut instant = Instant::now();
         for _ in 0..1_000_000 {
             tx.send(3).unwrap();
-            let val = rc.recv().unwrap();
+            let _val = rc.recv().unwrap();
         }
         let std = instant.elapsed();
 
