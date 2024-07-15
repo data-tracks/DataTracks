@@ -1,6 +1,6 @@
 use std::collections::HashMap;
-use serde::de::Unexpected::Str;
-use crate::processing::layout::OutputType::{Any, Array, Boolean, Float, Integer, Text, Tuple};
+
+use crate::processing::layout::OutputType::{Any, Array, Boolean, Float, Integer, Text, Dict};
 use crate::util::BufferedReader;
 
 #[derive(PartialEq, Debug, Clone)]
@@ -37,15 +37,9 @@ impl Field{
 
         while let Some(char) = reader.next() {
             match char {
-                '{' => {
-                    return parse_tuple(&mut reader, None)
-                },
-                '(' => {
-                    return parse_scalar(&mut reader, None)
-                },
-                '[' => {
-                    return parse_array(&mut reader, None)
-                },
+                '{' => return parse_tuple(&mut reader, None),
+                '(' => return parse_scalar(&mut reader, None),
+                '[' => return parse_array(&mut reader, None),
                 ' ' => { },
                 c => panic!("Unknown char in output: {}", c),
             }
@@ -83,7 +77,7 @@ fn parse_tuple(reader: &mut BufferedReader, name: Option<String>) -> Field {
         explicit: false,
         name,
         position: None,
-        type_: Tuple(Box::new(TupleType{ fields })),
+        type_: Dict(Box::new(DictType { fields })),
     }
 }
 
@@ -193,6 +187,7 @@ pub(crate) enum OutputType {
     Boolean,
     Any,
     Array(Box<ArrayType>),
+    Dict(Box<DictType>),
     Tuple(Box<TupleType>)
 }
 
@@ -216,8 +211,13 @@ pub(crate) struct ArrayType{
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub(crate) struct TupleType{
-    fields: HashMap<String, Field> // "name" or "0"
+pub(crate) struct DictType {
+    fields: HashMap<String, Field> // "name"
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub(crate) struct TupleType {
+    fields: HashMap<i64, Field> // "0"
 }
 
 
@@ -277,11 +277,32 @@ mod test {
     }
 
     #[test]
+    fn dict(){
+        let stencil = "{name: (type:text),age: (type: int)}";
+        let field = Field::parse(stencil.to_string());
+        match field.type_ {
+            OutputType::Dict(d) => {
+                assert!(d.fields.contains_key("name"));
+                assert_eq!(d.fields.get("name").cloned().map(|e|e.name).unwrap().unwrap(), "name");
+                assert_eq!(d.fields.get("name").cloned().map(|e|e.type_).unwrap(), Text);
+                assert!(d.fields.contains_key("age"));
+                assert_eq!(d.fields.get("age").cloned().map(|e|e.name).unwrap().unwrap(), "age");
+                assert_eq!(d.fields.get("age").cloned().map(|e|e.type_).unwrap(), Integer);
+            }
+            _ => panic!("Wrong output format")
+
+        }
+    }
+
+    #[test]
     fn tuple(){
-        let stencil = "{name: (type:text), age: (type: int)}";
+        let stencil = "[(type:text),(type: int)]";
         let field = Field::parse(stencil.to_string());
         match field.type_ {
             OutputType::Tuple(t) => {
+
+            }
+            OutputType::Dict(t) => {
                 assert!(t.fields.contains_key("name"));
                 assert_eq!(t.fields.get("name").cloned().map(|e|e.name).unwrap().unwrap(), "name");
                 assert_eq!(t.fields.get("name").cloned().map(|e|e.type_).unwrap(), Text);
@@ -290,7 +311,6 @@ mod test {
                 assert_eq!(t.fields.get("age").cloned().map(|e|e.type_).unwrap(), Integer);
             }
             _ => panic!("Wrong output format")
-
         }
     }
 

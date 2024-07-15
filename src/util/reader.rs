@@ -1,5 +1,3 @@
-use std::str::Chars;
-
 pub struct BufferedReader{
     string: String,
     position: usize
