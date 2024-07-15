@@ -1,3 +1,4 @@
+use core::default::Default;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -5,9 +6,8 @@ use crossbeam::channel;
 use crossbeam::channel::{Sender, unbounded};
 use serde::{Serialize, Serializer};
 use serde::ser::SerializeStruct;
-
 use crate::processing::destination::Destination;
-use crate::processing::plan::PlanStage::{OutputStage, Num, TransformStage, WindowStage};
+use crate::processing::plan::PlanStage::{LayoutStage, Num, TransformStage, WindowStage, BlockStage};
 use crate::processing::source::Source;
 use crate::processing::station::{Command, Station};
 use crate::util::GLOBAL_ID;
@@ -192,7 +192,7 @@ impl Plan {
                     };
                     match char {
                         '[' => stage = WindowStage,
-                        '(' => stage = OutputStage,
+                        '(' => stage = LayoutStage,
                         '{' => stage = TransformStage,
                         _ => {}
                     }
@@ -208,7 +208,7 @@ impl Plan {
                 _ => {
                     if let Num = stage {
                         if char == '|' {
-                            current.push((OutputStage, "".to_string()));
+                            current.push((BlockStage, "".to_string()));
                             continue;
                         }
                     }
@@ -280,7 +280,8 @@ impl Plan {
 pub(crate) enum PlanStage {
     WindowStage,
     TransformStage,
-    OutputStage,
+    LayoutStage,
+    BlockStage,
     Num,
 }
 
@@ -312,7 +313,7 @@ impl Serialize for &Plan {
                 num.to_string(),
                 Stop {
                     num: *num,
-                    transform: stop.transform.dump().clone(),
+                    transform: stop.transform.get(num).map( |i| i.dump().clone()).unwrap_or("".to_string()),
                 },
             );
         }
@@ -411,6 +412,22 @@ mod test {
         let stencils = vec![
             "1-2-3\n4-|2",
             "1-|2-3\n4-2",
+        ];
+
+        for stencil in stencils {
+            let plan = Plan::parse(stencil);
+            assert_eq!(plan.dump(), stencil)
+        }
+    }
+
+    #[test]
+    fn stencil_branch() {
+        let stencils = vec![
+            "1-2{sql|SELECT $1.name FROM $1}\n1-3{sql|SELECT $1.age FROM $1}",
+            /*"1-2{sql|$1 HAS name}\n1-3{sql|SELECT $1.age FROM $1}",
+            "1-2{sql|$1 HAS NOT name}\n1-3{sql|SELECT $1.age FROM $1}",
+            //
+            "1-2{mql|db.$1.has(name: 1)}\n1-3{db.$1.find({},{age:1}}",*/
         ];
 
         for stencil in stencils {
@@ -763,10 +780,10 @@ mod stencil {
     fn divide_workload() {
         let mut station = Station::new(0);
         let station_id = station.id;
-        station.transform = Transform::Func(FuncTransform::new_boxed(|num, train| {
+        station.set_transform(0, Transform::Func(FuncTransform::new_boxed(|num, train| {
             sleep(Duration::from_millis(10));
             Train::from(train)
-        }));
+        })));
 
         let mut values = vec![];
 

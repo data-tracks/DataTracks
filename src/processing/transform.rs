@@ -163,7 +163,7 @@ mod tests {
 
         let control = unbounded();
 
-        station.set_transform(Func(FuncTransform::new_val(0, |x| &x + &Value::int(3))));
+        station.set_transform(0, Func(FuncTransform::new_val(0, |x| &x + &Value::int(3))));
 
         let values = vec![Value::float(3.3), Value::int(3)];
 
@@ -192,7 +192,7 @@ mod tests {
 
         let control = unbounded();
 
-        station.set_transform(Func(FuncTransform::new_val(0, |x| &x + &Value::int(3))));
+        station.set_transform(0, Func(FuncTransform::new_val(0, |x| &x + &Value::int(3))));
 
         let values = vec![Value::float(3.3), Value::int(3)];
 

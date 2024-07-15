@@ -3,8 +3,6 @@ use std::fmt::Formatter;
 use std::hash::{Hash, Hasher};
 
 use crate::value::Value;
-use crate::value::value::{ValType, Valuable};
-use crate::value::value::ValType::Map;
 
 #[derive(Eq, Clone, Debug)]
 pub struct HoMap(HashMap<Value, Value>);
@@ -19,12 +17,6 @@ impl HoMap {
 impl Hash for HoMap {
     fn hash<H: Hasher>(&self, _: &mut H) {
         panic!()
-    }
-}
-
-impl Valuable for HoMap {
-    fn type_(&self) -> ValType {
-        Map
     }
 }
 

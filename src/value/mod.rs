@@ -3,6 +3,7 @@ pub use float::HoFloat;
 pub use int::HoInt;
 pub use string::HoString;
 pub use value::Value;
+pub use value::ValType;
 
 mod float;
 mod int;

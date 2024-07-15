@@ -8,6 +8,12 @@ pub(crate) struct Sender {
     outs: HashMap<i64, Tx<Train>>,
 }
 
+impl Sender {
+    pub(crate) fn send_to(&self, num: i64, train: Train) {
+        self.outs.get(&num).unwrap().send(train).unwrap();
+    }
+}
+
 impl Default for Sender {
     fn default() -> Self {
         Sender { outs: HashMap::new() }

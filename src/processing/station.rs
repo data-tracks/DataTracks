@@ -1,3 +1,6 @@
+use std::alloc::Layout;
+use std::collections::HashMap;
+use std::process::Output;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::thread;
@@ -5,6 +8,7 @@ use std::thread;
 use crossbeam::channel;
 use crossbeam::channel::{Receiver, unbounded};
 
+use crate::processing::layout::Field;
 use crate::processing::plan::PlanStage;
 use crate::processing::platform::Platform;
 use crate::processing::sender::Sender;
@@ -19,9 +23,10 @@ pub(crate) struct Station {
     pub(crate) incoming: (Tx<Train>, Arc<AtomicU64>, Rx<Train>),
     pub(crate) outgoing: Sender,
     pub(crate) window: Window,
-    pub(crate) transform: Transform,
+    pub(crate) transform: HashMap<i64, Transform>,
     pub(crate) block: Vec<i64>,
     pub(crate) inputs: Vec<i64>,
+    pub(crate) layout: Field,
     control: (channel::Sender<Command>, Receiver<Command>),
 }
 
@@ -43,9 +48,10 @@ impl Station {
             incoming: (incoming.0, incoming.1, incoming.2),
             outgoing: Sender::default(),
             window: Window::default(),
-            transform: Transform::default(),
+            transform: HashMap::default(),
             block: vec![],
             inputs: vec![],
+            layout: Field::default(),
             control: (control.0.clone(), control.1.clone()),
         };
         station
@@ -56,8 +62,9 @@ impl Station {
         for stage in parts {
             match stage.0 {
                 PlanStage::WindowStage => station.set_window(Window::parse(stage.1)),
-                PlanStage::TransformStage => station.set_transform(Transform::parse(stage.1).unwrap()),
-                PlanStage::OutputStage => station.add_block(last.unwrap_or(-1)),
+                PlanStage::TransformStage => station.set_transform(last.unwrap_or(-1), Transform::parse(stage.1).unwrap()),
+                PlanStage::BlockStage => station.add_block(last.unwrap_or(-1)),
+                PlanStage::LayoutStage => station.add_explicit_output(Field::parse(stage.1)),
                 PlanStage::Num => station.set_stop(stage.1.parse::<i64>().unwrap()),
             }
         }
@@ -68,10 +75,11 @@ impl Station {
         self.inputs.push(input);
     }
 
-    pub(crate) fn merge(&mut self, other: Station) {
-        for line in other.block {
-            self.block.push(line)
-        }
+    pub(crate) fn merge(&mut self, mut other: Station) {
+        self.block.append(other.block.as_mut());
+        other.transform.into_iter().for_each(|(num, transform)| {
+            self.transform.insert(num, transform.clone());
+        })
     }
 
     pub(crate) fn close(&mut self) {
@@ -86,8 +94,8 @@ impl Station {
         self.window = window;
     }
 
-    pub(crate) fn set_transform(&mut self, transform: Transform) {
-        self.transform = transform;
+    pub(crate) fn set_transform(&mut self, id: i64,  transform: Transform) {
+        self.transform.insert(id, transform);
     }
 
     pub(crate) fn add_block(&mut self, line: i64) {
@@ -110,7 +118,9 @@ impl Station {
         }
         dump += &self.stop.to_string();
         dump += &self.window.dump();
-        dump += &self.transform.dump();
+        if let Some(transform) = self.transform.get(&line) {
+            dump += &transform.dump();
+        }
         dump
     }
 
@@ -125,6 +135,10 @@ impl Station {
             platform.operate(control)
         });
         sender
+    }
+
+    fn add_explicit_output(&self, output: Field) {
+        todo!()
     }
 }
 
@@ -246,9 +260,9 @@ mod tests {
     #[test]
     fn sql_parse_output() {
         let stencils = vec![
-            //"1(type:float)",// scalar
+            "1(type:float)",// scalar
             //"1({name:(type:string), temperature:(type:number)})", // named tuple
-            //"1([type:number, length:3])" // limited array
+            //"1([type:number, length:3])" // array
         ];
 
         for stencil in stencils {
@@ -359,7 +373,7 @@ mod tests {
         let time = duration.clone();
 
 
-        station.transform = match duration  {
+        station.set_transform(0,  match duration  {
             0 => {
                 Transform::Func(FuncTransform::new(Arc::new(move |num, train| {
                     Train::from(train)
@@ -370,7 +384,7 @@ mod tests {
                     sleep(Duration::from_millis(time));
                     Train::from(train)
                 })))
-        } };
+        } });
 
         let (c_tx, c_rx) = unbounded();
 

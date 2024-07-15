@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread;
@@ -11,7 +12,7 @@ use crate::processing::sender::Sender;
 use crate::processing::station::{Command, Station};
 use crate::processing::station::Command::{OKAY, READY, THRESHOLD};
 use crate::processing::Train;
-use crate::processing::transform::{Transform};
+use crate::processing::transform::{Taker, Transform};
 use crate::processing::window::Window;
 use crate::util::{GLOBAL_ID, Rx};
 
@@ -20,8 +21,8 @@ pub(crate) struct Platform {
     control: Receiver<Command>,
     receiver: Rx<Train>,
     sender: Option<Sender>,
-    transform: Option<Transform>,
-    window: Option<Window>,
+    transform: HashMap<i64, Transform>,
+    window: Window,
     stop: i64,
     blocks: Vec<i64>,
     inputs: Vec<i64>,
@@ -45,8 +46,8 @@ impl Platform {
             control: control.1,
             receiver,
             sender: Some(sender),
-            transform: Some(transform),
-            window: Some(window),
+            transform,
+            window,
             stop,
             blocks,
             inputs,
@@ -54,20 +55,12 @@ impl Platform {
         }, control.0)
     }
     pub(crate) fn operate(&mut self, control: Arc<channel::Sender<Command>>) {
-        let transform = self.transform.take().unwrap();
+        let process = optimize(self.stop.clone(), self.transform.clone(), self.window.windowing(), self.sender.take().unwrap());
         let stop = self.stop.clone();
-        let mut window = self.window.take().unwrap().windowing();
-        let sender = self.sender.take().unwrap();
         let timeout = Duration::from_nanos(10);
         let mut threshold = 2000;
         let mut too_high = false;
 
-        let process = Box::new(move |trains: &mut Vec<Train>| {
-            let windowed = window.take(trains);
-            let mut transformed = transform.apply(stop, windowed);
-            transformed.last = stop;
-            sender.send(transformed);
-        });
 
         let mut block = Block::new(self.inputs.clone(), self.blocks.clone(), process);
 
@@ -106,5 +99,36 @@ impl Platform {
                 }
             };
         }
+    }
+}
+
+fn optimize(stop: i64, transforms: HashMap<i64, Transform>, mut window: Box<dyn Taker>, sender: Sender) -> Box<dyn FnMut(&mut Vec<Train>)> {
+    return if transforms.is_empty() {
+        Box::new(move |trains| {
+            let windowed = window.take(trains);
+            let mut train:Train = windowed.into();
+            train.last = stop;
+            sender.send(train);
+        })
+    }else if transforms.len() == 1 {
+        Box::new(move |trains|{
+            let windowed = window.take(trains);
+            let mut train = transforms.values().last().unwrap().apply(stop, windowed);
+            train.last = stop;
+            sender.send(train);
+        })
+    }else{
+        Box::new(move |trains| {
+            let windowed = window.take(trains);
+            let mut trains = HashMap::new();
+            for train in windowed {
+                trains.entry(train.last).or_insert_with(Vec::new).push(train);
+            }
+            for (num, trains) in trains {
+                let mut train = transforms.get(&num).unwrap().apply(stop, trains);
+                train.last = stop;
+                sender.send_to(num, train);
+            }
+        })
     }
 }

@@ -1,15 +1,13 @@
 use std::cmp::PartialEq;
-use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::ops::Add;
 
 use crate::value::{HoBool, HoFloat, HoInt};
-use crate::value::map::HoMap;
 use crate::value::null::HoNull;
 use crate::value::string::HoString;
 use crate::value::tuple::HoTuple;
-use crate::value::Value::{Bool, Float, Int, Map, Null, Text, Tuple};
+use crate::value::Value::{Bool, Float, Int, Null, Text, Tuple};
 
 pub enum ValType {
     Integer,
@@ -17,8 +15,19 @@ pub enum ValType {
     Text,
     Bool,
     Tuple,
-    Map,
     Null,
+}
+
+impl ValType {
+    pub(crate) fn parse(stencil: &str) -> ValType {
+        match stencil.to_lowercase().as_str() {
+            "int" | "integer" | "i" => Integer,
+            "float" | "f" => ValType::Float,
+            "bool" | "boolean" | "b" => ValType::Bool,
+            "text" | "string" | "s" => ValType::Text,
+            _ => panic!("Could not parse the type of the value.")
+        }
+    }
 }
 
 #[derive(Eq, Hash, Clone, Debug)]
@@ -28,7 +37,6 @@ pub enum Value {
     Bool(HoBool),
     Text(Box<HoString>),
     Tuple(HoTuple),
-    Map(HoMap),
     Null(HoNull),
 }
 
@@ -53,10 +61,6 @@ impl Value {
         Tuple(HoTuple::new(tuple))
     }
 
-    pub fn map(map: HashMap<Value, Value>) -> Value {
-        Map(HoMap::new(map))
-    }
-
     pub fn null() -> Value {
         Null(HoNull {})
     }
@@ -74,6 +78,7 @@ macro_rules! value_display {
 }
 
 pub(crate) use value_display;
+use crate::value::ValType::Integer;
 
 impl Display for Value {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -84,7 +89,6 @@ impl Display for Value {
             Bool(v) => v.fmt(f),
             Tuple(v) => v.fmt(f),
             Null(v) => v.fmt(f),
-            Map(v) => v.fmt(f)
         }
     }
 }
@@ -138,12 +142,6 @@ impl PartialEq for Value {
             Tuple(a) => {
                 match other {
                     Tuple(b) => b == a,
-                    _ => false
-                }
-            }
-            Map(a) => {
-                match other {
-                    Map(b) => b == a,
                     _ => false
                 }
             }
