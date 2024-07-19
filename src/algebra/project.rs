@@ -26,14 +26,14 @@ impl RefHandler for ProjectHandler {
     }
 
     fn clone(&self) -> Box<dyn RefHandler + Send + 'static> {
-        Box::new( ProjectHandler{ input: self.input.clone(), project: self.project.clone() })
+        Box::new( ProjectHandler{ input: self.input.clone(), project: self.project })
 
     }
 }
 
 impl Algebra for TrainProject {
     fn get_handler(&mut self) -> Box<dyn RefHandler + Send> {
-        let project = self.project.clone();
+        let project = self.project;
         let input = self.input.get_handler();
         Box::new(ProjectHandler{input, project})
     }

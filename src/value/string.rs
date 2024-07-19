@@ -10,7 +10,7 @@ pub struct HoString(pub String);
 
 impl Valuable for HoString {
     fn type_(&self) -> ValType {
-        return Text;
+        Text
     }
 }
 

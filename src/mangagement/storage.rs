@@ -21,6 +21,6 @@ impl Storage {
 
     pub fn add_plan(&mut self, plan: Plan) {
         let mut plans = self.plans.lock().unwrap();
-        plans.insert(plan.id.clone(), plan);
+        plans.insert(plan.id, plan);
     }
 }

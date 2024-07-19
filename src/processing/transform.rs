@@ -27,7 +27,7 @@ impl Default for Transform {
 
 impl Transform {
     pub fn parse(stencil: String) -> Result<Transform, String> {
-        match stencil.split_once("|") {
+        match stencil.split_once('|') {
             None => Err("Wrong transform format.".to_string()),
             Some((module, logic)) => match Language::try_from(module) {
                 Ok(lang) => Ok(Lang(LanguageTransform::parse(lang, logic))),
@@ -77,8 +77,8 @@ impl LanguageTransform {
 
 fn build_transformer(language: &Language, query: &str) -> Result<Box<dyn RefHandler + Send + 'static>, String> {
     let algebra = match language {
-        Language::SQL => language::sql::transform(query)?,
-        Language::MQL => language::mql::transform(query)?
+        Language::Sql => language::sql::transform(query)?,
+        Language::Mql => language::mql::transform(query)?
     };
     algebra::functionize(algebra)
 }
@@ -119,7 +119,7 @@ impl Default for FuncTransform {
 
 impl FuncTransform {
     pub(crate) fn new_boxed(func: fn(i64, Vec<Train>) -> Train) -> Self {
-        return Self::new(Arc::new(func));
+        Self::new(Arc::new(func))
     }
 
     pub(crate) fn new(func: Arc<(dyn Fn(i64, Vec<Train>) -> Train + Send + Sync)>) -> Self {
@@ -130,7 +130,7 @@ impl FuncTransform {
         Self::new(Arc::new(move |stop, wagons: Vec<Train>| {
             let mut values: Vec<Value> = vec![];
             for mut train in wagons {
-                let mut vals = train.values.take().unwrap().into_iter().map(|v| func(v)).collect();
+                let mut vals = train.values.take().unwrap().into_iter().map(func).collect();
                 values.append(&mut vals);
             }
 

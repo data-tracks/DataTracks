@@ -40,7 +40,7 @@ impl Station {
     pub(crate) fn new(stop: i64) -> Self {
         let incoming = new_channel();
         let control = unbounded();
-        let station = Station {
+        Station {
             id: GLOBAL_ID.new_id(),
             stop,
             incoming: (incoming.0, incoming.1, incoming.2),
@@ -51,8 +51,7 @@ impl Station {
             inputs: vec![],
             layout: Field::default(),
             control: (control.0.clone(), control.1.clone()),
-        };
-        station
+        }
     }
 
     pub(crate) fn parse(last: Option<i64>, parts: Vec<(PlanStage, String)>) -> Self {
@@ -81,7 +80,7 @@ impl Station {
     }
 
     pub(crate) fn close(&mut self) {
-        self.control.0.send(Command::STOP(0)).expect("TODO: panic message");
+        self.control.0.send(Command::Stop(0)).expect("TODO: panic message");
     }
 
     pub(crate) fn set_stop(&mut self, stop: i64) {
@@ -143,11 +142,11 @@ impl Station {
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Command {
-    STOP(i64),
-    READY(i64),
-    OVERFLOW(i64),
-    THRESHOLD(i64),
-    OKAY(i64),
+    Stop(i64),
+    Ready(i64),
+    Overflow(i64),
+    Threshold(i64),
+    Okay(i64),
 }
 
 
@@ -161,7 +160,7 @@ mod tests {
 
     use crate::processing::plan::Plan;
     use crate::processing::station::{Command, Station};
-    use crate::processing::station::Command::{OKAY, READY, THRESHOLD};
+    use crate::processing::station::Command::{Okay, Ready, Threshold};
     use crate::processing::train::Train;
     use crate::processing::transform::{FuncTransform, Transform};
     use crate::util::{new_channel, Rx, Tx};
@@ -276,14 +275,14 @@ mod tests {
         let (mut station, train_sender, rx, c_rx, a_tx) = create_test_station(10);
 
         let sender = station.operate(Arc::clone(&a_tx));
-        sender.send(THRESHOLD(3)).unwrap();
+        sender.send(Threshold(3)).unwrap();
 
         for _ in 0..1_000 {
             train_sender.send(Train::new(0, vec![Value::int(3)])).unwrap();
         }
 
         // the station should start, the threshold should be reached and after some time be balanced
-        for state in vec![READY(0), THRESHOLD(0), OKAY(0)] {
+        for state in vec![Ready(0), Threshold(0), Okay(0)] {
             assert_eq!(state, c_rx.recv().unwrap())
         }
     }
@@ -293,7 +292,7 @@ mod tests {
         let (mut station, train_sender, rx, c_rx, a_tx) = create_test_station(100);
 
         let sender = station.operate(Arc::clone(&a_tx));
-        sender.send(THRESHOLD(3)).unwrap();
+        sender.send(Threshold(3)).unwrap();
         station.operate(Arc::clone(&a_tx));
 
         for _ in 0..1_000 {
@@ -301,7 +300,7 @@ mod tests {
         }
 
         // the station should open a platform, the station starts another platform,  the threshold should be reached and after some time be balanced
-        for state in vec![READY(0), READY(0), THRESHOLD(0), OKAY(0)] {
+        for state in vec![Ready(0), Ready(0), Threshold(0), Okay(0)] {
             assert_eq!(state, c_rx.recv().unwrap())
         }
     }
@@ -320,7 +319,7 @@ mod tests {
         }
 
         // the station should open a platform, the station starts another platform,  the threshold should be reached and after some time be balanced
-        for state in vec![READY(0), READY(0)] {
+        for state in vec![Ready(0), Ready(0)] {
             assert_eq!(state, c_rx.recv().unwrap())
         }
         let mut values = vec![];
@@ -344,7 +343,7 @@ mod tests {
         }
 
         // the station should open a platform
-        for state in vec![READY(0)] {
+        for state in vec![Ready(0)] {
             assert_eq!(state, c_rx.recv().unwrap())
         }
         let time = Instant::now();

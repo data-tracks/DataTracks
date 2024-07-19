@@ -24,9 +24,10 @@ impl PartialEq for HoTuple {
     }
 }
 
-impl Into<Value> for Vec<Value> {
-    fn into(self) -> Value {
-        Value::tuple(self)
+impl From<Vec<Value>> for Value {
+
+    fn from(value: Vec<Value>) -> Self {
+        Value::tuple(value)
     }
 }
 

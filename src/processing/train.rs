@@ -1,5 +1,7 @@
 use crate::value::Value;
 
+pub type MutWagonsFunc = Box<dyn FnMut(&mut Vec<Train>)>;
+
 #[derive(Clone)]
 pub struct Train {
     pub last: i64,
@@ -26,7 +28,7 @@ impl From<&mut Train> for Train {
 impl From<Vec<Train>> for Train {
     fn from(wagons: Vec<Train>) -> Self {
         if wagons.len() == 1 {
-            return Train::from(wagons[0].clone());
+            return wagons[0].clone()
         }
 
         let mut values = vec![];

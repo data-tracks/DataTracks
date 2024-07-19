@@ -9,7 +9,7 @@ pub struct HoBool(pub bool);
 
 impl Valuable for HoBool {
     fn type_(&self) -> ValType {
-        return ValType::Bool;
+        ValType::Bool
     }
 }
 

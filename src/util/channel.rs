@@ -55,13 +55,13 @@ where
         let mut vec = self.channel.buffer.lock().unwrap();
         if !vec.is_empty() {
             let element = vec.pop_front();
-            return match element {
+            match element {
                 None => Err("Could not get error".to_string()),
                 Some(e) => {
                     self.channel.size.fetch_sub(1, Ordering::SeqCst);
                     Ok(e)
                 }
-            };
+            }
         } else {
             Err("Could not get error".to_string())
         }

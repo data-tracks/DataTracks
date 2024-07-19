@@ -17,7 +17,7 @@ impl HoFloat {
 
     pub(crate) fn new(value: f64) -> Self {
         let parsed = value.to_string();
-        let split = parsed.split_once(".");
+        let split = parsed.split_once('.');
         match split {
             None => HoFloat(value as i64, 0),
             Some((a, b)) => HoFloat(a.parse().unwrap(), b.parse().unwrap())

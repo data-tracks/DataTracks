@@ -10,8 +10,9 @@ use crossbeam::channel::{Receiver, unbounded};
 use crate::processing::block::Block;
 use crate::processing::sender::Sender;
 use crate::processing::station::{Command, Station};
-use crate::processing::station::Command::{OKAY, READY, THRESHOLD};
+use crate::processing::station::Command::{Okay, Ready, Threshold};
 use crate::processing::Train;
+use crate::processing::train::MutWagonsFunc;
 use crate::processing::transform::{Taker, Transform};
 use crate::processing::window::Window;
 use crate::util::{GLOBAL_ID, Rx};
@@ -55,8 +56,8 @@ impl Platform {
         }, control.0)
     }
     pub(crate) fn operate(&mut self, control: Arc<channel::Sender<Command>>) {
-        let process = optimize(self.stop.clone(), self.transform.clone(), self.window.windowing(), self.sender.take().unwrap());
-        let stop = self.stop.clone();
+        let process = optimize(self.stop, self.transform.clone(), self.window.windowing(), self.sender.take().unwrap());
+        let stop = self.stop;
         let timeout = Duration::from_nanos(10);
         let mut threshold = 2000;
         let mut too_high = false;
@@ -64,32 +65,30 @@ impl Platform {
 
         let mut block = Block::new(self.inputs.clone(), self.blocks.clone(), process);
 
-        control.send(READY(stop)).unwrap();
+        control.send(Ready(stop)).unwrap();
 
         loop {
             // are we struggling to handle incoming
             let current = self.incoming.load(Ordering::SeqCst);
             if current > threshold && !too_high {
-                control.send(THRESHOLD(stop)).unwrap();
+                control.send(Threshold(stop)).unwrap();
                 too_high = true;
             } else if current < threshold && too_high {
-                control.send(OKAY(stop)).unwrap();
+                control.send(Okay(stop)).unwrap();
                 too_high = false;
             }
 
             // did we get a command?
-            match self.control.try_recv() {
-                Ok(command) => {
+            if let Ok(command) = self.control.try_recv() {
                     match command {
-                        Command::STOP(_) => return,
-                        THRESHOLD(th) => {
+                        Command::Stop(_) => return,
+                        Threshold(th) => {
                             threshold = th as u64;
                         }
                         _ => {}
                     }
                 }
-                _ => {}
-            };
+
             match self.receiver.try_recv() {
                 Ok(train) => {
                     block.next(train); // window takes precedence to
@@ -102,7 +101,7 @@ impl Platform {
     }
 }
 
-fn optimize(stop: i64, transforms: HashMap<i64, Transform>, mut window: Box<dyn Taker>, sender: Sender) -> Box<dyn FnMut(&mut Vec<Train>)> {
+fn optimize(stop: i64, transforms: HashMap<i64, Transform>, mut window: Box<dyn Taker>, sender: Sender) -> MutWagonsFunc {
     return if transforms.is_empty() {
         Box::new(move |trains| {
             let windowed = window.take(trains);

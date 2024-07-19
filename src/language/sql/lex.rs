@@ -57,7 +57,7 @@ pub(crate) enum Token {
 }
 
 pub fn parse(query: &str) -> Result<SqlStatement, String> {
-    let mut lexer = crate_lexer(&query);
+    let mut lexer = crate_lexer(query);
     parse_query(&mut lexer)
 }
 
@@ -78,9 +78,9 @@ fn parse_select(lexer: &mut BufferedLexer) -> Result<SqlStatement, String> {
     Ok(SqlStatement::Select(SqlSelect::new(fields, froms)))
 }
 
-fn parse_expressions(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> Result<Vec<SqlStatement>, String> {
+fn parse_expressions(lexer: &mut BufferedLexer, stops: &[Token]) -> Result<Vec<SqlStatement>, String> {
     let mut expressions = vec![];
-    let mut stops = stops.clone();
+    let mut stops = stops.to_owned();
     stops.push(Comma);
     expressions.push(parse_expression(lexer, &stops));
 

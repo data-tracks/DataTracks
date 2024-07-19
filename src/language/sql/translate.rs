@@ -12,9 +12,8 @@ pub(crate) fn translate(query: SqlStatement) -> Result<AlgebraType, String> {
         return Ok(scans.pop().unwrap())
     }
 
-    match scans {
-        _ => Err("Not supported.".to_string())
-    }
+
+    Err("Not supported.".to_string())
 }
 
 fn handle_select(query: SqlSelect) -> Result<Vec<AlgebraType>, String> {
@@ -31,13 +30,13 @@ fn handle_from(from: SqlStatement) -> Result<AlgebraType, String> {
 
 fn handle_table(identifier: SqlIdentifier) -> Result<AlgebraType, String> {
     let scan = match identifier.names[0].as_str() {
-        s if s.starts_with("$") => s.strip_prefix("$")
+        s if s.starts_with('$') => s.strip_prefix('$')
             .ok_or("Prefix not found".to_string())
             .and_then(|rest| rest.parse::<i64>().map_err(|_| "Could not parse number".to_string()))
             .map(|num| Scan(TrainScan::new(num))).unwrap(),
         _ => Err("Could not translate table".to_string())?
     };
-    if let Some(_) = identifier.alias {
+    if identifier.alias.is_some() {
         Err("Alias is not supported.".to_string())?
     };
     Ok(scan)

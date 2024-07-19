@@ -41,7 +41,7 @@ impl Window {
         if stencil.contains('@') {
             return Interval(IntervalWindow::parse(stencil));
         }
-        return Back(BackWindow::parse(stencil));
+        Back(BackWindow::parse(stencil))
     }
 }
 
@@ -93,7 +93,7 @@ impl Taker for BackWindow {
 }
 
 fn get_duration(time: i64, time_unit: TimeUnit) -> Duration {
-    return match time_unit {
+    match time_unit {
         TimeUnit::Millis => Duration::milliseconds(time),
         TimeUnit::Seconds => Duration::seconds(time),
         TimeUnit::Minutes => Duration::minutes(time),
@@ -174,7 +174,7 @@ mod test {
 
     use crossbeam::channel::unbounded;
 
-    use crate::processing::station::Command::READY;
+    use crate::processing::station::Command::Ready;
     use crate::processing::station::Station;
     use crate::processing::train::Train;
     use crate::processing::window::{BackWindow, Window};
@@ -226,7 +226,7 @@ mod test {
         station.add_out(0, tx).unwrap();
         station.operate(Arc::new(control.0));
         // wait for read
-        assert_eq!(READY(0), control.1.recv().unwrap());
+        assert_eq!(Ready(0), control.1.recv().unwrap());
 
         for value in &values {
             station.send(Train::new(0, vec![value.clone()])).unwrap();

@@ -9,13 +9,16 @@ use crate::value::string::HoString;
 use crate::value::tuple::HoTuple;
 use crate::value::Value::{Bool, Float, Int, Null, Text, Tuple};
 
+#[derive(PartialEq, Debug, Clone)]
 pub enum ValType {
     Integer,
     Float,
     Text,
     Bool,
     Tuple,
+    Dict,
     Null,
+    Any
 }
 
 impl ValType {
@@ -134,10 +137,7 @@ impl PartialEq for Value {
                 }
             }
             Null(_) => {
-                match other {
-                    Null(_) => true,
-                    _ => false
-                }
+                matches!(other, Null(_))
             }
             Tuple(a) => {
                 match other {
@@ -149,27 +149,28 @@ impl PartialEq for Value {
     }
 }
 
-impl Into<Value> for i64 {
-    fn into(self) -> Value {
-        Value::int(self)
+impl From<i64> for Value {
+    fn from(value: i64) -> Self {
+        Value::int(value)
     }
 }
 
-impl Into<Value> for f64 {
-    fn into(self) -> Value {
-        Value::float(self)
+impl From<f64> for Value {
+    fn from(value: f64) -> Self {
+        Value::float(value)
     }
 }
 
-impl Into<Value> for &str {
-    fn into(self) -> Value {
-        Value::text(self)
+impl From<&str> for Value {
+    fn from(value: &str) -> Self {
+        Value::text(value)
     }
 }
 
-impl Into<Value> for bool {
-    fn into(self) -> Value {
-        Value::bool(self)
+impl From<bool> for Value {
+
+    fn from(value: bool) -> Self {
+        Value::bool(value)
     }
 }
 

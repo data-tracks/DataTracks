@@ -54,7 +54,7 @@ impl Plan {
     }
 
     pub(crate) fn halt(&mut self) {
-        for (_, station) in &mut self.stations {
+        for station in self.stations.values_mut() {
             station.close();
         }
     }
@@ -90,7 +90,7 @@ impl Plan {
         self.connect_destinations().unwrap();
         self.connect_sources().unwrap();
         for station in &mut self.stations {
-            self.controls.entry(station.1.id).or_insert_with(Vec::new).push(station.1.operate(Arc::clone(&self.control_receiver.0)));
+            self.controls.entry(station.1.id).or_default().push(station.1.operate(Arc::clone(&self.control_receiver.0)));
         }
 
         // wait for all stations to be ready
@@ -99,7 +99,7 @@ impl Plan {
             match self.control_receiver.1.recv() {
                 Ok(command) => {
                     match command {
-                        Command::READY(id) => { readys.push(id) }
+                        Command::Ready(id) => { readys.push(id) }
                         _ => todo!()
                     }
                 }
@@ -109,17 +109,17 @@ impl Plan {
 
 
         for destination in &mut self.destinations {
-            self.controls.entry(destination.1.get_id()).or_insert_with(Vec::new).push(destination.1.operate(Arc::clone(&self.control_receiver.0)));
+            self.controls.entry(destination.1.get_id()).or_default().push(destination.1.operate(Arc::clone(&self.control_receiver.0)));
         }
 
         for source in &mut self.sources {
-            self.controls.entry(source.1.get_id()).or_insert_with(Vec::new).push(source.1.operate(Arc::clone(&self.control_receiver.0)));
+            self.controls.entry(source.1.get_id()).or_default().push(source.1.operate(Arc::clone(&self.control_receiver.0)));
         }
     }
 
     pub(crate) fn clone_platform(&mut self, num: i64) {
         let station = self.stations.get_mut(&num).unwrap();
-        self.controls.entry(num).or_insert_with(Vec::new).push(station.operate(Arc::clone(&self.control_receiver.0)))
+        self.controls.entry(num).or_default().push(station.operate(Arc::clone(&self.control_receiver.0)))
     }
 
     fn connect_stops(&mut self) -> Result<(), String> {
@@ -127,11 +127,11 @@ impl Plan {
             let mut stops_iter = stops.iter();
 
             if let Some(first) = stops_iter.next() {
-                let mut last_station = first.clone();
+                let mut last_station = *first;
 
                 for num in stops_iter {
                     let next_station = self.stations.get_mut(num).ok_or("Could not find target station".to_string())?;
-                    let next_stop_id = next_station.stop.clone();
+                    let next_stop_id = next_station.stop;
 
                     next_station.add_insert(last_station);
 
@@ -150,7 +150,7 @@ impl Plan {
     pub(crate) fn parse(stencil: &str) -> Self {
         let mut plan = Plan::default();
 
-        let lines = stencil.split("\n");
+        let lines = stencil.split('\n');
         for line in lines.enumerate() {
             plan.parse_line(line.0 as i64, line.1);
         }
@@ -171,25 +171,20 @@ impl Plan {
 
             match char {
                 '-' => {
-                    match stage {
-                        Num => current.push((stage, temp.clone())),
-                        _ => {}
-                    };
+                    if let Num = stage { current.push((stage, temp.clone())) };
 
-                    let station = Station::parse(self.lines.get(&line).map(|vec: &Vec<i64>| vec.last().cloned()).flatten(), current.clone());
+                    let station = Station::parse(self.lines.get(&line).and_then(|vec: &Vec<i64>| vec.last().cloned()), current.clone());
                     self.build(line, station);
                     current.clear();
                     temp = "".to_string();
                     stage = Num;
                 }
                 '{' | '(' | '[' => {
-                    match stage {
-                        Num => {
-                            current.push((stage, temp.clone()));
-                            temp = "".to_string();
-                        }
-                        _ => {}
-                    };
+                    if let Num = stage {
+                        current.push((stage, temp.clone()));
+                        temp = "".to_string();
+                    }
+
                     match char {
                         '[' => stage = WindowStage,
                         '(' => stage = LayoutStage,
@@ -221,12 +216,12 @@ impl Plan {
             current.push((stage, temp.clone()));
         }
         if !current.is_empty() {
-            let station = Station::parse(self.lines.get(&line).map(|vec: &Vec<i64>| vec.last().cloned()).flatten(), current.clone());
+            let station = Station::parse(self.lines.get(&line).and_then(|vec: &Vec<i64>| vec.last().cloned()), current.clone());
             self.build(line, station);
         }
     }
     fn build(&mut self, line_num: i64, station: Station) {
-        self.lines.entry(line_num).or_insert_with(Vec::new).push(station.stop);
+        self.lines.entry(line_num).or_default().push(station.stop);
         let stop = station.stop;
         let station = match self.stations.remove(&stop) {
             None => station,
@@ -239,7 +234,7 @@ impl Plan {
     }
 
     fn build_split(&mut self, line_num: i64, stop_num: i64) -> Result<(), String> {
-        self.lines.entry(line_num).or_insert_with(Vec::new).push(stop_num);
+        self.lines.entry(line_num).or_default().push(stop_num);
         Ok(())
     }
 
@@ -448,7 +443,7 @@ mod dummy {
     use crate::processing::destination::Destination;
     use crate::processing::source::Source;
     use crate::processing::station::Command;
-    use crate::processing::station::Command::{READY, STOP};
+    use crate::processing::station::Command::{Ready, Stop};
     use crate::processing::train::Train;
     use crate::util::{GLOBAL_ID, new_channel, Rx, Tx};
     use crate::value::Value;
@@ -483,12 +478,12 @@ mod dummy {
             let (tx, rx) = unbounded();
 
             spawn(move || {
-                control.send(READY(stop)).unwrap();
+                control.send(Ready(stop)).unwrap();
                 // wait for ready from callee
                 match rx.recv() {
                     Ok(command) => {
                         match command {
-                            READY(id) => {}
+                            Ready(id) => {}
                             _ => panic!()
                         }
                     }
@@ -503,7 +498,7 @@ mod dummy {
                     }
                     sleep(delay);
                 }
-                control.send(STOP(stop)).unwrap()
+                control.send(Stop(stop)).unwrap()
             });
             tx
         }
@@ -554,12 +549,12 @@ mod dummy {
             let (tx, rx) = unbounded();
 
             spawn(move || {
-                control.send(READY(stop)).unwrap();
+                control.send(Ready(stop)).unwrap();
                 let mut shared = local.lock().unwrap();
                 loop {
                     match rx.try_recv() {
                         Ok(command) => match command {
-                            STOP(_) => break,
+                            Stop(_) => break,
                             _ => {}
                         },
                         _ => {}
@@ -575,7 +570,7 @@ mod dummy {
                     }
                 }
                 drop(shared);
-                control.send(STOP(stop))
+                control.send(Stop(stop))
             });
             tx
         }
@@ -606,7 +601,7 @@ mod stencil {
     use crate::processing::plan::dummy::{DummyDestination, DummySource};
     use crate::processing::plan::Plan;
     use crate::processing::source::Source;
-    use crate::processing::station::Command::{READY, STOP};
+    use crate::processing::station::Command::{Ready, Stop};
     use crate::processing::station::Station;
     use crate::processing::Train;
     use crate::processing::transform::{FuncTransform, Transform};
@@ -710,10 +705,10 @@ mod stencil {
         plan.operate();
 
         // start dummy source
-        plan.send_control(id, READY(3));
+        plan.send_control(id, Ready(3));
 
         // source ready + stop, destination ready + stop
-        for _command in vec![READY(3), STOP(3), READY(3), STOP(3)] {
+        for _command in vec![Ready(3), Stop(3), Ready(3), Stop(3)] {
             plan.control_receiver.1.recv().unwrap();
         }
 
@@ -750,11 +745,11 @@ mod stencil {
         plan.operate();
 
         // send ready
-        plan.send_control(id1, READY(0));
-        plan.send_control(id4, READY(4));
+        plan.send_control(id1, Ready(0));
+        plan.send_control(id4, Ready(4));
 
         // source 1 ready + stop, source 4 ready + stop, destination ready + stop
-        for com in vec![READY(1), STOP(1), READY(4), STOP(4), READY(3), STOP(3)] {
+        for com in vec![Ready(1), Stop(1), Ready(4), Stop(4), Ready(3), Stop(3)] {
             match plan.control_receiver.1.recv() {
                 Ok(command) => {}
                 Err(_) => panic!()
@@ -809,14 +804,14 @@ mod stencil {
 
         plan.operate();
         let now = SystemTime::now();
-        plan.send_control(id, READY(0));
+        plan.send_control(id, Ready(0));
         plan.clone_platform(0);
         plan.clone_platform(0);
         plan.clone_platform(0);
 
 
         // source 1 ready + stop, each platform ready, destination ready (+ stop only after stopped)
-        for com in vec![READY(1), STOP(1), READY(0), READY(0), READY(0), READY(0), READY(0)] {
+        for com in vec![Ready(1), Stop(1), Ready(0), Ready(0), Ready(0), Ready(0), Ready(0)] {
             match plan.control_receiver.1.recv() {
                 Ok(command) => {}
                 Err(_) => panic!()

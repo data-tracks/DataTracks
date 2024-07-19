@@ -53,7 +53,7 @@ where
 
 
 
-impl<'a, H> RefHandler for JoinHandler<H>
+impl<H> RefHandler for JoinHandler<H>
 where
     H: PartialEq + 'static,
 {
@@ -78,11 +78,11 @@ where
 
     fn clone(&self) -> Box<dyn RefHandler + Send + 'static> {
         Box::new(JoinHandler{
-            left_hash: self.left_hash.clone(),
-            right_hash: self.right_hash.clone(),
+            left_hash: self.left_hash,
+            right_hash: self.right_hash,
             left: self.left.clone(),
             right: self.right.clone(),
-            out: self.out.clone(),
+            out: self.out,
         })
     }
 }

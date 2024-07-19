@@ -16,19 +16,20 @@ impl Display for TimeUnit{
     }
 }
 
-const TIME_UNIT_MS: &'static str = "ms";
+const TIME_UNIT_MS: &str = "ms";
 
-const TIME_UNIT_S: &'static str = "s";
+const TIME_UNIT_S: &str = "s";
 
-const TIME_UNIT_M: &'static str = "m";
+const TIME_UNIT_M: &str = "m";
 
-const TIME_UNIT_H: &'static str = "h";
+const TIME_UNIT_H: &str = "h";
 
-const TIME_UNIT_D: &'static str = "d";
+const TIME_UNIT_D: &str = "d";
 
-impl Into<&str> for &TimeUnit {
-    fn into(self) -> &'static str {
-        match self {
+impl From<&TimeUnit> for &str {
+
+    fn from(value: &TimeUnit) -> Self {
+        match value {
             TimeUnit::Millis => TIME_UNIT_MS,
             TimeUnit::Seconds => TIME_UNIT_S,
             TimeUnit::Minutes => TIME_UNIT_M,

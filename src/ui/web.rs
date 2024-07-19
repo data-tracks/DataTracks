@@ -61,7 +61,7 @@ async fn fallback_handler() -> impl IntoResponse {
 }
 
 async fn get_plans(State(state): State<WebState>) -> impl IntoResponse {
-    let plans = state.storage.lock().unwrap().plans.lock().unwrap().values().into_iter().map(|plan| serde_json::to_value(&plan).unwrap()).collect::<Value>();
+    let plans = state.storage.lock().unwrap().plans.lock().unwrap().values().map(|plan| serde_json::to_value(plan).unwrap()).collect::<Value>();
     let msg = json!( {"plans": &plans});
     Json(msg)
 }

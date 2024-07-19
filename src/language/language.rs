@@ -1,25 +1,25 @@
 use crate::algebra::AlgebraType;
 use crate::language::{mql, sql};
-use crate::language::Language::{MQL, SQL};
+use crate::language::Language::{Mql, Sql};
 
 #[derive(Clone)]
 pub enum Language {
-    SQL,
-    MQL,
+    Sql,
+    Mql,
 }
 
 impl Language {
     pub(crate) fn name(&self) -> String {
         match self {
-            SQL => "sql".to_string(),
-            MQL => "mql".to_string()
+            Sql => "sql".to_string(),
+            Mql => "mql".to_string()
         }
     }
 
     fn parse(&self, query: &str) -> Result<AlgebraType, String> {
         match self {
-            SQL => sql::transform(query),
-            MQL => mql::transform(query),
+            Sql => sql::transform(query),
+            Mql => mql::transform(query),
         }
     }
 }
@@ -29,8 +29,8 @@ impl TryFrom<&str> for Language {
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         match value {
-            "sql" => Ok(SQL),
-            "mql" => Ok(MQL),
+            "sql" => Ok(Sql),
+            "mql" => Ok(Mql),
             _ => Err(format!("invalid language: {}", value))
         }
     }

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::processing::train::Train;
 use crate::util::Tx;
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub(crate) struct Sender {
     outs: HashMap<i64, Tx<Train>>,
 }
@@ -14,15 +14,9 @@ impl Sender {
     }
 }
 
-impl Default for Sender {
-    fn default() -> Self {
-        Sender { outs: HashMap::new() }
-    }
-}
-
 impl Sender {
     pub(crate) fn add(&mut self, id: i64, sender: Tx<Train>) {
-        self.outs.insert(id, sender.into());
+        self.outs.insert(id, sender);
     }
 
     pub(crate) fn send(&self, train: Train) {
