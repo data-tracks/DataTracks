@@ -33,4 +33,14 @@ impl BufferedReader {
     pub(crate) fn peek(&mut self, pos: usize) -> Option<char> {
         self.string.chars().nth(self.position + pos - 1)
     }
+
+    pub(crate) fn consume_spaces(&mut self){
+        while let Some(char) = self.peek_next() {
+            if char == ' '{
+                self.next();
+            }else {
+                return;
+            }
+        }
+    }
 }

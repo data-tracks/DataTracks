@@ -38,14 +38,6 @@ pub trait RefHandler: Send {
 }
 
 
-pub trait CloneableRefHandler: RefHandler {
-    fn clone(&self) -> Box<dyn RefHandler>;
-}
-
-pub trait Handler {
-    fn process(&self, train: Train) -> Train;
-}
-
 
 
 

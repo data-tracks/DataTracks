@@ -102,7 +102,7 @@ impl RefHandler for FuncValueHandler {
     }
 
     fn clone(&self) -> Box<dyn RefHandler + Send + 'static> {
-        Box::new(FuncValueHandler { func: self.func.clone() })
+        Box::new(FuncValueHandler { func: self.func })
     }
 }
 

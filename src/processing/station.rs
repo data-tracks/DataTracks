@@ -134,8 +134,8 @@ impl Station {
         sender
     }
 
-    fn add_explicit_output(&self, output: Field) {
-        todo!()
+    fn add_explicit_output(&mut self, output: Field) {
+        self.layout = output
     }
 }
 
@@ -257,9 +257,9 @@ mod tests {
     #[test]
     fn sql_parse_output() {
         let stencils = vec![
-            "1(type:float)",// scalar
-            //"1({name:(type:string), temperature:(type:number)})", // named tuple
-            //"1([type:number, length:3])" // array
+            "1(f)",// scalar
+            "1(d{name:t, temperature:f})", // named tuple
+            "1(a(length: 3)i)" // array
         ];
 
         for stencil in stencils {

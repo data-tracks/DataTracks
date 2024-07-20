@@ -1,8 +1,6 @@
 use std::collections::HashMap;
-
-use crate::processing::layout::OutputType::{Any, Array, Boolean, Float, Integer, Text};
+use crate::processing::layout::OutputType::{Any, Array, Boolean, Float, Integer, Text, Tuple};
 use crate::util::BufferedReader;
-use crate::value::ValType;
 
 #[derive(PartialEq, Debug, Clone)]
 pub(crate) struct Field {
@@ -48,11 +46,9 @@ impl Field{
 }
 
 fn try_parse(reader: &mut BufferedReader) -> Option<Field> {
-    while let Some(char) = reader.next() {
-        match char {
-            ' ' => continue,
-            c => return Some(parse_type(reader, c))
-        };
+    reader.consume_spaces();
+    if let Some(char) = reader.next() {
+        return Some(parse_type(reader, char))
     }
     None
 }
@@ -63,12 +59,36 @@ fn parse_type(reader: &mut BufferedReader, c: char) -> Field {
         'f' => parse_scalar(Float, reader).0,
         't' => parse_scalar(Text, reader).0,
         'b' => parse_scalar(Boolean, reader).0,
-        'a' => {
-            parse_array(reader)
-        }
-        'd' => {todo!()}
+        'a' => parse_array(reader),
+        'd' => parse_dict(reader),
         _ => panic!("Unknown output prefix")
     }
+}
+
+fn parse_dict(reader: &mut BufferedReader) -> Field {
+    let (mut field, _values) = parse_scalar(Any, reader);
+    let mut temp = String::default();
+
+    reader.consume_spaces();
+    if let Some(char ) = reader.peek_next() {
+        if char == '{' {
+            temp.push_str(&(reader.consume_until('}').as_str().to_owned() + "}"));
+        }
+    }
+
+    let json = parse_json(temp);
+    let mut fields = HashMap::new();
+    for (key, value) in json {
+        let mut buffered_reader = BufferedReader::new(value);
+        let mut field = try_parse(&mut buffered_reader).unwrap();
+        // set field name
+        field.name = Some(key.clone());
+        fields.insert(key, field);
+    }
+
+    field.type_ = Tuple(Box::new(DictType{ fields }));
+    field
+
 }
 
 fn parse_array(reader: &mut BufferedReader) -> Field {
@@ -94,8 +114,8 @@ fn parse_scalar(type_: OutputType, mut reader: &mut BufferedReader) -> (Field, H
             ' ' => {},
             '?' => nullable = true,
             '\'' => optional = true,
-            '{' => {
-                temp.push_str(&(reader.consume_until('}').as_str().to_owned() + "}"));
+            '(' => {
+                temp.push_str(&(reader.consume_until(')').as_str().to_owned() + ")"));
                 break;
             },
             _ => break
@@ -146,7 +166,7 @@ pub(crate) enum OutputType {
     Boolean,
     Any,
     Array(Box<ArrayType>),
-    Tuple(Box<TupleType>)
+    Tuple(Box<DictType>)
 }
 
 impl OutputType {
@@ -170,16 +190,16 @@ pub(crate) struct ArrayType{
 
 
 #[derive(Debug, PartialEq, Clone)]
-pub(crate) struct TupleType {
-    fields: HashMap<i64, Field> // "0"
+pub(crate) struct DictType {
+    fields: HashMap<String, Field> // "0"
 }
 
 
 
 #[cfg(test)]
 mod test {
-    use crate::processing::layout::Field;
-    use crate::processing::layout::OutputType::{Array, Float, Integer};
+    use crate::processing::layout::{Field, OutputType};
+    use crate::processing::layout::OutputType::{Array, Float, Integer, Text};
 
     #[test]
     fn scalar(){
@@ -207,7 +227,7 @@ mod test {
 
     #[test]
     fn scalar_name(){
-        let stencil = "i{name: test}";
+        let stencil = "i(name: test)";
         let field = Field::parse(stencil.to_string());
         assert_eq!(field.type_, Integer);
         assert_eq!(field.name.unwrap(), "test");
@@ -215,20 +235,22 @@ mod test {
 
     #[test]
     fn array(){
-        let stencil = "a{}f";
-        let field = Field::parse(stencil.to_string());
-        match field.type_ {
-            Array(array) => {
-                assert_eq!(array.fields, Float);
-                assert_eq!(array.length, None);
+        let stencils = vec!["a()f", "af"];
+        for stencil in stencils {
+            let field = Field::parse(stencil.to_string());
+            match field.type_ {
+                Array(array) => {
+                    assert_eq!(array.fields, Float);
+                    assert_eq!(array.length, None);
+                }
+                _ => panic!("Wrong output format")
             }
-            _ => panic!("Wrong output format")
         }
     }
 
     #[test]
     fn array_length(){
-        let stencil = "a{length: 3}f";
+        let stencil = "a(length: 3)f";
         let field = Field::parse(stencil.to_string());
         match field.type_ {
             Array(array) => {
@@ -241,20 +263,23 @@ mod test {
 
     #[test]
     fn dict(){
-        let stencil = "d-?{name: t, age: i}";
-        let field = Field::parse(stencil.to_string());
-        match field.type_ {
-            /*OutputType::Dict(d) => {
-                assert!(d.fields.contains_key("name"));
-                assert_eq!(d.fields.get("name").cloned().map(|e|e.name).unwrap().unwrap(), "name");
-                assert_eq!(d.fields.get("name").cloned().map(|e|e.type_).unwrap(), Text);
-                assert!(d.fields.contains_key("age"));
-                assert_eq!(d.fields.get("age").cloned().map(|e|e.name).unwrap().unwrap(), "age");
-                assert_eq!(d.fields.get("age").cloned().map(|e|e.type_).unwrap(), Integer);
-            }*/
-            _ => panic!("Wrong output format")
+        let stencils = vec!["d'?{name: t, age: i}", "d(optional: true, nullable: true){name: t, age: i}"];
+        for stencil in stencils {
+            let field = Field::parse(stencil.to_string());
+            match field.type_ {
+                OutputType::Tuple(d) => {
+                    assert!(d.fields.contains_key("name"));
+                    assert_eq!(d.fields.get("name").cloned().map(|e|e.name).unwrap().unwrap(), "name");
+                    assert_eq!(d.fields.get("name").cloned().map(|e|e.type_).unwrap(), Text);
+                    assert!(d.fields.contains_key("age"));
+                    assert_eq!(d.fields.get("age").cloned().map(|e|e.name).unwrap().unwrap(), "age");
+                    assert_eq!(d.fields.get("age").cloned().map(|e|e.type_).unwrap(), Integer);
+                }
+                _ => panic!("Wrong output format")
 
+            }
         }
+
     }
 
 }

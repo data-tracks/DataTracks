@@ -1,4 +1,5 @@
 use core::default::Default;
+use std::cmp::PartialEq;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -162,11 +163,34 @@ impl Plan {
         let mut stage = Num;
         let mut current: Vec<(PlanStage, String)> = vec![];
         let mut is_text = false;
+        let mut open_brackets = 0;
 
         for char in stencil.chars() {
             if is_text && char != '"' {
                 temp.push(char);
                 continue;
+            }
+
+            if stage != Num {
+                match char {
+                    '}' | ')' | ']' => {
+                        if (stage == TransformStage && char == '}')
+                            || (stage == LayoutStage && char == ')')
+                            || (stage == WindowStage && char == ']')  {
+                            if open_brackets == 0 {
+                                current.push((stage, temp.clone()));
+                                temp = "".to_string();
+                                stage = Num;
+                                continue
+                            }else {
+                                open_brackets -= 1;
+                            }
+                        }
+                        temp.push(char);
+                        continue
+                    }
+                    _ => {}
+                }
             }
 
             match char {
@@ -183,19 +207,41 @@ impl Plan {
                     if let Num = stage {
                         current.push((stage, temp.clone()));
                         temp = "".to_string();
+                        match char {
+                            '[' => stage = WindowStage,
+                            '(' => stage = LayoutStage,
+                            '{' => stage = TransformStage,
+                            _ => {}
+                        }
+                    }else {
+                        // is already stage, might open additional brackets
+
+                        match char {
+                            '[' => {
+                                if stage == WindowStage {
+                                    open_brackets += 1;
+                                    temp.push(char);
+                                }
+                            },
+                            '(' => {
+                                if stage == LayoutStage {
+                                    open_brackets += 1;
+                                    temp.push(char);
+                                }
+                            },
+                            '{' => {
+                                if stage == TransformStage {
+                                    open_brackets += 1;
+                                    temp.push(char);
+                                }
+                            },
+                            _ => {}
+                        }
                     }
 
-                    match char {
-                        '[' => stage = WindowStage,
-                        '(' => stage = LayoutStage,
-                        '{' => stage = TransformStage,
-                        _ => {}
-                    }
+
                 }
-                '}' | ')' | ']' => {
-                    current.push((stage, temp.clone()));
-                    temp = "".to_string();
-                }
+
                 '"' => {
                     is_text = !is_text;
                     temp.push(char);
@@ -271,7 +317,7 @@ impl Plan {
 }
 
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub(crate) enum PlanStage {
     WindowStage,
     TransformStage,

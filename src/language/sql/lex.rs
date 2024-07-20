@@ -72,8 +72,8 @@ fn parse_query<'source>(lexer: &'source mut Lexer<'source, Token>) -> Result<Sql
 }
 
 fn parse_select(lexer: &mut BufferedLexer) -> Result<SqlStatement, String> {
-    let fields = parse_expressions(lexer, &vec![From])?;
-    let froms = parse_expressions(lexer, &vec![Semi, Where, GroupBy])?;
+    let fields = parse_expressions(lexer, &[From])?;
+    let froms = parse_expressions(lexer, &[Semi, Where, GroupBy])?;
 
     Ok(SqlStatement::Select(SqlSelect::new(fields, froms)))
 }

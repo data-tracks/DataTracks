@@ -25,7 +25,7 @@ pub struct SqlIdentifier {
 
 impl SqlIdentifier {
     pub fn new(names: Vec<String>, alias: Option<SqlStatement>) -> Self {
-        SqlIdentifier { names, alias: alias.map(|a| Box::new(a)) }
+        SqlIdentifier { names, alias: alias.map(Box::new) }
     }
 }
 
