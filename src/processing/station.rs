@@ -8,6 +8,7 @@ use crossbeam::channel::{Receiver, unbounded};
 
 use crate::processing::layout::Field;
 use crate::processing::plan::PlanStage;
+use crate::processing::plan::PlanStage::{LayoutStage, Num, TransformStage, WindowStage};
 use crate::processing::platform::Platform;
 use crate::processing::sender::Sender;
 use crate::processing::train::Train;
@@ -54,15 +55,85 @@ impl Station {
         }
     }
 
-    pub(crate) fn parse(last: Option<i64>, parts: Vec<(PlanStage, String)>) -> Self {
+    pub(crate) fn parse(stencil: String, last: Option<i64>) -> Self{
+        let mut temp = String::default();
+        let mut is_text = false;
+        let mut stages = vec![];
+        let mut current_stage = Some(Num);
+
+        for char in stencil.chars() {
+            if char != '"' && is_text {
+                temp.push(char);
+                continue;
+            }
+
+            // can we end number
+            if let Some(_stage @ Num) = current_stage {
+                match char {
+                    '(' | '{' | '[' => {
+                        stages.push((Num, temp.clone()));
+                        temp = String::default();
+                        current_stage = None;
+                    }
+                    _ => {}
+                }
+            }
+
+            match char {
+                '"' => {
+                    if is_text {
+                        is_text = false;
+                    }else {
+                        is_text = true;
+                    }
+                }
+                '(' | '{' | '[' => {
+                    if current_stage.is_some() {
+                        temp.push(char);
+                        continue;
+                    }
+                    current_stage = Some(match char {
+                        '(' => LayoutStage,
+                        '{' => TransformStage,
+                        '[' => WindowStage,
+                        _ => current_stage.unwrap()
+                    })
+                }
+                c => {
+                    if let Some(stage) = current_stage{
+                        if (c == ')' && stage == LayoutStage)
+                            || (c == '}' && stage == TransformStage)
+                            || (c == ']' && stage == LayoutStage){
+                            stages.push((stage, temp.clone()));
+                            temp = String::default();
+                            current_stage = None;
+                            continue
+                        }
+                    }
+                    temp.push(char);
+                }
+            }
+        }
+        if !temp.is_empty() {
+            if let Some(stage @ Num) = current_stage {
+                stages.push((stage, temp))
+            }else {
+                panic!("Nof finished parsing")
+            }
+        }
+
+        Self::parse_stages(last, stages )
+    }
+
+    pub(crate) fn parse_stages(last: Option<i64>, parts: Vec<(PlanStage, String)>) -> Self {
         let mut station: Station = Station::default();
         for stage in parts {
             match stage.0 {
-                PlanStage::WindowStage => station.set_window(Window::parse(stage.1)),
-                PlanStage::TransformStage => station.set_transform(last.unwrap_or(-1), Transform::parse(stage.1).unwrap()),
+                WindowStage => station.set_window(Window::parse(stage.1)),
+                TransformStage => station.set_transform(last.unwrap_or(-1), Transform::parse(stage.1).unwrap()),
                 PlanStage::BlockStage => station.add_block(last.unwrap_or(-1)),
-                PlanStage::LayoutStage => station.add_explicit_output(Field::parse(stage.1)),
-                PlanStage::Num => station.set_stop(stage.1.parse::<i64>().unwrap()),
+                LayoutStage => station.add_explicit_output(Field::parse(stage.1)),
+                Num => station.set_stop(stage.1.parse::<i64>().unwrap()),
             }
         }
         station

@@ -7,8 +7,8 @@ use crossbeam::channel;
 use crossbeam::channel::{Sender, unbounded};
 use serde::{Serialize, Serializer};
 use serde::ser::SerializeStruct;
+
 use crate::processing::destination::Destination;
-use crate::processing::plan::PlanStage::{LayoutStage, Num, TransformStage, WindowStage, BlockStage};
 use crate::processing::source::Source;
 use crate::processing::station::{Command, Station};
 use crate::util::GLOBAL_ID;
@@ -159,87 +159,25 @@ impl Plan {
         plan
     }
     fn parse_line(&mut self, line: i64, stencil: &str) {
-        let mut temp = "".to_string();
-        let mut stage = Num;
-        let mut current: Vec<(PlanStage, String)> = vec![];
+        let mut temp = String::default();
         let mut is_text = false;
-        let mut open_brackets = 0;
+
+        let last = None;
 
         for char in stencil.chars() {
             if is_text && char != '"' {
                 temp.push(char);
                 continue;
             }
+            let last = self.lines.get(&line).and_then(|v| v.last().cloned());
 
-            if stage != Num {
-                match char {
-                    '}' | ')' | ']' => {
-                        if (stage == TransformStage && char == '}')
-                            || (stage == LayoutStage && char == ')')
-                            || (stage == WindowStage && char == ']')  {
-                            if open_brackets == 0 {
-                                current.push((stage, temp.clone()));
-                                temp = "".to_string();
-                                stage = Num;
-                                continue
-                            }else {
-                                open_brackets -= 1;
-                            }
-                        }
-                        temp.push(char);
-                        continue
-                    }
-                    _ => {}
-                }
-            }
 
             match char {
                 '-' => {
-                    if let Num = stage { current.push((stage, temp.clone())) };
-
-                    let station = Station::parse(self.lines.get(&line).and_then(|vec: &Vec<i64>| vec.last().cloned()), current.clone());
+                    let station = Station::parse( temp.clone(), last);
                     self.build(line, station);
-                    current.clear();
-                    temp = "".to_string();
-                    stage = Num;
-                }
-                '{' | '(' | '[' => {
-                    if let Num = stage {
-                        current.push((stage, temp.clone()));
-                        temp = "".to_string();
-                        match char {
-                            '[' => stage = WindowStage,
-                            '(' => stage = LayoutStage,
-                            '{' => stage = TransformStage,
-                            _ => {}
-                        }
-                    }else {
-                        // is already stage, might open additional brackets
 
-                        match char {
-                            '[' => {
-                                if stage == WindowStage {
-                                    open_brackets += 1;
-                                    temp.push(char);
-                                }
-                            },
-                            '(' => {
-                                if stage == LayoutStage {
-                                    open_brackets += 1;
-                                    temp.push(char);
-                                }
-                            },
-                            '{' => {
-                                if stage == TransformStage {
-                                    open_brackets += 1;
-                                    temp.push(char);
-                                }
-                            },
-                            _ => {}
-                        }
-                    }
-
-
+                    temp = String::default();
                 }
 
                 '"' => {
@@ -247,22 +185,13 @@ impl Plan {
                     temp.push(char);
                 }
                 _ => {
-                    if let Num = stage {
-                        if char == '|' {
-                            current.push((BlockStage, "".to_string()));
-                            continue;
-                        }
-                    }
-
                     temp.push(char);
                 }
             }
         }
+
         if !temp.is_empty() {
-            current.push((stage, temp.clone()));
-        }
-        if !current.is_empty() {
-            let station = Station::parse(self.lines.get(&line).and_then(|vec: &Vec<i64>| vec.last().cloned()), current.clone());
+            let station = Station::parse(temp, last);
             self.build(line, station);
         }
     }

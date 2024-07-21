@@ -396,7 +396,7 @@ mod stencil {
 
 #[test]
 fn full_test() {
-    let mut plan = Plan::parse("0-1");
+    let mut plan = Plan::parse("0-1(f)-2");
 
     let mut values = vec![];
 
@@ -410,13 +410,13 @@ fn full_test() {
 
     let destination = DummyDestination::new(1, 2);
     let result = destination.results();
-    plan.add_destination(1, Box::new(destination));
+    plan.add_destination(2, Box::new(destination));
 
     plan.operate();
 
     plan.send_control(&id, Ready(0));
 
-    for command in [Ready(0), Stop(0), Stop(1)] {
+    for command in [Ready(0), Stop(0), Stop(2)] {
         assert_eq!(command.type_id(), plan.control_receiver.1.recv().unwrap().type_id());
     }
     let lock = result.lock().unwrap();
