@@ -12,3 +12,4 @@ mod destination;
 mod block;
 mod platform;
 mod layout;
+mod tests;

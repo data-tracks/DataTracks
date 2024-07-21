@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use crate::processing::layout::OutputType::{Any, Array, Boolean, Float, Integer, Text, Tuple};
+use crate::processing::layout::OutputType::{Any, Array, Boolean, Float, Integer, Text, Dict};
 use crate::util::BufferedReader;
 
 #[derive(PartialEq, Debug, Clone)]
@@ -70,10 +70,8 @@ fn parse_dict(reader: &mut BufferedReader) -> Field {
     let mut temp = String::default();
 
     reader.consume_spaces();
-    if let Some(char ) = reader.peek_next() {
-        if char == '{' {
-            temp.push_str(&(reader.consume_until('}').as_str().to_owned() + "}"));
-        }
+    if let Some( _char @ '{' ) = reader.peek_next() {
+        temp.push_str(&(reader.consume_until('}').as_str().to_owned() + "}"));
     }
 
     let json = parse_json(temp);
@@ -86,7 +84,7 @@ fn parse_dict(reader: &mut BufferedReader) -> Field {
         fields.insert(key, field);
     }
 
-    field.type_ = Tuple(Box::new(DictType{ fields }));
+    field.type_ = Dict(Box::new(DictType{ fields }));
     field
 
 }
@@ -166,7 +164,7 @@ pub(crate) enum OutputType {
     Boolean,
     Any,
     Array(Box<ArrayType>),
-    Tuple(Box<DictType>)
+    Dict(Box<DictType>)
 }
 
 impl OutputType {
@@ -267,7 +265,7 @@ mod test {
         for stencil in stencils {
             let field = Field::parse(stencil.to_string());
             match field.type_ {
-                OutputType::Tuple(d) => {
+                OutputType::Dict(d) => {
                     assert!(d.fields.contains_key("name"));
                     assert_eq!(d.fields.get("name").cloned().map(|e|e.name).unwrap().unwrap(), "name");
                     assert_eq!(d.fields.get("name").cloned().map(|e|e.type_).unwrap(), Text);

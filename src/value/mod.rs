@@ -12,5 +12,6 @@ mod string;
 mod value;
 mod bool;
 mod null;
-mod tuple;
+mod array;
 mod map;
+mod dict;

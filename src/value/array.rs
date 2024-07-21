@@ -3,35 +3,30 @@ use std::fmt::Formatter;
 use crate::value::Value;
 use crate::value::value::{ValType, Valuable};
 
-#[derive(Eq, Hash, Clone, Debug)]
-pub struct HoTuple(Vec<Value>);
+#[derive(Eq, Hash, Clone, Debug, PartialEq)]
+pub struct HoArray(Vec<Value>);
 
-impl HoTuple {
+impl HoArray {
     pub fn new(values: Vec<Value>) -> Self {
-        HoTuple(values)
+        HoArray(values)
     }
 }
 
-impl Valuable for HoTuple {
+impl Valuable for HoArray {
     fn type_(&self) -> ValType {
         ValType::Tuple
     }
 }
 
-impl PartialEq for HoTuple {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
-    }
-}
 
 impl From<Vec<Value>> for Value {
 
     fn from(value: Vec<Value>) -> Self {
-        Value::tuple(value)
+        Value::array(value)
     }
 }
 
-impl std::fmt::Display for HoTuple {
+impl std::fmt::Display for HoArray {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.0)
     }

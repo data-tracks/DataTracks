@@ -1,13 +1,17 @@
 use std::cmp::PartialEq;
+use std::collections::BTreeMap;
 use std::fmt::Display;
-use std::fmt::Formatter;
 use std::ops::Add;
 
+use json::{JsonValue, parse};
+
 use crate::value::{HoBool, HoFloat, HoInt};
+use crate::value::array::HoArray;
+use crate::value::dict::HoDict;
 use crate::value::null::HoNull;
 use crate::value::string::HoString;
-use crate::value::tuple::HoTuple;
-use crate::value::Value::{Bool, Float, Int, Null, Text, Tuple};
+use crate::value::ValType::Integer;
+use crate::value::Value::{Array, Bool, Dict, Float, Int, Null, Text};
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum ValType {
@@ -39,7 +43,8 @@ pub enum Value {
     Float(HoFloat),
     Bool(HoBool),
     Text(Box<HoString>),
-    Tuple(HoTuple),
+    Array(HoArray),
+    Dict(HoDict),
     Null(HoNull),
 }
 
@@ -60,8 +65,12 @@ impl Value {
         Bool(HoBool(bool))
     }
 
-    pub fn tuple(tuple: Vec<Value>) -> Value {
-        Tuple(HoTuple::new(tuple))
+    pub fn array(tuple: Vec<Value>) -> Value {
+        Array(HoArray::new(tuple))
+    }
+
+    fn dict(values: BTreeMap<String, Value>) -> Value {
+        Dict(HoDict::new(values))
     }
 
     pub fn null() -> Value {
@@ -81,22 +90,6 @@ macro_rules! value_display {
 }
 
 pub(crate) use value_display;
-use crate::value::ValType::Integer;
-
-impl Display for Value {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Int(v) => v.fmt(f),
-            Float(v) => v.fmt(f),
-            Text(v) => v.fmt(f),
-            Bool(v) => v.fmt(f),
-            Tuple(v) => v.fmt(f),
-            Null(v) => v.fmt(f),
-        }
-    }
-}
-
-
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         match self {
@@ -139,9 +132,15 @@ impl PartialEq for Value {
             Null(_) => {
                 matches!(other, Null(_))
             }
-            Tuple(a) => {
+            Array(a) => {
                 match other {
-                    Tuple(b) => b == a,
+                    Array(b) => b == a,
+                    _ => false
+                }
+            }
+            Dict(a) => {
+                match other {
+                    Dict(b) => a == b,
                     _ => false
                 }
             }
@@ -171,6 +170,40 @@ impl From<bool> for Value {
 
     fn from(value: bool) -> Self {
         Value::bool(value)
+    }
+}
+
+impl Value {
+    pub(crate) fn from_json(value: &str) -> Self {
+        let json = parse(value);
+        let mut values = BTreeMap::new();
+        match json {
+            Ok(json) => {
+                for (key, value) in json.entries() {
+                    values.insert(key.into(), value.into() );
+                }
+            }
+            Err(_) => panic!("Could not parse Dict")
+        }
+        Value::dict(values)
+    }
+}
+
+impl From<&JsonValue> for Value{
+    fn from(value: &JsonValue) -> Self {
+        match value {
+            JsonValue::Null => Value::null(),
+            JsonValue::Short(a) => Value::text(a.as_str()),
+            JsonValue::String(a) => Value::text(a),
+            JsonValue::Number(a) => Value::int(a.as_fixed_point_i64(0).unwrap()),
+            JsonValue::Boolean(a) => Value::bool(*a),
+            JsonValue::Object(elements) => {
+                Value::dict(elements.iter().map(|(k,v)| (k.to_string(), v.into())).collect())
+            }
+            JsonValue::Array(elements) => {
+                Value::array(elements.iter().map(|arg0: &JsonValue| arg0.into()).collect())
+            }
+        }
     }
 }
 
@@ -226,9 +259,9 @@ mod tests {
         assert_eq!(Value::text("Hello"), Value::text("Hello"));
         assert_ne!(Value::text("Hello"), Value::text("World"));
 
-        assert_eq!(Value::tuple(vec![3.into(), 5.5.into()]), Value::tuple(vec![3.into(), 5.5.into()]));
-        assert_ne!(Value::tuple(vec![5.5.into()]), Value::tuple(vec![3.into(), 5.5.into()]));
-        assert_ne!(Value::tuple(vec![3.into(), 5.5.into()]), Value::tuple(vec![5.5.into(), 3.into()]));
+        assert_eq!(Value::array(vec![3.into(), 5.5.into()]), Value::array(vec![3.into(), 5.5.into()]));
+        assert_ne!(Value::array(vec![5.5.into()]), Value::array(vec![3.into(), 5.5.into()]));
+        assert_ne!(Value::array(vec![3.into(), 5.5.into()]), Value::array(vec![5.5.into(), 3.into()]));
 
         assert_eq!(Value::null(), Value::null());
     }
@@ -241,7 +274,7 @@ mod tests {
             Value::bool(true),
             Value::text("Hello"),
             Value::null(),
-            Value::tuple(vec![3.into(), 7.into()]),
+            Value::array(vec![3.into(), 7.into()]),
         ];
 
         assert_eq!(values[0], Value::int(42));
@@ -249,7 +282,7 @@ mod tests {
         assert_eq!(values[2], Value::bool(true));
         assert_eq!(values[3], Value::text("Hello"));
         assert_eq!(values[4], Value::null());
-        assert_eq!(values[5], Value::tuple(vec![3.into(), 7.into()]));
+        assert_eq!(values[5], Value::array(vec![3.into(), 7.into()]));
     }
 
     #[test]
@@ -271,7 +304,7 @@ mod tests {
     #[test]
     fn into() {
         let raws: Vec<Value> = vec![3.into(), 5.into(), 3.3.into(), "test".into(), false.into(), vec![3.into(), 7.into()].into()];
-        let values = vec![Value::int(3), Value::int(5), Value::float(3.3), Value::text("test"), Value::bool(false), Value::tuple(vec![3.into(), 7.into()])];
+        let values = vec![Value::int(3), Value::int(5), Value::float(3.3), Value::text("test"), Value::bool(false), Value::array(vec![3.into(), 7.into()])];
 
         for (i, raw) in raws.iter().enumerate() {
             assert_eq!(raw, &values[i])

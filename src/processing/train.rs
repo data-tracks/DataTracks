@@ -14,7 +14,7 @@ impl Train {
     }
 
 
-    pub(crate) fn visit(&mut self, stop: i64) {
+    pub(crate) fn set_last(&mut self, stop: i64) {
         self.last = stop;
     }
 }
