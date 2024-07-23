@@ -5,7 +5,7 @@ use crate::processing::Plan;
 use crate::processing::source::Source;
 use crate::processing::station::Command::{Ready, Stop};
 use crate::processing::tests::plan_test::dummy::{DummyDestination, DummySource};
-use crate::value::Value;
+use crate::value::{Dict, Value};
 
 #[cfg(test)]
 mod dummy {
@@ -21,25 +21,25 @@ mod dummy {
     use crate::processing::station::Command::{Ready, Stop};
     use crate::processing::train::Train;
     use crate::util::{GLOBAL_ID, new_channel, Rx, Tx};
-    use crate::value::Value;
+    use crate::value::Dict;
 
     pub struct DummySource {
         id: i64,
         stop: i64,
-        values: Option<Vec<Vec<Value>>>,
+        values: Option<Vec<Vec<Dict>>>,
         delay: Duration,
         initial_delay: Duration,
         senders: Option<Vec<Tx<Train>>>,
     }
 
     impl DummySource {
-        pub(crate) fn new(stop: i64, values: Vec<Vec<Value>>, delay: Duration) -> (Self, i64) {
+        pub(crate) fn new(stop: i64, values: Vec<Vec<Dict>>, delay: Duration) -> (Self, i64) {
             Self::new_with_delay(stop, values, Duration::from_millis(0), delay)
         }
 
-        pub(crate) fn new_with_delay(stop: i64, values: Vec<Vec<Value>>, initial_delay: Duration, delay: Duration) -> (Self, i64) {
+        pub(crate) fn new_with_delay(stop: i64, values: Vec<Vec<Dict>>, initial_delay: Duration, delay: Duration) -> (Self, i64) {
             let id = GLOBAL_ID.new_id();
-            (DummySource { id , stop, values: Some(values), initial_delay, delay, senders: Some(vec![]) }, id)
+            (DummySource { id, stop, values: Some(values), initial_delay, delay, senders: Some(vec![]) }, id)
         }
     }
 
@@ -171,7 +171,7 @@ mod dummy {
 
 
 #[cfg(test)]
-mod stencil {
+pub mod tests {
     use std::thread::sleep;
     use std::time::{Duration, SystemTime};
     use std::vec;
@@ -185,11 +185,19 @@ mod stencil {
     use crate::processing::Train;
     use crate::processing::transform::{FuncTransform, Transform};
     use crate::util::new_channel;
-    use crate::value::Value;
+    use crate::value::{Dict, Value};
+
+    pub fn dict_values(values: Vec<Value>) -> Vec<Dict>{
+        let mut dicts:Vec<Dict> = vec![];
+        for value in values {
+            dicts.push(Dict::from(value));
+        }
+        dicts
+    }
 
     #[test]
     fn station_plan_train() {
-        let values = vec![3.into(), "test".into()];
+        let values = vec![3.into(), "test".into().into()];
 
         let mut plan = Plan::default();
         let mut first = Station::new(0);
@@ -220,7 +228,7 @@ mod stencil {
 
     #[test]
     fn station_plan_split_train() {
-        let values = vec![3.into(), "test".into(), true.into(), Value::null()];
+        let values = dict_values(vec![3.into(), "test".into(), true.into(), Value::null()]);
 
         let mut plan = Plan::default();
         let mut first = Station::new(0);
@@ -266,7 +274,7 @@ mod stencil {
 
     #[test]
     fn sql_parse_transform() {
-        let values = vec![vec![3.into(), "test".into(), true.into(), Value::null()]];
+        let values = vec![dict_values(vec![3.into(), "test".into(), true.into(), Value::null()])];
         let stencil = "3{sql|Select * From $0}";
 
         let mut plan = Plan::parse(stencil);
@@ -361,7 +369,7 @@ mod stencil {
         let length = numbers.len();
 
         for num in numbers {
-            values.push(vec![Value::int(3)]);
+            values.push(dict_values(vec![Value::int(3)]));
         }
 
         let mut plan = Plan::new(0);
@@ -400,9 +408,9 @@ fn full_test() {
 
     let mut values = vec![];
 
-    let hello = Value::from_json(r#"{"msg": "hello", "_topic": "command"}"#);
+    let hello = Dict::from(r#"{"msg": "hello", "$topic": "command"}"#);
     values.push(vec![hello]);
-    values.push(vec![Value::float(3.6)]);
+    values.push(vec![Dict::from(Value::float(3.6))]);
 
     let (source, id) = DummySource::new(0, values, Duration::from_millis(1));
 

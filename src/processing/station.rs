@@ -5,7 +5,7 @@ use std::thread;
 
 use crossbeam::channel;
 use crossbeam::channel::{Receiver, unbounded};
-
+use PlanStage::BlockStage;
 use crate::processing::layout::Field;
 use crate::processing::plan::PlanStage;
 use crate::processing::plan::PlanStage::{LayoutStage, Num, TransformStage, WindowStage};
@@ -118,7 +118,7 @@ impl Station {
             if let Some(stage @ Num) = current_stage {
                 stages.push((stage, temp))
             }else {
-                panic!("Nof finished parsing")
+                panic!("Not finished parsing")
             }
         }
 
@@ -131,7 +131,7 @@ impl Station {
             match stage.0 {
                 WindowStage => station.set_window(Window::parse(stage.1)),
                 TransformStage => station.set_transform(last.unwrap_or(-1), Transform::parse(stage.1).unwrap()),
-                PlanStage::BlockStage => station.add_block(last.unwrap_or(-1)),
+                BlockStage => station.add_block(last.unwrap_or(-1)),
                 LayoutStage => station.add_explicit_output(Field::parse(stage.1)),
                 Num => station.set_stop(stage.1.parse::<i64>().unwrap()),
             }
@@ -222,20 +222,20 @@ pub(crate) enum Command {
 
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use std::sync::Arc;
     use std::thread::sleep;
     use std::time::{Duration, Instant};
 
     use crossbeam::channel::{Receiver, Sender, unbounded};
-
     use crate::processing::plan::Plan;
     use crate::processing::station::{Command, Station};
     use crate::processing::station::Command::{Okay, Ready, Threshold};
     use crate::processing::train::Train;
     use crate::processing::transform::{FuncTransform, Transform};
     use crate::util::{new_channel, Rx, Tx};
-    use crate::value::Value;
+    use crate::value::{Dict, Value};
+    use crate::processing::tests::dict_values;
 
     #[test]
     fn start_stop_test() {
@@ -243,10 +243,10 @@ mod tests {
 
         let control = unbounded();
 
-        let mut values = vec![Value::text("test"), Value::bool(true), Value::float(3.3), Value::null()];
+        let mut values = dict_values(vec![Value::text("test"), Value::bool(true), Value::float(3.3), Value::null()]);
 
         for x in 0..1_000_000 {
-            values.push(Value::int(x))
+            values.push(Dict::from(Value::int(x)))
         }
 
 
@@ -262,7 +262,7 @@ mod tests {
                 assert_eq!(values.len(), t.values.clone().map_or(usize::MAX, |values| values.len()));
                 for (i, value) in t.values.take().unwrap().iter().enumerate() {
                     assert_eq!(value, &values[i]);
-                    assert_ne!(&Value::text(""), value)
+                    assert_ne!(&Value::text(""), value.0.get("$").unwrap())
                 }
             }
             Err(..) => assert!(false),
@@ -272,7 +272,7 @@ mod tests {
 
     #[test]
     fn station_two_train() {
-        let values = vec![3.into()];
+        let values = vec![Dict::from(Value::int(3))];
         let (tx, rx) = unbounded();
         let control = Arc::new(tx);
 
@@ -294,7 +294,7 @@ mod tests {
 
         let res = output_rx.recv().unwrap();
         assert_eq!(res.values.clone().unwrap(), values);
-        assert_ne!(res.values.clone().unwrap(), vec![Value::null()]);
+        assert_ne!(res.values.clone().unwrap(), vec![Value::null().into()]);
 
         assert!(output_rx.try_recv().is_err());
 
@@ -349,7 +349,7 @@ mod tests {
         sender.send(Threshold(3)).unwrap();
 
         for _ in 0..1_000 {
-            train_sender.send(Train::new(0, vec![Value::int(3)])).unwrap();
+            train_sender.send(Train::new(0, dict_values(vec![Value::int(3)]))).unwrap();
         }
 
         // the station should start, the threshold should be reached and after some time be balanced
@@ -367,7 +367,7 @@ mod tests {
         station.operate(Arc::clone(&a_tx));
 
         for _ in 0..1_000 {
-            train_sender.send(Train::new(0, vec![Value::int(3)])).unwrap();
+            train_sender.send(Train::new(0, dict_values(vec![Value::int(3)]))).unwrap();
         }
 
         // the station should open a platform, the station starts another platform,  the threshold should be reached and after some time be balanced
@@ -382,11 +382,11 @@ mod tests {
         let sender = station.operate(Arc::clone(&a_tx));
 
         for _ in 0..500 {
-            train_sender.send(Train::new(0, vec![Value::int(3)])).unwrap();
+            train_sender.send(Train::new(0, dict_values(vec![Value::int(3)]))).unwrap();
         }
         station.operate(Arc::clone(&a_tx));
         for _ in 0..500 {
-            train_sender.send(Train::new(0, vec![Value::int(3)])).unwrap();
+            train_sender.send(Train::new(0, dict_values(vec![Value::int(3)]))).unwrap();
         }
 
         // the station should open a platform, the station starts another platform,  the threshold should be reached and after some time be balanced
@@ -410,7 +410,7 @@ mod tests {
         let mut trains = vec![];
 
         for _ in 0..1_000 {
-            trains.push(Train::new(0, vec![Value::int(3)]));
+            trains.push(Train::new(0, dict_values(vec![Value::int(3)])));
         }
 
         // the station should open a platform

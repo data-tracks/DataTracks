@@ -1,39 +1,39 @@
 use std::fmt::Formatter;
 
-use crate::value::{HoFloat, HoInt, HoString};
-use crate::value::value::{ValType, Valuable};
-use crate::value::value::value_display;
+use crate::value::{Float, Int, Text, ValType};
+use crate::value::value::{Valuable};
+use crate::value_display;
 
 #[derive(Eq, Hash, Clone, Debug)]
-pub struct HoBool(pub bool);
+pub struct Bool(pub bool);
 
-impl Valuable for HoBool {
+impl Valuable for Bool {
     fn type_(&self) -> ValType {
         ValType::Bool
     }
 }
 
 
-impl PartialEq<&HoInt> for &HoBool {
-    fn eq(&self, other: &&HoInt) -> bool {
+impl PartialEq<&Int> for &Bool {
+    fn eq(&self, other: &&Int) -> bool {
         other == self
     }
 }
 
-impl PartialEq<&HoFloat> for &HoBool {
-    fn eq(&self, other: &&HoFloat) -> bool {
+impl PartialEq<&Float> for &Bool {
+    fn eq(&self, other: &&Float) -> bool {
         other == self
     }
 }
 
-impl PartialEq for HoBool {
+impl PartialEq for Bool {
     fn eq(&self, other: &Self) -> bool {
         self.0 == other.0
     }
 }
 
-impl PartialEq<Box<HoString>> for HoBool {
-    fn eq(&self, other: &Box<HoString>) -> bool {
+impl PartialEq<Text> for Bool {
+    fn eq(&self, other: &Text) -> bool {
         match other.0.parse::<bool>() {
             Ok(bo) => self.0 == bo,
             Err(_) => false
@@ -41,4 +41,4 @@ impl PartialEq<Box<HoString>> for HoBool {
     }
 }
 
-value_display!(HoBool);
+value_display!(Bool);

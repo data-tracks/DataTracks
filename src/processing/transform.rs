@@ -5,7 +5,7 @@ use crate::algebra::RefHandler;
 use crate::language::Language;
 use crate::processing::train::Train;
 use crate::processing::transform::Transform::{Func, Lang};
-use crate::value::Value;
+use crate::value::{Dict, Value};
 
 pub trait Taker: Send {
     fn take(&mut self, wagons: &mut Vec<Train>) -> Vec<Train>;
@@ -86,13 +86,13 @@ fn build_transformer(language: &Language, query: &str) -> Result<Box<dyn RefHand
 
 #[derive(Clone)]
 struct FuncValueHandler {
-    func: fn(train: Value) -> Value,
+    func: fn(train: Dict) -> Dict,
 }
 
 
 impl RefHandler for FuncValueHandler {
     fn process(&self, stop: i64, wagons: Vec<Train>) -> Train {
-        let mut values: Vec<Value> = vec![];
+        let mut values = vec![];
         for mut train in wagons {
             let mut vals = train.values.take().unwrap().into_iter().map(|v| (self.func)(v)).collect();
             values.append(&mut vals);
@@ -127,8 +127,8 @@ impl FuncTransform {
     }
 
     pub(crate) fn new_val(_stop: i64, func: fn(Value) -> Value) -> FuncTransform {
-        Self::new(Arc::new(move |stop, wagons: Vec<Train>| {
-            let mut values: Vec<Value> = vec![];
+        Self::new(Arc::new(move |stop, wagons| {
+            let mut values = vec![];
             for mut train in wagons {
                 let mut vals = train.values.take().unwrap().into_iter().map(func).collect();
                 values.append(&mut vals);
@@ -146,16 +146,19 @@ impl FuncTransform {
 
 #[cfg(test)]
 mod tests {
+    use std::ops::Add;
     use std::sync::Arc;
 
     use crossbeam::channel::unbounded;
 
     use crate::processing::station::Station;
+    use crate::processing::tests::dict_values;
     use crate::processing::train::Train;
     use crate::processing::transform::FuncTransform;
     use crate::processing::transform::Transform::Func;
     use crate::util::new_channel;
     use crate::value::Value;
+
 
     #[test]
     fn transform() {
@@ -165,7 +168,7 @@ mod tests {
 
         station.set_transform(0, Func(FuncTransform::new_val(0, |x| &x + &Value::int(3))));
 
-        let values = vec![Value::float(3.3), Value::int(3)];
+        let values = dict_values(vec![Value::float(3.3), Value::int(3)]);
 
         let (tx, num, rx) = new_channel();
 
@@ -176,10 +179,10 @@ mod tests {
         let res = rx.recv();
         match res {
             Ok(mut t) => {
-                assert_eq!(values.len(), t.values.clone().map_or(usize::MAX, |vec: Vec<Value>| vec.len()));
+                assert_eq!(values.len(), t.values.clone().map_or(usize::MAX, |vec| vec.len()));
                 for (i, value) in t.values.take().unwrap().into_iter().enumerate() {
                     assert_eq!(value, &values[i] + &Value::int(3));
-                    assert_ne!(Value::text(""), value)
+                    assert_ne!(Value::text("").into(), value)
                 }
             }
             Err(..) => assert!(false),

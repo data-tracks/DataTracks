@@ -1,16 +1,16 @@
 use std::fmt::Formatter;
 use std::ops::{Add, Sub};
 
-use crate::value::{HoBool, HoString};
-use crate::value::int::HoInt;
+use crate::value::{Bool, Text, ValType};
+use crate::value::int::Int;
 use crate::value::number::Number;
-use crate::value::value::{ValType, Valuable, value_display};
-use crate::value::value::ValType::Float;
+use crate::value::value::{Valuable};
+use crate::value_display;
 
 #[derive(Eq, Hash, Debug, PartialEq, Clone, Copy)]
-pub struct HoFloat(pub i64, pub u64);
+pub struct Float(pub i64, pub u64);
 
-impl HoFloat {
+impl Float {
     pub(crate) fn as_f64(&self) -> f64 {
         self.0 as f64 + self.1 as f64 * 10f64.powi(-(self.1.to_string().len() as i32))
     }
@@ -19,20 +19,20 @@ impl HoFloat {
         let parsed = value.to_string();
         let split = parsed.split_once('.');
         match split {
-            None => HoFloat(value as i64, 0),
-            Some((a, b)) => HoFloat(a.parse().unwrap(), b.parse().unwrap())
+            None => Float(value as i64, 0),
+            Some((a, b)) => Float(a.parse().unwrap(), b.parse().unwrap())
         }
     }
 }
 
 
-impl Valuable for HoFloat {
+impl Valuable for Float {
     fn type_(&self) -> ValType {
-        Float
+        ValType::Float
     }
 }
 
-impl Number for HoFloat {
+impl Number for Float {
     fn float(&self) -> f64 {
         self.as_f64()
     }
@@ -42,55 +42,55 @@ impl Number for HoFloat {
     }
 }
 
-impl Add for HoFloat {
+impl Add for Float {
     type Output = Self;
 
     fn add(self, other: Self) -> Self {
-        HoFloat::new(self.as_f64() + other.as_f64())
+        Float::new(self.as_f64() + other.as_f64())
     }
 }
 
-impl Sub for HoFloat {
+impl Sub for Float {
     type Output = Self;
 
     fn sub(self, other: Self) -> Self {
-        HoFloat::new(self.as_f64() - other.as_f64())
+        Float::new(self.as_f64() - other.as_f64())
     }
 }
 
 
 // Adding FloatWrapper to IntWrapper
-impl Add<HoInt> for HoFloat {
-    type Output = HoFloat;
+impl Add<Int> for Float {
+    type Output = Float;
 
-    fn add(self, other: HoInt) -> HoFloat {
-        HoFloat(self.0 + other.0, self.1)
+    fn add(self, other: Int) -> Float {
+        Float(self.0 + other.0, self.1)
     }
 }
 
 // Subtracting IntWrapper from FloatWrapper
-impl Sub<HoInt> for HoFloat {
-    type Output = HoFloat;
+impl Sub<Int> for Float {
+    type Output = Float;
 
-    fn sub(self, other: HoInt) -> HoFloat {
-        HoFloat(self.0 - other.0, self.1)
+    fn sub(self, other: Int) -> Float {
+        Float(self.0 - other.0, self.1)
     }
 }
 
-impl PartialEq<HoInt> for HoFloat {
-    fn eq(&self, other: &HoInt) -> bool {
+impl PartialEq<Int> for Float {
+    fn eq(&self, other: &Int) -> bool {
         other == self
     }
 }
 
-impl PartialEq<HoBool> for HoFloat {
-    fn eq(&self, other: &HoBool) -> bool {
+impl PartialEq<Bool> for Float {
+    fn eq(&self, other: &Bool) -> bool {
         self.0 > 0 && other.0
     }
 }
 
-impl PartialEq<Box<HoString>> for HoFloat {
-    fn eq(&self, other: &Box<HoString>) -> bool {
+impl PartialEq<Text> for Float {
+    fn eq(&self, other: &Text) -> bool {
         match other.0.parse::<f64>() {
             Ok(f) => f == self.as_f64(),
             Err(_) => false
@@ -98,15 +98,15 @@ impl PartialEq<Box<HoString>> for HoFloat {
     }
 }
 
-value_display!(HoFloat);
+value_display!(Float);
 
 #[cfg(test)]
 mod tests {
-    use crate::value::HoFloat;
+    use crate::value::Float;
 
     #[test]
     fn add() {
-        let float = HoFloat::new(35.5);
+        let float = Float::new(35.5);
 
         let res = float + float;
 

@@ -1,17 +1,17 @@
 use std::fmt::{Display, Formatter};
-
-use crate::value::value::{ValType, Valuable};
+use crate::value::ValType;
+use crate::value::value::{Valuable};
 
 #[derive(Eq, Hash, Clone, Debug, PartialEq)]
-pub struct HoNull {}
+pub struct Null {}
 
-impl Valuable for HoNull {
+impl Valuable for Null {
     fn type_(&self) -> ValType {
         ValType::Null
     }
 }
 
-impl Display for HoNull {
+impl Display for Null {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "null")
     }

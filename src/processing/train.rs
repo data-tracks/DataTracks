@@ -1,15 +1,15 @@
-use crate::value::Value;
+use crate::value::Dict;
 
 pub type MutWagonsFunc = Box<dyn FnMut(&mut Vec<Train>)>;
 
 #[derive(Clone)]
 pub struct Train {
     pub last: i64,
-    pub values: Option<Vec<Value>>,
+    pub values: Option<Vec<Dict>>,
 }
 
 impl Train {
-    pub(crate) fn new(stop: i64, values: Vec<Value>) -> Self {
+    pub(crate) fn new(stop: i64, values: Vec<Dict>) -> Self {
         Train { last: stop, values: Some(values) }
     }
 

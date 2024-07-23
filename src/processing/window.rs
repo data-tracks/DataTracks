@@ -176,10 +176,11 @@ mod test {
 
     use crate::processing::station::Command::Ready;
     use crate::processing::station::Station;
+    use crate::processing::tests::dict_values;
     use crate::processing::train::Train;
     use crate::processing::window::{BackWindow, Window};
     use crate::util::{new_channel, TimeUnit};
-    use crate::value::Value;
+    use crate::value::{Dict, Value};
 
     #[test]
     fn default_behavior() {
@@ -187,7 +188,7 @@ mod test {
 
         let control = unbounded();
 
-        let values = vec![Value::float(3.3), Value::int(3)];
+        let values = dict_values(vec![Value::float(3.3), Value::int(3)]);
 
         let (tx, num, rx) = new_channel();
 
@@ -199,10 +200,10 @@ mod test {
         let res = rx.recv();
         match res {
             Ok(mut t) => {
-                assert_eq!(values.len(), t.values.clone().map_or(usize::MAX, |vec: Vec<Value>| vec.len()));
+                assert_eq!(values.len(), t.values.clone().map_or(usize::MAX, |vec: Vec<Dict>| vec.len()));
                 for (i, value) in t.values.take().unwrap().into_iter().enumerate() {
                     assert_eq!(value, values[i]);
-                    assert_ne!(Value::text(""), value)
+                    assert_ne!(Value::text(""), *value.0.get("$").unwrap())
                 }
             }
             Err(..) => assert!(false),
@@ -217,8 +218,8 @@ mod test {
 
         let control = unbounded();
 
-        let values = vec![Value::float(3.3), Value::int(3)];
-        let after = vec!["test".into()];
+        let values = dict_values(vec![Value::float(3.3), Value::int(3)]);
+        let after = dict_values(vec!["test".into()]);
 
         let (tx, num, rx) = new_channel();
 

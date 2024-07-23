@@ -1,18 +1,18 @@
 use std::fmt::Formatter;
 
-use crate::value::Value;
-use crate::value::value::{ValType, Valuable};
+use crate::value::{ValType, Value};
+use crate::value::value::{Valuable};
 
 #[derive(Eq, Hash, Clone, Debug, PartialEq)]
-pub struct HoArray(Vec<Value>);
+pub struct Array(Vec<Value>);
 
-impl HoArray {
+impl Array {
     pub fn new(values: Vec<Value>) -> Self {
-        HoArray(values)
+        Array(values)
     }
 }
 
-impl Valuable for HoArray {
+impl Valuable for Array {
     fn type_(&self) -> ValType {
         ValType::Tuple
     }
@@ -26,7 +26,7 @@ impl From<Vec<Value>> for Value {
     }
 }
 
-impl std::fmt::Display for HoArray {
+impl std::fmt::Display for Array {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.0)
     }

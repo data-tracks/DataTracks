@@ -1,84 +1,60 @@
 use std::cmp::PartialEq;
 use std::collections::BTreeMap;
-use std::fmt::Display;
 use std::ops::Add;
 
 use json::{JsonValue, parse};
 
-use crate::value::{HoBool, HoFloat, HoInt};
-use crate::value::array::HoArray;
-use crate::value::dict::HoDict;
-use crate::value::null::HoNull;
-use crate::value::string::HoString;
-use crate::value::ValType::Integer;
-use crate::value::Value::{Array, Bool, Dict, Float, Int, Null, Text};
+use crate::value::{Bool, Float, Int};
+use crate::value::array::Array;
+use crate::value::dict::Dict;
+use crate::value::null::Null;
+use crate::value::string::Text;
 
-#[derive(PartialEq, Debug, Clone)]
-pub enum ValType {
-    Integer,
-    Float,
-    Text,
-    Bool,
-    Tuple,
-    Dict,
-    Null,
-    Any
-}
 
-impl ValType {
-    pub(crate) fn parse(stencil: &str) -> ValType {
-        match stencil.to_lowercase().as_str() {
-            "int" | "integer" | "i" => Integer,
-            "float" | "f" => ValType::Float,
-            "bool" | "boolean" | "b" => ValType::Bool,
-            "text" | "string" | "s" => ValType::Text,
-            _ => panic!("Could not parse the type of the value.")
-        }
-    }
-}
 
 #[derive(Eq, Hash, Clone, Debug)]
 pub enum Value {
-    Int(HoInt),
-    Float(HoFloat),
-    Bool(HoBool),
-    Text(Box<HoString>),
-    Array(HoArray),
-    Dict(HoDict),
-    Null(HoNull),
+    Int(Int),
+    Float(Float),
+    Bool(Bool),
+    Text(Text),
+    Array(Array),
+    Dict(Dict),
+    Null(Null),
 }
 
 
 impl Value {
     pub fn text(string: &str) -> Value {
-        Text(Box::new(HoString(string.parse().unwrap())))
+        Value::Text(Text(string.parse().unwrap()))
     }
     pub fn int(int: i64) -> Value {
-        Int(HoInt(int))
+        Value::Int(Int(int))
     }
 
     pub fn float(float: f64) -> Value {
-        Float(HoFloat::new(float))
+        Value::Float(Float::new(float))
     }
 
     pub fn bool(bool: bool) -> Value {
-        Bool(HoBool(bool))
+        Value::Bool(Bool(bool))
     }
 
     pub fn array(tuple: Vec<Value>) -> Value {
-        Array(HoArray::new(tuple))
+        Value::Array(Array::new(tuple))
     }
 
     fn dict(values: BTreeMap<String, Value>) -> Value {
-        Dict(HoDict::new(values))
+        Value::Dict(Dict::new(values))
     }
 
     pub fn null() -> Value {
-        Null(HoNull {})
+        Value::Null(Null {})
     }
 }
 
 // Define the macro
+#[macro_export]
 macro_rules! value_display {
     ($type:ty) => {
         impl std::fmt::Display for $type {
@@ -89,58 +65,60 @@ macro_rules! value_display {
     };
 }
 
-pub(crate) use value_display;
+
+use crate::value::r#type::ValType;
+
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         match self {
-            Int(a) => {
+            Value::Int(a) => {
                 match other {
-                    Int(b) => a == b,
-                    Float(b) => a == b,
-                    Bool(b) => a == b,
-                    Text(b) => a == b,
+                    Value::Int(b) => a.0 == b.0,
+                    Value::Float(b) => a == b,
+                    Value::Bool(b) => a == b,
+                    Value::Text(b) => a == b,
                     _ => false
                 }
             }
-            Float(a) => {
+            Value::Float(a) => {
                 match other {
-                    Int(b) => a == b,
-                    Float(b) => a == b,
-                    Bool(b) => a == b,
-                    Text(b) => a == b,
+                    Value::Int(b) => a == b,
+                    Value::Float(b) => a == b,
+                    Value::Bool(b) => a == b,
+                    Value::Text(b) => a == b,
                     _ => false
                 }
             }
-            Bool(a) => {
+            Value::Bool(a) => {
                 match other {
-                    Int(b) => a == b,
-                    Float(b) => a == b,
-                    Bool(b) => a == b,
-                    Text(b) => a == b,
+                    Value::Int(b) => a == b,
+                    Value::Float(b) => a == b,
+                    Value::Bool(b) => a == b,
+                    Value::Text(b) => a == b,
                     _ => false
                 }
             }
-            Text(a) => {
+            Value::Text(a) => {
                 match other {
-                    Int(b) => a == b,
-                    Float(b) => a == b,
-                    Bool(b) => a == b,
-                    Text(b) => a == b,
+                    Value::Int(b) => a == b,
+                    Value::Float(b) => a == b,
+                    Value::Bool(b) => a == b,
+                    Value::Text(b) => a == b,
                     _ => false
                 }
             }
-            Null(_) => {
-                matches!(other, Null(_))
+            Value::Null(_) => {
+                matches!(other, Value::Null(_))
             }
-            Array(a) => {
+            Value::Array(a) => {
                 match other {
-                    Array(b) => b == a,
+                    Value::Array(b) => b == a,
                     _ => false
                 }
             }
-            Dict(a) => {
+            Value::Dict(a) => {
                 match other {
-                    Dict(b) => a == b,
+                    Value::Dict(b) => a == b,
                     _ => false
                 }
             }
@@ -213,17 +191,17 @@ impl Add for &Value {
 
     fn add(self, rhs: Self) -> Self::Output {
         match self {
-            Int(a) => {
+            Value::Int(a) => {
                 match rhs {
-                    Int(b) => Int(*a + *b),
-                    Float(b) => Float(*a + *b),
+                    Value::Int(b) => Value::Int(*a + *b),
+                    Value::Float(b) => Value::Float(*a + *b),
                     _ => panic!("Cannot add.")
                 }
             }
-            Float(a) => {
+            Value::Float(a) => {
                 match rhs {
-                    Int(b) => Float(*b + *a),
-                    Float(b) => Float(*b + *a),
+                    Value::Int(b) => Value::Float(*b + *a),
+                    Value::Float(b) => Value::Float(*b + *a),
                     _ => panic!("Cannot add.")
                 }
             }
