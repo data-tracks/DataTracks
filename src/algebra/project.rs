@@ -1,7 +1,7 @@
 use crate::algebra::algebra::{Algebra, RefHandler};
 use crate::algebra::AlgebraType;
 use crate::processing::Train;
-use crate::value::Value;
+use crate::value::Dict;
 
 pub trait Project: Algebra {
     fn get_input(&self) -> &AlgebraType;
@@ -9,19 +9,19 @@ pub trait Project: Algebra {
 
 pub struct TrainProject {
     input: Box<AlgebraType>,
-    project: fn(Value) -> Value,
+    project: fn(Dict) -> Dict,
 }
 
 struct ProjectHandler{
     input: Box<dyn RefHandler + Send>,
-    project: fn(Value) -> Value
+    project: fn(Dict) -> Dict
     
 }
 
 impl RefHandler for ProjectHandler {
     fn process(&self, stop: i64, wagons: Vec<Train>) -> Train {
         let mut train = self.input.process(stop, wagons);
-        let projected = train.values.take().unwrap().into_iter().map(|value: Value| (self.project)(value)).collect();
+        let projected = train.values.take().unwrap().into_iter().map(|value| (self.project)(value)).collect();
         Train::new(stop, projected)
     }
 

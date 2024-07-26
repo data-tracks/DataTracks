@@ -5,7 +5,7 @@ use crate::algebra::RefHandler;
 use crate::language::Language;
 use crate::processing::train::Train;
 use crate::processing::transform::Transform::{Func, Lang};
-use crate::value::{Dict, Value};
+use crate::value::Dict;
 
 pub trait Taker: Send {
     fn take(&mut self, wagons: &mut Vec<Train>) -> Vec<Train>;
@@ -126,7 +126,7 @@ impl FuncTransform {
         FuncTransform { func }
     }
 
-    pub(crate) fn new_val(_stop: i64, func: fn(Value) -> Value) -> FuncTransform {
+    pub(crate) fn new_val(_stop: i64, func: fn(Dict) -> Dict) -> FuncTransform {
         Self::new(Arc::new(move |stop, wagons| {
             let mut values = vec![];
             for mut train in wagons {
@@ -146,7 +146,7 @@ impl FuncTransform {
 
 #[cfg(test)]
 mod tests {
-    use std::ops::Add;
+    use crate::processing::transform::Dict;
     use std::sync::Arc;
 
     use crossbeam::channel::unbounded;
@@ -159,14 +159,16 @@ mod tests {
     use crate::util::new_channel;
     use crate::value::Value;
 
-
     #[test]
     fn transform() {
         let mut station = Station::new(0);
 
         let control = unbounded();
 
-        station.set_transform(0, Func(FuncTransform::new_val(0, |x| &x + &Value::int(3))));
+        station.set_transform(0, Func(FuncTransform::new_val(0, |mut x| {
+            x.0.insert("$".into(), x.get_data().unwrap() + &Value::int(3));
+            x
+        })));
 
         let values = dict_values(vec![Value::float(3.3), Value::int(3)]);
 
@@ -181,8 +183,8 @@ mod tests {
             Ok(mut t) => {
                 assert_eq!(values.len(), t.values.clone().map_or(usize::MAX, |vec| vec.len()));
                 for (i, value) in t.values.take().unwrap().into_iter().enumerate() {
-                    assert_eq!(value, &values[i] + &Value::int(3));
-                    assert_ne!(Value::text("").into(), value)
+                    assert_eq!(value.get_data().unwrap().clone(), &values[i].get_data().unwrap().clone() + &Value::int(3));
+                    assert_ne!(Dict::from(Value::text("")), value)
                 }
             }
             Err(..) => assert!(false),
@@ -195,9 +197,12 @@ mod tests {
 
         let control = unbounded();
 
-        station.set_transform(0, Func(FuncTransform::new_val(0, |x| &x + &Value::int(3))));
+        station.set_transform(0, Func(FuncTransform::new_val(0, |mut x| {
+            x.0.insert("$".into(), x.get_data().unwrap() + &Value::int(3));
+            x
+        })));
 
-        let values = vec![Value::float(3.3), Value::int(3)];
+        let values = vec![Value::float(3.3).into(), Value::int(3).into()];
 
         let (tx, num, rx) = new_channel();
 
@@ -211,8 +216,8 @@ mod tests {
                 if let Some(vec) = t.values.take() {
                     assert_eq!(values.len(), vec.len());
                     for (i, value) in vec.into_iter().enumerate() {
-                        assert_eq!(value, values.get(i).unwrap() + &Value::int(3));
-                        assert_ne!(Value::text(""), value);
+                        assert_eq!(value.get_data().unwrap().clone(), values.get(i).unwrap().get_data().unwrap() + &Value::int(3));
+                        assert_ne!(&Value::text(""), value.get_data().unwrap());
                     }
                 } else {
                     panic!("Expected values for key 0");

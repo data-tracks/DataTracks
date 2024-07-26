@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use crate::processing::block::Block::{All, Non, Specific};
 use crate::processing::Train;
 use crate::processing::train::MutWagonsFunc;
-use crate::value::Value;
+use crate::value::Dict;
 
 pub(crate) enum Block {
     Non(NonBlock),
@@ -65,7 +65,7 @@ pub(crate) struct SpecificBlock {
     input: Vec<i64>,
     blocks: Vec<i64>,
     func: MutWagonsFunc,
-    buffer: HashMap<i64, Vec<Value>>,
+    buffer: HashMap<i64, Vec<Dict>>,
 }
 
 impl SpecificBlock {
@@ -89,7 +89,7 @@ impl SpecificBlock {
 
 }
 
-fn merge_buffer(drain: Drain<i64, Vec<Value>>) -> Vec<Train> {
+fn merge_buffer(drain: Drain<i64, Vec<Dict>>) -> Vec<Train> {
     let mut trains = vec![];
     for (last, values) in drain {
         trains.push(Train::new(last, values));
@@ -100,7 +100,7 @@ fn merge_buffer(drain: Drain<i64, Vec<Value>>) -> Vec<Train> {
 pub(crate) struct AllBlock {
     input: Vec<i64>,
     func: MutWagonsFunc,
-    buffer: HashMap<i64, Vec<Value>>,
+    buffer: HashMap<i64, Vec<Dict>>,
     switch: HashMap<i64, bool>
 }
 
@@ -139,6 +139,7 @@ mod test {
 
     use crate::processing::block::Block;
     use crate::processing::Train;
+    use crate::value::{Dict, Value};
 
     #[test]
     fn overhead() {
@@ -151,7 +152,7 @@ mod test {
 
         let mut trains = vec![];
         for _ in 0..1000 {
-            trains.push(Train::new(0, vec![3.into()]))
+            trains.push(Train::new(0, vec![Dict::from(Value::int(3))]))
         }
 
         let instant = Instant::now();

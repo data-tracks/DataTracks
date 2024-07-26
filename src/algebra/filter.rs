@@ -1,7 +1,7 @@
 use crate::algebra::algebra::{Algebra, RefHandler};
 use crate::algebra::AlgebraType;
 use crate::processing::Train;
-use crate::value::Value;
+use crate::value::Dict;
 
 pub trait Filter: Algebra {
     fn get_input(&self) -> &AlgebraType;
@@ -10,13 +10,13 @@ pub trait Filter: Algebra {
 
 pub struct TrainFilter {
     input: Box<AlgebraType>,
-    condition: Option<fn(&Value) -> bool>,
+    condition: Option<fn(&Dict) -> bool>,
 }
 
 
 struct FilterHandler{
     input: Box<dyn RefHandler>,
-    condition: fn(&Value) -> bool
+    condition: fn(&Dict) -> bool
 }
 
 impl RefHandler for  FilterHandler{

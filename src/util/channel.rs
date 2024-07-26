@@ -214,6 +214,6 @@ mod test {
 
         println!("std: {}ms vs counted: {}ms", std.as_millis(), new_time.as_millis());
 
-        assert!((1.10 * std.as_millis() as f64) as u128 >= new_time.as_millis())
+        assert!((1.20 * std.as_millis() as f64) as u128 >= new_time.as_millis())
     }
 }

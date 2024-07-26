@@ -2,7 +2,6 @@ use std::any::Any;
 use std::time::Duration;
 
 use crate::processing::Plan;
-use crate::processing::source::Source;
 use crate::processing::station::Command::{Ready, Stop};
 use crate::processing::tests::plan_test::dummy::{DummyDestination, DummySource};
 use crate::value::{Dict, Value};
@@ -178,7 +177,6 @@ pub mod tests {
 
     use crate::processing::destination::Destination;
     use crate::processing::plan::Plan;
-    use crate::processing::source::Source;
     use crate::processing::station::Command::{Ready, Stop};
     use crate::processing::station::Station;
     use crate::processing::tests::plan_test::dummy::{DummyDestination, DummySource};
@@ -197,7 +195,7 @@ pub mod tests {
 
     #[test]
     fn station_plan_train() {
-        let values = vec![3.into(), "test".into().into()];
+        let values = vec![Value::int(3).into(), Value::text("test").into()];
 
         let mut plan = Plan::default();
         let mut first = Station::new(0);
@@ -217,7 +215,7 @@ pub mod tests {
 
         let mut res = output_rx.recv().unwrap();
         assert_eq!(res.values.clone().unwrap(), values);
-        assert_ne!(res.values.take().unwrap(), vec![Value::null()]);
+        assert_ne!(res.values.take().unwrap(), vec![Value::null().into()]);
 
         assert!(output_rx.try_recv().is_err());
 
@@ -256,13 +254,13 @@ pub mod tests {
 
         let mut res = output1_rx.recv().unwrap();
         assert_eq!(res.values.clone().unwrap(), values);
-        assert_ne!(res.values.take().unwrap(), vec![Value::null()]);
+        assert_ne!(res.values.take().unwrap(), vec![Value::null().into()]);
 
         assert!(output1_rx.try_recv().is_err());
 
         let mut res = output2_rx.recv().unwrap();
         assert_eq!(res.values.clone().unwrap(), values);
-        assert_ne!(res.values.take().unwrap(), vec![Value::null()]);
+        assert_ne!(res.values.take().unwrap(), vec![Value::null().into()]);
 
         assert!(output2_rx.try_recv().is_err());
 
@@ -311,10 +309,10 @@ pub mod tests {
 
 
         let mut plan = Plan::parse(stencil);
-        let values1 = vec![vec![3.3.into()], vec![3.1.into()]];
+        let values1 = vec![vec![Dict::from(Value::from(3.3))], vec![Dict::from(Value::from(3.1))]];
         let (source1, id1) = DummySource::new(1, values1.clone(), Duration::from_millis(1));
 
-        let values4 = vec![vec![3.into()]];
+        let values4 = vec![vec![Dict::from(Value::from(3))]];
         let (source4, id4) = DummySource::new_with_delay(4, values4.clone(), Duration::from_millis(3), Duration::from_millis(1));
 
         let destination = DummyDestination::new(3, 1);
@@ -408,7 +406,7 @@ fn full_test() {
 
     let mut values = vec![];
 
-    let hello = Dict::from(r#"{"msg": "hello", "$topic": "command"}"#);
+    let hello = Dict::from_json(r#"{"msg": "hello", "$topic": "command"}"#);
     values.push(vec![hello]);
     values.push(vec![Dict::from(Value::float(3.6))]);
 

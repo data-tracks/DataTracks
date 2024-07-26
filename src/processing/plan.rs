@@ -162,19 +162,19 @@ impl Plan {
         let mut temp = String::default();
         let mut is_text = false;
 
-        let last = None;
+        let mut last = None;
 
         for char in stencil.chars() {
             if is_text && char != '"' {
                 temp.push(char);
                 continue;
             }
-            let last = self.lines.get(&line).and_then(|v| v.last().cloned());
 
 
             match char {
                 '-' => {
                     let station = Station::parse( temp.clone(), last);
+                    last = Some(station.stop);
                     self.build(line, station);
 
                     temp = String::default();
@@ -251,8 +251,7 @@ pub(crate) enum PlanStage {
     WindowStage,
     TransformStage,
     LayoutStage,
-    BlockStage,
-    Num,
+    NumStage,
 }
 
 

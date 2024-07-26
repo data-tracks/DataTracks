@@ -19,7 +19,7 @@ pub struct ScanHandler {
 }
 
 impl RefHandler for ScanHandler {
-    fn process(&self, stop: i64, wagons: Vec<Train>) -> Train {
+    fn process(&self, _stop: i64, wagons: Vec<Train>) -> Train {
         let mut values = vec![];
         wagons.into_iter().filter(|w| w.last == self.index).for_each(|mut t| values.append(t.values.take().unwrap().as_mut()));
         Train::new(self.index, values)
@@ -43,10 +43,11 @@ mod test {
     use crate::algebra::algebra::Algebra;
     use crate::algebra::scan::TrainScan;
     use crate::processing::Train;
+    use crate::value::Dict;
 
     #[test]
     fn simple_scan() {
-        let train = Train::new(0, vec![3.into(), "test".into()]);
+        let train = Train::new(0, Dict::transform(vec![3.into(), "test".into()]));
 
         let mut scan = TrainScan::new(0);
 
@@ -54,7 +55,7 @@ mod test {
 
         let mut train_2 = handler.process(0, vec![train]);
 
-        assert_eq!(train_2.values.clone().unwrap(), vec![3.into(), "test".into()]);
-        assert_ne!(train_2.values.take().unwrap(), vec![8.into(), "test".into()]);
+        assert_eq!(train_2.values.clone().unwrap(), Dict::transform(vec![3.into(), "test".into()]));
+        assert_ne!(train_2.values.take().unwrap(), Dict::transform(vec![8.into(), "test".into()]));
     }
 }

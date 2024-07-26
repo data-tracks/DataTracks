@@ -5,10 +5,9 @@ use std::thread;
 
 use crossbeam::channel;
 use crossbeam::channel::{Receiver, unbounded};
-use PlanStage::BlockStage;
 use crate::processing::layout::Field;
 use crate::processing::plan::PlanStage;
-use crate::processing::plan::PlanStage::{LayoutStage, Num, TransformStage, WindowStage};
+use crate::processing::plan::PlanStage::{LayoutStage, NumStage, TransformStage, WindowStage};
 use crate::processing::platform::Platform;
 use crate::processing::sender::Sender;
 use crate::processing::train::Train;
@@ -59,7 +58,8 @@ impl Station {
         let mut temp = String::default();
         let mut is_text = false;
         let mut stages = vec![];
-        let mut current_stage = Some(Num);
+        let mut current_stage = Some(NumStage);
+        let mut counter = 0;
 
         for char in stencil.chars() {
             if char != '"' && is_text {
@@ -68,10 +68,10 @@ impl Station {
             }
 
             // can we end number
-            if let Some(_stage @ Num) = current_stage {
+            if let Some(_stage @ NumStage) = current_stage {
                 match char {
                     '(' | '{' | '[' => {
-                        stages.push((Num, temp.clone()));
+                        stages.push((NumStage, temp.clone()));
                         temp = String::default();
                         current_stage = None;
                     }
@@ -90,6 +90,7 @@ impl Station {
                 '(' | '{' | '[' => {
                     if current_stage.is_some() {
                         temp.push(char);
+                        counter += 1;
                         continue;
                     }
                     current_stage = Some(match char {
@@ -101,13 +102,17 @@ impl Station {
                 }
                 c => {
                     if let Some(stage) = current_stage{
-                        if (c == ')' && stage == LayoutStage)
+                        if counter == 0 && (
+                            (c == ')' && stage == LayoutStage)
                             || (c == '}' && stage == TransformStage)
-                            || (c == ']' && stage == LayoutStage){
+                            || (c == ']' && stage == WindowStage)
+                        ) {
                             stages.push((stage, temp.clone()));
                             temp = String::default();
                             current_stage = None;
                             continue
+                        }else if c == ')' || c == '}' || c == ']' {
+                            counter -= 1;
                         }
                     }
                     temp.push(char);
@@ -115,7 +120,7 @@ impl Station {
             }
         }
         if !temp.is_empty() {
-            if let Some(stage @ Num) = current_stage {
+            if let Some(stage @ NumStage) = current_stage {
                 stages.push((stage, temp))
             }else {
                 panic!("Not finished parsing")
@@ -131,9 +136,16 @@ impl Station {
             match stage.0 {
                 WindowStage => station.set_window(Window::parse(stage.1)),
                 TransformStage => station.set_transform(last.unwrap_or(-1), Transform::parse(stage.1).unwrap()),
-                BlockStage => station.add_block(last.unwrap_or(-1)),
                 LayoutStage => station.add_explicit_output(Field::parse(stage.1)),
-                Num => station.set_stop(stage.1.parse::<i64>().unwrap()),
+                NumStage => {
+                    let mut num = stage.1;
+                    // test for blocks
+                    if num.starts_with('|'){
+                        station.add_block(last.unwrap_or(-1));
+                        num.remove(0);
+                    }
+                    station.set_stop(num.parse().unwrap())
+                },
             }
         }
         station
