@@ -1,6 +1,5 @@
 use std::any::Any;
 use std::time::Duration;
-
 use crate::processing::Plan;
 use crate::processing::station::Command::{Ready, Stop};
 use crate::processing::tests::plan_test::dummy::{DummyDestination, DummySource};

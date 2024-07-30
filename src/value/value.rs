@@ -12,7 +12,7 @@ use crate::value::string::Text;
 
 
 
-#[derive(Eq, Hash, Clone, Debug)]
+#[derive(Eq, PartialEq, Hash, Clone, Debug)]
 pub enum Value {
     Int(Int),
     Float(Float),
@@ -68,7 +68,7 @@ macro_rules! value_display {
 
 use crate::value::r#type::ValType;
 
-impl PartialEq for Value {
+/*impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         match self {
             Value::Int(a) => {
@@ -124,7 +124,7 @@ impl PartialEq for Value {
             }
         }
     }
-}
+}*/
 
 impl From<i64> for Value {
     fn from(value: i64) -> Self {

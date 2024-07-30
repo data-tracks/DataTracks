@@ -121,7 +121,7 @@ impl AllBlock {
     fn next(&mut self, train: Train) {
         self.buffer.entry(train.last).or_default().append(&mut train.values.unwrap());
         self.switch.insert(train.last, true);
-        if self.switch.iter().all(|(i,s)| *s) {
+        if self.switch.iter().all(|(_i,s)| *s) {
             (self.func)(&mut merge_buffer(self.buffer.drain()));
 
             self.input.iter().for_each(|i|{

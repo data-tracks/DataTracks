@@ -47,6 +47,6 @@ fn trim_quotes(value: &str) -> String {
     chars.as_str().to_string()
 }
 
-pub(crate) fn parse(query: &str) -> Result<MqlStatement, String> {
+pub(crate) fn parse(_query: &str) -> Result<MqlStatement, String> {
     todo!()
 }

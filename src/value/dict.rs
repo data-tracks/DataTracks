@@ -11,7 +11,7 @@ pub struct Dict(pub BTreeMap<String, Value>);
 
 impl Dict {
     pub fn new(values: BTreeMap<String, Value>) -> Self{
-        Dict(values.into())
+        Dict(values)
     }
 
     pub(crate) fn get(&self, key: &String) -> Option<&Value> {

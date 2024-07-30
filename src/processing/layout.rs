@@ -102,7 +102,7 @@ fn parse_array(reader: &mut BufferedReader) -> Field {
     field
 }
 
-fn parse_scalar(type_: OutputType, mut reader: &mut BufferedReader) -> (Field, HashMap<String, String>) {
+fn parse_scalar(type_: OutputType, reader: &mut BufferedReader) -> (Field, HashMap<String, String>) {
     let mut temp = String::default();
     let mut nullable = false;
     let mut optional = false;

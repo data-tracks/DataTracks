@@ -4,7 +4,7 @@ use crate::value::{Float, Int, Text, ValType};
 use crate::value::value::{Valuable};
 use crate::value_display;
 
-#[derive(Eq, Hash, Clone, Debug)]
+#[derive(Eq, PartialEq, Hash, Clone, Debug)]
 pub struct Bool(pub bool);
 
 impl Valuable for Bool {
@@ -26,11 +26,6 @@ impl PartialEq<&Float> for &Bool {
     }
 }
 
-impl PartialEq for Bool {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
-    }
-}
 
 impl PartialEq<Text> for Bool {
     fn eq(&self, other: &Text) -> bool {

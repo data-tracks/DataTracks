@@ -113,7 +113,7 @@ pub struct FuncTransform {
 
 impl Default for FuncTransform {
     fn default() -> Self {
-        Self::new(Arc::new(|stop, trains| Train::from(trains)))
+        Self::new(Arc::new(|_stop, trains| Train::from(trains)))
     }
 }
 

@@ -248,11 +248,35 @@ impl Plan {
 
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) enum PlanStage {
-    WindowStage,
-    TransformStage,
-    LayoutStage,
-    NumStage,
+    Window,
+    Transform,
+    Layout,
+    Num,
 }
+
+pub(crate) struct Stage{
+    pub(crate) open: char,
+    pub(crate) close: char
+}
+
+impl PlanStage {
+    pub(crate) const WINDOW_OPEN: char = '[';
+    pub(crate) const WINDOW_CLOSE: char = ']';
+    pub(crate) const TRANSFORM_OPEN: char = '{';
+    pub(crate) const TRANSFORM_CLOSE: char = '}';
+    pub(crate) const LAYOUT_OPEN: char = '(';
+    pub(crate) const LAYOUT_CLOSE: char = ')';
+
+    pub(crate) fn is_open(char: char) -> bool{
+        matches!(char, PlanStage::LAYOUT_OPEN | PlanStage::TRANSFORM_OPEN | PlanStage::WINDOW_OPEN)
+    }
+
+    pub(crate) fn is_close(char: char) -> bool{
+        matches!(char, PlanStage::LAYOUT_CLOSE | PlanStage::TRANSFORM_CLOSE | PlanStage::WINDOW_CLOSE)
+    }
+}
+
+
 
 
 impl Serialize for &Plan {
