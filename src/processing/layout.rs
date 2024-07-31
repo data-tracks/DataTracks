@@ -1,5 +1,6 @@
 use std::collections::HashMap;
-use crate::processing::layout::OutputType::{Any, Array, Boolean, Float, Integer, Text, Dict};
+
+use crate::processing::layout::OutputType::{Any, Array, Boolean, Dict, Float, Integer, Text};
 use crate::processing::plan::PlanStage;
 use crate::util::BufferedReader;
 
@@ -58,19 +59,32 @@ impl Field {
 
 fn parse_dict_fields(reader: &mut BufferedReader) -> DictType {
     let mut builder = DictBuilder::default();
-    reader.consume_spaces();
+
+    reader.consume_if_next('{');
 
     while let Some(char) = reader.next(){
         match char {
             ':' => {
                 reader.consume_spaces();
                 let type_char = reader.next().unwrap();
-                let layout = parse_type(reader, type_char);
+                let mut layout = parse_type(reader, type_char);
+                // set also name to value
+                layout.name = Some(builder.key.clone());
                 builder.push_value(layout);
+            }
+            ',' => {
+                reader.consume_spaces();
+            }
+            '}' => {
+                break
             }
             c => builder.push_key(c)
         }
     }
+
+    reader.consume_if_next('}');
+
+
     DictType{ fields: builder.build_fileds()}
 }
 
@@ -134,7 +148,9 @@ fn parse_field(type_: OutputType, reader: &mut BufferedReader) -> (Field, HashMa
 
     while let Some(char) = reader.peek_next() {
         match char {
-            ' ' => {},
+            ' ' => {
+                reader.next();
+            },
             '?' => nullable = true,
             '\'' => optional = true,
             '(' => {
@@ -221,7 +237,7 @@ pub(crate) struct DictType {
 
 #[cfg(test)]
 mod test {
-    use crate::processing::layout::{Field, OutputType};
+    use crate::processing::layout::Field;
     use crate::processing::layout::OutputType::{Array, Dict, Float, Integer, Text};
 
     #[test]

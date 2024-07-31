@@ -232,17 +232,21 @@ mod test {
         for value in &values {
             station.send(Train::new(0, vec![value.clone()])).unwrap();
         }
-        sleep(Duration::from_millis(4));
+        sleep(Duration::from_millis(20));
+
+        let mut results = vec![];
         station.send(Train::new(0, after.clone())).unwrap();
 
-        let mut res = rx.recv().unwrap();
-        assert_eq!(res.values.take().unwrap().get(0).unwrap(), values.get(0).unwrap());
+        for i in 0..3 {
+            results.push(rx.recv().unwrap())
+        }
 
-        let mut res = rx.recv().unwrap();
-        assert_eq!(res.values.take().unwrap(), values);
-
-        let mut res = rx.recv().unwrap();
-        assert_eq!(res.values.take().unwrap(), after);
+        // 1. train
+        assert_eq!(results.remove(0).values.take().unwrap().get(0).unwrap(), values.get(0).unwrap());
+        // 2. "
+        assert_eq!(results.remove(0).values.take().unwrap(), values);
+        // 3. "
+        assert_eq!(results.remove(0).values.take().unwrap(), after);
 
     }
 }

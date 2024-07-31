@@ -3,6 +3,7 @@ pub struct BufferedReader{
     position: usize
 }
 
+
 impl BufferedReader {
     pub(crate) fn consume_until(&mut self, stop: char) -> String {
         let mut temp = String::default();
@@ -13,6 +14,17 @@ impl BufferedReader {
             temp.push(char);
         }
         temp
+    }
+
+    pub(crate) fn consume_if_next(&mut self, char: char) {
+        self.consume_spaces();
+
+        if let Some(c) = self.peek_next() {
+            if c == char {
+                self.next();
+                self.consume_spaces();
+            }
+        }
     }
 }
 
