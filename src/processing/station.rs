@@ -5,7 +5,7 @@ use std::thread;
 
 use crossbeam::channel;
 use crossbeam::channel::{Receiver, unbounded};
-use crate::processing::layout::Field;
+use crate::processing::layout::{Field, Layout};
 use crate::processing::plan::PlanStage;
 use crate::processing::platform::Platform;
 use crate::processing::sender::Sender;
@@ -23,7 +23,7 @@ pub(crate) struct Station {
     pub(crate) transform: HashMap<i64, Transform>,
     pub(crate) block: Vec<i64>,
     pub(crate) inputs: Vec<i64>,
-    pub(crate) layout: Field,
+    pub(crate) layout: Layout,
     control: (channel::Sender<Command>, Receiver<Command>),
 }
 
@@ -48,7 +48,7 @@ impl Station {
             transform: HashMap::default(),
             block: vec![],
             inputs: vec![],
-            layout: Field::default(),
+            layout: Layout::default(),
             control: (control.0.clone(), control.1.clone()),
         }
     }
@@ -128,7 +128,7 @@ impl Station {
             match stage.0 {
                 PlanStage::Window => station.set_window(Window::parse(stage.1)),
                 PlanStage::Transform => station.set_transform(last.unwrap_or(-1), Transform::parse(stage.1).unwrap()),
-                PlanStage::Layout => station.add_explicit_output(Field::parse(stage.1)),
+                PlanStage::Layout => station.add_explicit_layout(Field::parse(stage.1)),
                 PlanStage::Num => {
                     let mut num = stage.1;
                     // test for blocks
@@ -209,8 +209,8 @@ impl Station {
         sender
     }
 
-    fn add_explicit_output(&mut self, output: Field) {
-        self.layout = output
+    fn add_explicit_layout(&mut self, layout: Layout) {
+        self.layout = layout;
     }
 }
 
@@ -330,11 +330,15 @@ pub mod tests {
     }
 
     #[test]
-    fn sql_parse_output() {
+    fn sql_parse_layout() {
         let stencils = vec![
-            "1(f)",// scalar
-            "1(d{name:t, temperature:f})", // named tuple
-            "1(a(length: 3)i)" // array
+            "1()",// no fixed
+            "1($1:f)", // fixed unnamed
+            "1(temperature:f)", // fixed float
+            "1(name:t)", // fixed text
+            "1(temp:f, age: i)", // fixed multiple
+            "1(address:d(number: i))", // fixed nested document
+            "1(locations:a()i())", // fixed array
         ];
 
         for stencil in stencils {

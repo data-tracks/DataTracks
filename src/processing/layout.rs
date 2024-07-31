@@ -1,6 +1,21 @@
 use std::collections::HashMap;
 use crate::processing::layout::OutputType::{Any, Array, Boolean, Float, Integer, Text, Dict};
+use crate::processing::plan::PlanStage;
 use crate::util::BufferedReader;
+
+#[derive(Default)]
+pub(crate) struct Layout {
+    type_: DictType
+}
+
+impl Layout{
+
+    fn get_default(&self) -> Field{
+        let default = Field::default();
+        self.type_.fields.get("$").cloned().unwrap_or(default)
+    }
+}
+
 
 #[derive(PartialEq, Debug, Clone)]
 pub(crate) struct Field {
@@ -14,7 +29,7 @@ pub(crate) struct Field {
 
 impl Default for Field {
     fn default() -> Self {
-        Field{
+        Field {
             explicit: false,
             nullable: false,
             optional: false,
@@ -33,32 +48,61 @@ enum FieldStage{
     Initial
 }
 
-impl Field{
-    pub(crate) fn parse(stencil: String) -> Field{
+impl Field {
+    pub(crate) fn parse(stencil: String) -> Layout {
         let mut reader = BufferedReader::new(stencil);
 
-        if let Some(value) = try_parse(&mut reader) {
-            value
-        }else {
-            panic!("Could not parse field")
-        }
+        Layout{ type_: parse_dict_fields(&mut reader)}
     }
 }
 
-fn try_parse(reader: &mut BufferedReader) -> Option<Field> {
+fn parse_dict_fields(reader: &mut BufferedReader) -> DictType {
+    let mut builder = DictBuilder::default();
     reader.consume_spaces();
-    if let Some(char) = reader.next() {
-        return Some(parse_type(reader, char))
+
+    while let Some(char) = reader.next(){
+        match char {
+            ':' => {
+                reader.consume_spaces();
+                let type_char = reader.next().unwrap();
+                let layout = parse_type(reader, type_char);
+                builder.push_value(layout);
+            }
+            c => builder.push_key(c)
+        }
     }
-    None
+    DictType{ fields: builder.build_fileds()}
+}
+
+#[derive(Default)]
+struct DictBuilder{
+    fields: HashMap<String, Field>,
+    key: String,
+}
+
+impl DictBuilder {
+    fn push_key(&mut self, char:char){
+        self.key.push(char)
+    }
+
+    fn push_value(&mut self, layout: Field) {
+        self.fields.insert(self.key.clone(), layout);
+        self.key.clear()
+    }
+
+    fn build_fileds(&mut self) -> HashMap<String, Field>{
+        let fields = self.fields.clone();
+        self.fields.clear();
+        fields
+    }
 }
 
 fn parse_type(reader: &mut BufferedReader, c: char) -> Field {
     match c {
-        'i' => parse_scalar(Integer, reader).0,
-        'f' => parse_scalar(Float, reader).0,
-        't' => parse_scalar(Text, reader).0,
-        'b' => parse_scalar(Boolean, reader).0,
+        'i' => parse_field(Integer, reader).0,
+        'f' => parse_field(Float, reader).0,
+        't' => parse_field(Text, reader).0,
+        'b' => parse_field(Boolean, reader).0,
         'a' => parse_array(reader),
         'd' => parse_dict(reader),
         _ => panic!("Unknown output prefix")
@@ -66,43 +110,24 @@ fn parse_type(reader: &mut BufferedReader, c: char) -> Field {
 }
 
 fn parse_dict(reader: &mut BufferedReader) -> Field {
-    let (mut field, _values) = parse_scalar(Any, reader);
-    let mut temp = String::default();
-
+    let (mut field, _values) = parse_field(Any, reader);
     reader.consume_spaces();
-    if let Some( _char @ '{' ) = reader.peek_next() {
-        temp.push_str(&(reader.consume_until('}').as_str().to_owned() + "}"));
-    }
 
-    let json = parse_json(temp);
-    let mut fields = HashMap::new();
-    for (key, value) in json {
-        let mut buffered_reader = BufferedReader::new(value);
-        let mut field = try_parse(&mut buffered_reader).unwrap();
-        // set field name
-        field.name = Some(key.clone());
-        fields.insert(key, field);
-    }
-
-    field.type_ = Dict(Box::new(DictType{ fields }));
+    field.type_ = Dict(Box::new(parse_dict_fields(reader)));
     field
 
 }
 
 fn parse_array(reader: &mut BufferedReader) -> Field {
-    let (mut field, values) = parse_scalar(Any, reader);
+    let (mut field, values) = parse_field(Any, reader);
     let length = values.get("length").map(|p|p.parse::<i32>().unwrap());
-    let output = match try_parse(reader) {
-        None => panic!("Could not parse component"),
-        Some(component) => {
-            Array(Box::new(ArrayType{ fields: component.type_, length }))
-        }
-    };
-    field.type_ = output;
+    let char_type = reader.next().unwrap();
+    let fields = parse_type(reader, char_type);
+    field.type_ = Array(Box::new(ArrayType { fields, length }));
     field
 }
 
-fn parse_scalar(type_: OutputType, reader: &mut BufferedReader) -> (Field, HashMap<String, String>) {
+fn parse_field(type_: OutputType, reader: &mut BufferedReader) -> (Field, HashMap<String, String>) {
     let mut temp = String::default();
     let mut nullable = false;
     let mut optional = false;
@@ -113,7 +138,7 @@ fn parse_scalar(type_: OutputType, reader: &mut BufferedReader) -> (Field, HashM
             '?' => nullable = true,
             '\'' => optional = true,
             '(' => {
-                temp.push_str(&(reader.consume_until(')').as_str().to_owned() + ")"));
+                temp.push_str(&(reader.consume_until(PlanStage::LAYOUT_CLOSE).as_str().to_owned() + &PlanStage::LAYOUT_CLOSE.to_string()));
                 break;
             },
             _ => break
@@ -126,7 +151,7 @@ fn parse_scalar(type_: OutputType, reader: &mut BufferedReader) -> (Field, HashM
     let position = value.get("position").map(|p|p.parse::<i32>().unwrap());
 
 
-    (Field{
+    (Field {
         explicit: true,
         nullable,
         optional,
@@ -182,12 +207,12 @@ impl OutputType {
 
 #[derive(PartialEq, Debug, Clone)]
 pub(crate) struct ArrayType{
-    fields: OutputType,
+    fields: Field,
     length: Option<i32>
 }
 
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Default)]
 pub(crate) struct DictType {
     fields: HashMap<String, Field> // "0"
 }
@@ -197,48 +222,40 @@ pub(crate) struct DictType {
 #[cfg(test)]
 mod test {
     use crate::processing::layout::{Field, OutputType};
-    use crate::processing::layout::OutputType::{Array, Float, Integer, Text};
+    use crate::processing::layout::OutputType::{Array, Dict, Float, Integer, Text};
 
     #[test]
     fn scalar(){
-        let stencil = "f";
+        let stencil = "$:f";
         let field = Field::parse(stencil.to_string());
-        assert_eq!(field.type_, Float)
+        assert_eq!(field.get_default().type_, Float)
     }
 
     #[test]
     fn scalar_nullable(){
-        let stencil = "f?";
+        let stencil = "$:f?";
         let field = Field::parse(stencil.to_string());
-        assert_eq!(field.type_, Float);
-        assert!(field.nullable);
+        assert_eq!(field.get_default().type_, Float);
+        assert!(field.get_default().nullable);
     }
 
     #[test]
     fn scalar_optional(){
-        let stencil = "f'?";
+        let stencil = "$:f'?";
         let field = Field::parse(stencil.to_string());
-        assert_eq!(field.type_, Float);
-        assert!(field.nullable);
-        assert!(field.optional);
-    }
-
-    #[test]
-    fn scalar_name(){
-        let stencil = "i(name: test)";
-        let field = Field::parse(stencil.to_string());
-        assert_eq!(field.type_, Integer);
-        assert_eq!(field.name.unwrap(), "test");
+        assert_eq!(field.get_default().type_, Float);
+        assert!(field.get_default().nullable);
+        assert!(field.get_default().optional);
     }
 
     #[test]
     fn array(){
-        let stencils = vec!["a()f", "af"];
+        let stencils = vec!["$:a()f", "$:af"];
         for stencil in stencils {
             let field = Field::parse(stencil.to_string());
-            match field.type_ {
+            match field.get_default().clone().type_ {
                 Array(array) => {
-                    assert_eq!(array.fields, Float);
+                    assert_eq!(array.fields.type_, Float);
                     assert_eq!(array.length, None);
                 }
                 _ => panic!("Wrong output format")
@@ -248,11 +265,11 @@ mod test {
 
     #[test]
     fn array_length(){
-        let stencil = "a(length: 3)f";
+        let stencil = "$:a(length: 3)f";
         let field = Field::parse(stencil.to_string());
-        match field.type_ {
+        match field.get_default().clone().type_ {
             Array(array) => {
-                assert_eq!(array.fields, Float);
+                assert_eq!(array.fields.type_, Float);
                 assert_eq!(array.length.unwrap(), 3);
             }
             _ => panic!("Wrong output format")
@@ -261,14 +278,20 @@ mod test {
 
     #[test]
     fn dict(){
-        let stencils = vec!["d'?{name: t, age: i}", "d(optional: true, nullable: true){name: t, age: i}"];
+        let stencils = vec!["$: d{address: d{num:i, street:t}, age: i}"];
         for stencil in stencils {
             let field = Field::parse(stencil.to_string());
-            match field.type_ {
-                OutputType::Dict(d) => {
-                    assert!(d.fields.contains_key("name"));
-                    assert_eq!(d.fields.get("name").cloned().map(|e|e.name).unwrap().unwrap(), "name");
-                    assert_eq!(d.fields.get("name").cloned().map(|e|e.type_).unwrap(), Text);
+            match field.get_default().clone().type_ {
+                Dict(d) => {
+                    assert!(d.fields.contains_key("address"));
+                    assert_eq!(d.fields.get("address").cloned().map(|e|e.name).unwrap().unwrap(), "address");
+                    match d.fields.get("address").cloned().unwrap().type_{
+                        Dict(dict) => {
+                            assert_eq!(dict.fields.get("num").unwrap().type_, Integer);
+                            assert_eq!(dict.fields.get("street").unwrap().type_, Text);
+                        }
+                        _ => panic!("Wrong output dict")
+                    }
                     assert!(d.fields.contains_key("age"));
                     assert_eq!(d.fields.get("age").cloned().map(|e|e.name).unwrap().unwrap(), "age");
                     assert_eq!(d.fields.get("age").cloned().map(|e|e.type_).unwrap(), Integer);

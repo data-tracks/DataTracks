@@ -401,11 +401,11 @@ pub mod tests {
 
 #[test]
 fn full_test() {
-    let mut plan = Plan::parse("0-1(f)-2");
+    let mut plan = Plan::parse("0-1($:f)-2");
 
     let mut values = vec![];
 
-    let hello = Dict::from_json(r#"{"msg": "hello", "$topic": "command"}"#);
+    let hello = Dict::from_json(r#"{"msg": "hello", "$topic": ["command"]}"#);
     values.push(vec![hello]);
     values.push(vec![Dict::from(Value::float(3.6))]);
 
