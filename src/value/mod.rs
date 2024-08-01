@@ -1,10 +1,11 @@
+pub use array::Array;
 pub use bool::Bool;
+pub use dict::Dict;
 pub use float::Float;
 pub use int::Int;
+pub use r#type::ValType;
 pub use string::Text;
 pub use value::Value;
-pub use dict::Dict;
-pub use r#type::ValType;
 
 mod float;
 mod int;

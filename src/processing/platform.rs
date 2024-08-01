@@ -8,6 +8,7 @@ use crossbeam::channel;
 use crossbeam::channel::{Receiver, unbounded};
 
 use crate::processing::block::Block;
+use crate::processing::layout::Layout;
 use crate::processing::sender::Sender;
 use crate::processing::station::{Command, Station};
 use crate::processing::station::Command::{Okay, Ready, Threshold};
@@ -23,6 +24,7 @@ pub(crate) struct Platform {
     receiver: Rx<Train>,
     sender: Option<Sender>,
     transform: HashMap<i64, Transform>,
+    layout: Layout,
     window: Window,
     stop: i64,
     blocks: Vec<i64>,
@@ -41,6 +43,7 @@ impl Platform {
         let blocks = station.block.clone();
         let inputs = station.inputs.clone();
         let control = unbounded();
+        let layout = station.layout.clone();
 
         (Platform {
             id: GLOBAL_ID.new_id(),
@@ -49,6 +52,7 @@ impl Platform {
             sender: Some(sender),
             transform,
             window,
+            layout,
             stop,
             blocks,
             inputs,
@@ -91,7 +95,9 @@ impl Platform {
 
             match self.receiver.try_recv() {
                 Ok(train) => {
-                    block.next(train); // window takes precedence to
+                    if self.layout.fits(&train) {
+                        block.next(train); // window takes precedence to
+                    }
                 }
                 _ => {
                     thread::sleep(timeout); // wait again

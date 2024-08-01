@@ -1,10 +1,10 @@
 use std::collections::btree_map::IntoIter;
 use std::collections::BTreeMap;
 use std::hash::Hash;
+
 use json::parse;
-use crate::value::r#type::ValType;
+
 use crate::value::Value;
-use crate::value::value::Valuable;
 
 #[derive(Eq, Clone, Debug, Hash, PartialEq, Default)]
 pub struct Dict(pub BTreeMap<String, Value>);
@@ -38,12 +38,6 @@ impl Dict {
             map.insert("$".into(), vec![self.get_data().unwrap().clone(), other.get_data().unwrap().clone()].into());
         }
         Dict(map)
-    }
-}
-
-impl Valuable for Dict {
-    fn type_(&self) -> ValType {
-        ValType::Dict
     }
 }
 

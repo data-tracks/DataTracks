@@ -2,9 +2,12 @@ use std::collections::HashMap;
 
 use crate::processing::layout::OutputType::{Any, Array, Boolean, Dict, Float, Integer, Text};
 use crate::processing::plan::PlanStage;
+use crate::processing::Train;
 use crate::util::BufferedReader;
+use crate::value;
+use crate::value::{ValType, Value};
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub(crate) struct Layout {
     type_: DictType
 }
@@ -14,6 +17,12 @@ impl Layout{
     fn get_default(&self) -> Field{
         let default = Field::default();
         self.type_.fields.get("$").cloned().unwrap_or(default)
+    }
+
+    pub(crate) fn fits(&self, train: &Train) -> bool {
+        train.values.as_ref().map_or(false, |v| {
+            v.iter().all(|value| self.type_.fits(value))
+        })
     }
 }
 
@@ -28,6 +37,7 @@ pub(crate) struct Field {
     type_: OutputType
 }
 
+
 impl Default for Field {
     fn default() -> Self {
         Field {
@@ -41,26 +51,22 @@ impl Default for Field {
     }
 }
 
-#[derive(PartialEq)]
-enum FieldStage{
-    ScalarStage,
-    ArrayStage,
-    TupleStage,
-    Initial
-}
-
 impl Field {
     pub(crate) fn parse(stencil: String) -> Layout {
         let mut reader = BufferedReader::new(stencil);
 
         Layout{ type_: parse_dict_fields(&mut reader)}
     }
+
+    pub(crate) fn fits(&self, value: &Value) -> bool {
+        self.type_.fits(value)
+    }
 }
 
 fn parse_dict_fields(reader: &mut BufferedReader) -> DictType {
     let mut builder = DictBuilder::default();
 
-    reader.consume_if_next('{');
+    reader.consume_if_next(PlanStage::TRANSFORM_OPEN);
 
     while let Some(char) = reader.next(){
         match char {
@@ -75,14 +81,14 @@ fn parse_dict_fields(reader: &mut BufferedReader) -> DictType {
             ',' => {
                 reader.consume_spaces();
             }
-            '}' => {
+            PlanStage::TRANSFORM_CLOSE => {
                 break
             }
             c => builder.push_key(c)
         }
     }
 
-    reader.consume_if_next('}');
+    reader.consume_if_next(PlanStage::TRANSFORM_CLOSE);
 
 
     DictType{ fields: builder.build_fileds()}
@@ -197,7 +203,7 @@ fn parse_json(mut string: String) -> HashMap<String, String> {
 }
 
 #[derive(PartialEq, Debug, Clone)]
-pub(crate) enum OutputType {
+pub enum OutputType {
   // single value
     Integer,
     Float,
@@ -206,6 +212,45 @@ pub(crate) enum OutputType {
     Any,
     Array(Box<ArrayType>),
     Dict(Box<DictType>)
+}
+
+impl OutputType {
+    pub(crate) fn fits(&self, value: &Value) -> bool {
+        return match self {
+            Any => true,
+            Array(a) => {
+                return match value {
+                    Value::Array(array) => {
+                        a.fits(array)
+                    }
+                    _ => false
+                }
+            }
+            Dict(d) => {
+                return match value {
+                    Value::Dict(dict) => {
+                        d.fits(dict)
+                    }
+                    _ => false
+                }
+            }
+            t => {
+                return value.type_() == t.value_type()
+            }
+        }
+    }
+
+    fn value_type(&self) -> ValType {
+        match self {
+            Integer => ValType::Integer,
+            Float => ValType::Float,
+            Text => ValType::Text,
+            Boolean => ValType::Bool,
+            Any => ValType::Any,
+            Array(_) => ValType::Array,
+            Dict(_) => ValType::Dict
+        }
+    }
 }
 
 impl OutputType {
@@ -227,13 +272,32 @@ pub(crate) struct ArrayType{
     length: Option<i32>
 }
 
+impl ArrayType {
+    pub(crate) fn fits(&self, array: &value::Array) -> bool {
+        array.0.iter().all(|a| self.fields.fits(a))
+    }
+}
+
 
 #[derive(Debug, PartialEq, Clone, Default)]
 pub(crate) struct DictType {
     fields: HashMap<String, Field> // "0"
 }
 
-
+impl DictType {
+    pub(crate) fn fits(&self, dict: &value::Dict) -> bool {
+        for (name, field) in self.fields.iter().by_ref() {
+            if let Some(value) = dict.0.get(name) {
+                if !field.fits(value) {
+                    return false
+                }
+            } else {
+                return false
+            }
+        }
+        true
+    }
+}
 
 #[cfg(test)]
 mod test {

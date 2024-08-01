@@ -1,5 +1,6 @@
 use std::any::Any;
 use std::time::Duration;
+
 use crate::processing::Plan;
 use crate::processing::station::Command::{Ready, Stop};
 use crate::processing::tests::plan_test::dummy::{DummyDestination, DummySource};
@@ -51,8 +52,9 @@ mod dummy {
             let senders = self.senders.take().unwrap();
             let (tx, rx) = unbounded();
 
-            spawn(move || {
+            let handle = spawn(move || {
                 control.send(Ready(stop)).unwrap();
+
                 // wait for ready from callee
                 match rx.recv() {
                     Ok(command) => {
@@ -72,7 +74,8 @@ mod dummy {
                     }
                     sleep(delay);
                 }
-                control.send(Stop(stop)).unwrap()
+                control.send(Stop(stop)).unwrap();
+                println!("out");
             });
             tx
         }
@@ -425,5 +428,5 @@ fn full_test() {
         assert_eq!(command.type_id(), plan.control_receiver.1.recv().unwrap().type_id());
     }
     let lock = result.lock().unwrap();
-    assert_eq!(lock.len(), 2)
+    assert_eq!(lock.len(), 1)
 }

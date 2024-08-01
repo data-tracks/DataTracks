@@ -1,17 +1,10 @@
 use std::fmt::Formatter;
 
-use crate::value::{Float, Int, Text, ValType};
-use crate::value::value::{Valuable};
+use crate::value::{Float, Int, Text};
 use crate::value_display;
 
 #[derive(Eq, PartialEq, Hash, Clone, Debug)]
 pub struct Bool(pub bool);
-
-impl Valuable for Bool {
-    fn type_(&self) -> ValType {
-        ValType::Bool
-    }
-}
 
 
 impl PartialEq<&Int> for &Bool {

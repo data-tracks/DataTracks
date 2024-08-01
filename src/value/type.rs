@@ -4,7 +4,7 @@ pub enum ValType {
     Float,
     Text,
     Bool,
-    Tuple,
+    Array,
     Dict,
     Null,
     Any

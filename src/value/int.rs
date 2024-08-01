@@ -1,20 +1,12 @@
 use std::fmt::Formatter;
 use std::ops::{Add, Sub};
 
-use crate::value::{Bool, Float, Text, ValType};
+use crate::value::{Bool, Float, Text};
 use crate::value::number::Number;
-use crate::value::ValType::Integer;
-use crate::value::value::{Valuable};
 use crate::value_display;
 
 #[derive(Eq, Hash, PartialEq, Clone, Copy, Debug)]
 pub struct Int(pub(crate) i64);
-
-impl Valuable for Int {
-    fn type_(&self) -> ValType {
-        Integer
-    }
-}
 
 impl Number for Int {
     fn float(&self) -> f64 {

@@ -8,9 +8,8 @@ use crate::value::{Bool, Float, Int};
 use crate::value::array::Array;
 use crate::value::dict::Dict;
 use crate::value::null::Null;
+use crate::value::r#type::ValType;
 use crate::value::string::Text;
-
-
 
 #[derive(Eq, PartialEq, Hash, Clone, Debug)]
 pub enum Value {
@@ -51,6 +50,18 @@ impl Value {
     pub fn null() -> Value {
         Value::Null(Null {})
     }
+
+    pub fn type_(&self) -> ValType {
+        match self {
+            Value::Int(_) => ValType::Integer,
+            Value::Float(_) => ValType::Float,
+            Value::Bool(_) => ValType::Bool,
+            Value::Text(_) => ValType::Text,
+            Value::Array(_) => ValType::Array,
+            Value::Dict(_) => ValType::Dict,
+            Value::Null(_) => ValType::Null
+        }
+    }
 }
 
 // Define the macro
@@ -65,66 +76,6 @@ macro_rules! value_display {
     };
 }
 
-
-use crate::value::r#type::ValType;
-
-/*impl PartialEq for Value {
-    fn eq(&self, other: &Self) -> bool {
-        match self {
-            Value::Int(a) => {
-                match other {
-                    Value::Int(b) => a.0 == b.0,
-                    Value::Float(b) => a == b,
-                    Value::Bool(b) => a == b,
-                    Value::Text(b) => a == b,
-                    _ => false
-                }
-            }
-            Value::Float(a) => {
-                match other {
-                    Value::Int(b) => a == b,
-                    Value::Float(b) => a == b,
-                    Value::Bool(b) => a == b,
-                    Value::Text(b) => a == b,
-                    _ => false
-                }
-            }
-            Value::Bool(a) => {
-                match other {
-                    Value::Int(b) => a == b,
-                    Value::Float(b) => a == b,
-                    Value::Bool(b) => a == b,
-                    Value::Text(b) => a == b,
-                    _ => false
-                }
-            }
-            Value::Text(a) => {
-                match other {
-                    Value::Int(b) => a == b,
-                    Value::Float(b) => a == b,
-                    Value::Bool(b) => a == b,
-                    Value::Text(b) => a == b,
-                    _ => false
-                }
-            }
-            Value::Null(_) => {
-                matches!(other, Value::Null(_))
-            }
-            Value::Array(a) => {
-                match other {
-                    Value::Array(b) => b == a,
-                    _ => false
-                }
-            }
-            Value::Dict(a) => {
-                match other {
-                    Value::Dict(b) => a == b,
-                    _ => false
-                }
-            }
-        }
-    }
-}*/
 
 impl From<i64> for Value {
     fn from(value: i64) -> Self {
@@ -212,10 +163,6 @@ impl Add for &Value {
     }
 }
 
-
-pub trait Valuable {
-    fn type_(&self) -> ValType;
-}
 
 #[cfg(test)]
 mod tests {

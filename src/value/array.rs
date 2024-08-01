@@ -1,20 +1,13 @@
 use std::fmt::Formatter;
 
-use crate::value::{ValType, Value};
-use crate::value::value::{Valuable};
+use crate::value::Value;
 
 #[derive(Eq, Hash, Clone, Debug, PartialEq)]
-pub struct Array(Vec<Value>);
+pub struct Array(pub Vec<Value>);
 
 impl Array {
     pub fn new(values: Vec<Value>) -> Self {
         Array(values)
-    }
-}
-
-impl Valuable for Array {
-    fn type_(&self) -> ValType {
-        ValType::Tuple
     }
 }
 

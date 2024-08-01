@@ -1,10 +1,9 @@
 use std::fmt::Formatter;
 use std::ops::{Add, Sub};
 
-use crate::value::{Bool, Text, ValType};
+use crate::value::{Bool, Text};
 use crate::value::int::Int;
 use crate::value::number::Number;
-use crate::value::value::{Valuable};
 use crate::value_display;
 
 #[derive(Eq, Hash, Debug, PartialEq, Clone, Copy)]
@@ -25,12 +24,6 @@ impl Float {
     }
 }
 
-
-impl Valuable for Float {
-    fn type_(&self) -> ValType {
-        ValType::Float
-    }
-}
 
 impl Number for Float {
     fn float(&self) -> f64 {
