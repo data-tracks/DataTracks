@@ -1,10 +1,4 @@
 use std::any::Any;
-use std::time::Duration;
-
-use crate::processing::Plan;
-use crate::processing::station::Command::{Ready, Stop};
-use crate::processing::tests::plan_test::dummy::{DummyDestination, DummySource};
-use crate::value::{Dict, Value};
 
 #[cfg(test)]
 mod dummy {
@@ -75,7 +69,6 @@ mod dummy {
                     sleep(delay);
                 }
                 control.send(Stop(stop)).unwrap();
-                println!("out");
             });
             tx
         }
@@ -173,6 +166,7 @@ mod dummy {
 
 #[cfg(test)]
 pub mod tests {
+    use std::any::Any;
     use std::thread::sleep;
     use std::time::{Duration, SystemTime};
     use std::vec;
@@ -309,13 +303,12 @@ pub mod tests {
     fn sql_parse_block_one() {
         let stencil = "1-|2-3\n4-2";
 
-
         let mut plan = Plan::parse(stencil);
         let values1 = vec![vec![Dict::from(Value::from(3.3))], vec![Dict::from(Value::from(3.1))]];
         let (source1, id1) = DummySource::new(1, values1.clone(), Duration::from_millis(1));
 
         let values4 = vec![vec![Dict::from(Value::from(3))]];
-        let (source4, id4) = DummySource::new_with_delay(4, values4.clone(), Duration::from_millis(3), Duration::from_millis(1));
+        let (source4, id4) = DummySource::new(4, values4.clone(), Duration::from_millis(1));
 
         let destination = DummyDestination::new(3, 1);
         let id3 = &destination.get_id();
@@ -329,10 +322,19 @@ pub mod tests {
 
         // send ready
         plan.send_control(&id1, Ready(0));
-        plan.send_control(&id4, Ready(4));
+        // source 1 ready + stop
+        for com in vec![Ready(1), Stop(1)] {
+            match plan.control_receiver.1.recv() {
+                Ok(command) => {}
+                Err(_) => panic!()
+            }
+        }
 
-        // source 1 ready + stop, source 4 ready + stop, destination ready + stop
-        for com in vec![Ready(1), Stop(1), Ready(4), Stop(4), Ready(3), Stop(3)] {
+        sleep(Duration::from_millis(5));
+
+        plan.send_control(&id4, Ready(4));
+        // source 1 ready + stop
+        for com in vec![Ready(4), Stop(4), Ready(3), Stop(3)] {
             match plan.control_receiver.1.recv() {
                 Ok(command) => {}
                 Err(_) => panic!()
@@ -347,6 +349,7 @@ pub mod tests {
         let lock = clone.lock().unwrap();
         let mut train = lock.clone().pop().unwrap();
         drop(lock);
+
 
         assert_eq!(train.values.clone().unwrap().len(), res.len());
         for (i, value) in train.values.take().unwrap().into_iter().enumerate() {
@@ -400,33 +403,35 @@ pub mod tests {
 
         println!("time: {} millis", now.elapsed().unwrap().as_millis())
     }
-}
 
-#[test]
-fn full_test() {
-    let mut plan = Plan::parse("0-1($:f)-2");
 
-    let mut values = vec![];
+    #[test]
+    fn full_test() {
+        let mut plan = Plan::parse("0-1($:f)-2");
 
-    let hello = Dict::from_json(r#"{"msg": "hello", "$topic": ["command"]}"#);
-    values.push(vec![hello]);
-    values.push(vec![Dict::from(Value::float(3.6))]);
+        let mut values = vec![];
 
-    let (source, id) = DummySource::new(0, values, Duration::from_millis(1));
+        let hello = Dict::from_json(r#"{"msg": "hello", "$topic": ["command"]}"#);
+        values.push(vec![hello]);
+        values.push(vec![Dict::from(Value::float(3.6))]);
 
-    plan.add_source(0, Box::new(source));
+        let (source, id) = DummySource::new(0, values, Duration::from_millis(1));
 
-    let destination = DummyDestination::new(1, 2);
-    let result = destination.results();
-    plan.add_destination(2, Box::new(destination));
+        plan.add_source(0, Box::new(source));
 
-    plan.operate();
+        let destination = DummyDestination::new(1, 1);
+        let result = destination.results();
+        plan.add_destination(2, Box::new(destination));
 
-    plan.send_control(&id, Ready(0));
+        plan.operate();
 
-    for command in [Ready(0), Stop(0), Stop(2)] {
-        assert_eq!(command.type_id(), plan.control_receiver.1.recv().unwrap().type_id());
+        plan.send_control(&id, Ready(0));
+
+        for command in [Ready(0), Stop(0), Ready(2), Stop(2)] {
+            assert_eq!(command.type_id(), plan.control_receiver.1.recv().unwrap().type_id());
+        }
+        let lock = result.lock().unwrap();
+        assert_eq!(lock.len(), 1)
     }
-    let lock = result.lock().unwrap();
-    assert_eq!(lock.len(), 1)
 }
+

@@ -78,8 +78,10 @@ impl SpecificBlock {
         SpecificBlock{input, blocks, func, buffer}
     }
     fn next(&mut self, train: Train) {
+
         self.buffer.entry(train.last).or_default().append(&mut train.values.unwrap());
         if !self.blocks.contains(&train.last) {
+            println!("block{:?}", self.buffer.clone());
             let mut trains = merge_buffer(self.buffer.drain());
 
             (self.func)(&mut trains)

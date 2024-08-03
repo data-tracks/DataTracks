@@ -5,11 +5,12 @@ use chrono::{Duration, NaiveTime};
 
 use crate::processing::Train;
 use crate::processing::transform::Taker;
-use crate::processing::window::Window::{Back, Interval};
+use crate::processing::window::Window::{Back, Interval, Non};
 use crate::util::TimeUnit;
 
 #[derive(Clone)]
 pub enum Window {
+    Non(NonWindow),
     Back(BackWindow),
     Interval(IntervalWindow),
 }
@@ -17,7 +18,7 @@ pub enum Window {
 
 impl Default for Window {
     fn default() -> Self {
-        Back(BackWindow::new(0, TimeUnit::Millis))
+        Non(NonWindow::default())
     }
 }
 
@@ -26,14 +27,16 @@ impl Window {
     pub(crate) fn windowing(&self) -> Box<dyn Taker> {
         match self {
             Back(w) => Box::new(w.clone()),
-            Interval(w) => Box::new(w.clone())
+            Interval(w) => Box::new(w.clone()),
+            Non(_) => Box::new(NonWindow::default())
         }
     }
 
     pub(crate) fn dump(&self) -> String {
         match self {
             Back(w) => w.dump(),
-            Interval(w) => w.dump()
+            Interval(w) => w.dump(),
+            Non(_) => "".to_owned()
         }
     }
 
@@ -45,13 +48,24 @@ impl Window {
     }
 }
 
+#[derive(Clone, Default)]
+pub struct NonWindow {}
+
+impl NonWindow {}
+
+impl Taker for NonWindow {
+    fn take(&mut self, wagons: &mut Vec<Train>) -> Vec<Train> {
+        wagons.clone()
+    }
+}
+
 
 #[derive(Clone)]
 pub struct BackWindow {
     duration: Duration,
     time: i64,
     time_unit: TimeUnit,
-    buffer: VecDeque<(Instant, Vec<Train>)>
+    buffer: VecDeque<(Instant, Vec<Train>)>,
 }
 
 impl BackWindow {
@@ -69,7 +83,7 @@ impl BackWindow {
         if self.time == 0 {
             return "".to_string();
         }
-        format!("[{}{}]", &self.time, self.time_unit )
+        format!("[{}{}]", &self.time, self.time_unit)
     }
 }
 
@@ -130,7 +144,7 @@ pub struct IntervalWindow {
     time: i64,
     time_unit: TimeUnit,
     start: NaiveTime,
-    buffer: VecDeque<Vec<Train>>
+    buffer: VecDeque<Vec<Train>>,
 }
 
 impl IntervalWindow {
@@ -138,7 +152,7 @@ impl IntervalWindow {
         IntervalWindow { time, time_unit, start, buffer: VecDeque::new() }
     }
     pub(crate) fn dump(&self) -> String {
-        format!("[{}{}@{}]", &self.time, self.time_unit, &self.start.format("%H:%M") )
+        format!("[{}{}@{}]", &self.time, self.time_unit, &self.start.format("%H:%M"))
     }
     fn parse(input: String) -> IntervalWindow {
         match input.split_once('@') {
@@ -151,10 +165,9 @@ impl IntervalWindow {
             }
         }
     }
-
 }
 
-impl Taker for IntervalWindow{
+impl Taker for IntervalWindow {
     fn take(&mut self, wagons: &mut Vec<Train>) -> Vec<Train> {
         self.buffer.push_back(wagons.clone());
         wagons.clone()
@@ -247,6 +260,5 @@ mod test {
         assert_eq!(results.remove(0).values.take().unwrap(), values);
         // 3. "
         assert_eq!(results.remove(0).values.take().unwrap(), after);
-
     }
 }
