@@ -361,7 +361,7 @@ pub mod tests {
     fn divide_workload() {
         let mut station = Station::new(0);
         let station_id = station.id;
-        station.set_transform(0, Transform::Func(FuncTransform::new_boxed(|num, train| {
+        station.set_transform(Transform::Func(FuncTransform::new_boxed(|num, train| {
             sleep(Duration::from_millis(10));
             Train::from(train)
         })));

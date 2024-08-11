@@ -1,10 +1,10 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::thread;
 
 use crossbeam::channel;
 use crossbeam::channel::{Receiver, unbounded};
+
 use crate::processing::layout::{Field, Layout};
 use crate::processing::plan::PlanStage;
 use crate::processing::platform::Platform;
@@ -20,7 +20,7 @@ pub(crate) struct Station {
     pub(crate) incoming: (Tx<Train>, Arc<AtomicU64>, Rx<Train>),
     pub(crate) outgoing: Sender,
     pub(crate) window: Window,
-    pub(crate) transform: HashMap<i64, Transform>,
+    pub(crate) transform: Option<Transform>,
     pub(crate) block: Vec<i64>,
     pub(crate) inputs: Vec<i64>,
     pub(crate) layout: Layout,
@@ -45,7 +45,7 @@ impl Station {
             incoming: (incoming.0, incoming.1, incoming.2),
             outgoing: Sender::default(),
             window: Window::default(),
-            transform: HashMap::default(),
+            transform: None,
             block: vec![],
             inputs: vec![],
             layout: Layout::default(),
@@ -127,7 +127,7 @@ impl Station {
         for stage in parts {
             match stage.0 {
                 PlanStage::Window => station.set_window(Window::parse(stage.1)),
-                PlanStage::Transform => station.set_transform(last.unwrap_or(-1), Transform::parse(stage.1).unwrap()),
+                PlanStage::Transform => station.set_transform(Transform::parse(stage.1).unwrap()),
                 PlanStage::Layout => station.add_explicit_layout(Field::parse(stage.1)),
                 PlanStage::Num => {
                     let mut num = stage.1;
@@ -149,8 +149,8 @@ impl Station {
 
     pub(crate) fn merge(&mut self, mut other: Station) {
         self.block.append(other.block.as_mut());
-        other.transform.into_iter().for_each(|(num, transform)| {
-            self.transform.insert(num, transform.clone());
+        other.transform.into_iter().for_each(|transform| {
+            self.transform = Some(transform.clone());
         })
     }
 
@@ -166,8 +166,8 @@ impl Station {
         self.window = window;
     }
 
-    pub(crate) fn set_transform(&mut self, id: i64,  transform: Transform) {
-        self.transform.insert(id, transform);
+    pub(crate) fn set_transform(&mut self, transform: Transform) {
+        self.transform = Some(transform);
     }
 
     pub(crate) fn add_block(&mut self, line: i64) {
@@ -183,16 +183,19 @@ impl Station {
         self.incoming.0.send(train).map_err(|e| e.to_string())
     }
 
-    pub fn dump(&self, line: i64) -> String {
+    pub fn dump(&self, line: i64, already_dumped: bool) -> String {
         let mut dump = "".to_string();
         if self.block.contains(&line) {
             dump += "|";
         }
         dump += &self.stop.to_string();
         dump += &self.window.dump();
-        if let Some(transform) = self.transform.get(&line) {
-            dump += &transform.dump();
+        if !already_dumped {
+            if let Some(transform) = self.transform.clone() {
+                dump += &transform.dump();
+            }
         }
+
         dump
     }
 
@@ -232,14 +235,15 @@ pub mod tests {
     use std::time::{Duration, Instant};
 
     use crossbeam::channel::{Receiver, Sender, unbounded};
+
     use crate::processing::plan::Plan;
     use crate::processing::station::{Command, Station};
     use crate::processing::station::Command::{Okay, Ready, Threshold};
+    use crate::processing::tests::dict_values;
     use crate::processing::train::Train;
     use crate::processing::transform::{FuncTransform, Transform};
     use crate::util::{new_channel, Rx, Tx};
     use crate::value::{Dict, Value};
-    use crate::processing::tests::dict_values;
 
     #[test]
     fn start_stop_test() {
@@ -449,7 +453,7 @@ pub mod tests {
         let time = duration.clone();
 
 
-        station.set_transform(0,  match duration  {
+        station.set_transform(match duration {
             0 => {
                 Transform::Func(FuncTransform::new(Arc::new(move |num, train| {
                     Train::from(train)

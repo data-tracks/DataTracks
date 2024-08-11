@@ -8,6 +8,7 @@ use crossbeam::channel::{Sender, unbounded};
 use serde::{Serialize, Serializer};
 use serde::ser::SerializeStruct;
 
+use crate::processing;
 use crate::processing::destination::Destination;
 use crate::processing::source::Source;
 use crate::processing::station::{Command, Station};
@@ -62,6 +63,7 @@ impl Plan {
 
     pub(crate) fn dump(&self) -> String {
         let mut dump = "".to_string();
+        let mut dumped_stations = vec![];
         let mut lines: Vec<(&i64, &Vec<i64>)> = self.lines.iter().collect();
         lines.sort_by_key(|&(key, _)| key);
         for line in lines {
@@ -74,8 +76,9 @@ impl Plan {
                 if stop.0 != 0 {
                     dump += "-";
                 }
-                dump += &self.stations[stop.1].dump(last);
-                last = *stop.1
+                dump += &self.stations[stop.1].dump(last, dumped_stations.contains(&stop.0.clone()));
+                last = *stop.1;
+                dumped_stations.push(stop.0)
             }
         }
 
@@ -306,7 +309,9 @@ impl Serialize for &Plan {
                 num.to_string(),
                 Stop {
                     num: *num,
-                    transform: stop.transform.get(num).map( |i| i.dump().clone()).unwrap_or("".to_string()),
+                    transform: stop.transform.clone().map(|t| {
+                        t.into()
+                    })
                 },
             );
         }
@@ -325,7 +330,27 @@ struct Line {
 #[derive(Serialize)]
 struct Stop {
     num: i64,
-    transform: String,
+    transform: Option<Transform>,
+}
+
+#[derive(Serialize)]
+struct Transform {
+    language: String,
+    query: String,
+}
+
+
+impl From<processing::transform::Transform> for Transform {
+    fn from(value: processing::transform::Transform) -> Self {
+        match value {
+            processing::transform::Transform::Func(_) => {
+                Transform { language: "Function".to_string(), query: "".to_string() }
+            }
+            processing::transform::Transform::Lang(l) => {
+                Transform { language: l.language.to_string(), query: l.query }
+            }
+        }
+    }
 }
 
 

@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread;
@@ -23,13 +22,13 @@ pub(crate) struct Platform {
     control: Receiver<Command>,
     receiver: Rx<Train>,
     sender: Option<Sender>,
-    transform: HashMap<i64, Transform>,
+    transform: Option<Transform>,
     layout: Layout,
     window: Window,
     stop: i64,
     blocks: Vec<i64>,
     inputs: Vec<i64>,
-    incoming: Arc<AtomicU64>
+    incoming: Arc<AtomicU64>,
 }
 
 impl Platform {
@@ -84,14 +83,14 @@ impl Platform {
 
             // did we get a command?
             if let Ok(command) = self.control.try_recv() {
-                    match command {
-                        Command::Stop(_) => return,
-                        Threshold(th) => {
-                            threshold = th as u64;
-                        }
-                        _ => {}
+                match command {
+                    Command::Stop(_) => return,
+                    Threshold(th) => {
+                        threshold = th as u64;
                     }
+                    _ => {}
                 }
+            }
 
             match self.receiver.try_recv() {
                 Ok(train) => {
@@ -107,33 +106,20 @@ impl Platform {
     }
 }
 
-fn optimize(stop: i64, transforms: HashMap<i64, Transform>, mut window: Box<dyn Taker>, sender: Sender) -> MutWagonsFunc {
-    return if transforms.is_empty() {
+fn optimize(stop: i64, transform: Option<Transform>, mut window: Box<dyn Taker>, sender: Sender) -> MutWagonsFunc {
+    return if let Some(transform) = transform {
         Box::new(move |trains| {
             let windowed = window.take(trains);
-            let mut train:Train = windowed.into();
+            let mut train = transform.apply(stop, windowed);
             train.last = stop;
             sender.send(train);
         })
-    }else if transforms.len() == 1 {
-        Box::new(move |trains|{
+    } else {
+        Box::new(move |trains| {
             let windowed = window.take(trains);
-            let mut train = transforms.values().last().unwrap().apply(stop, windowed);
+            let mut train: Train = windowed.into();
             train.last = stop;
             sender.send(train);
         })
-    }else{
-        Box::new(move |trains| {
-            let windowed = window.take(trains);
-            let mut trains = HashMap::new();
-            for train in windowed {
-                trains.entry(train.last).or_insert_with(Vec::new).push(train);
-            }
-            for (num, trains) in trains {
-                let mut train = transforms.get(&num).unwrap().apply(stop, trains);
-                train.last = stop;
-                sender.send_to(num, train);
-            }
-        })
-    }
+    };
 }

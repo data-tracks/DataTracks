@@ -53,8 +53,8 @@ impl Transform {
 
 
 pub struct LanguageTransform {
-    language: Language,
-    query: String,
+    pub(crate) language: Language,
+    pub(crate) query: String,
     func: Box<dyn RefHandler + Send>,
 }
 
@@ -146,7 +146,6 @@ impl FuncTransform {
 
 #[cfg(test)]
 mod tests {
-    use crate::processing::transform::Dict;
     use std::sync::Arc;
 
     use crossbeam::channel::unbounded;
@@ -154,6 +153,7 @@ mod tests {
     use crate::processing::station::Station;
     use crate::processing::tests::dict_values;
     use crate::processing::train::Train;
+    use crate::processing::transform::Dict;
     use crate::processing::transform::FuncTransform;
     use crate::processing::transform::Transform::Func;
     use crate::util::new_channel;
@@ -165,7 +165,7 @@ mod tests {
 
         let control = unbounded();
 
-        station.set_transform(0, Func(FuncTransform::new_val(0, |mut x| {
+        station.set_transform(Func(FuncTransform::new_val(0, |mut x| {
             x.0.insert("$".into(), x.get_data().unwrap() + &Value::int(3));
             x
         })));
@@ -197,7 +197,7 @@ mod tests {
 
         let control = unbounded();
 
-        station.set_transform(0, Func(FuncTransform::new_val(0, |mut x| {
+        station.set_transform(Func(FuncTransform::new_val(0, |mut x| {
             x.0.insert("$".into(), x.get_data().unwrap() + &Value::int(3));
             x
         })));
