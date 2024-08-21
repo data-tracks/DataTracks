@@ -3,10 +3,12 @@ defineProps<{
   isValid: boolean,
   message?: string
 }>()
+
 </script>
 
+
 <template>
-<div class="border rounded flex flex-col" :class="isValid ? 'border-black' : 'border-red-500 border-2'">
+<div class="flex flex-col" :class="isValid ? 'border-gray-500' : 'border-red-300'">
   <slot />
 </div>
   <span v-if="!isValid && message">{{ message }}</span>

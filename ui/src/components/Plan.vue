@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import * as d3 from 'd3'
-import { onMounted, ref, watchEffect } from 'vue'
+import { computed, onMounted, ref, watchEffect } from 'vue'
 import { type Link, type Network, type Node, type Stop } from '@/stores/plan'
 import { v4 } from 'uuid'
 import { useModalStore } from '@/stores/modal'
+import { Theme, useThemeStore } from '@/stores/theme'
+import { storeToRefs } from 'pinia'
 
 const X_GAP = 100
 const Y_GAP = 60
@@ -22,7 +24,9 @@ const isMounted = ref(false)
 
 const modal = useModalStore();
 
+const themeStore = useThemeStore();
 
+const {theme} = storeToRefs(themeStore);
 
 const extractNodes = (network: Network): Node[] => {
   const nodes = []
@@ -251,6 +255,8 @@ watchEffect(() => {
   render()
 })
 
+const lineColor = computed(() => theme.value === Theme.DARK ? 'white' : 'black');
+
 </script>
 
 <template>
@@ -310,5 +316,9 @@ p {
 
 circle {
   cursor: pointer;
+}
+
+line{
+  stroke: v-bind('lineColor');
 }
 </style>

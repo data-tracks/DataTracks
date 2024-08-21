@@ -4,6 +4,7 @@ import Button from '@/components/default/Button.vue'
 import Form from '@/components/default/Form.vue'
 import { ref } from 'vue'
 import { usePlanStore } from '@/stores/plan'
+import Card from '@/components/default/Card.vue'
 
 const schedule = ref('')
 const name = ref('')
@@ -19,22 +20,23 @@ const submit = async () => {
   await store.submitPlan(name.value, schedule.value)
   reset()
 }
+const FORM_STYLES = "border-0 rounded-sm p-1 shadow ring-1 ring-inset ring-gray-300 focus:ring-2 placeholder:text-gray-400"
 </script>
 
 <template>
   <default-layout title="Planner">
-    <div class="container mx-auto border-black border-2 rounded p-4 flex flex-col gap-2">
+    <Card :has-padding="true">
       <div>
         <div>Name</div>
         <Form :is-valid="name !== ''">
-          <input type="text" v-model="name" placeholder="Enter name...">
+          <input type="text" :class="FORM_STYLES" v-model="name" placeholder="Enter name...">
         </Form>
       </div>
 
       <div class="flex items-stretch flex-col">
         <div>Schedule</div>
         <Form :is-valid="schedule !== ''">
-          <textarea v-model="schedule" placeholder="Enter schedule..." />
+          <textarea :class="FORM_STYLES" v-model="schedule" placeholder="Enter schedule..." />
         </Form>
       </div>
 
@@ -42,7 +44,7 @@ const submit = async () => {
         <Button text="Send" @click="submit" :disabled="schedule === '' || name === ''"></Button>
       </div>
 
-    </div>
+    </Card>
   </default-layout>
 </template>
 
