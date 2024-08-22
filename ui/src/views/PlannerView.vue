@@ -33,7 +33,7 @@ const FORM_STYLES = "border-0 rounded-sm p-1 shadow ring-1 ring-inset ring-gray-
         </Form>
       </div>
 
-      <div class="flex items-stretch flex-col">
+      <div class="flex items-stretch flex-col mt-2">
         <div>Schedule</div>
         <Form :is-valid="schedule !== ''">
           <textarea :class="FORM_STYLES" v-model="schedule" placeholder="Enter schedule..." />

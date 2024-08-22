@@ -17,7 +17,7 @@ const {isDark} = storeToRefs(themeStore);
 </script>
 
 <template>
-  <div class="pb-4 border border-gray-300 rounded-md shadow" :class="{'border-gray-900 shadow-gray-500 text-gray-100 bg-gray-900': isDark}">
+  <div class="pb-4 border border-gray-300 rounded-md shadow" :class="{'border-gray-900 shadow-gray-800 text-gray-100 bg-gray-900': isDark}">
     <div class="p-2 mb-4 px-4 flex justify-between border-b border-gray-300" v-if="$slots.left || $slots.right">
       <div class="font-medium">
         <slot name="left"></slot>
