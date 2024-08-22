@@ -4,9 +4,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crossbeam::channel;
-use crossbeam::channel::{Sender, unbounded};
-use serde::{Serialize, Serializer};
+use crossbeam::channel::{unbounded, Sender};
 use serde::ser::SerializeStruct;
+use serde::{Serialize, Serializer};
 
 use crate::processing;
 use crate::processing::destination::Destination;
@@ -76,9 +76,9 @@ impl Plan {
                 if stop.0 != 0 {
                     dump += "-";
                 }
-                dump += &self.stations[stop.1].dump(last, dumped_stations.contains(&stop.0.clone()));
+                dump += &self.stations[stop.1].dump(last, dumped_stations.contains(&stop.1.clone()));
                 last = *stop.1;
-                dumped_stations.push(stop.0)
+                dumped_stations.push(stop.1.clone())
             }
         }
 
