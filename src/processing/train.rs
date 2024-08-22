@@ -2,7 +2,7 @@ use crate::value::Dict;
 
 pub type MutWagonsFunc = Box<dyn FnMut(&mut Vec<Train>)>;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Train {
     pub last: i64,
     pub values: Option<Vec<Dict>>,

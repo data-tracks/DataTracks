@@ -1,3 +1,5 @@
+pub use debug::DebugDestination;
+pub use http::HttpSource;
 pub use plan::Plan;
 pub use train::Train;
 
@@ -13,3 +15,5 @@ mod block;
 mod platform;
 mod layout;
 mod tests;
+mod http;
+mod debug;

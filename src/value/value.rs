@@ -2,14 +2,14 @@ use std::cmp::PartialEq;
 use std::collections::BTreeMap;
 use std::ops::Add;
 
-use json::{JsonValue, parse};
+use json::{parse, JsonValue};
 
-use crate::value::{Bool, Float, Int};
 use crate::value::array::Array;
 use crate::value::dict::Dict;
 use crate::value::null::Null;
 use crate::value::r#type::ValType;
 use crate::value::string::Text;
+use crate::value::{Bool, Float, Int};
 
 #[derive(Eq, PartialEq, Hash, Clone, Debug)]
 pub enum Value {
@@ -43,7 +43,7 @@ impl Value {
         Value::Array(Array::new(tuple))
     }
 
-    fn dict(values: BTreeMap<String, Value>) -> Value {
+    pub(crate) fn dict(values: BTreeMap<String, Value>) -> Value {
         Value::Dict(Dict::new(values))
     }
 
