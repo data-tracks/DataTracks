@@ -26,7 +26,11 @@ const modal = useModalStore();
 
 const themeStore = useThemeStore();
 
-const {theme} = storeToRefs(themeStore);
+const {theme, isDark} = storeToRefs(themeStore);
+
+const lineColor = computed(() => isDark.value ? 'white' : 'black');
+const tooltipBg = computed(() => isDark.value ? 'white' : 'grey');
+const tooltipText = computed(() => isDark.value ? 'black' : 'white');
 
 const extractNodes = (network: Network): Node[] => {
   const nodes = []
@@ -90,7 +94,7 @@ function renderNodesAndTooltip(svg: d3.Selection<SVGGElement, unknown, HTMLEleme
     .select('.editor-wrapper-' + id)
     .append('div')
     .style('opacity', 0)
-    .attr('class', 'tooltip')
+    .attr('class', 'tooltip border shadow-md')
 
 
   // Three function that change the tooltip when user hover / move / leave a cell
@@ -255,7 +259,7 @@ watchEffect(() => {
   render()
 })
 
-const lineColor = computed(() => theme.value === Theme.DARK ? 'white' : 'black');
+
 
 </script>
 
@@ -292,7 +296,8 @@ text.num {
 .tooltip {
   z-index: 2;
   position: absolute;
-  background-color: #e5e7eb;
+  background-color: v-bind('tooltipBg');
+  color: v-bind('tooltipText');
   padding: .5rem;
   border-radius: .3rem;
   white-space: nowrap;
