@@ -1,9 +1,6 @@
-use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
+use std::sync::Arc;
 use std::thread;
-
-use crossbeam::channel;
-use crossbeam::channel::{Receiver, unbounded};
 
 use crate::processing::layout::{Field, Layout};
 use crate::processing::plan::PlanStage;
@@ -12,8 +9,12 @@ use crate::processing::sender::Sender;
 use crate::processing::train::Train;
 use crate::processing::transform::Transform;
 use crate::processing::window::Window;
-use crate::util::{GLOBAL_ID, new_channel, Rx, Tx};
+use crate::util::{new_channel, Rx, Tx, GLOBAL_ID};
+use crossbeam::channel;
+use crossbeam::channel::{unbounded, Receiver};
+use tracing::info;
 
+#[derive(Clone)]
 pub(crate) struct Station {
     pub(crate) id: i64,
     pub stop: i64,
@@ -205,8 +206,10 @@ impl Station {
 
     pub(crate) fn operate(&mut self, control: Arc<channel::Sender<Command>>) -> channel::Sender<Command> {
         let (mut platform, sender) = Platform::new(self);
+        let stop = self.stop;
 
         thread::spawn(move || {
+            info!("starting station {}", stop );
             platform.operate(control)
         });
         sender
@@ -234,11 +237,11 @@ pub mod tests {
     use std::thread::sleep;
     use std::time::{Duration, Instant};
 
-    use crossbeam::channel::{Receiver, Sender, unbounded};
+    use crossbeam::channel::{unbounded, Receiver, Sender};
 
     use crate::processing::plan::Plan;
-    use crate::processing::station::{Command, Station};
     use crate::processing::station::Command::{Okay, Ready, Threshold};
+    use crate::processing::station::{Command, Station};
     use crate::processing::tests::dict_values;
     use crate::processing::train::Train;
     use crate::processing::transform::{FuncTransform, Transform};

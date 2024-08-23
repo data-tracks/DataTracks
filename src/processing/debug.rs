@@ -5,6 +5,7 @@ use crate::util::{new_channel, Rx, Tx, GLOBAL_ID};
 use crossbeam::channel::{unbounded, Sender};
 use std::sync::Arc;
 use std::thread;
+use tracing::{debug, error};
 
 pub struct DebugDestination {
     id: i64,
@@ -30,10 +31,10 @@ impl Destination for DebugDestination {
                 let res = receiver.recv();
                 match res {
                     Ok(train) => {
-                        println!("{:?}", train)
+                        debug!("{:?}", train);
                     }
                     Err(e) => {
-                        println!("error")
+                        error!("{}", e)
                     }
                 }
             }

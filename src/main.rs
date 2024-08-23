@@ -1,13 +1,14 @@
 extern crate core;
 
+use crate::management::Storage;
+use crate::processing::{DebugDestination, HttpSource, Plan};
+use crate::ui::start;
 use std::sync::mpsc::Receiver;
-use std::sync::mpsc;
+use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::thread::JoinHandle;
 use std::time::Duration;
-
-use crate::processing::{DebugDestination, HttpSource, Plan};
-use crate::ui::start;
+use tracing::log::info;
 use tracing::Level;
 use tracing_subscriber::FmtSubscriber;
 
@@ -18,7 +19,8 @@ mod processing;
 mod language;
 mod simulation;
 mod algebra;
-mod mangagement;
+mod management;
+
 
 fn main() {
     setup_logging();
@@ -32,37 +34,40 @@ fn main() {
         tx.send(()).expect("Could not send signal on shutdown.");
     }).expect("Error setting Ctrl-C handler");
 
-    let storage = mangagement::start();
+    let storage = management::start();
 
-    add_default();
+    add_default(storage.clone());
     // Spawn a new thread
     let handle = thread::spawn(|| start(storage));
-
-
 
     shutdown_hook(rx, handle);
 }
 
-fn add_default() {
-    thread::spawn(|| {
+fn add_default(storage: Arc<Mutex<Storage>>) {
+    thread::spawn(move || {
         let mut plan = Plan::parse("1-2-3");
-        plan.add_source(1, Box::new(HttpSource::new(5555)));
+        plan.add_source(1, Box::new(HttpSource::new(1, 5555)));
         plan.add_destination(3, Box::new(DebugDestination::new(3)));
+        let id = plan.id;
         plan.set_name("Default".to_string());
-        plan.operate();
+        let mut lock = storage.lock().unwrap();
+        lock.add_plan(plan);
+        lock.start_plan(id);
+        drop(lock);
     });
+
 }
 
 fn shutdown_hook(rx: Receiver<()>, handle: JoinHandle<()>) {
 // Wait for the shutdown signal or the thread to finish
     loop {
         if rx.try_recv().is_ok() {
-            println!("Received shutdown signal.");
+            info!("Received shutdown signal.");
             break;
         }
 
         if handle.is_finished() {
-            println!("Thread finished.");
+            info!("Thread finished.");
             handle.join().unwrap();
             break;
         }

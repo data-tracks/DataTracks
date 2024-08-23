@@ -1,28 +1,29 @@
 use core::default::Default;
-use std::cmp::PartialEq;
-use std::collections::HashMap;
-use std::sync::Arc;
-
 use crossbeam::channel;
 use crossbeam::channel::{unbounded, Sender};
 use serde::ser::SerializeStruct;
 use serde::{Serialize, Serializer};
+use std::cmp::PartialEq;
+use std::collections::HashMap;
+use std::sync::Arc;
 
 use crate::processing;
 use crate::processing::destination::Destination;
+use crate::processing::plan::Status::Stopped;
 use crate::processing::source::Source;
 use crate::processing::station::{Command, Station};
 use crate::util::GLOBAL_ID;
 
 pub struct Plan {
     pub id: i64,
-    name: String,
+    pub name: String,
     lines: HashMap<i64, Vec<i64>>,
     pub(crate) stations: HashMap<i64, Station>,
     sources: HashMap<i64, Box<dyn Source>>,
     destinations: HashMap<i64, Box<dyn Destination>>,
     controls: HashMap<i64, Vec<Sender<Command>>>,
     pub(crate) control_receiver: (Arc<Sender<Command>>, channel::Receiver<Command>),
+    pub(crate) status: Status,
 }
 
 impl Default for Plan {
@@ -37,8 +38,16 @@ impl Default for Plan {
             destinations: Default::default(),
             controls: Default::default(),
             control_receiver: (Arc::new(tx), rx),
+            status: Stopped,
         }
     }
+}
+
+#[derive(Clone)]
+pub enum Status {
+    Running,
+    Stopped,
+    Error,
 }
 
 
@@ -103,7 +112,9 @@ impl Plan {
             match self.control_receiver.1.recv() {
                 Ok(command) => {
                     match command {
-                        Command::Ready(id) => { readys.push(id) }
+                        Command::Ready(id) => {
+                            readys.push(id);
+                        }
                         _ => todo!()
                     }
                 }
@@ -176,7 +187,7 @@ impl Plan {
 
             match char {
                 '-' => {
-                    let station = Station::parse( temp.clone(), last);
+                    let station = Station::parse(temp.clone(), last);
                     last = Some(station.stop);
                     self.build(line, station);
 
@@ -257,9 +268,9 @@ pub(crate) enum PlanStage {
     Num,
 }
 
-pub(crate) struct Stage{
+pub(crate) struct Stage {
     pub(crate) open: char,
-    pub(crate) close: char
+    pub(crate) close: char,
 }
 
 impl PlanStage {
@@ -270,16 +281,14 @@ impl PlanStage {
     pub(crate) const LAYOUT_OPEN: char = '(';
     pub(crate) const LAYOUT_CLOSE: char = ')';
 
-    pub(crate) fn is_open(char: char) -> bool{
+    pub(crate) fn is_open(char: char) -> bool {
         matches!(char, PlanStage::LAYOUT_OPEN | PlanStage::TRANSFORM_OPEN | PlanStage::WINDOW_OPEN)
     }
 
-    pub(crate) fn is_close(char: char) -> bool{
+    pub(crate) fn is_close(char: char) -> bool {
         matches!(char, PlanStage::LAYOUT_CLOSE | PlanStage::TRANSFORM_CLOSE | PlanStage::WINDOW_CLOSE)
     }
 }
-
-
 
 
 impl Serialize for &Plan {
@@ -311,7 +320,7 @@ impl Serialize for &Plan {
                     num: *num,
                     transform: stop.transform.clone().map(|t| {
                         t.into()
-                    })
+                    }),
                 },
             );
         }

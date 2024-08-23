@@ -1,4 +1,4 @@
-use crate::mangagement::Storage;
+use crate::management::Storage;
 use crate::processing::source::Source;
 use crate::processing::station::Command;
 use crate::processing::Train;
@@ -17,11 +17,13 @@ use serde_json::Value;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::atomic::AtomicI64;
 use std::sync::{Arc, Mutex};
+use std::thread;
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
 use tower_http::cors::CorsLayer;
-use tracing::info;
+use tracing::{debug, info};
 
+#[derive(Clone)]
 pub struct HttpSource {
     id: i64,
     stop: i64,
@@ -30,13 +32,13 @@ pub struct HttpSource {
 }
 
 impl HttpSource {
-    pub(crate) fn new(port: u16) -> Self {
-        HttpSource { id: GLOBAL_ID.new_id(), stop: 0, port, outs: Default::default() }
+    pub(crate) fn new(stop: i64, port: u16) -> Self {
+        HttpSource { id: GLOBAL_ID.new_id(), stop, port, outs: Default::default() }
     }
 
 
     async fn publish(State(state): State<SourceState>, Json(payload): Json<Value>) -> impl IntoResponse {
-        println!("{:?}", payload);
+        debug!("{:?}", payload);
 
         let train = Train::new(-1, vec![payload.into()]);
 
@@ -48,7 +50,7 @@ impl HttpSource {
         (StatusCode::OK, "Done".to_string())
     }
 
-    async fn startup(&mut self) {
+    async fn startup(self) {
         info!("starting http source...");
         // We could also read our port in from the environment as well
         let addr = std::net::SocketAddr::from(([0, 0, 0, 0], self.port));
@@ -71,9 +73,13 @@ impl Source for HttpSource {
         let rt = Runtime::new().unwrap();
 
         let (tx, rx) = unbounded();
-        rt.block_on(async {
-            Self::startup(self).await;
+        let clone = self.clone();
+        thread::spawn(move || {
+            rt.block_on(async {
+                Self::startup(clone).await;
+            });
         });
+
         tx
     }
 

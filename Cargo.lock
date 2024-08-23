@@ -338,7 +338,6 @@ dependencies = [
  "ctrlc",
  "json",
  "lazy_static",
- "log",
  "logos",
  "rand",
  "serde",

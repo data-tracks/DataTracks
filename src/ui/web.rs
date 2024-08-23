@@ -1,12 +1,12 @@
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use axum::{Json, Router};
 use axum::extract::State;
 use axum::handler::HandlerWithoutStateExt;
 use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse};
 use axum::routing::{get, post};
+use axum::{Json, Router};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use tokio::net::TcpListener;
@@ -15,7 +15,7 @@ use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
 use tracing::{debug, info};
 
-use crate::mangagement::Storage;
+use crate::management::Storage;
 use crate::processing::Plan;
 
 pub fn start(storage: Arc<Mutex<Storage>>) {
@@ -67,7 +67,7 @@ async fn get_plans(State(state): State<WebState>) -> impl IntoResponse {
 }
 
 async fn create_plan(State(state): State<WebState>, Json(payload): Json<CreatePlanPayload>) -> impl IntoResponse {
-    println!("{:?}", payload);
+    debug!("{:?}", payload);
 
     let mut plan = Plan::parse(payload.plan.as_str());
     plan.set_name(payload.name);

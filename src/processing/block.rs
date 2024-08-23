@@ -1,10 +1,10 @@
+use crate::processing::block::Block::{All, Non, Specific};
+use crate::processing::train::MutWagonsFunc;
+use crate::processing::Train;
+use crate::value::Dict;
 use std::collections::hash_map::Drain;
 use std::collections::HashMap;
-
-use crate::processing::block::Block::{All, Non, Specific};
-use crate::processing::Train;
-use crate::processing::train::MutWagonsFunc;
-use crate::value::Dict;
+use tracing::log::debug;
 
 pub(crate) enum Block {
     Non(NonBlock),
@@ -81,7 +81,7 @@ impl SpecificBlock {
 
         self.buffer.entry(train.last).or_default().append(&mut train.values.unwrap());
         if !self.blocks.contains(&train.last) {
-            println!("block{:?}", self.buffer.clone());
+            debug!("block{:?}", self.buffer.clone());
             let mut trains = merge_buffer(self.buffer.drain());
 
             (self.func)(&mut trains)
@@ -136,12 +136,12 @@ impl AllBlock {
 
 #[cfg(test)]
 mod test {
-    use std::sync::mpsc::channel;
-    use std::time::Instant;
-
     use crate::processing::block::Block;
     use crate::processing::Train;
     use crate::value::{Dict, Value};
+    use std::sync::mpsc::channel;
+    use std::time::Instant;
+    use tracing::debug;
 
     #[test]
     fn overhead() {
@@ -167,6 +167,6 @@ mod test {
         }
         let elapsed = instant.elapsed();
 
-        println!("time {}ms", elapsed.as_millis())
+        debug!("time {}ms", elapsed.as_millis())
     }
 }
