@@ -10,7 +10,7 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::post;
 use axum::{Json, Router};
-use crossbeam::channel::{unbounded, Sender};
+use crossbeam::channel::{unbounded, Receiver, Sender};
 use json::JsonValue;
 use serde::Deserialize;
 use serde_json::Value;
@@ -38,7 +38,6 @@ impl HttpSource {
 
 
     async fn publish(State(state): State<SourceState>, Json(payload): Json<Value>) -> impl IntoResponse {
-        debug!("{:?}", payload);
 
         let train = Train::new(-1, vec![payload.into()]);
 
@@ -50,7 +49,7 @@ impl HttpSource {
         (StatusCode::OK, "Done".to_string())
     }
 
-    async fn startup(self) {
+    async fn startup(self, rx: Receiver<Command>) {
         info!("starting http source...");
         // We could also read our port in from the environment as well
         let addr = std::net::SocketAddr::from(([0, 0, 0, 0], self.port));
@@ -76,7 +75,7 @@ impl Source for HttpSource {
         let clone = self.clone();
         thread::spawn(move || {
             rt.block_on(async {
-                Self::startup(clone).await;
+                Self::startup(clone, rx).await;
             });
         });
 
@@ -104,7 +103,7 @@ struct SourceState {
 impl Into<Dict> for Value {
     fn into(self) -> Dict {
         let mut map = BTreeMap::new();
-        map.insert("data".to_string(), value::Value::text(self.to_string().as_str()));
+        map.insert(String::from("data"), value::Value::text(self.to_string().as_str()));
         Dict::new(map)
     }
 }

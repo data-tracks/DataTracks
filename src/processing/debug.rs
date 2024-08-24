@@ -3,6 +3,8 @@ use crate::processing::station::Command;
 use crate::processing::Train;
 use crate::util::{new_channel, Rx, Tx, GLOBAL_ID};
 use crossbeam::channel::{unbounded, Sender};
+use std::fs::File;
+use std::io::{BufWriter, Write};
 use std::sync::Arc;
 use std::thread;
 use tracing::{debug, error};
@@ -27,16 +29,20 @@ impl Destination for DebugDestination {
         let (tx, rx) = unbounded();
 
         thread::spawn(move || {
+            let file = File::create("debug.txt").unwrap();
+            let mut writer = BufWriter::new(file);
             loop {
                 let res = receiver.recv();
                 match res {
                     Ok(train) => {
-                        debug!("{:?}", train);
+                        writeln!(writer, "{:?}", train).expect("Could not write to debug file.");
+                        debug!("last: {}, {:?}", train.last, train.values.unwrap_or(vec![]));
                     }
                     Err(e) => {
                         error!("{}", e)
                     }
                 }
+                writer.flush().unwrap();
             }
         });
         tx
