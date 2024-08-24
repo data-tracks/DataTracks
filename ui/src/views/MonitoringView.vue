@@ -2,13 +2,20 @@
 import DefaultLayout from '@/layout/DefaultLayout.vue'
 import Plan from '@/components/Plan.vue'
 import Card from '@/components/default/Card.vue'
-import { usePlanStore } from '@/stores/plan'
+import { getStop, usePlanStore } from '@/stores/plan'
 import { onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
+import { useThemeStore } from '@/stores/theme'
+import Button from '@/components/default/Button.vue'
+import Stop from '@/components/Stop.vue'
 
 let store = usePlanStore()
 
-const {plans} = storeToRefs(store)
+const { plans } = storeToRefs(store)
+
+let theme = useThemeStore()
+
+const { isDark } = useThemeStore()
 
 onMounted(async () => {
   await store.fetchPlans()
@@ -17,17 +24,29 @@ onMounted(async () => {
 </script>
 
 <template>
-  <default-layout title="Monitoring">
+  <default-layout title="Plans">
     <div class="pb-6" v-for="network in plans" :key="network.name">
       <Card>
         <template v-slot:left>
-          {{network.name}}
+          {{ network.name }}
         </template>
         <template v-slot:right>
           <div class="text-green-500">running</div>
         </template>
 
         <Plan :network="network" />
+
+        <template v-slot:bottom v-if="store.currentNumber">
+          <div class="px-3 flex flex-col">
+            <div class="flex justify-between mb-4">
+              <Button text="Update"></Button>
+              <Button @click="store.setCurrent(null)" text="Close"></Button>
+            </div>
+            <div>
+              <Stop :stop="getStop(network, store.currentNumber)"></Stop>
+            </div>
+          </div>
+        </template>
       </Card>
     </div>
 

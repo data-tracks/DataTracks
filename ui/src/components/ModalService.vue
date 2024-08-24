@@ -5,13 +5,13 @@ import Modal from '@/components/default/Modal.vue'
 
 const store = useModalStore();
 
-const {visible} = storeToRefs(store)
+const {visible, content} = storeToRefs(store)
 
 </script>
 
 <template>
 <Modal :visible="visible">
-<h1>Test</h1>
+  <component :is="content.value"></component>
 </Modal>
 </template>
 

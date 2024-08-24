@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import * as d3 from 'd3'
 import { computed, onMounted, ref, watchEffect } from 'vue'
-import { type Link, type Network, type Node, type Stop } from '@/stores/plan'
+import { type Link, type Network, type Node, type Stop, usePlanStore } from '@/stores/plan'
 import { v4 } from 'uuid'
 import { useModalStore } from '@/stores/modal'
 import { Theme, useThemeStore } from '@/stores/theme'
@@ -25,8 +25,10 @@ const isMounted = ref(false)
 const modal = useModalStore();
 
 const themeStore = useThemeStore();
+const planStore = usePlanStore();
 
 const {theme, isDark} = storeToRefs(themeStore);
+const {currentNumber} = storeToRefs(planStore);
 
 const lineColor = computed(() => isDark.value ? 'white' : 'black');
 const tooltipBg = computed(() => isDark.value ? 'white' : 'grey');
@@ -143,7 +145,9 @@ function renderNodesAndTooltip(svg: d3.Selection<SVGGElement, unknown, HTMLEleme
     .on('mouseover', mouseover)
     .on('mousemove', mousemove)
     .on('mouseleave', mouseleave)
-    .on( 'click', () => modal.toggle())
+    .on( 'click', (e,n) => {
+      planStore.setCurrent(n.num)
+    })
 }
 
 const color = (d: any) => {
@@ -167,7 +171,7 @@ function renderInputs(svg: d3.Selection<SVGGElement, unknown, HTMLElement, any>,
     .attr('cy', (d) => d.y + 2)
     .attr('r', 10)
     .classed('stop', true)
-    .attr('fill', 'black')
+    .attr('fill', 'black');
 }
 
 function renderOutputs(svg: d3.Selection<SVGGElement, unknown, HTMLElement, any>, nodes: Node[]) {

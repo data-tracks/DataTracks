@@ -14,7 +14,7 @@ export const useThemeStore = defineStore('theme', () => {
   const theme = ref(initialTheme)
   const isDark = computed(() => theme.value === Theme.DARK)
 
-  function changeTheme(t: Theme) {
+  const changeTheme = (t: Theme) => {
     theme.value = t;
     localStorage.setItem("theme", theme.value);
   }
