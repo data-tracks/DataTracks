@@ -40,6 +40,8 @@ impl HttpSource {
 
 
     async fn publish(State(state): State<SourceState>, Json(payload): Json<Value>) -> impl IntoResponse {
+        debug!("New http message received: {:?}", payload);
+
         let value = Self::transform_to_value(payload);
         let train = Train::new(-1, vec![value]);
 
@@ -63,6 +65,8 @@ impl HttpSource {
     }
 
     async fn publish_with_topic(Path(topic): Path<String>, State(state): State<SourceState>, Json(payload): Json<Value>) -> impl IntoResponse {
+        debug!("New http message received: {:?}", payload);
+
         let mut dict = Self::transform_to_value(payload);
         dict.0.insert(String::from("topic"), value::Value::text(topic.as_str()));
         let train = Train::new(-1, vec![dict]);

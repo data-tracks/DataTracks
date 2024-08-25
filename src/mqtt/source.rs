@@ -28,6 +28,7 @@ impl MqttSource {
 impl Source for MqttSource {
     fn operate(&mut self, _control: Arc<Sender<Command>>) -> Sender<Command> {
         let rt = Runtime::new().unwrap();
+        debug!("starting mqtt source...");
 
         let (tx, rx) = unbounded();
         let port = self.port;
@@ -35,7 +36,7 @@ impl Source for MqttSource {
             rt.block_on(async {
                 let listener = TcpListener::bind("127.0.0.1:".to_owned() + &port.to_string()).unwrap();
                 while let Ok((stream, _)) = listener.accept() {
-                    debug!("New client connected: {:?}", stream.peer_addr());
+                    debug!("New mqtt client connected: {:?}", stream.peer_addr());
                 }
             });
         });
