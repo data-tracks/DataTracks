@@ -1,19 +1,20 @@
 use crate::management::Storage;
 use crate::processing::source::Source;
 use crate::processing::station::Command;
-use crate::processing::Train;
+use crate::processing::{plan, train, Train};
 use crate::util::{Tx, GLOBAL_ID};
 use crate::value;
 use crate::value::Dict;
-use axum::extract::State;
+use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::post;
 use axum::{Json, Router};
 use crossbeam::channel::{unbounded, Receiver, Sender};
 use json::JsonValue;
+use serde::de::Unexpected::Str;
 use serde::Deserialize;
-use serde_json::Value;
+use serde_json::{Map, Number, Value};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::atomic::AtomicI64;
 use std::sync::{Arc, Mutex};
@@ -38,8 +39,32 @@ impl HttpSource {
 
 
     async fn publish(State(state): State<SourceState>, Json(payload): Json<Value>) -> impl IntoResponse {
+        let value = Self::transform_to_value(payload);
+        let train = Train::new(-1, vec![value]);
 
-        let train = Train::new(-1, vec![payload.into()]);
+        for out in state.source.lock().unwrap().values() {
+            out.send(train.clone()).unwrap();
+        }
+
+        // Return a response
+        (StatusCode::OK, "Done".to_string())
+    }
+
+    fn transform_to_value(payload: Value) -> Dict {
+        match payload {
+            Value::Object(o) => o.into(),
+            v => {
+                let mut map = BTreeMap::new();
+                map.insert(String::from("data"), v.into());
+                Dict(map)
+            }
+        }
+    }
+
+    async fn publish_with_topic(Path(topic): Path<String>, State(state): State<SourceState>, Json(payload): Json<Value>) -> impl IntoResponse {
+        let mut dict = Self::transform_to_value(payload);
+        dict.0.insert(String::from("topic"), value::Value::text(topic.as_str()));
+        let train = Train::new(-1, vec![dict]);
 
         for out in state.source.lock().unwrap().values() {
             out.send(train.clone()).unwrap();
@@ -58,6 +83,7 @@ impl HttpSource {
 
         let app = Router::new()
             .route("/data", post(Self::publish))
+            .route("/data/*topic", post(Self::publish_with_topic))
             .layer(CorsLayer::permissive())
             .with_state(state);
 
@@ -100,10 +126,45 @@ struct SourceState {
     pub source: Arc<Mutex<HashMap<i64, Tx<Train>>>>,
 }
 
-impl Into<Dict> for Value {
-    fn into(self) -> Dict {
+impl From<Value> for value::Value {
+    fn from(value: Value) -> Self {
+        match value {
+            Value::Null => value::Value::null(),
+            Value::Bool(b) => value::Value::bool(b),
+            Value::Number(n) => {
+                if n.is_f64() {
+                    value::Value::float(n.as_f64().unwrap())
+                } else {
+                    value::Value::int(n.as_i64().unwrap())
+                }
+            }
+            Value::String(s) => value::Value::text(&s),
+            Value::Array(a) => {
+                let mut values = vec![];
+                for value in a {
+                    values.push(value.into());
+                }
+                value::Value::array(values)
+            },
+            Value::Object(o) => {
+                o.into()
+            }
+        }
+    }
+}
+
+impl From<Map<String, Value>> for value::Value {
+    fn from(value: Map<String, Value>) -> Self {
+        value::Value::Dict(value.into())
+    }
+}
+
+impl From<Map<String, Value>> for Dict {
+    fn from(value: Map<String, Value>) -> Self {
         let mut map = BTreeMap::new();
-        map.insert(String::from("data"), value::Value::text(self.to_string().as_str()));
-        Dict::new(map)
+        for (key, value) in value {
+            map.insert(key, value.into());
+        }
+        Dict(map)
     }
 }
