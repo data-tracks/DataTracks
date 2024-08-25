@@ -1,6 +1,7 @@
 extern crate core;
 
 use crate::management::Storage;
+use crate::mqtt::MqttSource;
 use crate::processing::{DebugDestination, HttpSource, Plan};
 use crate::ui::start;
 use std::sync::mpsc::Receiver;
@@ -20,7 +21,8 @@ mod language;
 mod simulation;
 mod algebra;
 mod management;
-
+mod http;
+mod mqtt;
 
 fn main() {
     setup_logging();
@@ -47,6 +49,7 @@ fn add_default(storage: Arc<Mutex<Storage>>) {
     thread::spawn(move || {
         let mut plan = Plan::parse("1-2-3");
         plan.add_source(1, Box::new(HttpSource::new(1, 5555)));
+        plan.add_source(1, Box::new(MqttSource::new(1, 6666)));
         plan.add_destination(3, Box::new(DebugDestination::new(3)));
         let id = plan.id;
         plan.set_name("Default".to_string());

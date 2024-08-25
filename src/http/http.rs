@@ -24,6 +24,7 @@ use tokio::runtime::Runtime;
 use tower_http::cors::CorsLayer;
 use tracing::{debug, info};
 
+// messages like: curl --json '{"website": "linuxize.com"}' localhost:5555/data/isabel
 #[derive(Clone)]
 pub struct HttpSource {
     id: i64,

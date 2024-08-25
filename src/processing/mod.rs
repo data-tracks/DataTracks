@@ -1,19 +1,18 @@
+pub use crate::http::http::HttpSource;
 pub use debug::DebugDestination;
-pub use http::HttpSource;
 pub use plan::Plan;
 pub use train::Train;
 
-mod station;
+pub(crate) mod station;
 mod window;
 mod transform;
-mod train;
+pub(crate) mod train;
 mod sender;
-mod plan;
-mod source;
+pub(crate) mod plan;
+pub(crate) mod source;
 mod destination;
 mod block;
 mod platform;
 mod layout;
 mod tests;
-mod http;
 mod debug;
