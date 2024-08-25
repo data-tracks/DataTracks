@@ -38,10 +38,6 @@ onMounted(async () => {
 
         <template v-slot:bottom v-if="store.currentNumber">
           <div class="px-3 flex flex-col">
-            <div class="flex justify-between mb-4">
-              <Button text="Update"></Button>
-              <Button @click="store.setCurrent(null)" text="Close"></Button>
-            </div>
             <div>
               <Stop :stop="getStop(network, store.currentNumber)"></Stop>
             </div>

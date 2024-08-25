@@ -1,15 +1,25 @@
-import {defineStore} from 'pinia'
-import {ref} from 'vue'
+import { defineStore } from 'pinia'
+import { type Component, type Ref, ref } from 'vue'
 import Empty from '@/components/Empty.vue'
 
 export const useModalStore = defineStore('modal', () => {
-    const visible = ref(false)
+  const visible = ref(false)
 
-    const content = ref(Empty);
+  const content: Ref<Component> = ref(Empty)
 
-    const toggle = () => {
-        visible.value = !visible.value
-    }
+  const properties = ref({})
 
-    return {visible, content, toggle}
+  const openModal = (component: Component, props = {}) => {
+    visible.value = true
+    content.value = component
+    properties.value = props
+  }
+
+  const closeModal = () => {
+    visible.value = false
+    content.value = Empty
+    properties.value = {}
+  }
+
+  return { visible, content, properties, openModal, closeModal }
 })
