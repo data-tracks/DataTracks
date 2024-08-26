@@ -14,8 +14,18 @@ type Line = {
 export type Stop = {
   num: number;
   transform: Transform;
-  inputs?: number[],
-  outputs?: number[],
+  sources: Source[],
+  destinations: Destination[],
+}
+
+type Source = {
+  id: string,
+  _type: string
+}
+
+type Destination = {
+  id: string,
+  _type: string
 }
 
 type Transform = {
@@ -132,9 +142,10 @@ const _dummyData: any[] = [{
   stops: {
     0: {
       num: 0,
-      inputs: [
+      sources: [
         {
-          name: 'mongo'
+          _type: 'mongo',
+          id: "test_mongo"
         }
       ]
     },
@@ -159,9 +170,10 @@ const _dummyData: any[] = [{
     },
     7: {
       num: 7,
-      outputs: [
+      destinations: [
         {
-          name: 'mqtt'
+          _type: 'mqtt',
+          id: "test_mqtt"
         }
       ]
     }

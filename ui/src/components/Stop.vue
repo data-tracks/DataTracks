@@ -24,9 +24,12 @@ const openAddDestination = () => {
 <template>
   <div class="flex gap-2 min-h-14 items-center">
     <div class="sources">
+      <div v-for="source in stop?.sources" :key="source.id" class="p-4">
+        <p>{{source._type}}</p>
+      </div>
       <Button text="+ Source" @click="openAddSource()"></Button>
     </div>
-    <div class="configuration grow border border-y-0 px-4">
+    <div class="configuration grow border border-y-0 px-4 self-stretch flex items-center">
       <table class="table-fixed">
         <tbody>
         <tr>
@@ -47,6 +50,9 @@ const openAddDestination = () => {
       </table>
     </div>
     <div class="destinations">
+      <div v-for="destination in stop?.destinations" :key="destination.id" class="p-4">
+        <p>{{destination._type}}</p>
+      </div>
       <Button text="+ Destination" @click="openAddDestination()"></Button>
     </div>
   </div>

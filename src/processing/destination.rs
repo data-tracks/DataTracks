@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crossbeam::channel::Sender;
-
+use crate::processing::plan::DestinationModel;
 use crate::processing::station::Command;
 use crate::processing::train::Train;
 use crate::util::Tx;
@@ -13,4 +13,6 @@ pub trait Destination: Send {
     fn get_stop(&self) -> i64;
 
     fn get_id(&self) -> i64;
+
+    fn serialize(&self) -> DestinationModel;
 }

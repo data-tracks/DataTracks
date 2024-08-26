@@ -9,6 +9,7 @@ use std::sync::Arc;
 use std::thread;
 use tokio::runtime::Runtime;
 use tracing::debug;
+use crate::processing::plan::SourceModel;
 
 pub struct MqttSource {
     id: i64,
@@ -23,7 +24,6 @@ impl MqttSource {
         MqttSource { port, stop, id: GLOBAL_ID.new_id(), outs: HashMap::new() }
     }
 }
-
 
 impl Source for MqttSource {
     fn operate(&mut self, _control: Arc<Sender<Command>>) -> Sender<Command> {
@@ -53,5 +53,9 @@ impl Source for MqttSource {
 
     fn get_id(&self) -> i64 {
         self.id
+    }
+
+    fn serialize(&self) -> SourceModel {
+        SourceModel{ _type: String::from("Mqtt"), id: self.id.to_string() }
     }
 }

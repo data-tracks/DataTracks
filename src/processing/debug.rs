@@ -8,6 +8,7 @@ use std::io::{BufWriter, Write};
 use std::sync::Arc;
 use std::thread;
 use tracing::{debug, error};
+use crate::processing::plan::DestinationModel;
 
 pub struct DebugDestination {
     id: i64,
@@ -58,5 +59,9 @@ impl Destination for DebugDestination {
 
     fn get_id(&self) -> i64 {
         self.id
+    }
+
+    fn serialize(&self) -> DestinationModel {
+        DestinationModel{ _type: String::from("Debug"), id: self.id.to_string() }
     }
 }

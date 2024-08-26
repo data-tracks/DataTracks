@@ -9,6 +9,7 @@ mod dummy {
     use crossbeam::channel::{Sender, unbounded};
 
     use crate::processing::destination::Destination;
+    use crate::processing::plan::{DestinationModel, SourceModel};
     use crate::processing::source::Source;
     use crate::processing::station::Command;
     use crate::processing::station::Command::{Ready, Stop};
@@ -35,6 +36,7 @@ mod dummy {
             (DummySource { id, stop, values: Some(values), initial_delay, delay, senders: Some(vec![]) }, id)
         }
     }
+
 
     impl Source for DummySource {
         fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command> {
@@ -84,6 +86,10 @@ mod dummy {
 
         fn get_id(&self) -> i64 {
             self.id
+        }
+
+        fn serialize(&self) -> SourceModel {
+            SourceModel{ _type: String::from("Dummy"), id: self.id.to_string() }
         }
     }
 
@@ -159,6 +165,10 @@ mod dummy {
 
         fn get_id(&self) -> i64 {
             self.id
+        }
+
+        fn serialize(&self) -> DestinationModel {
+            DestinationModel{ _type: String::from("Dummy"), id: self.id.to_string() }
         }
     }
 }

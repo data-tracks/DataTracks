@@ -23,6 +23,7 @@ use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
 use tower_http::cors::CorsLayer;
 use tracing::{debug, info};
+use crate::processing::plan::SourceModel;
 
 // messages like: curl --json '{"website": "linuxize.com"}' localhost:5555/data/isabel
 #[derive(Clone)]
@@ -123,6 +124,10 @@ impl Source for HttpSource {
 
     fn get_id(&self) -> i64 {
         self.id
+    }
+
+    fn serialize(&self) -> SourceModel {
+        SourceModel{ _type: String::from("Http"), id: self.id.to_string() }
     }
 }
 

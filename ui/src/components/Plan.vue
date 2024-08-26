@@ -113,7 +113,7 @@ function renderNodesAndTooltip(svg: d3.Selection<SVGGElement, unknown, HTMLEleme
     }
     Tooltip.html(content).style('opacity', 1)
     const target = e.currentTarget as HTMLElement
-    d3.select(target).style('opacity', 0.8)
+    target.classList.add('hover')
   }
   const mousemove = (e: MouseEvent, d: Node) => {
     Tooltip
@@ -124,7 +124,7 @@ function renderNodesAndTooltip(svg: d3.Selection<SVGGElement, unknown, HTMLEleme
   const mouseleave = (e: MouseEvent, d: Node) => {
     Tooltip.style('opacity', 0)
     const target = e.currentTarget as HTMLElement
-    d3.select(target).style('opacity', 1)
+    target.classList.remove('hover')
   }
 
 
@@ -158,6 +158,13 @@ const color = (d: any) => {
   return 'default'
 }
 
+function isEmpty(elements: any[] | undefined) {
+  if(!elements){
+    return true
+  }
+  return elements.length == 0;
+}
+
 function renderInputs(svg: d3.Selection<SVGGElement, unknown, HTMLElement, any>, nodes: Node[]) {
   // inputs
   svg
@@ -165,7 +172,7 @@ function renderInputs(svg: d3.Selection<SVGGElement, unknown, HTMLElement, any>,
     .attr('stroke', '#fff')
     .attr('stroke-width', 1.5)
     .selectAll()
-    .data(nodes.filter(n => getStop(n)?.inputs))
+    .data(nodes.filter(n => !isEmpty(getStop(n)?.sources) ))
     .join('circle')
     .attr('cx', (d) => d.x - WIDTH/2)
     .attr('cy', (d) => d.y + 2)
@@ -181,7 +188,7 @@ function renderOutputs(svg: d3.Selection<SVGGElement, unknown, HTMLElement, any>
     .attr('stroke', '#fff')
     .attr('stroke-width', 1.5)
     .selectAll()
-    .data(nodes.filter(n => getStop(n)?.outputs))
+    .data(nodes.filter(n => !isEmpty(getStop(n)?.destinations)))
     .join('circle')
     .attr('cx', (d) => d.x + WIDTH/2)
     .attr('cy', (d) => d.y + 2)
@@ -321,6 +328,10 @@ p {
 
 .station{
   cursor: pointer;
+
+  &.hover {
+    stroke: $moonstone;
+  }
 }
 
 circle {

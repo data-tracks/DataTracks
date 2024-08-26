@@ -19,8 +19,8 @@ pub struct Plan {
     pub name: String,
     lines: HashMap<i64, Vec<i64>>,
     pub(crate) stations: HashMap<i64, Station>,
-    sources: HashMap<i64, Box<dyn Source>>,
-    destinations: HashMap<i64, Box<dyn Destination>>,
+    sources: HashMap<i64, Vec<Box<dyn Source>>>,
+    destinations: HashMap<i64, Vec<Box<dyn Destination>>>,
     controls: HashMap<i64, Vec<Sender<Command>>>,
     pub(crate) control_receiver: (Arc<Sender<Command>>, channel::Receiver<Command>),
     pub(crate) status: Status,
@@ -123,12 +123,16 @@ impl Plan {
         }
 
 
-        for destination in &mut self.destinations {
-            self.controls.entry(destination.1.get_id()).or_default().push(destination.1.operate(Arc::clone(&self.control_receiver.0)));
+        for (_stop, destinations) in &mut self.destinations {
+            for destination in destinations {
+                self.controls.entry(destination.get_id()).or_default().push(destination.operate(Arc::clone(&self.control_receiver.0)));
+            }
         }
 
-        for source in &mut self.sources {
-            self.controls.entry(source.1.get_id()).or_default().push(source.1.operate(Arc::clone(&self.control_receiver.0)));
+        for (_stop, sources) in &mut self.sources {
+            for source in sources {
+                self.controls.entry(source.get_id()).or_default().push(source.operate(Arc::clone(&self.control_receiver.0)));
+            }
         }
     }
 
@@ -228,34 +232,38 @@ impl Plan {
     }
 
     fn connect_destinations(&mut self) -> Result<(), String> {
-        for destination in &mut self.destinations {
-            let tx = destination.1.get_in();
-            let target = destination.1.get_stop();
-            if let Some(station) = self.stations.get_mut(&target) {
-                station.add_out(-1, tx)?;
-            } else {
-                todo!()
+        for (_stop, destinations) in &mut self.destinations {
+            for destination in destinations {
+                let tx = destination.get_in();
+                let target = destination.get_stop();
+                if let Some(station) = self.stations.get_mut(&target) {
+                    station.add_out(-1, tx)?;
+                } else {
+                    todo!()
+                }
             }
         }
         Ok(())
     }
     fn connect_sources(&mut self) -> Result<(), String> {
-        for source in &mut self.sources {
-            let target = source.1.get_stop();
-            if let Some(station) = self.stations.get_mut(&target) {
-                let tx = station.get_in();
-                source.1.add_out(station.stop, tx)
+        for (_stop, sources) in &mut self.sources {
+            for source in sources {
+                let target = source.get_stop();
+                if let Some(station) = self.stations.get_mut(&target) {
+                    let tx = station.get_in();
+                    source.add_out(station.stop, tx)
+                }
             }
         }
         Ok(())
     }
 
     pub(crate) fn add_source(&mut self, stop: i64, source: Box<dyn Source>) {
-        self.sources.insert(stop, source);
+        self.sources.entry(stop).or_default().push(source);
     }
 
     pub(crate) fn add_destination(&mut self, stop: i64, destination: Box<dyn Destination>) {
-        self.destinations.insert(stop, destination);
+        self.destinations.entry(stop).or_default().push(destination);
     }
 }
 
@@ -321,6 +329,8 @@ impl Serialize for &Plan {
                     transform: stop.transform.clone().map(|t| {
                         t.into()
                     }),
+                    sources: self.sources.get(&stop.stop).unwrap_or(&vec![]).iter().map(|s| s.serialize()).collect(),
+                    destinations: self.destinations.get(&stop.stop).unwrap_or(&vec![]).iter().map(|d| d.serialize()).collect(),
                 },
             );
         }
@@ -340,6 +350,21 @@ struct Line {
 struct Stop {
     num: i64,
     transform: Option<Transform>,
+    sources: Vec<SourceModel>,
+    destinations: Vec<DestinationModel>,
+}
+
+
+#[derive(Serialize)]
+pub struct SourceModel {
+    pub(crate) _type: String,
+    pub(crate) id: String
+}
+
+#[derive(Serialize)]
+pub struct DestinationModel {
+    pub(crate) _type: String,
+    pub(crate) id: String
 }
 
 #[derive(Serialize)]
