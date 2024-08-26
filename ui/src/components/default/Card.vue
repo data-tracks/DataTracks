@@ -31,7 +31,7 @@ const { isDark } = storeToRefs(themeStore)
     <div class="pb-6" :class="hasPadding ? 'p-4': ''">
       <slot />
     </div>
-    <div v-if="$slots.bottom" class="border-t border-gray-300 py-4 bg-gray-200" :class="{'border-grey-900 bg-gray-800': isDark}">
+    <div v-if="$slots.bottom" class="border-t border-gray-300 py-4" :class="{'border-grey-900 bg-gray-800': isDark}">
       <slot name="bottom"></slot>
     </div>
 

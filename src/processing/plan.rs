@@ -2,7 +2,7 @@ use core::default::Default;
 use crossbeam::channel;
 use crossbeam::channel::{unbounded, Sender};
 use serde::ser::SerializeStruct;
-use serde::{Serialize, Serializer};
+use serde::{Deserialize, Serialize, Serializer};
 use std::cmp::PartialEq;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -12,6 +12,8 @@ use crate::processing::destination::Destination;
 use crate::processing::plan::Status::Stopped;
 use crate::processing::source::Source;
 use crate::processing::station::{Command, Station};
+use crate::ui::{ConfigContainer, StringModel};
+use crate::ui::ConfigModel::StringConf;
 use crate::util::GLOBAL_ID;
 
 pub struct Plan {
@@ -259,10 +261,12 @@ impl Plan {
     }
 
     pub(crate) fn add_source(&mut self, stop: i64, source: Box<dyn Source>) {
+        assert_eq!(stop, source.get_stop());
         self.sources.entry(stop).or_default().push(source);
     }
 
     pub(crate) fn add_destination(&mut self, stop: i64, destination: Box<dyn Destination>) {
+        assert_eq!(stop, destination.get_stop());
         self.destinations.entry(stop).or_default().push(destination);
     }
 }
@@ -346,42 +350,48 @@ struct Line {
     stops: Vec<i64>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 struct Stop {
     num: i64,
-    transform: Option<Transform>,
+    transform: Option<ConfigContainer>,
     sources: Vec<SourceModel>,
     destinations: Vec<DestinationModel>,
 }
 
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct SourceModel {
     pub(crate) _type: String,
-    pub(crate) id: String
+    pub(crate) id: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct DestinationModel {
     pub(crate) _type: String,
-    pub(crate) id: String
+    pub(crate) id: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 struct Transform {
     language: String,
     query: String,
 }
 
 
-impl From<processing::transform::Transform> for Transform {
+impl From<processing::transform::Transform> for ConfigContainer {
     fn from(value: processing::transform::Transform) -> Self {
         match value {
             processing::transform::Transform::Func(_) => {
-                Transform { language: "Function".to_string(), query: "".to_string() }
+                let mut map = HashMap::new();
+                map.insert(String::from("type"), StringConf(StringModel::new("Function")));
+                map.insert(String::from("query"), StringConf(StringModel::new("")));
+                ConfigContainer::new(String::from("Transform"), map)
             }
             processing::transform::Transform::Lang(l) => {
-                Transform { language: l.language.to_string(), query: l.query }
+                let mut map = HashMap::new();
+                map.insert(String::from("language"), StringConf(StringModel::new(&l.language.to_string())));
+                map.insert(String::from("query"), StringConf(StringModel::new(&l.query.to_string())));
+                ConfigContainer::new(String::from("Transform"), map)
             }
         }
     }

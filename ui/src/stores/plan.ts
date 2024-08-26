@@ -13,7 +13,7 @@ type Line = {
 
 export type Stop = {
   num: number;
-  transform: Transform;
+  transform: ConfigContainer;
   sources: Source[],
   destinations: Destination[],
 }
@@ -28,9 +28,33 @@ type Destination = {
   _type: string
 }
 
+type ConfigContainer = {
+  name: string,
+  configs: Map<string, ConfigModel>
+}
+
 type Transform = {
   language: string;
   query: string;
+}
+
+type BaseConfig = {}
+
+interface ConfigModel {
+  baseConfig: BaseConfig
+}
+
+interface StringConf extends ConfigModel {
+  string: string
+}
+
+interface NumberConf extends ConfigModel {
+  number: number
+}
+
+interface ListConf extends ConfigModel {
+  list: ConfigModel[],
+  addable: boolean
 }
 
 export type Network = {
@@ -145,15 +169,32 @@ const _dummyData: any[] = [{
       sources: [
         {
           _type: 'mongo',
-          id: "test_mongo"
+          id: 'test_mongo'
         }
       ]
     },
     1: {
       num: 1,
       transform: {
-        language: 'SQL',
-        query: 'SELECT * FROM $1, $4, $5'
+        name: 'Transform',
+        configs: [
+          [
+            'language',
+            {
+              StringConf: {
+                string: 'sql'
+              }
+            }
+          ],
+          [
+            'query',
+            {
+              StringConf: {
+                string: 'SELECT * FROM $1, $4, $5'
+              }
+            }
+          ]
+        ]
       }
     },
     3: {
@@ -173,7 +214,7 @@ const _dummyData: any[] = [{
       destinations: [
         {
           _type: 'mqtt',
-          id: "test_mqtt"
+          id: 'test_mqtt'
         }
       ]
     }
