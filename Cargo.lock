@@ -339,6 +339,7 @@ dependencies = [
  "json",
  "lazy_static",
  "logos",
+    "mqtt_packet_3_5",
  "rand",
  "serde",
  "serde_json",
@@ -704,6 +705,12 @@ dependencies = [
  "wasi",
  "windows-sys 0.48.0",
 ]
+
+[[package]]
+name = "mqtt_packet_3_5"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "37f144b8299075716a07c676553dbff090c4af9d99d6e92f5c4f4992acb0393d"
 
 [[package]]
 name = "nix"

@@ -47,8 +47,8 @@ fn main() {
 
 fn add_default(storage: Arc<Mutex<Storage>>) {
     thread::spawn(move || {
-        let mut plan = Plan::parse("1-2-3");
-        // todo fix two sources
+        let mut plan = Plan::parse("1-2{sql|SELECT $1 FROM $1}-3");
+
         plan.add_source(1, Box::new(HttpSource::new(1, 5555)));
         plan.add_source(2, Box::new(MqttSource::new(2, 6666)));
         plan.add_destination(3, Box::new(DebugDestination::new(3)));
