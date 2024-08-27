@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import * as d3 from 'd3'
 import { computed, onMounted, ref, watchEffect } from 'vue'
-import { type Link, type Network, type Node, type Stop, usePlanStore } from '@/stores/plan'
+import { ConfigContainer, type Link, type Network, type Node, type Stop, usePlanStore } from '@/stores/plan'
 import { v4 } from 'uuid'
 import { useModalStore } from '@/stores/modal'
 import { Theme, useThemeStore } from '@/stores/theme'
@@ -104,12 +104,8 @@ function renderNodesAndTooltip(svg: d3.Selection<SVGGElement, unknown, HTMLEleme
     const el = props.network.stops.get(d.num)
     let content = '<p>Stop: ' + d.num + '</p>'
     if (el?.transform) {
-      content +=
-        '<p>Transform: ' +
-        el.transform.language +
-        '</p>\n<p>' +
-        el.transform.query +
-        '</p>'
+      console.log(el.transform.name)
+      content += el.transform.display()
     }
     Tooltip.html(content).style('opacity', 1)
     const target = e.currentTarget as HTMLElement

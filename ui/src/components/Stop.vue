@@ -45,7 +45,7 @@ const {isDark} = storeToRefs(themeStore)
         <template v-if="stop?.transform?.configs">
           <tr :key="key" v-for="[key, config] in stop?.transform?.configs">
             <td>{{ key }}</td>
-            <td>{{ config }}</td>
+            <td>{{ config.display() }}</td>
           </tr>
         </template>
         <template v-else>

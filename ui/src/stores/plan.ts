@@ -28,33 +28,115 @@ type Destination = {
   _type: string
 }
 
-type ConfigContainer = {
-  name: string,
+export class ConfigContainer {
+  name: string
   configs: Map<string, ConfigModel>
+
+  static from(configContainer: ConfigContainer): ConfigContainer {
+    const configs = new Map<string, ConfigModel>()
+    console.log(configContainer.configs as Object)
+    for (const [key, value] of Object.entries(configContainer.configs as Object)) {
+      configs.set(key, ConfigModel.from(value))
+    }
+    return new ConfigContainer(configContainer.name, configs)
+  }
+
+
+  constructor(name: string, configs: Map<string, ConfigModel>) {
+    this.name = name
+    this.configs = configs
+  }
+
+  display(): string {
+    return Array.from(this.configs).reduce((before, [key, value]) => {
+      return before + `${capitalize(key)}:${value.display()}\n`
+    }, '')
+  }
 }
 
-type Transform = {
-  language: string;
-  query: string;
+function capitalize(str: string): string {
+  return str.charAt(0).toUpperCase() + str.slice(1)
 }
 
-type BaseConfig = {}
+class BaseConfig {
+  constructor(obj: Object = {}) {
+  }
 
-interface ConfigModel {
+}
+
+abstract class ConfigModel {
   baseConfig: BaseConfig
+
+  protected constructor(baseConfig: BaseConfig) {
+    this.baseConfig = baseConfig
+  }
+
+  static from(obj: any): ConfigModel {
+    console.log(obj)
+    if (Object.prototype.hasOwnProperty.call(obj, StringConf.name)) {
+      return StringConf.from(obj[StringConf.name] as StringConf)
+    } else if (Object.prototype.hasOwnProperty.call(obj, NumberConf.name)) {
+      return NumberConf.from(obj[NumberConf.name] as NumberConf)
+    } else if (Object.prototype.hasOwnProperty.call(obj, ListConf.name)) {
+      return ListConf.from(obj[ListConf.name] as ListConf)
+    } else {
+      return new StringConf('Error', {})
+    }
+  }
+
+  abstract display(): string;
 }
 
-interface StringConf extends ConfigModel {
+class StringConf extends ConfigModel {
   string: string
+
+  static from(object: StringConf): StringConf {
+    return new StringConf(object.string, object.baseConfig)
+  }
+
+  constructor(string: string, baseConfig: BaseConfig) {
+    super(baseConfig)
+    this.string = string
+  }
+
+  display(): string {
+    return this.string
+  }
 }
 
-interface NumberConf extends ConfigModel {
+class NumberConf extends ConfigModel {
   number: number
+
+  static from(object: NumberConf): NumberConf {
+    return new NumberConf(object.number, object.baseConfig)
+  }
+
+  constructor(number: number, baseConfig: BaseConfig) {
+    super(baseConfig)
+    this.number = number
+  }
+
+  display(): string {
+    return this.number.toString()
+  }
 }
 
-interface ListConf extends ConfigModel {
-  list: ConfigModel[],
+class ListConf extends ConfigModel {
+  list: ConfigModel[]
   addable: boolean
+
+
+  constructor(object: ListConf) {
+    super(object.baseConfig)
+    this.list = object.list.map(e => ConfigModel.from(e))
+    this.addable = object.addable
+  }
+
+  display(): string {
+    return this.list.map(e => e.display()).join(', ')
+  }
+
+
 }
 
 export type Network = {
@@ -101,7 +183,11 @@ export const usePlanStore = defineStore('plan', () => {
     }
 
     for (const key in data.stops) {
-      stops.set(Number(key), data.stops[key] as Stop)
+      const stop = data.stops[key] as Stop
+      if (stop.transform) {
+        stop.transform = ConfigContainer.from(stop.transform as ConfigContainer)
+        stops.set(Number(key), stop)
+      }
     }
 
     return {
@@ -177,24 +263,19 @@ const _dummyData: any[] = [{
       num: 1,
       transform: {
         name: 'Transform',
-        configs: [
-          [
-            'language',
-            {
-              StringConf: {
-                string: 'sql'
-              }
+        configs: {
+          'language': {
+            StringConf: {
+              string: 'sql'
             }
-          ],
-          [
-            'query',
+          },
+          'query':
             {
               StringConf: {
                 string: 'SELECT * FROM $1, $4, $5'
               }
             }
-          ]
-        ]
+        }
       }
     },
     3: {

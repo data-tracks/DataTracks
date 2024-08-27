@@ -17,7 +17,9 @@
   "dependencies": {
     "@types/uuid": "^10.0.0",
     "axios": "^1.7.2",
+    "class-transformer": "^0.5.1",
     "d3": "^7.9.0",
+    "es6-shim": "^0.35.8",
     "pinia": "^2.1.7",
     "uuid": "^10.0.0",
     "vue": "^3.4.29",

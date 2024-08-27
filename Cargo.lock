@@ -339,7 +339,7 @@ dependencies = [
  "json",
  "lazy_static",
  "logos",
-    "mqtt_packet_3_5",
+ "mqtt_packet_3_5",
  "rand",
  "serde",
  "serde_json",
