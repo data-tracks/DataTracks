@@ -6,7 +6,7 @@ mod dummy {
     use std::thread::{sleep, spawn};
     use std::time::Duration;
 
-    use crossbeam::channel::{Sender, unbounded};
+    use crossbeam::channel::{unbounded, Sender};
 
     use crate::processing::destination::Destination;
     use crate::processing::plan::{DestinationModel, SourceModel};
@@ -14,7 +14,7 @@ mod dummy {
     use crate::processing::station::Command;
     use crate::processing::station::Command::{Ready, Stop};
     use crate::processing::train::Train;
-    use crate::util::{GLOBAL_ID, new_channel, Rx, Tx};
+    use crate::util::{new_channel, Rx, Tx, GLOBAL_ID};
     use crate::value::Dict;
 
     pub struct DummySource {
@@ -186,8 +186,8 @@ pub mod tests {
     use crate::processing::station::Command::{Ready, Stop};
     use crate::processing::station::Station;
     use crate::processing::tests::plan_test::dummy::{DummyDestination, DummySource};
-    use crate::processing::Train;
     use crate::processing::transform::{FuncTransform, Transform};
+    use crate::processing::Train;
     use crate::util::new_channel;
     use crate::value::{Dict, Value};
 
@@ -429,7 +429,7 @@ pub mod tests {
 
         plan.add_source(0, Box::new(source));
 
-        let destination = DummyDestination::new(1, 1);
+        let destination = DummyDestination::new(2, 1);
         let result = destination.results();
         plan.add_destination(2, Box::new(destination));
 
