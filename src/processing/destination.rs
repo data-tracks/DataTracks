@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
-use crossbeam::channel::Sender;
 use crate::processing::plan::DestinationModel;
 use crate::processing::station::Command;
 use crate::processing::train::Train;
 use crate::util::Tx;
+use crossbeam::channel::Sender;
 
 pub trait Destination: Send {
     fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command>;
@@ -15,4 +15,8 @@ pub trait Destination: Send {
     fn get_id(&self) -> i64;
 
     fn serialize(&self) -> DestinationModel;
+
+    fn serialize_default() -> Option<DestinationModel>
+    where
+        Self: Sized;
 }

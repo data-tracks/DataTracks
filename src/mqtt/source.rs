@@ -7,7 +7,7 @@ use crate::value::{Dict, Value};
 use crossbeam::channel::{unbounded, Sender};
 use mqtt_packet_3_5::{MqttPacket, PacketDecoder, PublishPacket};
 use std::collections::{BTreeMap, HashMap};
-use std::io::{Write};
+use std::io::Write;
 use std::net::{TcpListener, TcpStream};
 use std::sync::Arc;
 use std::thread;
@@ -61,7 +61,11 @@ impl Source for MqttSource {
     }
 
     fn serialize(&self) -> SourceModel {
-        SourceModel { _type: String::from("Mqtt"), id: self.id.to_string() }
+        SourceModel { type_name: String::from("Mqtt"), id: self.id.to_string(), configs: vec![] }
+    }
+
+    fn serialize_default() -> Option<SourceModel> {
+        Some(SourceModel { type_name: String::from("Mqtt"), id: String::from("Mqtt"), configs: vec![] })
     }
 }
 

@@ -16,7 +16,10 @@ use tower_http::services::ServeDir;
 use tracing::{debug, info};
 
 use crate::management::Storage;
-use crate::processing::Plan;
+use crate::mqtt::MqttSource;
+use crate::processing::destination::Destination;
+use crate::processing::source::Source;
+use crate::processing::{DebugDestination, HttpSource, Plan};
 
 pub fn start(storage: Arc<Mutex<Storage>>) {
     // Create a new Tokio runtime
@@ -42,6 +45,7 @@ pub async fn startup(storage: Arc<Mutex<Storage>>) {
     let app = Router::new()
         .route("/plans", get(get_plans))
         .route("/plans/create", post(create_plan))
+        .route("/options", get(get_options))
         .with_state(state)
         .layer(CorsLayer::permissive())
         .nest_service("/", serve_dir);
@@ -63,6 +67,13 @@ async fn fallback_handler() -> impl IntoResponse {
 async fn get_plans(State(state): State<WebState>) -> impl IntoResponse {
     let plans = state.storage.lock().unwrap().plans.lock().unwrap().values().map(|plan| serde_json::to_value(plan).unwrap()).collect::<Value>();
     let msg = json!( {"plans": &plans});
+    Json(msg)
+}
+
+async fn get_options(State(state): State<WebState>) -> impl IntoResponse {
+    let sources = vec![HttpSource::serialize_default().unwrap(), MqttSource::serialize_default().unwrap()];
+    let destinations = vec![DebugDestination::serialize_default().unwrap()];
+    let msg = json!( {"sources": &sources, "destinations": &destinations});
     Json(msg)
 }
 

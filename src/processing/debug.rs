@@ -1,4 +1,5 @@
 use crate::processing::destination::Destination;
+use crate::processing::plan::DestinationModel;
 use crate::processing::station::Command;
 use crate::processing::Train;
 use crate::util::{new_channel, Rx, Tx, GLOBAL_ID};
@@ -8,7 +9,6 @@ use std::io::{BufWriter, Write};
 use std::sync::Arc;
 use std::thread;
 use tracing::{debug, error};
-use crate::processing::plan::DestinationModel;
 
 pub struct DebugDestination {
     id: i64,
@@ -62,6 +62,13 @@ impl Destination for DebugDestination {
     }
 
     fn serialize(&self) -> DestinationModel {
-        DestinationModel{ _type: String::from("Debug"), id: self.id.to_string() }
+        DestinationModel { type_name: String::from("Debug"), id: self.id.to_string(), configs: vec![] }
+    }
+
+    fn serialize_default() -> Option<DestinationModel>
+    where
+        Self: Sized,
+    {
+        Some(DestinationModel { type_name: String::from("Debug"), id: String::from("Debug"), configs: vec![] })
     }
 }

@@ -12,8 +12,8 @@ use crate::processing::destination::Destination;
 use crate::processing::plan::Status::Stopped;
 use crate::processing::source::Source;
 use crate::processing::station::{Command, Station};
-use crate::ui::{ConfigContainer, StringModel};
 use crate::ui::ConfigModel::StringConf;
+use crate::ui::{ConfigContainer, ConfigModel, StringModel};
 use crate::util::GLOBAL_ID;
 
 pub struct Plan {
@@ -361,14 +361,16 @@ struct Stop {
 
 #[derive(Serialize, Deserialize)]
 pub struct SourceModel {
-    pub(crate) _type: String,
+    pub(crate) type_name: String,
     pub(crate) id: String,
+    pub(crate) configs: Vec<ConfigModel>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct DestinationModel {
-    pub(crate) _type: String,
+    pub(crate) type_name: String,
     pub(crate) id: String,
+    pub(crate) configs: Vec<ConfigModel>,
 }
 
 #[derive(Serialize, Deserialize)]

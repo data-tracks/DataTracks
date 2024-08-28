@@ -1,6 +1,7 @@
+use crate::processing::plan::SourceModel;
 use crate::processing::source::Source;
 use crate::processing::station::Command;
-use crate::processing::{Train};
+use crate::processing::Train;
 use crate::util::{Tx, GLOBAL_ID};
 use crate::value;
 use crate::value::Dict;
@@ -10,6 +11,7 @@ use axum::response::IntoResponse;
 use axum::routing::post;
 use axum::{Json, Router};
 use crossbeam::channel::{unbounded, Receiver, Sender};
+use serde::{Serialize, Serializer};
 use serde_json::{Map, Value};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
@@ -18,7 +20,6 @@ use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
 use tower_http::cors::CorsLayer;
 use tracing::{debug, info};
-use crate::processing::plan::SourceModel;
 
 // messages like: curl --json '{"website": "linuxize.com"}' localhost:5555/data/isabel
 #[derive(Clone)]
@@ -122,7 +123,11 @@ impl Source for HttpSource {
     }
 
     fn serialize(&self) -> SourceModel {
-        SourceModel{ _type: String::from("Http"), id: self.id.to_string() }
+        SourceModel { type_name: String::from("Http"), id: self.id.to_string(), configs: vec![] }
+    }
+
+    fn serialize_default() -> Option<SourceModel> {
+        Some(SourceModel { type_name: String::from("Http"), id: String::from("Http"), configs: vec![] })
     }
 }
 

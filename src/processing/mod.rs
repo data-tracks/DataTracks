@@ -10,7 +10,7 @@ pub(crate) mod train;
 mod sender;
 pub(crate) mod plan;
 pub(crate) mod source;
-mod destination;
+pub(crate) mod destination;
 mod block;
 mod platform;
 mod layout;

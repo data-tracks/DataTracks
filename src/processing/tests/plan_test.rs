@@ -89,7 +89,11 @@ mod dummy {
         }
 
         fn serialize(&self) -> SourceModel {
-            SourceModel{ _type: String::from("Dummy"), id: self.id.to_string() }
+            SourceModel { type_name: String::from("Dummy"), id: self.id.to_string(), configs: vec![] }
+        }
+
+        fn serialize_default() -> Option<SourceModel> {
+            None
         }
     }
 
@@ -168,7 +172,7 @@ mod dummy {
         }
 
         fn serialize(&self) -> DestinationModel {
-            DestinationModel{ _type: String::from("Dummy"), id: self.id.to_string() }
+            DestinationModel { type_name: String::from("Dummy"), id: self.id.to_string() }
         }
     }
 }
