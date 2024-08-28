@@ -142,7 +142,11 @@ function renderNodesAndTooltip(svg: d3.Selection<SVGGElement, unknown, HTMLEleme
     .on('mousemove', mousemove)
     .on('mouseleave', mouseleave)
     .on( 'click', (e,n) => {
-      planStore.setCurrent(n.num)
+      if(planStore.currentNumber === n.num){
+        planStore.setCurrent(null);
+      }else {
+        planStore.setCurrent(n.num)
+      }
     })
 }
 

@@ -3,8 +3,8 @@ import { type Ref, ref } from 'vue'
 import axios from 'axios'
 import { ToastType, useToastStore } from '@/stores/toast'
 
-const PORT = import.meta.env.VITE_PORT || 8080
-const IS_DUMMY_MODE = import.meta.env.VITE_MODE == 'dummy' || false
+export const PORT = import.meta.env.VITE_PORT || 8080
+export const IS_DUMMY_MODE = import.meta.env.VITE_MODE == 'dummy' || false
 
 type Line = {
   num: number;
@@ -18,14 +18,16 @@ export type Stop = {
   destinations: Destination[],
 }
 
-type Source = {
+export type Source = {
   id: string,
-  _type: string
+  type_name: string,
+  configs: ConfigModel[],
 }
 
-type Destination = {
+export type Destination = {
   id: string,
-  _type: string
+  type_name: string,
+  configs: ConfigModel[],
 }
 
 export class ConfigContainer {
@@ -49,7 +51,7 @@ export class ConfigContainer {
 
   display(): string {
     return Array.from(this.configs).reduce((before, [key, value]) => {
-      return before + `${capitalize(key)}:${value.display()}\n`
+      return before + `<div>${capitalize(key)}: ${value.display()}\n</div>`
     }, '')
   }
 }
@@ -64,7 +66,7 @@ class BaseConfig {
 
 }
 
-abstract class ConfigModel {
+export abstract class ConfigModel {
   baseConfig: BaseConfig
 
   protected constructor(baseConfig: BaseConfig) {
@@ -186,8 +188,8 @@ export const usePlanStore = defineStore('plan', () => {
       const stop = data.stops[key] as Stop
       if (stop.transform) {
         stop.transform = ConfigContainer.from(stop.transform as ConfigContainer)
-        stops.set(Number(key), stop)
       }
+      stops.set(Number(key), stop)
     }
 
     return {

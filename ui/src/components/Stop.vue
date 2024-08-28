@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import type { Stop } from '@/stores/plan'
+import { type Destination, type Source, type Stop } from '@/stores/plan'
 import Button from '@/components/default/Button.vue'
 import { useModalStore } from '@/stores/modal'
-import Empty from '@/components/Empty.vue'
 import { useThemeStore } from '@/stores/theme'
 import { storeToRefs } from 'pinia'
+import Config from '@/components/Config.vue'
+import Adder from '@/components/Adder.vue'
+import { Addable, useOptionsStore } from '@/stores/options'
 
 
 const props = defineProps<{
@@ -13,17 +15,27 @@ const props = defineProps<{
 
 const modal = useModalStore();
 
+const into = (insOuts: Source[] | Destination[]) => {
+  return insOuts.map(e => new Addable(e.type_name));
+}
+
 const openAddSource = () => {
-  modal.openModal(Empty, {text: "Add Source"});
+  modal.openModal(Adder, {adds: into(sources.value)});
 }
 
 const openAddDestination = () => {
-  modal.openModal(Empty, {text: "Add Destination"});
+  modal.openModal(Adder, {adds: into(destinations.value)});
 }
 
 const themeStore = useThemeStore();
 
 const {isDark} = storeToRefs(themeStore)
+
+const optionsStore = useOptionsStore();
+
+const {sources, destinations} = storeToRefs(optionsStore);
+
+optionsStore.fetchInOutOptions();
 
 </script>
 
@@ -35,7 +47,7 @@ const {isDark} = storeToRefs(themeStore)
       </div>
       <Button text="+ Source" @click="openAddSource()"></Button>
     </div>
-    <div class="configuration grow border border-y-0 px-4 self-stretch flex items-center" >
+    <div class="configuration grow border border-y-0 px-4 self-stretch flex items-center justify-center" >
       <table class="table-fixed">
         <tbody>
         <tr>
@@ -44,15 +56,8 @@ const {isDark} = storeToRefs(themeStore)
         </tr>
         <template v-if="stop?.transform?.configs">
           <tr :key="key" v-for="[key, config] in stop?.transform?.configs">
-            <td>{{ key }}</td>
-            <td>{{ config.display() }}</td>
+            <Config :key_="key" :config="config"></Config>
           </tr>
-        </template>
-        <template v-else>
-          <div class="flex rounded-md shadow-sm ring-1 ring-inset ring-gray-300 focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-600 sm:max-w-md">
-            <span class="flex select-none items-center pl-3 text-gray-500 sm:text-sm">workcation.com/</span>
-            <input type="text" name="username" id="username" autocomplete="username" class="block flex-1 border-0 bg-transparent py-1.5 pl-1 text-gray-900 placeholder:text-gray-400 focus:ring-0 sm:text-sm sm:leading-6" placeholder="janesmith" />
-          </div>
         </template>
         </tbody>
       </table>
