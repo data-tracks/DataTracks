@@ -310,6 +310,7 @@ impl Serialize for &Plan {
     {
         let mut state = serializer.serialize_struct("Plan", 3)?;
         state.serialize_field("name", &self.name)?;
+        state.serialize_field("id", &self.id)?;
 
         let mut lines = HashMap::new();
         for (num, stops) in &self.lines {
@@ -363,14 +364,14 @@ struct Stop {
 pub struct SourceModel {
     pub(crate) type_name: String,
     pub(crate) id: String,
-    pub(crate) configs: Vec<ConfigModel>,
+    pub(crate) configs: HashMap<String, ConfigModel>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct DestinationModel {
     pub(crate) type_name: String,
     pub(crate) id: String,
-    pub(crate) configs: Vec<ConfigModel>,
+    pub(crate) configs: HashMap<String, ConfigModel>,
 }
 
 #[derive(Serialize, Deserialize)]

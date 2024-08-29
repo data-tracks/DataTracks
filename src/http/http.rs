@@ -2,6 +2,7 @@ use crate::processing::plan::SourceModel;
 use crate::processing::source::Source;
 use crate::processing::station::Command;
 use crate::processing::Train;
+use crate::ui::ConfigModel;
 use crate::util::{Tx, GLOBAL_ID};
 use crate::value;
 use crate::value::Dict;
@@ -11,7 +12,6 @@ use axum::response::IntoResponse;
 use axum::routing::post;
 use axum::{Json, Router};
 use crossbeam::channel::{unbounded, Receiver, Sender};
-use serde::{Serialize, Serializer};
 use serde_json::{Map, Value};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
@@ -123,11 +123,26 @@ impl Source for HttpSource {
     }
 
     fn serialize(&self) -> SourceModel {
-        SourceModel { type_name: String::from("Http"), id: self.id.to_string(), configs: vec![] }
+        SourceModel { type_name: String::from("Http"), id: self.id.to_string(), configs: HashMap::new() }
     }
 
-    fn serialize_default() -> Option<SourceModel> {
-        Some(SourceModel { type_name: String::from("Http"), id: String::from("Http"), configs: vec![] })
+    fn from(stop_id: i64, configs: HashMap<String, ConfigModel>) -> Result<Box<dyn Source>, String> {
+        if let Some(value) = configs.get("port") {
+            return match value {
+                ConfigModel::StringConf(port) => {
+                    Ok(Box::new(HttpSource::new(stop_id, port.string.parse::<u16>().unwrap())))
+                }
+                ConfigModel::NumberConf(port) => {
+                    Ok(Box::new(HttpSource::new(stop_id, port.number as u16)))
+                }
+                _ => Err(String::from("Could not create HttpSource."))
+            }
+        }
+        Err(String::from("Could not create HttpSource."))
+    }
+
+    fn serialize_default() -> Result<SourceModel, ()> {
+        Ok(SourceModel { type_name: String::from("Http"), id: String::from("Http"), configs: HashMap::new() })
     }
 }
 
@@ -155,7 +170,7 @@ impl From<Value> for value::Value {
                     values.push(value.into());
                 }
                 value::Value::array(values)
-            },
+            }
             Value::Object(o) => {
                 o.into()
             }

@@ -102,7 +102,7 @@ function renderNodesAndTooltip(svg: d3.Selection<SVGGElement, unknown, HTMLEleme
   // Three function that change the tooltip when user hover / move / leave a cell
   const mouseover = (e: MouseEvent, d: Node) => {
     const el = props.network.stops.get(d.num)
-    let content = '<p>Stop: ' + d.num + '</p>'
+    let content = `<p>Stop: ${d.num}</p>`
     if (el?.transform) {
       console.log(el.transform.name)
       content += el.transform.display()

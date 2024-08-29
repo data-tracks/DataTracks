@@ -7,8 +7,9 @@ const props = defineProps<{
 </script>
 
 <template>
-  <div v-for="add in adds" :key="add.name">
+  <div v-for="add in adds" :key="add.name" @click="add.onAdd(add.name, add.configs)">
     {{add.name}}
+    {{add.configs}}
   </div>
 </template>
 

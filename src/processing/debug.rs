@@ -4,6 +4,7 @@ use crate::processing::station::Command;
 use crate::processing::Train;
 use crate::util::{new_channel, Rx, Tx, GLOBAL_ID};
 use crossbeam::channel::{unbounded, Sender};
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::sync::Arc;
@@ -62,13 +63,13 @@ impl Destination for DebugDestination {
     }
 
     fn serialize(&self) -> DestinationModel {
-        DestinationModel { type_name: String::from("Debug"), id: self.id.to_string(), configs: vec![] }
+        DestinationModel { type_name: String::from("Debug"), id: self.id.to_string(), configs: HashMap::new() }
     }
 
     fn serialize_default() -> Option<DestinationModel>
     where
         Self: Sized,
     {
-        Some(DestinationModel { type_name: String::from("Debug"), id: String::from("Debug"), configs: vec![] })
+        Some(DestinationModel { type_name: String::from("Debug"), id: String::from("Debug"), configs: HashMap::new() })
     }
 }

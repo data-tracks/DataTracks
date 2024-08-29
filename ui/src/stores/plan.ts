@@ -13,6 +13,7 @@ type Line = {
 }
 
 export type Stop = {
+  id: number;
   num: number;
   transform: ConfigContainer;
   sources: Source[],
@@ -71,17 +72,17 @@ export abstract class ConfigModel {
   baseConfig: BaseConfig
 
   protected constructor(baseConfig: BaseConfig) {
-      this.baseConfig = baseConfig;
+    this.baseConfig = baseConfig
   }
 
   static from(obj: any): ConfigModel {
     console.log(obj)
-      if (Object.prototype.hasOwnProperty.call(obj, StringConf.key)) {
-          return StringConf.from(obj[StringConf.key] as StringConf)
-      } else if (Object.prototype.hasOwnProperty.call(obj, NumberConf.key)) {
-          return NumberConf.from(obj[NumberConf.key] as NumberConf)
-      } else if (Object.prototype.hasOwnProperty.call(obj, ListConf.key)) {
-          return ListConf.from(obj[ListConf.key] as ListConf)
+    if (Object.prototype.hasOwnProperty.call(obj, StringConf.key)) {
+      return StringConf.from(obj[StringConf.key] as StringConf)
+    } else if (Object.prototype.hasOwnProperty.call(obj, NumberConf.key)) {
+      return NumberConf.from(obj[NumberConf.key] as NumberConf)
+    } else if (Object.prototype.hasOwnProperty.call(obj, ListConf.key)) {
+      return ListConf.from(obj[ListConf.key] as ListConf)
     } else {
       return new StringConf('Error', {})
     }
@@ -92,7 +93,7 @@ export abstract class ConfigModel {
 
 class StringConf extends ConfigModel {
   string: string
-    static key = "StringConf";
+  static key = 'StringConf'
 
   static from(object: StringConf): StringConf {
     return new StringConf(object.string, object.baseConfig)
@@ -109,8 +110,8 @@ class StringConf extends ConfigModel {
 }
 
 class NumberConf extends ConfigModel {
-    number: number;
-    static key = "NumberConf";
+  number: number
+  static key = 'NumberConf'
 
   static from(object: NumberConf): NumberConf {
     return new NumberConf(object.number, object.baseConfig)
@@ -127,9 +128,9 @@ class NumberConf extends ConfigModel {
 }
 
 class ListConf extends ConfigModel {
-    static key = "ListConf";
-    list: ConfigModel[];
-    addable: boolean;
+  static key = 'ListConf'
+  list: ConfigModel[]
+  addable: boolean
 
 
   constructor(object: ListConf) {
@@ -146,13 +147,14 @@ class ListConf extends ConfigModel {
 }
 
 export type Network = {
+  id: number;
   name: string;
   lines: Map<number, Line>;
   stops: Map<number, Stop>;
 }
 
 export const getStop = (network: Network, number: number): Stop | undefined => {
-  return network.stops.get(number)
+  return network.stops.get(number);
 }
 
 export type Node = {
@@ -197,6 +199,7 @@ export const usePlanStore = defineStore('plan', () => {
     }
 
     return {
+      id: data.id,
       name: data.name,
       lines: lines,
       stops: stops
@@ -205,8 +208,8 @@ export const usePlanStore = defineStore('plan', () => {
 
   const submitPlan = async (name: string, plan: string) => {
     try {
-      await axios.post('http://localhost:' + PORT + '/plans/create', { name: name, plan: plan })
-      toast.addToast('Successfully created plan: ' + name + '.')
+      await axios.post(`http://localhost:${PORT}/plans/create`, {name: name, plan: plan})
+      toast.addToast(`Successfully created plan: ${name}.`)
     } catch (error) {
       toast.addToast(error as string, ToastType.error)
     }
@@ -219,7 +222,7 @@ export const usePlanStore = defineStore('plan', () => {
     }
 
     try {
-      const { data, status } = await axios.get<GetPlansResponse>('http://localhost:' + PORT + '/plans')
+      const {data, status} = await axios.get<GetPlansResponse>(`http://localhost:${PORT}/plans`)
 
       if (status !== 200 || !data.plans) {
         return
@@ -232,7 +235,27 @@ export const usePlanStore = defineStore('plan', () => {
     }
   }
 
-  return { plans, currentNumber, setCurrent, submitPlan, fetchPlans }
+  const addInOut = async (planId: number, stopId: number, typeName: string, category: InOut, configs: ConfigModel[]) => {
+    if (IS_DUMMY_MODE) {
+      toast.addToast(`Cannot add ${InOut} in dummy mode.`, ToastType.error)
+      return
+    }
+    try {
+      await axios.post(`http://localhost:${PORT}/inouts/create`, {
+        plan_id: planId,
+        stop_id: stopId,
+        type_name: typeName,
+        category,
+        configs
+      })
+      toast.addToast(`Successfully added :${typeName}.`)
+      await fetchPlans();
+    } catch (error) {
+      toast.addToast(error as string, ToastType.error)
+    }
+  }
+
+  return {plans, currentNumber, setCurrent, submitPlan, fetchPlans, addInOut}
 })
 
 const _dummyData: any[] = [{
@@ -260,7 +283,7 @@ const _dummyData: any[] = [{
       num: 0,
       sources: [
         {
-            type_name: 'mongo',
+          type_name: 'mongo',
           id: 'test_mongo'
         }
       ]
@@ -300,10 +323,15 @@ const _dummyData: any[] = [{
       num: 7,
       destinations: [
         {
-            type_name: 'mqtt',
+          type_name: 'mqtt',
           id: 'test_mqtt'
         }
       ]
     }
   }
 }]
+
+export enum InOut {
+  Source = 'source',
+  Destination = 'destination'
+}

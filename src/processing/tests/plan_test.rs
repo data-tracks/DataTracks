@@ -92,8 +92,8 @@ mod dummy {
             SourceModel { type_name: String::from("Dummy"), id: self.id.to_string(), configs: vec![] }
         }
 
-        fn serialize_default() -> Option<SourceModel> {
-            None
+        fn serialize_default() -> Result<SourceModel, ()> {
+            Err(())
         }
     }
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { type Destination, type Source, type Stop } from '@/stores/plan'
+import { ConfigModel, type Destination, InOut, type Source, type Stop, usePlanStore } from '@/stores/plan'
 import Button from '@/components/default/Button.vue'
 import { useModalStore } from '@/stores/modal'
 import { useThemeStore } from '@/stores/theme'
@@ -8,24 +8,36 @@ import Config from '@/components/Config.vue'
 import Adder from '@/components/Adder.vue'
 import { Addable, useOptionsStore } from '@/stores/options'
 import InOutConfiguration from '@/components/InOutConfiguration.vue'
+import { markRaw } from 'vue'
 
 
 const props = defineProps<{
-  stop: Stop | undefined
+  planId: number
+  stop: Stop
 }>()
 
 const modal = useModalStore()
 
-const into = (insOuts: Source[] | Destination[]) => {
-  return insOuts.map(e => new Addable(e.type_name))
+const planStore = usePlanStore();
+
+const addSource = (typeName: string, configs: ConfigModel[]) => {
+  planStore.addInOut(props.planId, props.stop.num, typeName,InOut.Source, configs)
+}
+
+const addDestination = (typeName: string, configs: ConfigModel[]) => {
+  planStore.addInOut(props.planId, props.stop.num, typeName, InOut.Destination, configs)
+}
+
+const into = (insOuts: Source[] | Destination[], onAdd: (typeName: string, c: ConfigModel[]) => void ) => {
+  return insOuts.map(e => new Addable(e.type_name, e.configs, onAdd))
 }
 
 const openAddSource = () => {
-  modal.openModal(Adder, { adds: into(sources.value) })
+  modal.openModal(markRaw(Adder), { adds: into(sources.value, addSource) })
 }
 
 const openAddDestination = () => {
-  modal.openModal(Adder, { adds: into(destinations.value) })
+  modal.openModal(markRaw(Adder), { adds: into(destinations.value, addDestination) })
 }
 
 const themeStore = useThemeStore()
@@ -39,7 +51,7 @@ const { sources, destinations } = storeToRefs(optionsStore)
 optionsStore.fetchInOutOptions()
 
 const openSourceDestination = (sourceDestination: Source | Destination) => {
-  modal.openModal(InOutConfiguration, {inOut: sourceDestination})
+  modal.openModal(InOutConfiguration, { inOut: sourceDestination })
 }
 
 </script>

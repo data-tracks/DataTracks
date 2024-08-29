@@ -1,8 +1,10 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::processing::plan::SourceModel;
 use crate::processing::station::Command;
 use crate::processing::train::Train;
+use crate::ui::ConfigModel;
 use crate::util::Tx;
 use crossbeam::channel::Sender;
 
@@ -17,7 +19,11 @@ pub trait Source: Send {
 
     fn serialize(&self) -> SourceModel;
 
-    fn serialize_default() -> Option<SourceModel>
+    fn from(stop_id: i64, configs: HashMap<String, ConfigModel>) -> Result<Box<dyn Source>, String>
+    where
+        Self: Sized;
+
+    fn serialize_default() -> Result<SourceModel, ()>
     where
         Self: Sized;
 }

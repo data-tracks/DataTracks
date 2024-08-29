@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -20,6 +21,7 @@ use crate::mqtt::MqttSource;
 use crate::processing::destination::Destination;
 use crate::processing::source::Source;
 use crate::processing::{DebugDestination, HttpSource, Plan};
+use crate::ui::ConfigModel;
 
 pub fn start(storage: Arc<Mutex<Storage>>) {
     // Create a new Tokio runtime
@@ -45,6 +47,7 @@ pub async fn startup(storage: Arc<Mutex<Storage>>) {
     let app = Router::new()
         .route("/plans", get(get_plans))
         .route("/plans/create", post(create_plan))
+        .route("/inouts/create", post(create_in_outs))
         .route("/options", get(get_options))
         .with_state(state)
         .layer(CorsLayer::permissive())
@@ -88,10 +91,63 @@ async fn create_plan(State(state): State<WebState>, Json(payload): Json<CreatePl
     (StatusCode::OK, "Plan created".to_string())
 }
 
+async fn create_in_outs(State(state): State<WebState>, Json(payload): Json<CreateInOutsPayload>) -> impl IntoResponse {
+    debug!("{:?}", payload);
+    match payload.category.as_str() {
+        "source" => {
+            if let Err(value) = create_source(&state, payload) {
+                return (StatusCode::BAD_REQUEST, value)
+            }
+        }
+        "destination" => {
+            if let Err(value) = create_destination(&state, payload) {
+                return (StatusCode::BAD_REQUEST, value)
+            }
+        }
+        _ => {}
+    }
+
+    // Return a response
+    (StatusCode::OK, "Created".to_string())
+}
+
+fn create_source(state: &WebState, payload: CreateInOutsPayload) -> Result<(), String> {
+    let source = match payload.type_name.to_lowercase().as_str() {
+        "mqtt" => {
+            <MqttSource as Source>::from(payload.stop_id, payload.configs)
+        }
+        "http" => {
+            <HttpSource as Source>::from(payload.stop_id, payload.configs)
+        }
+        _ => {
+            return Err("Unknown source".to_string());
+        }
+    };
+    if let Err(err) = source {
+        return Err(err);
+    }
+
+    state.storage.lock().unwrap().add_source(payload.plan_id, payload.stop_id, source?);
+    Ok(())
+}
+
+fn create_destination(_state: &WebState, _payload: CreateInOutsPayload) -> Result<(), String> {
+    Err("Unknown source".to_string())
+}
+
 #[derive(Deserialize, Debug)]
 struct CreatePlanPayload {
     name: String,
     plan: String,
+}
+
+#[derive(Deserialize, Debug)]
+struct CreateInOutsPayload {
+    plan_id: i64,
+    stop_id: i64,
+    type_name: String,
+    category: String,
+    configs: HashMap<String, ConfigModel>,
 }
 
 #[derive(Clone)]

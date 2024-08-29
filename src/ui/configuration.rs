@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum ConfigModel {
     StringConf(StringModel),
     NumberConf(NumberModel),
@@ -20,13 +20,13 @@ impl ConfigContainer {
     }
 }
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize, Default, Debug)]
 pub struct BaseConfig {}
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct StringModel {
     base_config: BaseConfig,
-    string: String,
+    pub string: String,
 }
 
 impl StringModel {
@@ -35,13 +35,13 @@ impl StringModel {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct NumberModel {
     base_config: BaseConfig,
-    number: i64,
+    pub number: i64,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct ListModel {
     addable: bool,
     base_config: BaseConfig,

@@ -39,7 +39,7 @@ onMounted(async () => {
         <template v-slot:bottom v-if="store.currentNumber || store.currentNumber === 0">
           <div class="px-3 flex flex-col">
             <div>
-              <Stop :stop="getStop(network, store.currentNumber)"></Stop>
+              <Stop :stop="getStop(network, store.currentNumber)" :plan-id="network.id"></Stop>
             </div>
           </div>
         </template>

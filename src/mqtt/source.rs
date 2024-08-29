@@ -2,6 +2,8 @@ use crate::processing::plan::SourceModel;
 use crate::processing::source::Source;
 use crate::processing::station::Command;
 use crate::processing::Train;
+use crate::ui::ConfigModel::StringConf;
+use crate::ui::{ConfigModel, StringModel};
 use crate::util::{Tx, GLOBAL_ID};
 use crate::value::{Dict, Value};
 use crossbeam::channel::{unbounded, Sender};
@@ -26,7 +28,6 @@ impl MqttSource {
     pub fn new(stop: i64, port: u16) -> Self {
         MqttSource { port, stop, id: GLOBAL_ID.new_id(), outs: HashMap::new() }
     }
-
 }
 
 impl Source for MqttSource {
@@ -61,11 +62,28 @@ impl Source for MqttSource {
     }
 
     fn serialize(&self) -> SourceModel {
-        SourceModel { type_name: String::from("Mqtt"), id: self.id.to_string(), configs: vec![] }
+        SourceModel { type_name: String::from("Mqtt"), id: self.id.to_string(), configs: HashMap::new() }
     }
 
-    fn serialize_default() -> Option<SourceModel> {
-        Some(SourceModel { type_name: String::from("Mqtt"), id: String::from("Mqtt"), configs: vec![] })
+    fn from(stop_id: i64, configs: HashMap<String, ConfigModel>) -> Result<Box<dyn Source>, String> {
+        if let Some(value) = configs.get("port") {
+            return match value {
+                ConfigModel::StringConf(port) => {
+                    Ok(Box::new(MqttSource::new(stop_id, port.string.parse::<u16>().unwrap())))
+                }
+                ConfigModel::NumberConf(port) => {
+                    Ok(Box::new(MqttSource::new(stop_id, port.number as u16)))
+                }
+                _ => Err(String::from("Could not create HttpSource."))
+            };
+        }
+        Err(String::from("Could not create MqttSource."))
+    }
+
+    fn serialize_default() -> Result<SourceModel, ()> {
+        let mut configs = HashMap::new();
+        configs.insert(String::from("port"), StringConf(StringModel::new("7777")));
+        Ok(SourceModel { type_name: String::from("Mqtt"), id: String::from("Mqtt"), configs })
     }
 }
 

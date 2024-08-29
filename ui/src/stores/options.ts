@@ -1,8 +1,8 @@
-import { computed, type Ref, ref } from 'vue'
+import {type Ref, ref} from 'vue'
 import {defineStore} from 'pinia'
-import { ConfigContainer, type ConfigModel, type Destination, IS_DUMMY_MODE, PORT, type Source } from '@/stores/plan'
+import {ConfigContainer, type ConfigModel, type Destination, IS_DUMMY_MODE, PORT, type Source} from '@/stores/plan'
 import axios from 'axios'
-import { ToastType, useToastStore } from '@/stores/toast'
+import {ToastType, useToastStore} from '@/stores/toast'
 
 export type SourceDestinationModel = {
   type_name: string,
@@ -12,9 +12,14 @@ export type SourceDestinationModel = {
 
 export class Addable{
   name:string;
+    configs: ConfigModel[];
+    onAdd: (name: string, configs: ConfigModel[]) => void;
 
-  constructor(name: string) {
+
+    constructor(name: string, configs: ConfigModel[], onAdd: (name: string, configs: ConfigModel[]) => void) {
     this.name = name
+        this.configs = configs
+        this.onAdd = onAdd
   }
 }
 
