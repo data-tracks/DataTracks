@@ -66,8 +66,8 @@ impl HttpSource {
 
         let mut dict = Self::transform_to_value(payload);
         dict.0.insert(String::from("topic"), value::Value::text(topic.as_str()));
-        let train = Train::new(-1, vec![dict]);
 
+        let train = Train::new(-1, vec![dict]);
         for out in state.source.lock().unwrap().values() {
             out.send(train.clone()).unwrap();
         }

@@ -1,7 +1,8 @@
-import { defineStore } from 'pinia'
-import { type Ref, ref } from 'vue'
+import {defineStore} from 'pinia'
+import {type Ref, ref} from 'vue'
 import axios from 'axios'
-import { ToastType, useToastStore } from '@/stores/toast'
+import {ToastType, useToastStore} from '@/stores/toast'
+import Stop from '@/components/Stop.vue'
 
 export const PORT = import.meta.env.VITE_PORT || 8080
 export const IS_DUMMY_MODE = import.meta.env.VITE_MODE == 'dummy' || false
@@ -62,25 +63,25 @@ function capitalize(str: string): string {
 
 class BaseConfig {
   constructor(obj: Object = {}) {
-  }
 
+  }
 }
 
 export abstract class ConfigModel {
   baseConfig: BaseConfig
 
   protected constructor(baseConfig: BaseConfig) {
-    this.baseConfig = baseConfig
+      this.baseConfig = baseConfig;
   }
 
   static from(obj: any): ConfigModel {
     console.log(obj)
-    if (Object.prototype.hasOwnProperty.call(obj, StringConf.name)) {
-      return StringConf.from(obj[StringConf.name] as StringConf)
-    } else if (Object.prototype.hasOwnProperty.call(obj, NumberConf.name)) {
-      return NumberConf.from(obj[NumberConf.name] as NumberConf)
-    } else if (Object.prototype.hasOwnProperty.call(obj, ListConf.name)) {
-      return ListConf.from(obj[ListConf.name] as ListConf)
+      if (Object.prototype.hasOwnProperty.call(obj, StringConf.key)) {
+          return StringConf.from(obj[StringConf.key] as StringConf)
+      } else if (Object.prototype.hasOwnProperty.call(obj, NumberConf.key)) {
+          return NumberConf.from(obj[NumberConf.key] as NumberConf)
+      } else if (Object.prototype.hasOwnProperty.call(obj, ListConf.key)) {
+          return ListConf.from(obj[ListConf.key] as ListConf)
     } else {
       return new StringConf('Error', {})
     }
@@ -91,6 +92,7 @@ export abstract class ConfigModel {
 
 class StringConf extends ConfigModel {
   string: string
+    static key = "StringConf";
 
   static from(object: StringConf): StringConf {
     return new StringConf(object.string, object.baseConfig)
@@ -107,7 +109,8 @@ class StringConf extends ConfigModel {
 }
 
 class NumberConf extends ConfigModel {
-  number: number
+    number: number;
+    static key = "NumberConf";
 
   static from(object: NumberConf): NumberConf {
     return new NumberConf(object.number, object.baseConfig)
@@ -124,8 +127,9 @@ class NumberConf extends ConfigModel {
 }
 
 class ListConf extends ConfigModel {
-  list: ConfigModel[]
-  addable: boolean
+    static key = "ListConf";
+    list: ConfigModel[];
+    addable: boolean;
 
 
   constructor(object: ListConf) {
@@ -256,7 +260,7 @@ const _dummyData: any[] = [{
       num: 0,
       sources: [
         {
-          _type: 'mongo',
+            type_name: 'mongo',
           id: 'test_mongo'
         }
       ]
@@ -296,7 +300,7 @@ const _dummyData: any[] = [{
       num: 7,
       destinations: [
         {
-          _type: 'mqtt',
+            type_name: 'mqtt',
           id: 'test_mqtt'
         }
       ]

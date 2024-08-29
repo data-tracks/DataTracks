@@ -172,7 +172,14 @@ mod dummy {
         }
 
         fn serialize(&self) -> DestinationModel {
-            DestinationModel { type_name: String::from("Dummy"), id: self.id.to_string() }
+            DestinationModel { type_name: String::from("Dummy"), id: self.id.to_string(), configs: vec![] }
+        }
+
+        fn serialize_default() -> Option<DestinationModel>
+        where
+            Self: Sized,
+        {
+            None
         }
     }
 }

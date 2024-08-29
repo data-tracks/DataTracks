@@ -7,35 +7,40 @@ import { storeToRefs } from 'pinia'
 import Config from '@/components/Config.vue'
 import Adder from '@/components/Adder.vue'
 import { Addable, useOptionsStore } from '@/stores/options'
+import InOutConfiguration from '@/components/InOutConfiguration.vue'
 
 
 const props = defineProps<{
   stop: Stop | undefined
 }>()
 
-const modal = useModalStore();
+const modal = useModalStore()
 
 const into = (insOuts: Source[] | Destination[]) => {
-  return insOuts.map(e => new Addable(e.type_name));
+  return insOuts.map(e => new Addable(e.type_name))
 }
 
 const openAddSource = () => {
-  modal.openModal(Adder, {adds: into(sources.value)});
+  modal.openModal(Adder, { adds: into(sources.value) })
 }
 
 const openAddDestination = () => {
-  modal.openModal(Adder, {adds: into(destinations.value)});
+  modal.openModal(Adder, { adds: into(destinations.value) })
 }
 
-const themeStore = useThemeStore();
+const themeStore = useThemeStore()
 
-const {isDark} = storeToRefs(themeStore)
+const { isDark } = storeToRefs(themeStore)
 
-const optionsStore = useOptionsStore();
+const optionsStore = useOptionsStore()
 
-const {sources, destinations} = storeToRefs(optionsStore);
+const { sources, destinations } = storeToRefs(optionsStore)
 
-optionsStore.fetchInOutOptions();
+optionsStore.fetchInOutOptions()
+
+const openSourceDestination = (sourceDestination: Source | Destination) => {
+  modal.openModal(InOutConfiguration, {inOut: sourceDestination})
+}
 
 </script>
 
@@ -43,11 +48,11 @@ optionsStore.fetchInOutOptions();
   <div class="flex gap-2 min-h-14 items-center">
     <div class="sources  flex flex-col self-end items-center">
       <div v-for="source in stop?.sources" :key="source.id" class="p-4">
-        <p>{{source._type}}</p>
+        <div @click="openSourceDestination(source)">{{ source.type_name }}</div>
       </div>
       <Button text="+ Source" @click="openAddSource()"></Button>
     </div>
-    <div class="configuration grow border border-y-0 px-4 self-stretch flex items-center justify-center" >
+    <div class="configuration grow border border-y-0 px-4 self-stretch flex items-center justify-center">
       <table class="table-fixed">
         <tbody>
         <tr>
@@ -64,7 +69,7 @@ optionsStore.fetchInOutOptions();
     </div>
     <div class="destinations flex flex-col self-end items-center">
       <div v-for="destination in stop?.destinations" :key="destination.id" class="p-4">
-        <p>{{destination._type}}</p>
+        <p>{{ destination.type_name }}</p>
       </div>
       <Button text="+ Destination" @click="openAddDestination()"></Button>
     </div>

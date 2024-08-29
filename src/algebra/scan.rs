@@ -26,7 +26,7 @@ impl RefHandler for ScanHandler {
     }
 
     fn clone(&self) -> Box<dyn RefHandler + Send + 'static> {
-        Box::new(ScanHandler{ index: 0 })
+        Box::new(ScanHandler { index: self.index })
     }
 }
 

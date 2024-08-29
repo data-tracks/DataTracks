@@ -1,5 +1,5 @@
-use crate::algebra::{AlgebraType, TrainScan};
 use crate::algebra::AlgebraType::Scan;
+use crate::algebra::{AlgebraType, TrainScan};
 use crate::language::sql::statement::{SqlIdentifier, SqlSelect, SqlStatement};
 
 pub(crate) fn translate(query: SqlStatement) -> Result<AlgebraType, String> {
@@ -33,7 +33,7 @@ fn handle_table(identifier: SqlIdentifier) -> Result<AlgebraType, String> {
         s if s.starts_with('$') => s.strip_prefix('$')
             .ok_or("Prefix not found".to_string())
             .and_then(|rest| rest.parse::<i64>().map_err(|_| "Could not parse number".to_string()))
-            .map(|num| Scan(TrainScan::new(num))).unwrap(),
+            .map(|num| Scan(TrainScan::new(num)))?,
         _ => Err("Could not translate table".to_string())?
     };
     if identifier.alias.is_some() {

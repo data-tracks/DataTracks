@@ -1,21 +1,21 @@
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
-
-use crossbeam::channel;
-use crossbeam::channel::{Receiver, unbounded};
 
 use crate::processing::block::Block;
 use crate::processing::layout::Layout;
 use crate::processing::sender::Sender;
-use crate::processing::station::{Command, Station};
 use crate::processing::station::Command::{Okay, Ready, Threshold};
-use crate::processing::Train;
+use crate::processing::station::{Command, Station};
 use crate::processing::train::MutWagonsFunc;
 use crate::processing::transform::{Taker, Transform};
 use crate::processing::window::Window;
-use crate::util::{GLOBAL_ID, Rx};
+use crate::processing::Train;
+use crate::util::{Rx, GLOBAL_ID};
+use crossbeam::channel;
+use crossbeam::channel::{unbounded, Receiver};
+use tracing::debug;
 
 pub(crate) struct Platform {
     id: i64,
@@ -94,6 +94,7 @@ impl Platform {
 
             match self.receiver.try_recv() {
                 Ok(train) => {
+                    debug!("{:?}", train);
                     if self.layout.fits(&train) {
                         block.next(train); // window takes precedence to
                     }
@@ -107,7 +108,7 @@ impl Platform {
 }
 
 fn optimize(stop: i64, transform: Option<Transform>, mut window: Box<dyn Taker>, sender: Sender) -> MutWagonsFunc {
-    return if let Some(transform) = transform {
+    if let Some(transform) = transform {
         Box::new(move |trains| {
             let windowed = window.take(trains);
             let mut train = transform.apply(stop, windowed);
@@ -121,5 +122,5 @@ fn optimize(stop: i64, transform: Option<Transform>, mut window: Box<dyn Taker>,
             train.last = stop;
             sender.send(train);
         })
-    };
+    }
 }
