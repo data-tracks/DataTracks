@@ -2,6 +2,7 @@ use std::any::Any;
 
 #[cfg(test)]
 mod dummy {
+    use std::collections::HashMap;
     use std::sync::{Arc, Mutex};
     use std::thread::{sleep, spawn};
     use std::time::Duration;
@@ -14,6 +15,7 @@ mod dummy {
     use crate::processing::station::Command;
     use crate::processing::station::Command::{Ready, Stop};
     use crate::processing::train::Train;
+    use crate::ui::ConfigModel;
     use crate::util::{new_channel, Rx, Tx, GLOBAL_ID};
     use crate::value::Dict;
 
@@ -89,7 +91,14 @@ mod dummy {
         }
 
         fn serialize(&self) -> SourceModel {
-            SourceModel { type_name: String::from("Dummy"), id: self.id.to_string(), configs: vec![] }
+            SourceModel { type_name: String::from("Dummy"), id: self.id.to_string(), configs: HashMap::new() }
+        }
+
+        fn from(stop_id: i64, configs: HashMap<String, ConfigModel>) -> Result<Box<dyn Source>, String>
+        where
+            Self: Sized,
+        {
+            Err(String::from("This source does not allow for modifications."))
         }
 
         fn serialize_default() -> Result<SourceModel, ()> {
@@ -172,7 +181,7 @@ mod dummy {
         }
 
         fn serialize(&self) -> DestinationModel {
-            DestinationModel { type_name: String::from("Dummy"), id: self.id.to_string(), configs: vec![] }
+            DestinationModel { type_name: String::from("Dummy"), id: self.id.to_string(), configs: HashMap::new() }
         }
 
         fn serialize_default() -> Option<DestinationModel>
@@ -202,8 +211,8 @@ pub mod tests {
     use crate::util::new_channel;
     use crate::value::{Dict, Value};
 
-    pub fn dict_values(values: Vec<Value>) -> Vec<Dict>{
-        let mut dicts:Vec<Dict> = vec![];
+    pub fn dict_values(values: Vec<Value>) -> Vec<Dict> {
+        let mut dicts: Vec<Dict> = vec![];
         for value in values {
             dicts.push(Dict::from(value));
         }
