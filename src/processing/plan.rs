@@ -45,7 +45,7 @@ impl Default for Plan {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize)]
 pub enum Status {
     Running,
     Stopped,
@@ -136,6 +136,7 @@ impl Plan {
                 self.controls.entry(source.get_id()).or_default().push(source.operate(Arc::clone(&self.control_receiver.0)));
             }
         }
+        self.status = Status::Running;
     }
 
     pub(crate) fn clone_platform(&mut self, num: i64) {
@@ -311,6 +312,7 @@ impl Serialize for &Plan {
         let mut state = serializer.serialize_struct("Plan", 3)?;
         state.serialize_field("name", &self.name)?;
         state.serialize_field("id", &self.id)?;
+        state.serialize_field("status", &self.status)?;
 
         let mut lines = HashMap::new();
         for (num, stops) in &self.lines {

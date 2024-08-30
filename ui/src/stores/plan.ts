@@ -146,15 +146,22 @@ class ListConf extends ConfigModel {
 
 }
 
-export type Network = {
+export type Plan = {
   id: number;
+  status: PlanStatus;
   name: string;
   lines: Map<number, Line>;
   stops: Map<number, Stop>;
 }
 
-export const getStop = (network: Network, number: number): Stop | undefined => {
-  return network.stops.get(number);
+export enum PlanStatus {
+  Running = 'Running',
+  Stopped = 'Stopped',
+  Error = 'Error'
+}
+
+export const getStop = (plan: Plan, number: number): Stop | undefined => {
+  return plan.stops.get(number);
 }
 
 export type Node = {
@@ -174,7 +181,7 @@ type GetPlansResponse = {
 
 
 export const usePlanStore = defineStore('plan', () => {
-  const plans: Ref<Array<Network>> = ref([])
+  const plans: Ref<Array<Plan>> = ref([])
   const toast = useToastStore()
   const currentNumber = ref<number | null>()
 
@@ -182,7 +189,7 @@ export const usePlanStore = defineStore('plan', () => {
     currentNumber.value = number
   }
 
-  const transformNetwork = (data: any): Network => {
+  const transformPlan = (data: any): Plan => {
     const lines = new Map<number, Line>()
     const stops = new Map<number, Stop>()
 
@@ -199,6 +206,7 @@ export const usePlanStore = defineStore('plan', () => {
     }
 
     return {
+      status: data.status || PlanStatus.Stopped,
       id: data.id,
       name: data.name,
       lines: lines,
@@ -215,9 +223,27 @@ export const usePlanStore = defineStore('plan', () => {
     }
   }
 
+  const startPlan = async (planId: number) => {
+    try {
+      await axios.post(`http://localhost:${PORT}/plans/start`, {plan_id: planId})
+      toast.addToast(`Successfully started plan: ${planId}.`)
+    } catch (error) {
+      toast.addToast(error as string, ToastType.error)
+    }
+  }
+
+  const stopPlan = async (planId: number) => {
+    try {
+      await axios.post(`http://localhost:${PORT}/plans/stop`, {plan_id: planId})
+      toast.addToast(`Successfully stopped plan: ${planId}.`)
+    } catch (error) {
+      toast.addToast(error as string, ToastType.error)
+    }
+  }
+
   const fetchPlans = async () => {
     if (IS_DUMMY_MODE) {
-      plans.value = _dummyData.map(d => transformNetwork(d))
+      plans.value = _dummyData.map(d => transformPlan(d))
       return
     }
 
@@ -228,7 +254,7 @@ export const usePlanStore = defineStore('plan', () => {
         return
       }
 
-      plans.value = data.plans.map(d => transformNetwork(d))
+      plans.value = data.plans.map(d => transformPlan(d))
     } catch (error) {
       toast.addToast(error as string, ToastType.error)
       console.log(error)
@@ -255,11 +281,12 @@ export const usePlanStore = defineStore('plan', () => {
     }
   }
 
-  return {plans, currentNumber, setCurrent, submitPlan, fetchPlans, addInOut}
+  return {plans, currentNumber, setCurrent, submitPlan, fetchPlans, addInOut, startPlan, stopPlan}
 })
 
 const _dummyData: any[] = [{
   name: 'Plan Simple',
+  status: "stopped",
   lines: {
     0: {
       num: 0,

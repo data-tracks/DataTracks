@@ -47,8 +47,11 @@ pub async fn startup(storage: Arc<Mutex<Storage>>) {
     let app = Router::new()
         .route("/plans", get(get_plans))
         .route("/plans/create", post(create_plan))
+        .route("/plans/stop", post(stop_plan))
+        .route("/plans/start", post(start_plan))
         .route("/inouts/create", post(create_in_outs))
         .route("/options", get(get_options))
+        .route("/status", get(get_status))
         .with_state(state)
         .layer(CorsLayer::permissive())
         .nest_service("/", serve_dir);
@@ -80,6 +83,11 @@ async fn get_options(State(state): State<WebState>) -> impl IntoResponse {
     Json(msg)
 }
 
+async fn get_status(State(state): State<WebState>) -> impl IntoResponse {
+    let msg = json!( {"status": "connected"});
+    Json(msg)
+}
+
 async fn create_plan(State(state): State<WebState>, Json(payload): Json<CreatePlanPayload>) -> impl IntoResponse {
     debug!("{:?}", payload);
 
@@ -89,6 +97,22 @@ async fn create_plan(State(state): State<WebState>, Json(payload): Json<CreatePl
 
     // Return a response
     (StatusCode::OK, "Plan created".to_string())
+}
+
+async fn start_plan(State(state): State<WebState>, Json(payload): Json<PlanPayload>) -> impl IntoResponse {
+    debug!("{:?}", payload);
+
+    state.storage.lock().unwrap().start_plan(payload.plan_id);
+
+    // Return a response
+    (StatusCode::OK, "Plan started".to_string())
+}
+
+async fn stop_plan(State(state): State<WebState>, Json(payload): Json<PlanPayload>) -> impl IntoResponse {
+    debug!("{:?}", payload);
+
+    // Return a response
+    (StatusCode::FORBIDDEN, "Plan cannot be stooped yet.".to_string())
 }
 
 async fn create_in_outs(State(state): State<WebState>, Json(payload): Json<CreateInOutsPayload>) -> impl IntoResponse {
@@ -155,3 +179,8 @@ struct WebState {
     pub storage: Arc<Mutex<Storage>>,
 }
 
+
+#[derive(Deserialize, Debug)]
+struct PlanPayload {
+    plan_id: i64
+}

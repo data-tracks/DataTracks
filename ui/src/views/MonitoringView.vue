@@ -2,12 +2,12 @@
 import DefaultLayout from '@/layout/DefaultLayout.vue'
 import Plan from '@/components/Plan.vue'
 import Card from '@/components/default/Card.vue'
-import { getStop, usePlanStore } from '@/stores/plan'
+import { getStop, PlanStatus, usePlanStore } from '@/stores/plan'
 import { onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useThemeStore } from '@/stores/theme'
-import Button from '@/components/default/Button.vue'
 import Stop from '@/components/Stop.vue'
+import { PauseBoxIcon, PlayBoxIcon } from 'mdi-vue3'
 
 let store = usePlanStore()
 
@@ -25,21 +25,30 @@ onMounted(async () => {
 
 <template>
   <default-layout title="Plans">
-    <div class="pb-6" v-for="network in plans" :key="network.name">
+    <div class="pb-6" v-for="plan in plans" :key="plan.name">
       <Card>
         <template v-slot:left>
-          {{ network.name }}
+          {{ plan.name }}
         </template>
         <template v-slot:right>
-          <div class="text-green-500">running</div>
+          <div class="flex items-center">
+            <div
+              :class="{'text-gray-500' : plan.status === PlanStatus.Stopped, 'text-green-500': plan.status === PlanStatus.Running, 'text-red-500': plan.status === PlanStatus.Error }">
+              {{ plan.status }}...
+            </div>
+            <PlayBoxIcon class="fill-blue-500 cursor-pointer hover:fill-blue-300" width="2rem"
+                         v-if="plan.status === PlanStatus.Stopped" @click="store.startPlan(plan.id)" />
+            <PauseBoxIcon class="fill-blue-500 cursor-pointer hover:fill-blue-300" width="2rem"
+                          v-if="plan.status === PlanStatus.Running" @click="store.stopPlan(plan.id)" />
+          </div>
         </template>
 
-        <Plan :network="network" />
+        <Plan :network="plan" />
 
         <template v-slot:bottom v-if="store.currentNumber || store.currentNumber === 0">
           <div class="px-3 flex flex-col">
             <div>
-              <Stop :stop="getStop(network, store.currentNumber)" :plan-id="network.id"></Stop>
+              <Stop :stop="getStop(plan, store.currentNumber)" :plan-id="plan.id"></Stop>
             </div>
           </div>
         </template>

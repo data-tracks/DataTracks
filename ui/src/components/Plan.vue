@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import * as d3 from 'd3'
 import { computed, onMounted, ref, watchEffect } from 'vue'
-import { ConfigContainer, type Link, type Network, type Node, type Stop, usePlanStore } from '@/stores/plan'
+import { ConfigContainer, type Link, type Plan, type Node, type Stop, usePlanStore } from '@/stores/plan'
 import { v4 } from 'uuid'
 import { useModalStore } from '@/stores/modal'
 import { Theme, useThemeStore } from '@/stores/theme'
@@ -16,7 +16,7 @@ const TOTAL = WIDTH/2 + PADDING
 const id: string = v4()
 
 const props = defineProps<{
-  network: Network
+  network: Plan
 }>()
 
 const isRendered = ref(false)
@@ -34,7 +34,7 @@ const lineColor = computed(() => isDark.value ? 'white' : 'black');
 const tooltipBg = computed(() => isDark.value ? 'white' : 'grey');
 const tooltipText = computed(() => isDark.value ? 'black' : 'white');
 
-const extractNodes = (network: Network): Node[] => {
+const extractNodes = (network: Plan): Node[] => {
   const nodes = []
   const used: number[] = []
 
@@ -52,7 +52,7 @@ const extractNodes = (network: Network): Node[] => {
   return nodes
 }
 
-const extractLinks = (network: Network, nodes: Node[]): Link[] => {
+const extractLinks = (network: Plan, nodes: Node[]): Link[] => {
   const links = []
 
   for (const [num, line] of network.lines) {
@@ -275,7 +275,7 @@ watchEffect(() => {
 </script>
 
 <template>
-  <div :class="'editor-'+id" class="editor flex justify-center"></div>
+  <div :class="'editor-'+id" class="editor flex justify-center my-8"></div>
 </template>
 
 <style lang="scss">

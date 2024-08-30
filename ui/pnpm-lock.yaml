@@ -20,6 +20,9 @@ dependencies:
   es6-shim:
     specifier: ^0.35.8
     version: 0.35.8
+  mdi-vue3:
+    specifier: ^7.4.47
+    version: 7.4.47(vue@3.4.30)
   pinia:
     specifier: ^2.1.7
     version: 2.1.7(typescript@5.4.5)(vue@3.4.30)
@@ -3160,6 +3163,14 @@ packages:
     resolution: {integrity: sha512-iIRwTIf0QKV3UAnYK4PU8uiEc4SRh5jX0mwpIwETPpHdhVM4f53RSwS/vXvN1JhGX+Cs7B8qIq3d6AH49O5fAQ==}
     dependencies:
       '@jridgewell/sourcemap-codec': 1.4.15
+
+  /mdi-vue3@7.4.47(vue@3.4.30):
+    resolution: {integrity: sha512-zUOqx/1TaPBCQMQvz8vcFyxSiRJzrbmfvLiute5PAoAKnNDkc7l2JuXE9K/CcU4CScTkttWmhWSnhMVcUi0KVA==}
+    peerDependencies:
+      vue: '>= 3'
+    dependencies:
+      vue: 3.4.30(typescript@5.4.5)
+    dev: false
 
   /memorystream@0.3.1:
     resolution: {integrity: sha512-S3UwM3yj5mtUSEfP41UZmt/0SCoVYUcU1rkXv+BQ5Ig8ndL4sPoJNBUJERafdPb5jjHJGuMgytgKvKIf58XNBw==}

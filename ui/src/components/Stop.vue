@@ -13,7 +13,7 @@ import { markRaw } from 'vue'
 
 const props = defineProps<{
   planId: number
-  stop: Stop
+  stop: Stop | undefined
 }>()
 
 const modal = useModalStore()
@@ -21,11 +21,11 @@ const modal = useModalStore()
 const planStore = usePlanStore();
 
 const addSource = (typeName: string, configs: ConfigModel[]) => {
-  planStore.addInOut(props.planId, props.stop.num, typeName,InOut.Source, configs)
+  planStore.addInOut(props.planId, props.stop?.num || 0, typeName,InOut.Source, configs)
 }
 
 const addDestination = (typeName: string, configs: ConfigModel[]) => {
-  planStore.addInOut(props.planId, props.stop.num, typeName, InOut.Destination, configs)
+  planStore.addInOut(props.planId, props.stop?.num || 0, typeName, InOut.Destination, configs)
 }
 
 const into = (insOuts: Source[] | Destination[], onAdd: (typeName: string, c: ConfigModel[]) => void ) => {
