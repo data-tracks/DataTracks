@@ -9,6 +9,7 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::sync::Arc;
 use std::thread;
+use tokio::io::AsyncWriteExt;
 use tracing::{debug, error};
 
 pub struct DebugDestination {
@@ -31,20 +32,29 @@ impl Destination for DebugDestination {
         let (tx, rx) = unbounded();
 
         thread::spawn(move || {
-            let file = File::create("debug.txt").unwrap();
-            let mut writer = BufWriter::new(file);
+            let mut writer = None;
+            if let Ok(file) = File::create("debug.txt") {
+                writer = Some(BufWriter::new(file));
+            }
             loop {
                 let res = receiver.recv();
                 match res {
                     Ok(train) => {
-                        writeln!(writer, "{:?}", train).expect("Could not write to debug file.");
+                        if let Some(ref mut w) = writer {
+                            writeln!(w, "{:?}", train).expect("Could not write to debug file.");
+                        }
+
                         debug!("last: {}, {:?}", train.last, train.values.unwrap_or(vec![]));
                     }
                     Err(e) => {
                         error!("{}", e)
                     }
                 }
-                writer.flush().unwrap();
+
+                if let Some(ref mut w) = writer {
+                    w.flush().unwrap();
+                }
+
             }
         });
         tx
