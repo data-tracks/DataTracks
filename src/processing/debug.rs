@@ -9,7 +9,6 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::sync::Arc;
 use std::thread;
-use tokio::io::AsyncWriteExt;
 use tracing::{debug, error};
 
 pub struct DebugDestination {

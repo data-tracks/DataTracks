@@ -89,7 +89,7 @@ impl Plan {
                 }
                 dump += &self.stations[stop.1].dump(last, dumped_stations.contains(&stop.1.clone()));
                 last = *stop.1;
-                dumped_stations.push(stop.1.clone())
+                dumped_stations.push(*stop.1)
             }
         }
 
@@ -125,13 +125,13 @@ impl Plan {
         }
 
 
-        for (_stop, destinations) in &mut self.destinations {
+        for destinations in self.destinations.values_mut() {
             for destination in destinations {
                 self.controls.entry(destination.get_id()).or_default().push(destination.operate(Arc::clone(&self.control_receiver.0)));
             }
         }
 
-        for (_stop, sources) in &mut self.sources {
+        for sources in self.sources.values_mut() {
             for source in sources {
                 self.controls.entry(source.get_id()).or_default().push(source.operate(Arc::clone(&self.control_receiver.0)));
             }
@@ -235,7 +235,7 @@ impl Plan {
     }
 
     fn connect_destinations(&mut self) -> Result<(), String> {
-        for (_stop, destinations) in &mut self.destinations {
+        for destinations in self.destinations.values_mut() {
             for destination in destinations {
                 let tx = destination.get_in();
                 let target = destination.get_stop();
@@ -249,7 +249,7 @@ impl Plan {
         Ok(())
     }
     fn connect_sources(&mut self) -> Result<(), String> {
-        for (_stop, sources) in &mut self.sources {
+        for sources in self.sources.values_mut() {
             for source in sources {
                 let target = source.get_stop();
                 if let Some(station) = self.stations.get_mut(&target) {

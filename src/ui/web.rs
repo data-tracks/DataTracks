@@ -147,9 +147,6 @@ fn create_source(state: &WebState, payload: CreateInOutsPayload) -> Result<(), S
             return Err("Unknown source".to_string());
         }
     };
-    if let Err(err) = source {
-        return Err(err);
-    }
 
     state.storage.lock().unwrap().add_source(payload.plan_id, payload.stop_id, source?);
     Ok(())

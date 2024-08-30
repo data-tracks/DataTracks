@@ -101,8 +101,8 @@ impl Packet {
         PacketDecoder::from_stream(self.stream.try_clone().unwrap())
     }
 
-    fn write(&mut self, message: &Vec<u8>) {
-        self.stream.write(message).unwrap();
+    fn write(&mut self, message: &[u8]) {
+        self.stream.write_all(message).unwrap();
     }
 }
 
@@ -154,7 +154,7 @@ fn handle_message(mut initial_packet: Packet, outs: &HashMap<i64, Tx<Train>>) {
 
 fn send_message(dict: Dict, outs: &HashMap<i64, Tx<Train>>) {
     let train = Train::new(-1, vec![dict]);
-    for (_stop, tx) in outs {
+    for tx in outs.values() {
         tx.send(train.clone()).unwrap();
     }
 }

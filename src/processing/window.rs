@@ -3,9 +3,9 @@ use std::time::Instant;
 
 use chrono::{Duration, NaiveTime};
 
-use crate::processing::Train;
 use crate::processing::transform::Taker;
 use crate::processing::window::Window::{Back, Interval, Non};
+use crate::processing::Train;
 use crate::util::TimeUnit;
 
 #[derive(Clone)]
@@ -28,7 +28,7 @@ impl Window {
         match self {
             Back(w) => Box::new(w.clone()),
             Interval(w) => Box::new(w.clone()),
-            Non(_) => Box::new(NonWindow::default())
+            Non(_) => Box::<NonWindow>::default()
         }
     }
 

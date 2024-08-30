@@ -216,10 +216,10 @@ pub enum OutputType {
 
 impl OutputType {
     pub(crate) fn fits(&self, value: &Value) -> bool {
-        return match self {
+        match self {
             Any => true,
             Array(a) => {
-                return match value {
+                match value {
                     Value::Array(array) => {
                         a.fits(array)
                     }
@@ -227,7 +227,7 @@ impl OutputType {
                 }
             }
             Dict(d) => {
-                return match value {
+                match value {
                     Value::Dict(dict) => {
                         d.fits(dict)
                     }
@@ -235,7 +235,7 @@ impl OutputType {
                 }
             }
             t => {
-                return value.type_() == t.value_type()
+                value.type_() == t.value_type()
             }
         }
     }

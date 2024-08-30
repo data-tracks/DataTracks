@@ -27,12 +27,17 @@ impl Storage {
 
     pub fn add_source(&mut self, plan_id: i64, stop_id: i64, source: Box<dyn Source>) {
         let mut plans = self.plans.lock().unwrap();
-        plans.get_mut(&plan_id).map(|p| p.add_source(stop_id, source));
+        if let Some(p) = plans.get_mut(&plan_id) {
+            p.add_source(stop_id, source)
+        }
     }
 
     pub fn add_destination(&mut self, plan_id: i64, stop_id: i64, destination: Box<dyn Destination>) {
         let mut plans = self.plans.lock().unwrap();
-        plans.get_mut(&plan_id).map(|p| p.add_destination(stop_id, destination));
+
+        if let Some(p) = plans.get_mut(&plan_id) {
+            p.add_destination(stop_id, destination)
+        }
     }
 
     pub fn start_plan(&mut self, id: i64) {
@@ -40,7 +45,7 @@ impl Storage {
         let plan = lock.get_mut(&id);
         match plan {
             None => {}
-            Some(mut p) => {
+            Some(p) => {
                 p.operate();
             }
         }
