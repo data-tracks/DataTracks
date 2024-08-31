@@ -33,6 +33,9 @@ rand = "0.9.0-alpha.1"
 json = "0.12.4"
 mqtt_packet_3_5 = "0.2.2"
 log = "0.4.21"
+include_dir = "0.7.4"
+mime_guess = "2.0.4"
+bytes = "1.6.0"
 
 # The profile that 'cargo dist' will build with
 [profile.dist]

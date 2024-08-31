@@ -1,20 +1,7 @@
 use std::collections::HashMap;
+use std::io::Bytes;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-
-use axum::extract::State;
-use axum::handler::HandlerWithoutStateExt;
-use axum::http::StatusCode;
-use axum::response::{Html, IntoResponse};
-use axum::routing::{get, post};
-use axum::{Json, Router};
-use serde::Deserialize;
-use serde_json::{json, Value};
-use tokio::net::TcpListener;
-use tokio::runtime::Runtime;
-use tower_http::cors::CorsLayer;
-use tower_http::services::ServeDir;
-use tracing::{debug, info};
 
 use crate::management::Storage;
 use crate::mqtt::MqttSource;
@@ -22,6 +9,26 @@ use crate::processing::destination::Destination;
 use crate::processing::source::Source;
 use crate::processing::{DebugDestination, HttpSource, Plan};
 use crate::ui::ConfigModel;
+use axum::body::Body;
+use axum::extract::{Path, State};
+use axum::handler::HandlerWithoutStateExt;
+use axum::http::{header, Response, StatusCode};
+use axum::response::{Html, IntoResponse};
+use axum::routing::{get, post};
+use axum::{Json, Router};
+use include_dir::{include_dir, Dir};
+use serde::Deserialize;
+use serde_json::{json, Value};
+use tokio::net::TcpListener;
+use tokio::runtime::Runtime;
+use tower_http::body;
+use tower_http::body::Full;
+use tower_http::cors::CorsLayer;
+use tower_http::services::ServeDir;
+use tracing::{debug, info, warn};
+
+// Embed the entire directory
+static ASSETS_DIR: Dir<'_> = include_dir!("ui/dist");
 
 pub fn start(storage: Arc<Mutex<Storage>>) {
     // Create a new Tokio runtime
@@ -32,15 +39,35 @@ pub fn start(storage: Arc<Mutex<Storage>>) {
     })
 }
 
+
+async fn serve_embedded_file(path: String) -> impl IntoResponse {
+    let path = if path.is_empty() || path == "/" {
+        "index.html"
+    } else {
+        path.trim_start_matches('/')
+    };
+
+    match ASSETS_DIR.get_file(path) {
+        Some(file) => {
+            let mime_type = mime_guess::from_path(file.path()).first_or_octet_stream();
+            Response::builder()
+                .status(StatusCode::OK)
+                .header(header::CONTENT_TYPE, mime_type.as_ref())
+                .body(Body::from(file.contents().clone()))
+                .unwrap()
+                .into_response()
+        }
+        None => (StatusCode::NOT_FOUND, "404 Not Found").into_response(),
+    }
+}
+
 pub async fn startup(storage: Arc<Mutex<Storage>>) {
     info!("initializing router...");
 
     // We could also read our port in from the environment as well
-    let assets_path = std::env::current_dir().unwrap();
     let port = 2666_u16;
     let addr = std::net::SocketAddr::from(([0, 0, 0, 0], port));
-    let serve_dir = ServeDir::new(format!("{}/ui/dist", assets_path.to_str().unwrap()))
-        .fallback(fallback_handler.into_service());
+
 
     let state = WebState { storage };
 
@@ -52,9 +79,11 @@ pub async fn startup(storage: Arc<Mutex<Storage>>) {
         .route("/inouts/create", post(create_in_outs))
         .route("/options", get(get_options))
         .route("/status", get(get_status))
+        .route("/*path", get(|path: Path<String>| serve_embedded_file(path.to_string())))
+        .route("/", get(|| serve_embedded_file(String::from("/"))))
         .with_state(state)
-        .layer(CorsLayer::permissive())
-        .nest_service("/", serve_dir);
+        .layer(CorsLayer::permissive());
+    //.nest_service("/", serve_dir);
 
     let listener = TcpListener::bind(&addr).await.unwrap();
     debug!("router initialized, now listening on port {}", port);
@@ -63,10 +92,13 @@ pub async fn startup(storage: Arc<Mutex<Storage>>) {
 }
 
 async fn fallback_handler() -> impl IntoResponse {
-    let index_path = PathBuf::from("./ui/dist/index.html");
-    match tokio::fs::read_to_string(index_path).await {
-        Ok(contents) => Html(contents).into_response(),
-        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "500 Internal Server Error").into_response(),
+    let index_path = ASSETS_DIR.get_file("index.html");
+    match ASSETS_DIR.get_file("index.html") {
+        Some(file) => Html(file.contents_utf8().unwrap()).into_response(),
+        None => {
+            warn!("Failed to read {:?}: {:?}", index_path.clone(), "index.html");
+            (StatusCode::INTERNAL_SERVER_ERROR, "500 Internal Server Error").into_response()
+        }
     }
 }
 
