@@ -16,7 +16,7 @@ const TOTAL = WIDTH/2 + PADDING
 const id: string = v4()
 
 const props = defineProps<{
-  network: Plan
+  plan: Plan
 }>()
 
 const isRendered = ref(false)
@@ -28,7 +28,7 @@ const themeStore = useThemeStore();
 const planStore = usePlanStore();
 
 const {theme, isDark} = storeToRefs(themeStore);
-const {currentNumber} = storeToRefs(planStore);
+const {currentNumbers} = storeToRefs(planStore);
 
 const lineColor = computed(() => isDark.value ? 'white' : 'black');
 const tooltipBg = computed(() => isDark.value ? 'white' : 'grey');
@@ -71,7 +71,7 @@ const extractLinks = (network: Plan, nodes: Node[]): Link[] => {
 }
 
 const getStop = (node: Node): Stop | undefined => {
-  return props.network.stops.get(node.num)
+  return props.plan.stops.get(node.num)
 }
 
 function renderLines(svg: d3.Selection<SVGGElement, unknown, HTMLElement, any>, links: Link[]): void {
@@ -101,7 +101,7 @@ function renderNodesAndTooltip(svg: d3.Selection<SVGGElement, unknown, HTMLEleme
 
   // Three function that change the tooltip when user hover / move / leave a cell
   const mouseover = (e: MouseEvent, d: Node) => {
-    const el = props.network.stops.get(d.num)
+    const el = props.plan.stops.get(d.num)
     let content = `<p>Stop: ${d.num}</p>`
     if (el?.transform) {
       console.log(el.transform.name)
@@ -142,16 +142,16 @@ function renderNodesAndTooltip(svg: d3.Selection<SVGGElement, unknown, HTMLEleme
     .on('mousemove', mousemove)
     .on('mouseleave', mouseleave)
     .on( 'click', (e,n) => {
-      if(planStore.currentNumber === n.num){
-        planStore.setCurrent(null);
+      if(planStore.currentNumbers.get(props.plan.id) === n.num){
+        planStore.setCurrent(props.plan.id, null);
       }else {
-        planStore.setCurrent(n.num)
+        planStore.setCurrent(props.plan.id, n.num)
       }
     })
 }
 
 const color = (d: any) => {
-  const stop = props.network.stops.get(d.num)
+  const stop = props.plan.stops.get(d.num)
   if (stop && stop.transform) {
     return 'trans'
   }
@@ -217,13 +217,13 @@ function renderNumbers(svg: d3.Selection<SVGGElement, unknown, HTMLElement, any>
 
 const render = () => {
   // we have to wait that the component is mounted and that the data is actually loaded
-  if (!isMounted.value || !props.network || isRendered.value) {
+  if (!isMounted.value || !props.plan || isRendered.value) {
     return
   }
   isRendered.value = true
 
-  const nodes = extractNodes(props.network)
-  const links = extractLinks(props.network, nodes)
+  const nodes = extractNodes(props.plan)
+  const links = extractLinks(props.plan, nodes)
 
   let initialSvg = d3
     .select('.editor-' + id)

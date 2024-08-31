@@ -183,10 +183,10 @@ type GetPlansResponse = {
 export const usePlanStore = defineStore('plan', () => {
   const plans: Ref<Array<Plan>> = ref([])
   const toast = useToastStore()
-  const currentNumber = ref<number | null>()
+  const currentNumbers = ref(new Map<number, number | null>())
 
-  const setCurrent = (number: number | null) => {
-    currentNumber.value = number
+  const setCurrent = (planId: number, stop: number | null) => {
+    currentNumbers.value.set(planId, stop)
   }
 
   const transformPlan = (data: any): Plan => {
@@ -281,7 +281,7 @@ export const usePlanStore = defineStore('plan', () => {
     }
   }
 
-  return {plans, currentNumber, setCurrent, submitPlan, fetchPlans, addInOut, startPlan, stopPlan}
+  return {plans, currentNumbers, setCurrent, submitPlan, fetchPlans, addInOut, startPlan, stopPlan}
 })
 
 const _dummyData: any[] = [{

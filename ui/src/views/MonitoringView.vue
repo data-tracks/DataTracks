@@ -43,12 +43,12 @@ onMounted(async () => {
           </div>
         </template>
 
-        <Plan :network="plan" />
+        <Plan :plan="plan" />
 
-        <template v-slot:bottom v-if="store.currentNumber || store.currentNumber === 0">
+        <template v-slot:bottom v-if="store.currentNumbers.get(plan.id) || store.currentNumbers.get(plan.id) === 0">
           <div class="px-3 flex flex-col">
             <div>
-              <Stop :stop="getStop(plan, store.currentNumber)" :plan-id="plan.id"></Stop>
+              <Stop :stop="getStop(plan, store.currentNumbers.get(plan.id) || 0)" :plan-id="plan.id"></Stop>
             </div>
           </div>
         </template>
