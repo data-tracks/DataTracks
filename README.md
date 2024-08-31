@@ -1,5 +1,5 @@
 <p align="center">
-<img alt="Logo" height="300" src="/admin/logo.jpeg?raw=true" title="DataTrack" width="300"/>
+<img alt="Logo" height="300" src="/admin/logo-transparent.png?raw=true" title="DataTrack" width="300"/>
 </p>
 
 # 🚂 DataTracks
