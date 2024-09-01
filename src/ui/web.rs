@@ -36,6 +36,7 @@ pub fn start(storage: Arc<Mutex<Storage>>) {
 
     rt.block_on(async {
         startup(storage).await;
+        debug!("Startup done.")
     })
 }
 
@@ -50,7 +51,6 @@ async fn serve_embedded_file(path: String) -> impl IntoResponse {
 
     match ASSETS_DIR.get_file(path) {
         Some(file) => {
-            debug!("Handling {}", path);
             let mime_type = mime_guess::from_path(file.path()).first_or_octet_stream();
             Response::builder()
                 .status(StatusCode::OK)
@@ -91,6 +91,7 @@ pub async fn startup(storage: Arc<Mutex<Storage>>) {
     debug!("router initialized, now listening on port {}", port);
     info!("DataTracks started: http://localhost:{}", port);
     axum::serve(listener, app).await.unwrap();
+    debug!("Finished serving.")
 }
 
 async fn fallback_handler() -> impl IntoResponse {
