@@ -41,6 +41,7 @@ pub fn start(storage: Arc<Mutex<Storage>>) {
 
 
 async fn serve_embedded_file(path: String) -> impl IntoResponse {
+    debug!("Serve route{}", path);
     let path = if path.is_empty() || path == "/" {
         "index.html"
     } else {
