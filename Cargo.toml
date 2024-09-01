@@ -3,6 +3,7 @@ name = "data_tracks"
 version = "0.1.0"
 edition = "2021"
 authors = ["David Lengweiler"]
+license = "GPL-3.0"
 repository = "https://github.com/datomo/DataTracks"
 description = "DataTracks is an prototype system, which provides easy creation and management of complex data streaming workloads for various degrees of structured and unstructured data."
 
@@ -18,7 +19,7 @@ eula = false
 axum = "0.7.5"
 ctrlc = "3.4.4"
 tokio = { version = "1.38.0", features = ["full"] }
-tower = "0.4.13"
+tower = "0.5.0"
 tower-http = { version = "0.5.2", features = ["full"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
@@ -55,6 +56,6 @@ targets = ["aarch64-apple-darwin", "x86_64-apple-darwin", "x86_64-unknown-linux-
 # Path that installers should place binaries in
 install-path = "CARGO_HOME"
 # Whether to install an updater program
-install-updater = true
+install-updater = false
 
 

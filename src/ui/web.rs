@@ -49,6 +49,7 @@ async fn serve_embedded_file(path: String) -> impl IntoResponse {
 
     match ASSETS_DIR.get_file(path) {
         Some(file) => {
+            debug!("Handling {}", path);
             let mime_type = mime_guess::from_path(file.path()).first_or_octet_stream();
             Response::builder()
                 .status(StatusCode::OK)
@@ -96,6 +97,7 @@ async fn fallback_handler() -> impl IntoResponse {
     match ASSETS_DIR.get_file("index.html") {
         Some(file) => Html(file.contents_utf8().unwrap()).into_response(),
         None => {
+            debug!("Could not open file.");
             warn!("Failed to read {:?}: {:?}", index_path.clone(), "index.html");
             (StatusCode::INTERNAL_SERVER_ERROR, "500 Internal Server Error").into_response()
         }
