@@ -16,8 +16,11 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            binary: x86_64-pc-windows-gnu
+            target: x86_64-pc-windows-msvc
             ending: exe
+          - os: macos-latest
+            target: aarch64-apple-darwin
+
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -33,13 +36,17 @@ jobs:
           profile: minimal
           override: true
 
-      # Step 3: Build the Rust project
-      - name: Build
-        run: cargo build --release
+      # Step 3: Install target for cross-compilation (Linux, macOS, Windows)
+      - name: Install additional Rust targets
+        run: rustup target add ${{ matrix.target }}
 
-      # Step 4: Upload the build artifact
+      # Step 4: Build the Rust project
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }}
+
+      # Step 5: Upload the build artifact
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.binary }}.${{ matrix.ending }}
-          path: target/release/data_tracks.${{ matrix.ending }}
+          name: ${{ matrix.target }}.${{ matrix.ending }}
+          path: target/${{ matrix.target }}/release/
