@@ -17,7 +17,7 @@ jobs:
         include:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            ending: exe
+            ending: .exe
           - os: macos-latest
             target: aarch64-apple-darwin
 
@@ -48,5 +48,5 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.target }}.${{ matrix.ending }}
-          path: target/${{ matrix.target }}/release/
+          name: ${{ matrix.target }}${{ matrix.ending }}
+          path: target/${{ matrix.target }}/release/data_tracks${{ matrix.target }}
