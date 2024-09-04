@@ -1,6 +1,4 @@
 use std::collections::HashMap;
-use std::io::Bytes;
-use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use crate::management::Storage;
@@ -11,7 +9,6 @@ use crate::processing::{DebugDestination, HttpSource, Plan};
 use crate::ui::ConfigModel;
 use axum::body::Body;
 use axum::extract::{Path, State};
-use axum::handler::HandlerWithoutStateExt;
 use axum::http::{header, Response, StatusCode};
 use axum::response::{Html, IntoResponse};
 use axum::routing::{get, post};
@@ -21,10 +18,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
-use tower_http::body;
-use tower_http::body::Full;
 use tower_http::cors::CorsLayer;
-use tower_http::services::ServeDir;
 use tracing::{debug, info, warn};
 
 // Embed the entire directory
