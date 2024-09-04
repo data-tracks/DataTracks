@@ -1,0 +1,44 @@
+name: Release
+permissions:
+  "contents": "write"
+
+on:
+  pull_request:
+  push:
+#   tags:
+# - '**[0-9]+.[0-9]+.[0-9]+*' // is version
+
+jobs:
+  release:
+    name: release ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-gnu
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      # Step 1: Checkout the code
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Step 2: Set up Rust
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+
+      # Step 3: Build the Rust project
+      - name: Build
+        run: cargo build --release
+
+      # Step 4: Upload the build artifact
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: rust-binary
+          path: target/release/

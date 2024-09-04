@@ -55,7 +55,7 @@ async fn serve_embedded_file(path: String) -> impl IntoResponse {
             Response::builder()
                 .status(StatusCode::OK)
                 .header(header::CONTENT_TYPE, mime_type.as_ref())
-                .body(Body::from(file.contents().clone()))
+                .body(Body::from(file.contents()))
                 .unwrap()
                 .into_response()
         }
