@@ -41,5 +41,5 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.binary }}
-          path: data_tracks.${{ matrix.ending }}
+          name: ${{ matrix.binary }}.${{ matrix.ending }}
+          path: target/release/data_tracks.${{ matrix.ending }}
