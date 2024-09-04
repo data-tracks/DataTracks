@@ -48,5 +48,5 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.target }}${{ matrix.ending }}
-          path: target/${{ matrix.target }}/release/data_tracks${{ matrix.target }}
+          name: data_tracks-${{ matrix.target }}${{ matrix.ending }}
+          path: target/${{ matrix.target }}/release/data_tracks${{ matrix.ending }}
