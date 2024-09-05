@@ -1,17 +1,17 @@
 <script setup lang="ts">
 import * as d3 from 'd3'
 import { computed, onMounted, ref, watchEffect } from 'vue'
-import { ConfigContainer, type Link, type Plan, type Node, type Stop, usePlanStore } from '@/stores/plan'
+import { type Link, type Node, type Plan, type Stop, usePlanStore } from '@/stores/plan'
 import { v4 } from 'uuid'
 import { useModalStore } from '@/stores/modal'
-import { Theme, useThemeStore } from '@/stores/theme'
+import { useThemeStore } from '@/stores/theme'
 import { storeToRefs } from 'pinia'
 
 const X_GAP = 100
 const Y_GAP = 60
 const WIDTH = 40
 const PADDING = 10
-const TOTAL = WIDTH/2 + PADDING
+const TOTAL = WIDTH / 2 + PADDING
 
 const id: string = v4()
 
@@ -22,17 +22,17 @@ const props = defineProps<{
 const isRendered = ref(false)
 const isMounted = ref(false)
 
-const modal = useModalStore();
+const modal = useModalStore()
 
-const themeStore = useThemeStore();
-const planStore = usePlanStore();
+const themeStore = useThemeStore()
+const planStore = usePlanStore()
 
-const {theme, isDark} = storeToRefs(themeStore);
-const {currentNumbers} = storeToRefs(planStore);
+const { theme, isDark } = storeToRefs(themeStore)
+const { currentNumbers } = storeToRefs(planStore)
 
-const lineColor = computed(() => isDark.value ? 'white' : 'black');
-const tooltipBg = computed(() => isDark.value ? 'white' : 'grey');
-const tooltipText = computed(() => isDark.value ? 'black' : 'white');
+const lineColor = computed(() => isDark.value ? 'white' : 'black')
+const tooltipBg = computed(() => isDark.value ? 'white' : 'grey')
+const tooltipText = computed(() => isDark.value ? 'black' : 'white')
 
 const extractNodes = (network: Plan): Node[] => {
   const nodes = []
@@ -115,7 +115,7 @@ function renderNodesAndTooltip(svg: d3.Selection<SVGGElement, unknown, HTMLEleme
     Tooltip
       .style('left', d.x + WIDTH + PADDING + 'px')
       .style('top', d.y + WIDTH + PADDING + 'px'
-    )
+      )
   }
   const mouseleave = (e: MouseEvent, d: Node) => {
     Tooltip.style('opacity', 0)
@@ -132,19 +132,19 @@ function renderNodesAndTooltip(svg: d3.Selection<SVGGElement, unknown, HTMLEleme
     .selectAll()
     .data(nodes)
     .join('rect')
-    .attr('x', (d) => d.x - WIDTH/2)
-    .attr('y', (d) => d.y - WIDTH/2)
+    .attr('x', (d) => d.x - WIDTH / 2)
+    .attr('y', (d) => d.y - WIDTH / 2)
     .attr('width', WIDTH)
     .attr('height', WIDTH)
     .attr('rx', 4)
-    .attr('class', (d) => 'station '+color(d))
+    .attr('class', (d) => 'station ' + color(d))
     .on('mouseover', mouseover)
     .on('mousemove', mousemove)
     .on('mouseleave', mouseleave)
-    .on( 'click', (e,n) => {
-      if(planStore.currentNumbers.get(props.plan.id) === n.num){
-        planStore.setCurrent(props.plan.id, null);
-      }else {
+    .on('click', (e, n) => {
+      if (planStore.currentNumbers.get(props.plan.id) === n.num) {
+        planStore.setCurrent(props.plan.id, null)
+      } else {
         planStore.setCurrent(props.plan.id, n.num)
       }
     })
@@ -159,26 +159,53 @@ const color = (d: any) => {
 }
 
 function isEmpty(elements: any[] | undefined) {
-  if(!elements){
+  if (!elements) {
     return true
   }
-  return elements.length == 0;
+  return elements.length == 0
 }
 
 function renderInputs(svg: d3.Selection<SVGGElement, unknown, HTMLElement, any>, nodes: Node[]) {
   // inputs
-  svg
-    .append('g')
-    .attr('stroke', '#fff')
-    .attr('stroke-width', 1.5)
-    .selectAll()
-    .data(nodes.filter(n => !isEmpty(getStop(n)?.sources) ))
-    .join('circle')
-    .attr('cx', (d) => d.x - WIDTH/2)
-    .attr('cy', (d) => d.y + 2)
-    .attr('r', 10)
-    .classed('stop', true)
-    .attr('fill', 'black');
+  const container =
+    svg.append('g')
+      .attr('stroke', '#fff')
+      .attr('stroke-width', 1.5)
+      .selectAll()
+      .data(nodes.filter(n => !isEmpty(getStop(n)?.sources)))
+      /*.join('circle')
+      .attr('cx', (d) => d.x - WIDTH/2)
+      .attr('cy', (d) => d.y + 2)
+      .attr('r', 10)
+      .classed('stop', true)
+      .attr('fill', 'black');*/
+      .append('svg')
+      .attr('height', 50)
+      .attr('width', 50)
+      //.attr("style", (d) => `transform: translate(-70px, ${d.y-15}px)`)
+      .attr('viewBox', '0 0 100 100')
+
+    attachTriangle(container, 0)
+    attachTriangle(container, 1)
+    attachTriangle(container, 2)
+
+}
+
+function attachTriangle(svg: d3.Selection<SVGSVGElement, Node, SVGGElement, unknown>, delay: number) {
+  svg.append('path')
+    .attr('d', 'M8.73,73.07l32.66-32.14c1.93-1.9,1.93-5,0-6.9L8.73,1.9C5.67-1.11.5,1.06.5,5.35v64.28c0,4.29,5.17,6.46,8.23,3.45Z')
+    .attr('fill', '#00a651')
+    .attr('stroke', '#231f20')
+    .attr('stroke-linecap', 'round')
+    .attr('stroke-miterlimit', '10')
+    .append('animateTransform')
+    .attr('attributeName', 'transform')
+    .attr('type', 'translate')
+    .attr('from', '-100,0')
+    .attr('to', '200,0')
+    .attr('dur', '2s')
+    .attr( 'begin', ''+ delay + 's')
+    .attr('repeatCount', 'indefinite')
 }
 
 function renderOutputs(svg: d3.Selection<SVGGElement, unknown, HTMLElement, any>, nodes: Node[]) {
@@ -190,7 +217,7 @@ function renderOutputs(svg: d3.Selection<SVGGElement, unknown, HTMLElement, any>
     .selectAll()
     .data(nodes.filter(n => !isEmpty(getStop(n)?.destinations)))
     .join('circle')
-    .attr('cx', (d) => d.x + WIDTH/2)
+    .attr('cx', (d) => d.x + WIDTH / 2)
     .attr('cy', (d) => d.y + 2)
     .attr('r', 10)
     .classed('stop', true)
@@ -236,11 +263,10 @@ const render = () => {
     .attr('height', 200)
 
   let svg = initialSvg
-    .append("g")
-    .classed("elements_wrapper", true)
+    .append('g')
+    .classed('elements_wrapper', true)
     // shift so all nodes ar in the visible area
-    .attr("transform", `translate(${TOTAL},${TOTAL})`)
-
+    .attr('transform', `translate(${TOTAL},${TOTAL})`)
 
 
   renderLines(svg, links)
@@ -269,7 +295,6 @@ onMounted(() => {
 watchEffect(() => {
   render()
 })
-
 
 
 </script>
@@ -326,7 +351,7 @@ p {
   fill: $melon;
 }
 
-.station{
+.station {
   cursor: pointer;
 
   &.hover {
@@ -338,7 +363,7 @@ circle {
   cursor: pointer;
 }
 
-line{
+line {
   stroke: v-bind('lineColor');
 }
 </style>
