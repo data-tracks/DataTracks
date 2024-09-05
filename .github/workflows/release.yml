@@ -14,6 +14,11 @@ on:
         required: false
         type: boolean
         default: true
+      description:
+        description: 'Description Text'
+        required: false
+        type: string
+        default: ""
 
 jobs:
   release:
@@ -30,7 +35,7 @@ jobs:
           prerelease: false
           release_name: ${{ inputs.version }}
           tag_name: ${{ inputs.version }}
-          body: "Test Body"
+          body: ${{ inputs.description }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
