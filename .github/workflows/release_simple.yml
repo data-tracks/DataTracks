@@ -31,8 +31,10 @@ jobs:
             ending: .exe
           - os: macos-latest
             target: aarch64-apple-darwin
+            ending: ""
           - os: linux-latest
             target: x86_64-unknown-linux-gnu
+            ending: ""
 
     runs-on: ${{ matrix.os }}
 
