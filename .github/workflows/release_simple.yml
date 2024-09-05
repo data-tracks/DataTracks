@@ -59,4 +59,4 @@ jobs:
         with:
           name: data_tracks-${{ matrix.target }}${{ matrix.ending }}
           path: target/${{ matrix.target }}/release/data_tracks${{ matrix.ending }}
-          compression: 0
+          compression-level: 0
