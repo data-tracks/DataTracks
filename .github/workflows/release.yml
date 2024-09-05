@@ -18,6 +18,8 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
+    outputs:
+      release_url: ${{ steps.create_release.outputs.upload_url }}
     steps:
       # Step 1: Create Release
       - name: Create Release
@@ -31,8 +33,6 @@ jobs:
           body: "Test Body"
         env:
           GITHUB_TOKEN: ${{ github.token }}
-      - name: Set Variable
-        run: echo "RELEASE_URL=steps.create_release.outputs.upload_url" >> $GITHUB_ENV
 
   build:
     name: Release ${{ matrix.target }}
@@ -83,12 +83,12 @@ jobs:
       #          compression-level: 0
 
       # Step 5: Upload asset to release
-      - name: upload darwin artifact
+      - name: Upload artifact
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ github.token }}
         with:
-          upload_url: ${{ env.RELEASE_URL }}
+          upload_url: ${{ needs.release.outputs.release_url }}
           asset_path: target/${{ matrix.target }}/release/data_tracks${{ matrix.ending }}
           asset_name: data_tracks-${{ matrix.target }}${{ matrix.ending }}
           asset_content_type: ${{ matrix.content_type }}
