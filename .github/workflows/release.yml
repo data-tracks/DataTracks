@@ -28,7 +28,7 @@ jobs:
           prerelease: false
           release_name: ${{ inputs.version }}
           tag_name: ${{ inputs.version }}
-          body_path: "Test Body"
+          body: "Test Body"
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
