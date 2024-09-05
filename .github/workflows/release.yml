@@ -31,6 +31,8 @@ jobs:
           body: "Test Body"
         env:
           GITHUB_TOKEN: ${{ github.token }}
+      - name: Set Variable
+        run: echo "RELEASE_URL=steps.create_release.outputs.upload_url" >> $GITHUB_ENV
 
   build:
     name: Release ${{ matrix.target }}
@@ -86,7 +88,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          upload_url: ${{ env.RELEASE_URL }}
           asset_path: target/${{ matrix.target }}/release/data_tracks${{ matrix.ending }}
           asset_name: data_tracks-${{ matrix.target }}${{ matrix.ending }}
           asset_content_type: ${{ matrix.content_type }}
