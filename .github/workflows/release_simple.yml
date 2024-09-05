@@ -3,6 +3,17 @@ permissions:
   "contents": "write"
 
 on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version of Release'
+        required: true
+        type: string
+      tags:
+        description: 'Draft Release'
+        required: false
+        type: boolean
+        default: true
   pull_request:
   push:
 #   tags:
@@ -10,7 +21,7 @@ on:
 
 jobs:
   release:
-    name: release ${{ matrix.target }}
+    name: Release ${{ matrix.target }}
     strategy:
       fail-fast: false
       matrix:
@@ -20,6 +31,8 @@ jobs:
             ending: .exe
           - os: macos-latest
             target: aarch64-apple-darwin
+          - os: linux-latest
+            target: x86_64-unknown-linux-gnu
 
     runs-on: ${{ matrix.os }}
 
@@ -30,11 +43,7 @@ jobs:
 
       # Step 2: Set up Rust
       - name: Set up Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          profile: minimal
-          override: true
+        uses: dtolnay/rust-toolchain@stable
 
       # Step 3: Install target for cross-compilation (Linux, macOS, Windows)
       - name: Install additional Rust targets
@@ -50,3 +59,4 @@ jobs:
         with:
           name: data_tracks-${{ matrix.target }}${{ matrix.ending }}
           path: target/${{ matrix.target }}/release/data_tracks${{ matrix.ending }}
+          compression: 0
