@@ -1,4 +1,4 @@
-name: Release
+name: 🫗 Release
 permissions:
   "contents": "write"
 
@@ -35,7 +35,7 @@ jobs:
   build:
     name: Release ${{ matrix.target }}
     needs:
-      - create_release
+      - release
     strategy:
       fail-fast: false
       matrix:
