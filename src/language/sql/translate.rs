@@ -36,8 +36,5 @@ fn handle_table(identifier: SqlIdentifier) -> Result<AlgebraType, String> {
             .map(|num| Scan(TrainScan::new(num)))?,
         _ => Err("Could not translate table".to_string())?
     };
-    if identifier.alias.is_some() {
-        Err("Alias is not supported.".to_string())?
-    };
     Ok(scan)
 }

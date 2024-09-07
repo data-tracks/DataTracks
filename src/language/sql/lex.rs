@@ -1,10 +1,11 @@
 use std::vec;
 
-use logos::{Lexer, Logos};
-
 use crate::language::sql::buffer::BufferedLexer;
 use crate::language::sql::lex::Token::{As, Comma, From, GroupBy, Identifier, Select, Semi, Star, Text, Where};
-use crate::language::sql::statement::{SqlIdentifier, SqlSelect, SqlStatement, SqlSymbol};
+use crate::language::sql::statement::SqlStatement::Operator;
+use crate::language::sql::statement::{SqlAlias, SqlIdentifier, SqlList, SqlOperator, SqlSelect, SqlStatement, SqlSymbol, SqlValue};
+use crate::{algebra, value};
+use logos::{Lexer, Logos};
 
 #[derive(Logos, Debug, PartialEq, Clone)]
 #[logos(skip r"[ \t\n\f]+")] // Ignore this regex pattern between tokens
@@ -54,6 +55,12 @@ pub(crate) enum Token {
     Ne,
     #[token("*")]
     Star,
+    #[token("+")]
+    Plus,
+    #[token("-")]
+    Minus,
+    #[token("/")]
+    Divide
 }
 
 pub fn parse(query: &str) -> Result<SqlStatement, String> {
@@ -94,12 +101,12 @@ fn parse_expressions(lexer: &mut BufferedLexer, stops: &[Token]) -> Result<Vec<S
 }
 
 fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> SqlStatement {
-    let mut expression = vec![];
+    let mut expressions = vec![];
     let mut is_alias = false;
+
     while let Ok(tok) = lexer.next() {
         if stops.contains(&tok) {
-            lexer.buffer(tok);
-            return SqlStatement::Identifier(SqlIdentifier::new(expression, None));
+            break;
         }
 
         if tok == Star {
@@ -113,20 +120,43 @@ fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> SqlStateme
 
         match tok {
             Identifier(i) => {
-                expression.push(i)
+                expressions.push(SqlStatement::Identifier(SqlIdentifier::new(vec![i])))
             }
             Text(t) => {
-                expression.push(t)
+                expressions.push(SqlStatement::Value(SqlValue::new(value::Value::text(&t))))
             }
-            _ => {}
+
+            t => {
+                if let Some(op) = parse_operator(t) {
+                    expressions.push(Operator(SqlOperator::new(op, vec![])))
+                }
+            }
         }
     }
-    let mut alias = None;
-    if is_alias {
-        alias = Some(parse_expression(lexer, stops));
-    }
+    let statement = match expressions.len() {
+        1 => {
+            expressions.pop().unwrap()
+        }
+        _ => {
+            SqlStatement::List(SqlList::new(expressions))
+        }
+    };
 
-    SqlStatement::Identifier(SqlIdentifier::new(expression, alias))
+    if is_alias {
+        let alias = parse_expression(lexer, stops);
+        return SqlStatement::Alias(SqlAlias::new(statement, alias))
+    }
+    statement
+}
+
+fn parse_operator(tok: Token) -> Option<algebra::Operator> {
+    match tok {
+        Star => Some(algebra::Operator::multiplication()),
+        Token::Plus => Some(algebra::Operator::plus()),
+        Token::Minus => Some(algebra::Operator::minus()),
+        Token::Divide => Some(algebra::Operator::divide()),
+        _ => None
+    }
 }
 
 
@@ -149,37 +179,52 @@ mod test {
 
     #[test]
     fn test_star() {
-        test_query("SELECT * FROM $0");
+        let query = &select("*", "$0");
+        test_query_diff(query, query);
     }
 
     #[test]
     fn test_single() {
-        test_query("SELECT name FROM $0");
+        let query = &select(&quote("name"), "$0");
+        test_query_diff(query, query);
     }
 
     #[test]
     fn test_list() {
-        test_query("SELECT name, age FROM $0");
+        let query = &select(&format!("{}, {}", quote("name"), quote("age")), "$0");
+        test_query_diff(query, query);
     }
 
     #[test]
     fn test_as() {
-        test_query("SELECT name AS n, age FROM $0");
+        let query = &select(&format!("{} AS {}, {}", quote("name"), quote("n"), quote("age")), "$0");
+        test_query_diff(query, query);
     }
 
     #[test]
     fn test_implicit_join() {
-        test_query("SELECT name AS n, age FROM $0, $1");
-    }
-
-    #[test]
-    fn test_as_mixed() {
-        test_query_diff("Select 'name' AS n, age FROM $0", "SELECT name AS n, age FROM $0");
+        let query = &select(&format!("{} AS {}, {}", quote("name"), quote("n"), quote("age")), "$0, $1");
+        test_query_diff(query, query);
     }
 
     #[test]
     fn test_as_quote() {
-        test_query_diff("Select \"name\" AS n, age FROM $0", "SELECT name AS n, age FROM $0");
+        let query = &select(&format!("{} AS {}, {}", quote("name"), quote("n"), quote("age")), "$0");
+        test_query_diff(query, query);
+    }
+
+    #[test]
+    fn test_calculators_add() {
+        let query = &select(&format!("{} + 1, {}", quote("name"), quote("age")), "$0");
+        test_query_diff(query, query);
+    }
+
+    fn select<'a>(selects: &str, from: &str) -> String {
+        format!("SELECT {} FROM {}", selects, from)
+    }
+
+    fn quote(key: &str) -> String {
+        format!("\"{}\"", key)
     }
 
     fn test_query(query: &str) {
@@ -190,6 +235,6 @@ mod test {
         let result = parse(query);
         assert!(matches!(result, Ok(_)), "Expected Ok, but got {:?}", result.err().unwrap());
         let parsed = result.ok().unwrap();
-        assert_eq!(parsed.dump(), expected, "Expected {:?}, but got {:?}", expected, parsed.dump())
+        assert_eq!(parsed.dump("\""), expected, "Expected {:?}, but got {:?}", expected, parsed.dump("\""))
     }
 }

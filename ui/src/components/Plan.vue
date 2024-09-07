@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import * as d3 from 'd3'
-import { computed, onMounted, ref, watchEffect } from 'vue'
-import { type Link, type Node, type Plan, type Stop, usePlanStore } from '@/stores/plan'
-import { v4 } from 'uuid'
-import { useModalStore } from '@/stores/modal'
-import { useThemeStore } from '@/stores/theme'
-import { storeToRefs } from 'pinia'
+import {computed, onMounted, ref, watchEffect} from 'vue'
+import {type Link, type Node, type Plan, type Stop, usePlanStore} from '@/stores/plan'
+import {v4} from 'uuid'
+import {useModalStore} from '@/stores/modal'
+import {useThemeStore} from '@/stores/theme'
+import {storeToRefs} from 'pinia'
 
 const X_GAP = 100
 const Y_GAP = 60
@@ -167,51 +167,25 @@ function isEmpty(elements: any[] | undefined) {
 
 function renderInputs(svg: d3.Selection<SVGGElement, unknown, HTMLElement, any>, nodes: Node[]) {
   // inputs
-  const container =
     svg.append('g')
+        .attr("class", "inputs")
       .attr('stroke', '#fff')
       .attr('stroke-width', 1.5)
       .selectAll()
       .data(nodes.filter(n => !isEmpty(getStop(n)?.sources)))
-      /*.join('circle')
+        .join('circle')
       .attr('cx', (d) => d.x - WIDTH/2)
       .attr('cy', (d) => d.y + 2)
       .attr('r', 10)
       .classed('stop', true)
-      .attr('fill', 'black');*/
-      .append('svg')
-      .attr('height', 50)
-      .attr('width', 50)
-      //.attr("style", (d) => `transform: translate(-70px, ${d.y-15}px)`)
-      .attr('viewBox', '0 0 100 100')
+        .attr('fill', 'black');
 
-    attachTriangle(container, 0)
-    attachTriangle(container, 1)
-    attachTriangle(container, 2)
 
-}
-
-function attachTriangle(svg: d3.Selection<SVGSVGElement, Node, SVGGElement, unknown>, delay: number) {
-  svg.append('path')
-    .attr('d', 'M8.73,73.07l32.66-32.14c1.93-1.9,1.93-5,0-6.9L8.73,1.9C5.67-1.11.5,1.06.5,5.35v64.28c0,4.29,5.17,6.46,8.23,3.45Z')
-    .attr('fill', '#00a651')
-    .attr('stroke', '#231f20')
-    .attr('stroke-linecap', 'round')
-    .attr('stroke-miterlimit', '10')
-    .append('animateTransform')
-    .attr('attributeName', 'transform')
-    .attr('type', 'translate')
-    .attr('from', '-100,0')
-    .attr('to', '200,0')
-    .attr('dur', '2s')
-    .attr( 'begin', ''+ delay + 's')
-    .attr('repeatCount', 'indefinite')
 }
 
 function renderOutputs(svg: d3.Selection<SVGGElement, unknown, HTMLElement, any>, nodes: Node[]) {
   // outputs
-  svg
-    .append('g')
+  svg.append('g')
     .attr('stroke', '#fff')
     .attr('stroke-width', 1.5)
     .selectAll()

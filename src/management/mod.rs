@@ -1,4 +1,4 @@
-pub use management::start;
+pub use management::Manager;
 pub use storage::Storage;
 
 mod storage;

@@ -1,16 +1,12 @@
 extern crate core;
 
-use crate::management::Storage;
-use crate::mqtt::MqttSource;
-use crate::processing::{DebugDestination, HttpSource, Plan};
-use crate::ui::start;
+use crate::management::Manager;
+use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
-use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
-use std::thread::JoinHandle;
 use std::time::Duration;
-use tracing::log::info;
-use tracing::Level;
+use tokio::io::AsyncWriteExt;
+use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
 
 mod value;
@@ -36,49 +32,26 @@ fn main() {
         tx.send(()).expect("Could not send signal on shutdown.");
     }).expect("Error setting Ctrl-C handler");
 
-    let storage = management::start();
+    let mut manager = Manager::new();
 
-    add_default(storage.clone());
-    // Spawn a new thread
-    let handle = thread::spawn(|| start(storage));
+    manager.start();
 
-    shutdown_hook(rx, handle);
+    shutdown_hook(rx, manager)
 }
 
-fn add_default(storage: Arc<Mutex<Storage>>) {
-    thread::spawn(move || {
-        let mut plan = Plan::parse("1-2{sql|SELECT $1 FROM $1}-3");
 
-        plan.add_source(1, Box::new(HttpSource::new(1, 5555)));
-        plan.add_source(2, Box::new(MqttSource::new(2, 6666)));
-        plan.add_destination(3, Box::new(DebugDestination::new(3)));
-        let id = plan.id;
-        plan.set_name("Default".to_string());
-        let mut lock = storage.lock().unwrap();
-        lock.add_plan(plan);
-        lock.start_plan(id);
-        drop(lock);
-    });
-
-}
-
-fn shutdown_hook(rx: Receiver<()>, handle: JoinHandle<()>) {
-// Wait for the shutdown signal or the thread to finish
+fn shutdown_hook(rx: Receiver<()>, mut manager: Manager) {
+    // Wait for the shutdown signal or the thread to finish
     loop {
         if rx.try_recv().is_ok() {
             info!("Received shutdown signal.");
             break;
         }
 
-        if handle.is_finished() {
-            info!("Thread finished.");
-            handle.join().unwrap();
-            break;
-        }
-
         // Sleep for a short duration to prevent busy-waiting
         thread::sleep(Duration::from_millis(100));
     }
+    manager.shutdown();
 
     println!("Exiting main function.");
 }

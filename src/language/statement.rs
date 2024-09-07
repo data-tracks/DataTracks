@@ -1,3 +1,3 @@
 pub trait Statement {
-    fn dump(&self) -> String;
+    fn dump(&self, quote: &str) -> String;
 }

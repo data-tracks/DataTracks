@@ -24,7 +24,7 @@ use tracing::{debug, info, warn};
 // Embed the entire directory
 static ASSETS_DIR: Dir<'_> = include_dir!("ui/dist");
 
-pub fn start(storage: Arc<Mutex<Storage>>) {
+pub fn start_web(storage: Arc<Mutex<Storage>>) {
     // Create a new Tokio runtime
     let rt = Runtime::new().unwrap();
 

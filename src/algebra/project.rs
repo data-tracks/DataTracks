@@ -27,7 +27,6 @@ impl RefHandler for ProjectHandler {
 
     fn clone(&self) -> Box<dyn RefHandler + Send + 'static> {
         Box::new( ProjectHandler{ input: self.input.clone(), project: self.project })
-
     }
 }
 
