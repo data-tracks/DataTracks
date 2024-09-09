@@ -3,7 +3,6 @@ pub use algebra::AlgebraType;
 pub use algebra::RefHandler;
 pub use operator::Operator;
 pub use scan::TrainScan;
-pub use operator::dump_value;
 
 mod project;
 mod algebra;

@@ -1,11 +1,11 @@
 use std::collections::btree_map::IntoIter;
 use std::collections::BTreeMap;
+use std::fmt::{Display, Formatter};
 use std::hash::Hash;
 
 use json::parse;
 
 use crate::value::Value;
-use crate::value_display;
 
 #[derive(Eq, Clone, Debug, Hash, PartialEq, Default)]
 pub struct Dict(pub BTreeMap<String, Value>);
@@ -42,7 +42,11 @@ impl Dict {
     }
 }
 
-value_display!(Dict);
+impl Display for Dict {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{{{}}}", self.0.iter().map(|(k, v)| format!("{}: {}", k, v)).collect::<Vec<String>>().join(", "))
+    }
+}
 
 impl From<Value> for Dict{
     fn from(value: Value) -> Self {

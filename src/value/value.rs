@@ -1,7 +1,7 @@
 use std::cmp::PartialEq;
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
-use std::ops::Add;
+use std::ops::{Add, Div, Mul, Sub};
 
 use json::{parse, JsonValue};
 
@@ -174,6 +174,36 @@ impl Add for &Value {
             _ => {
                 panic!("Cannot add.")
             }
+        }
+    }
+}
+
+impl Sub for &Value {
+    type Output = Value;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        match self {
+            _ => todo!()
+        }
+    }
+}
+
+impl Mul for &Value {
+    type Output = Value;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        match self {
+            _ => todo!()
+        }
+    }
+}
+
+impl Div for &Value {
+    type Output = Value;
+
+    fn div(self, rhs: Self) -> Self::Output {
+        match self {
+            _ => todo!()
         }
     }
 }

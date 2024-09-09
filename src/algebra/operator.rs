@@ -1,7 +1,6 @@
-use std::fmt::Display;
-use std::str::FromStr;
-use crate::algebra::Operator::{Divide, IndexedRef, Literal, Minus, Multiplication, NamedRef, Plus};
+use crate::algebra::Operator::{Divide, Minus, Multiplication, Plus};
 use crate::value::Value;
+use std::str::FromStr;
 
 #[derive(Debug)]
 pub enum Operator {
@@ -13,50 +12,80 @@ pub enum Operator {
 }
 
 impl Operator {
+    pub fn implement(&self, operators: Vec<fn(Value) -> Value>) -> fn(Value) -> Value {
+        match self {
+            Plus(_) => {
+                |v| {
+                    operators.iter().fold(Value::int(0), |a, b| {
+                        &a + &b(v)
+                    })
+                }
+            }
+            Minus(_) => {
+                |v| {
+                    operators.iter().fold(Value::int(0), |a, b| {
+                        &a - &b(v)
+                    })
+                }
+            }
+            Multiplication(_) => {
+                |v| {
+                    operators.iter().fold(Value::int(0), |a, b| {
+                        &a * &b(v)
+                    })
+                }
+            }
+            Divide(_) => {
+                |v| {
+                    operators.iter().fold(Value::int(0), |a, b| {
+                        &a / &b(v)
+                    })
+                }
+            }
+        }
+    }
+
     pub fn dump(&self, as_call: bool) -> String {
         match self {
-            Literal(l) => format!("{}", l.literal),
-            NamedRef(name) => format!("${}", name),
-            IndexedRef(index) => format!("${}", index),
             Plus(_) => {
                 if as_call {
                     String::from("ADD")
                 } else {
                     String::from("+")
                 }
-            },
+            }
             Minus(_) => {
                 if as_call {
                     String::from("MINUS")
                 } else {
                     String::from("-")
                 }
-            },
+            }
             Multiplication(_) => {
                 if as_call {
                     String::from("MULTIPLICATION")
                 } else {
                     String::from("*")
                 }
-            },
+            }
             Divide(_) => {
                 if as_call {
                     String::from("DIVIDE")
                 } else {
                     String::from("/")
                 }
-            },
+            }
             _ => panic!("Unexpected case!"),
         }
     }
 }
 
-impl FromStr for Operator{
+impl FromStr for Operator {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut trimmed = s.to_lowercase();
-        if s.ends_with("(")  {
+        if s.ends_with("(") {
             trimmed.pop();
         }
         match trimmed.as_str() {
@@ -71,11 +100,6 @@ impl FromStr for Operator{
 
 
 impl Operator {
-
-    pub fn literal(literal: Value) -> Operator {
-        Literal(LiteralOperator{literal})
-    }
-
     pub fn plus() -> Operator {
         Plus(PlusOperator)
     }
@@ -88,16 +112,7 @@ impl Operator {
     pub fn divide() -> Operator {
         Divide(DivideOperator)
     }
-
-    pub fn named_input(name: String) -> Operator {
-        NamedRef(NamedRefOperator{name})
-    }
-
-    pub fn indexed_input(index: u64) -> Operator {
-        IndexedRef(IndexedRefOperator{index})
-    }
 }
-
 
 
 #[derive(Debug)]

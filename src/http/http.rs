@@ -40,7 +40,7 @@ impl HttpSource {
         debug!("New http message received: {:?}", payload);
 
         let value = Self::transform_to_value(payload);
-        let train = Train::new(-1, vec![value]);
+        let train = Train::new(-1, vec![value::Value::Dict(value)]);
 
         for out in state.source.lock().unwrap().values() {
             out.send(train.clone()).unwrap();
@@ -67,7 +67,7 @@ impl HttpSource {
         let mut dict = Self::transform_to_value(payload);
         dict.0.insert(String::from("topic"), value::Value::text(topic.as_str()));
 
-        let train = Train::new(-1, vec![dict]);
+        let train = Train::new(-1, vec![value::Value::Dict(dict)]);
         for out in state.source.lock().unwrap().values() {
             out.send(train.clone()).unwrap();
         }
@@ -136,7 +136,7 @@ impl Source for HttpSource {
                     Ok(Box::new(HttpSource::new(stop_id, port.number as u16)))
                 }
                 _ => Err(String::from("Could not create HttpSource."))
-            }
+            };
         }
         Err(String::from("Could not create HttpSource."))
     }

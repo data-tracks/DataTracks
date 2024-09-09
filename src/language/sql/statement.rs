@@ -1,6 +1,6 @@
 use crate::algebra::Operator;
 use crate::language::statement::Statement;
-use crate::{algebra, value};
+use crate::value;
 use crate::value::Value;
 
 pub trait Sql: Statement {}

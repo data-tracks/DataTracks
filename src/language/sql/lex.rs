@@ -162,7 +162,7 @@ fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> SqlStateme
             }
         }
 
-        if (delay) {
+        if delay {
             delay = false;
         } else if let Some(op) = operator.take() {
             operators.push(expressions.pop().unwrap());
