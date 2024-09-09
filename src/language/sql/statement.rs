@@ -67,17 +67,23 @@ impl Statement for SqlAlias {
 pub struct SqlOperator {
     pub(crate) operator: Operator,
     pub(crate) operands: Vec<SqlStatement>,
+    pub(crate) is_call: bool // call: Function(op1, op2), no call: op1 op op2
 }
 
 impl SqlOperator {
-    pub fn new(operator: Operator, operands: Vec<SqlStatement>) -> Self {
-        SqlOperator { operator, operands }
+    pub fn new(operator: Operator, operands: Vec<SqlStatement>, is_call: bool) -> Self {
+        SqlOperator { operator, operands, is_call }
     }
 }
 
 impl Statement for SqlOperator {
     fn dump(&self, quote: &str) -> String {
-        let op = dump_operator(&self.operator);
+
+        if self.is_call {
+            let op = self.operator.dump(true);
+            return format!("{}({})", op, self.operands.iter().map(|o| o.dump(quote)).collect::<Vec<String>>().join(", "))
+        }
+        let op = self.operator.dump(false);
         match self.operands.len() {
             1 => {
                 format!("{}{}", op, self.operands.first().unwrap().dump(quote))
@@ -89,15 +95,6 @@ impl Statement for SqlOperator {
                 self.operands.iter().fold(String::new(), |a, b| format!("{} {} {}", a, op, b.dump(quote)))
             }
         }
-    }
-}
-
-fn dump_operator(operator: &Operator) -> &'static str {
-    match operator {
-        Operator::Plus(_) => "+",
-        Operator::Minus(_) => "-",
-        Operator::Multiplication(_) => "*",
-        Operator::Divide(_) => "/",
     }
 }
 

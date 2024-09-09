@@ -1,3 +1,4 @@
+use std::str::FromStr;
 use std::vec;
 
 use crate::algebra::Operator;
@@ -10,6 +11,8 @@ use logos::{Lexer, Logos};
 #[derive(Logos, Debug, PartialEq, Clone)]
 #[logos(skip r"[ \t\n\f]+")] // Ignore this regex pattern between tokens
 pub(crate) enum Token {
+    #[regex(r"[a-zA-Z_$][a-zA-Z_$0-9]*\(", | lex | lex.slice().to_owned())]
+    Function(String),
     #[regex(r"[']?[a-zA-Z_$][a-zA-Z_$0-9]*[']?", | lex | lex.slice().to_owned())]
     Identifier(String),
     #[regex(r#""[^"\\]*""#, | lex | trim_quotes(lex.slice()))]
@@ -132,6 +135,19 @@ fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> SqlStateme
             Token::Float(float) => {
                 expressions.push(SqlStatement::Value(SqlValue::new(value::Value::float(float))))
             }
+            Token::Function(func) => {
+                let stops = vec![Token::BracketClose];
+                if let Ok(op) = Operator::from_str(&func){
+                    let exp = parse_expressions(lexer,&stops);
+                    if let Ok(exprs) = exp {
+                        expressions.push(SqlStatement::Operator(SqlOperator::new(op, exprs, true)))
+                    }else {
+                        panic!("Unknown function arguments!")
+                    }
+                }else {
+                    panic!("Unknown call operator!")
+                }
+            }
 
             t => {
                 if let Some(op) = parse_operator(t.clone()) {
@@ -150,7 +166,7 @@ fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> SqlStateme
             delay = false;
         } else if let Some(op) = operator.take() {
             operators.push(expressions.pop().unwrap());
-            expressions.push(SqlStatement::Operator(SqlOperator::new(op, operators.drain(..).collect())));
+            expressions.push(SqlStatement::Operator(SqlOperator::new(op, operators.drain(..).collect(), false)));
         }
     }
 
@@ -180,12 +196,12 @@ fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> SqlStateme
     statement
 }
 
-fn parse_operator(tok: Token) -> Option<algebra::Operator> {
+fn parse_operator(tok: Token) -> Option<Operator> {
     match tok {
-        Star => Some(algebra::Operator::multiplication()),
-        Token::Plus => Some(algebra::Operator::plus()),
-        Token::Minus => Some(algebra::Operator::minus()),
-        Token::Divide => Some(algebra::Operator::divide()),
+        Star => Some(Operator::multiplication()),
+        Token::Plus => Some(Operator::plus()),
+        Token::Minus => Some(Operator::minus()),
+        Token::Divide => Some(Operator::divide()),
         _ => None
     }
 }
@@ -247,6 +263,55 @@ mod test {
     #[test]
     fn test_calculators_add() {
         let query = &select(&format!("{} + 1, {}", quote("name"), quote("age")), "$0");
+        test_query_diff(query, query);
+    }
+
+    #[test]
+    fn test_calculators_add_no_space() {
+        let query = &select(&format!("{}+1, {}", quote("name"), quote("age")), "$0");
+        let res = &select(&format!("{} + 1, {}", quote("name"), quote("age")), "$0");
+        test_query_diff(query, res);
+    }
+
+    #[test]
+    fn test_calculators_sub() {
+        let query = &select(&format!("{} - 1, {}", quote("name"), quote("age")), "$0");
+        test_query_diff(query, query);
+    }
+
+    #[test]
+    fn test_calculators_multi() {
+        let query = &select(&format!("{} * 1, {}", quote("name"), quote("age")), "$0");
+        test_query_diff(query, query);
+    }
+
+    #[test]
+    fn test_calculators_div() {
+        let query = &select(&format!("{} / 1, {}", quote("name"), quote("age")), "$0");
+        test_query_diff(query, query);
+    }
+
+    #[test]
+    fn test_calculators_add_nested() {
+        let query = &select(&format!("{} + 1 + 1, {}", quote("name"), quote("age")), "$0");
+        test_query_diff(query, query);
+    }
+
+    #[test]
+    fn test_calculators_add_nested_mixed() {
+        let query = &select(&format!("{} / 1 + 3, {}", quote("name"), quote("age")), "$0");
+        test_query_diff(query, query);
+    }
+
+    #[test]
+    fn test_calculators_function_call() {
+        let query = &select(&format!("ADD({}, {})", quote("name"), quote("age")), "$0");
+        test_query_diff(query, query);
+    }
+
+    #[test]
+    fn test_calculators_function_call_nested() {
+        let query = &select(&format!("ADD({}, ADD({}, {}))", quote("name"), quote("age"), quote("age2")), "$0");
         test_query_diff(query, query);
     }
 
