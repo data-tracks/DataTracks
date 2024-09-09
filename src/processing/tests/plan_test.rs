@@ -1,5 +1,3 @@
-use std::any::Any;
-
 #[cfg(test)]
 mod dummy {
     use std::collections::HashMap;

@@ -1,6 +1,7 @@
 use crate::algebra::Operator;
 use crate::language::statement::Statement;
 use crate::value;
+use crate::value::Value;
 
 pub trait Sql: Statement {}
 
@@ -11,7 +12,7 @@ pub(crate) enum SqlStatement {
     List(SqlList),
     Value(SqlValue),
     Operator(SqlOperator),
-    Alias(SqlAlias)
+    Alias(SqlAlias),
 }
 
 impl SqlStatement {
@@ -76,22 +77,58 @@ impl SqlOperator {
 
 impl Statement for SqlOperator {
     fn dump(&self, quote: &str) -> String {
+        let op = dump_operator(&self.operator);
         match self.operands.len() {
             1 => {
-                format!("{:?}{}", self.operator, self.operands.first().unwrap().dump(quote))
+                format!("{}{}", op, self.operands.first().unwrap().dump(quote))
             }
             2 => {
-                format!("{} {:?} {}", self.operands.first().unwrap().dump(quote), self.operator, self.operands.get(1).unwrap().dump(quote))
+                format!("{} {} {}", self.operands.first().unwrap().dump(quote), op, self.operands.get(1).unwrap().dump(quote))
             }
             _ => {
-                self.operands.iter().fold(String::new(), |a, b| format!("{} {:?} {}", a, self.operator, b.dump(quote)))
+                self.operands.iter().fold(String::new(), |a, b| format!("{} {} {}", a, op, b.dump(quote)))
             }
         }
     }
 }
 
+fn dump_operator(operator: &Operator) -> &'static str {
+    match operator {
+        Operator::Plus(_) => "+",
+        Operator::Minus(_) => "-",
+        Operator::Multiplication(_) => "*",
+        Operator::Divide(_) => "/",
+    }
+}
+
 pub struct SqlValue {
     pub(crate) value: value::Value,
+}
+
+fn dump_value(value: Value) -> String {
+    match value {
+        Value::Int(i) => {
+            i.to_string()
+        }
+        Value::Float(f) => {
+            f.to_string()
+        }
+        Value::Bool(b) => {
+            b.to_string()
+        }
+        Value::Text(t) => {
+            t.to_string()
+        }
+        Value::Array(a) => {
+            format!("[{}]", a.0.into_iter().map(|v| dump_value(v)).collect::<Vec<_>>().join(","))
+        }
+        Value::Dict(d) => {
+            format!("{{{}}}", d.0.into_iter().map(|(k, v)| format!("{}:{}", k, dump_value(v))).collect::<Vec<_>>().join(","))
+        }
+        Value::Null(n) => {
+            n.to_string()
+        }
+    }
 }
 
 impl SqlValue {
@@ -102,8 +139,7 @@ impl SqlValue {
 
 impl Statement for SqlValue {
     fn dump(&self, quote: &str) -> String {
-        let mut dump = format!("{:?}", self.value);
-        dump
+        dump_value(self.value.clone())
     }
 }
 

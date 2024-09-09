@@ -1,5 +1,6 @@
 use std::cmp::PartialEq;
 use std::collections::BTreeMap;
+use std::fmt::Display;
 use std::ops::Add;
 
 use json::{parse, JsonValue};

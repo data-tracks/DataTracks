@@ -1,8 +1,8 @@
-use std::fmt::Formatter;
+use std::fmt::{Debug, Display, Formatter};
 use std::ops::{Add, Sub};
 
-use crate::value::{Bool, Float, Text};
 use crate::value::number::Number;
+use crate::value::{Bool, Float, Text};
 use crate::value_display;
 
 #[derive(Eq, Hash, PartialEq, Clone, Copy, Debug)]

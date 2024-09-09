@@ -1,8 +1,8 @@
 use std::vec;
 
+use crate::algebra::Operator;
 use crate::language::sql::buffer::BufferedLexer;
 use crate::language::sql::lex::Token::{As, Comma, From, GroupBy, Identifier, Select, Semi, Star, Text, Where};
-use crate::language::sql::statement::SqlStatement::Operator;
 use crate::language::sql::statement::{SqlAlias, SqlIdentifier, SqlList, SqlOperator, SqlSelect, SqlStatement, SqlSymbol, SqlValue};
 use crate::{algebra, value};
 use logos::{Lexer, Logos};
@@ -10,17 +10,17 @@ use logos::{Lexer, Logos};
 #[derive(Logos, Debug, PartialEq, Clone)]
 #[logos(skip r"[ \t\n\f]+")] // Ignore this regex pattern between tokens
 pub(crate) enum Token {
-    #[regex(r"[a-zA-Z_$][a-zA-Z_$0-9]*", | lex | lex.slice().to_owned())]
+    #[regex(r"[']?[a-zA-Z_$][a-zA-Z_$0-9]*[']?", | lex | lex.slice().to_owned())]
     Identifier(String),
-    #[regex(r#"["|'][a-zA-Z]+["|']"#, | lex | trim_quotes(lex.slice()))]
+    #[regex(r#""[^"\\]*""#, | lex | trim_quotes(lex.slice()))]
     Text(String),
     #[token("false", | _ | false)]
     #[token("true", | _ | true)]
     Bool(bool),
-    #[regex(r"-?(?:0|[1-9]\d*)?", | lex | lex.slice().parse::< i64 > ().unwrap())]
+    #[regex(r"-?(?:0|[1-9]\d*)?", | lex | lex.slice().parse::<i64> ().unwrap())]
     Number(i64),
     #[regex(
-        r"-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?", | lex | lex.slice().parse::< f64 > ().unwrap()
+        r"-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?", | lex | lex.slice().parse::<f64> ().unwrap()
     )]
     Float(f64),
     #[regex(r"(?i)SELECT")]
@@ -60,7 +60,7 @@ pub(crate) enum Token {
     #[token("-")]
     Minus,
     #[token("/")]
-    Divide
+    Divide,
 }
 
 pub fn parse(query: &str) -> Result<SqlStatement, String> {
@@ -89,7 +89,8 @@ fn parse_expressions(lexer: &mut BufferedLexer, stops: &[Token]) -> Result<Vec<S
     let mut expressions = vec![];
     let mut stops = stops.to_owned();
     stops.push(Comma);
-    expressions.push(parse_expression(lexer, &stops));
+    let expression = parse_expression(lexer, &stops);
+    expressions.push(expression);
 
     let tok = lexer.consume_buffer();
     if let Ok(t) = tok { // ok to be empty, if no more tokens
@@ -102,15 +103,15 @@ fn parse_expressions(lexer: &mut BufferedLexer, stops: &[Token]) -> Result<Vec<S
 
 fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> SqlStatement {
     let mut expressions = vec![];
+    let mut operators = vec![];
+    let mut operator = None;
     let mut is_alias = false;
+    let mut delay = false;
 
     while let Ok(tok) = lexer.next() {
         if stops.contains(&tok) {
+            lexer.buffer(tok);
             break;
-        }
-
-        if tok == Star {
-            return SqlStatement::Symbol(SqlSymbol::new("*"));
         }
 
         if tok == As {
@@ -125,14 +126,43 @@ fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> SqlStateme
             Text(t) => {
                 expressions.push(SqlStatement::Value(SqlValue::new(value::Value::text(&t))))
             }
+            Token::Number(number) => {
+                expressions.push(SqlStatement::Value(SqlValue::new(value::Value::int(number))))
+            }
+            Token::Float(float) => {
+                expressions.push(SqlStatement::Value(SqlValue::new(value::Value::float(float))))
+            }
 
             t => {
-                if let Some(op) = parse_operator(t) {
-                    expressions.push(Operator(SqlOperator::new(op, vec![])))
+                if let Some(op) = parse_operator(t.clone()) {
+                    operator = Some(op);
+                    if let Some(exp) = expressions.pop() {
+                        operators.push(exp);
+                    }
+                    delay = true;
+                } else {
+                    panic!("Invalid Token {:?}", t);
                 }
             }
         }
+
+        if (delay) {
+            delay = false;
+        } else if let Some(op) = operator.take() {
+            operators.push(expressions.pop().unwrap());
+            expressions.push(SqlStatement::Operator(SqlOperator::new(op, operators.drain(..).collect())));
+        }
     }
+
+    if let Some(op) = operator.take() {
+        if match op {
+            Operator::Multiplication(_) => true,
+            _ => false
+        } {
+            return SqlStatement::Symbol(SqlSymbol::new("*"));
+        }
+    }
+
     let statement = match expressions.len() {
         1 => {
             expressions.pop().unwrap()
@@ -142,9 +172,10 @@ fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> SqlStateme
         }
     };
 
+
     if is_alias {
         let alias = parse_expression(lexer, stops);
-        return SqlStatement::Alias(SqlAlias::new(statement, alias))
+        return SqlStatement::Alias(SqlAlias::new(statement, alias));
     }
     statement
 }
@@ -224,7 +255,7 @@ mod test {
     }
 
     fn quote(key: &str) -> String {
-        format!("\"{}\"", key)
+        format!("'{}'", key)
     }
 
     fn test_query(query: &str) {
