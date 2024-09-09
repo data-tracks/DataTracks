@@ -15,23 +15,23 @@ mod dummy {
     use crate::processing::train::Train;
     use crate::ui::ConfigModel;
     use crate::util::{new_channel, Rx, Tx, GLOBAL_ID};
-    use crate::value::Dict;
+    use crate::value::Value;
 
     pub struct DummySource {
         id: i64,
         stop: i64,
-        values: Option<Vec<Vec<Dict>>>,
+        values: Option<Vec<Vec<Value>>>,
         delay: Duration,
         initial_delay: Duration,
         senders: Option<Vec<Tx<Train>>>,
     }
 
     impl DummySource {
-        pub(crate) fn new(stop: i64, values: Vec<Vec<Dict>>, delay: Duration) -> (Self, i64) {
+        pub(crate) fn new(stop: i64, values: Vec<Vec<Value>>, delay: Duration) -> (Self, i64) {
             Self::new_with_delay(stop, values, Duration::from_millis(0), delay)
         }
 
-        pub(crate) fn new_with_delay(stop: i64, values: Vec<Vec<Dict>>, initial_delay: Duration, delay: Duration) -> (Self, i64) {
+        pub(crate) fn new_with_delay(stop: i64, values: Vec<Vec<Value>>, initial_delay: Duration, delay: Duration) -> (Self, i64) {
             let id = GLOBAL_ID.new_id();
             (DummySource { id, stop, values: Some(values), initial_delay, delay, senders: Some(vec![]) }, id)
         }
@@ -209,10 +209,10 @@ pub mod tests {
     use crate::util::new_channel;
     use crate::value::{Dict, Value};
 
-    pub fn dict_values(values: Vec<Value>) -> Vec<Dict> {
-        let mut dicts: Vec<Dict> = vec![];
+    pub fn dict_values(values: Vec<Value>) -> Vec<Value> {
+        let mut dicts = vec![];
         for value in values {
-            dicts.push(Dict::from(value));
+            dicts.push(Value::Dict(Dict::from(value)));
         }
         dicts
     }
@@ -332,10 +332,10 @@ pub mod tests {
         let stencil = "1-|2-3\n4-2";
 
         let mut plan = Plan::parse(stencil);
-        let values1 = vec![vec![Dict::from(Value::from(3.3))], vec![Dict::from(Value::from(3.1))]];
+        let values1 = vec![vec![Value::from(Dict::from(Value::from(3.3)))], vec![Value::from(Dict::from(Value::from(3.1)))]];
         let (source1, id1) = DummySource::new(1, values1.clone(), Duration::from_millis(1));
 
-        let values4 = vec![vec![Dict::from(Value::from(3))]];
+        let values4 = vec![vec![Value::from(Dict::from(Value::from(3)))]];
         let (source4, id4) = DummySource::new(4, values4.clone(), Duration::from_millis(1));
 
         let destination = DummyDestination::new(3, 1);
@@ -439,9 +439,9 @@ pub mod tests {
 
         let mut values = vec![];
 
-        let hello = Dict::from_json(r#"{"msg": "hello", "$topic": ["command"]}"#);
+        let hello = Value::Dict(Dict::from_json(r#"{"msg": "hello", "$topic": ["command"]}"#));
         values.push(vec![hello]);
-        values.push(vec![Dict::from(Value::float(3.6))]);
+        values.push(vec![Value::from(Dict::from(Value::float(3.6)))]);
 
         let (source, id) = DummySource::new(0, values, Duration::from_millis(1));
 

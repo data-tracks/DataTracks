@@ -246,7 +246,6 @@ pub mod tests {
     use crate::processing::train::Train;
     use crate::processing::transform::{FuncTransform, Transform};
     use crate::util::{new_channel, Rx, Tx};
-    use crate::value;
     use crate::value::{Dict, Value};
 
     #[test]
@@ -266,7 +265,7 @@ pub mod tests {
 
         station.add_out(0, tx).unwrap();
         station.operate(Arc::new(control.0));
-        station.send(Train::new(0, value::Value::Dict(values.clone()))).unwrap();
+        station.send(Train::new(0, values.clone())).unwrap();
 
         let res = rx.recv();
         match res {

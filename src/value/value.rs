@@ -117,6 +117,12 @@ impl From<bool> for Value {
     }
 }
 
+impl From<Dict> for Value {
+    fn from(value: Dict) -> Self {
+        Value::Dict(value)
+    }
+}
+
 impl Value {
     pub(crate) fn from_json(value: &str) -> Self {
         let json = parse(value);
