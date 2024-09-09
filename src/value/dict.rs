@@ -5,6 +5,7 @@ use std::hash::Hash;
 use json::parse;
 
 use crate::value::Value;
+use crate::value_display;
 
 #[derive(Eq, Clone, Debug, Hash, PartialEq, Default)]
 pub struct Dict(pub BTreeMap<String, Value>);
@@ -40,6 +41,8 @@ impl Dict {
         Dict(map)
     }
 }
+
+value_display!(Dict);
 
 impl From<Value> for Dict{
     fn from(value: Value) -> Self {

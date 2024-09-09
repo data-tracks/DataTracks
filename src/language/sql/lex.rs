@@ -5,7 +5,7 @@ use crate::algebra::Operator;
 use crate::language::sql::buffer::BufferedLexer;
 use crate::language::sql::lex::Token::{As, Comma, From, GroupBy, Identifier, Select, Semi, Star, Text, Where};
 use crate::language::sql::statement::{SqlAlias, SqlIdentifier, SqlList, SqlOperator, SqlSelect, SqlStatement, SqlSymbol, SqlValue};
-use crate::{algebra, value};
+use crate::value;
 use logos::{Lexer, Logos};
 
 #[derive(Logos, Debug, PartialEq, Clone)]

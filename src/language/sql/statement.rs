@@ -1,6 +1,6 @@
 use crate::algebra::Operator;
 use crate::language::statement::Statement;
-use crate::value;
+use crate::{algebra, value};
 use crate::value::Value;
 
 pub trait Sql: Statement {}
@@ -99,34 +99,10 @@ impl Statement for SqlOperator {
 }
 
 pub struct SqlValue {
-    pub(crate) value: value::Value,
+    pub(crate) value: Value,
 }
 
-fn dump_value(value: Value) -> String {
-    match value {
-        Value::Int(i) => {
-            i.to_string()
-        }
-        Value::Float(f) => {
-            f.to_string()
-        }
-        Value::Bool(b) => {
-            b.to_string()
-        }
-        Value::Text(t) => {
-            t.to_string()
-        }
-        Value::Array(a) => {
-            format!("[{}]", a.0.into_iter().map(|v| dump_value(v)).collect::<Vec<_>>().join(","))
-        }
-        Value::Dict(d) => {
-            format!("{{{}}}", d.0.into_iter().map(|(k, v)| format!("{}:{}", k, dump_value(v))).collect::<Vec<_>>().join(","))
-        }
-        Value::Null(n) => {
-            n.to_string()
-        }
-    }
-}
+
 
 impl SqlValue {
     pub fn new(value: value::Value) -> Self {
@@ -136,7 +112,7 @@ impl SqlValue {
 
 impl Statement for SqlValue {
     fn dump(&self, quote: &str) -> String {
-        dump_value(self.value.clone())
+        format!("{}", self.value)
     }
 }
 

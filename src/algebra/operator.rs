@@ -1,6 +1,7 @@
 use std::fmt::Display;
 use std::str::FromStr;
-use crate::algebra::Operator::{Divide, Minus, Multiplication, Plus};
+use crate::algebra::Operator::{Divide, IndexedRef, Literal, Minus, Multiplication, NamedRef, Plus};
+use crate::value::Value;
 
 #[derive(Debug)]
 pub enum Operator {
@@ -8,23 +9,44 @@ pub enum Operator {
     Minus(MinusOperator),
     Multiplication(MultiplicationOperator),
     Divide(DivideOperator),
+
 }
 
 impl Operator {
-    pub fn dump(&self, as_call: bool ) -> &str {
-        if as_call {
-            return match self {
-                Plus(_) => "ADD",
-                Minus(_) => "MINUS",
-                Multiplication(_) => "MULTIPLICATION",
-                Divide(_) => "DIVIDE"
-            }
-        };
+    pub fn dump(&self, as_call: bool) -> String {
         match self {
-            Plus(_) => "+",
-            Minus(_) => "-",
-            Multiplication(_) => "*",
-            Divide(_) => "/"
+            Literal(l) => format!("{}", l.literal),
+            NamedRef(name) => format!("${}", name),
+            IndexedRef(index) => format!("${}", index),
+            Plus(_) => {
+                if as_call {
+                    String::from("ADD")
+                } else {
+                    String::from("+")
+                }
+            },
+            Minus(_) => {
+                if as_call {
+                    String::from("MINUS")
+                } else {
+                    String::from("-")
+                }
+            },
+            Multiplication(_) => {
+                if as_call {
+                    String::from("MULTIPLICATION")
+                } else {
+                    String::from("*")
+                }
+            },
+            Divide(_) => {
+                if as_call {
+                    String::from("DIVIDE")
+                } else {
+                    String::from("/")
+                }
+            },
+            _ => panic!("Unexpected case!"),
         }
     }
 }
@@ -49,6 +71,11 @@ impl FromStr for Operator{
 
 
 impl Operator {
+
+    pub fn literal(literal: Value) -> Operator {
+        Literal(LiteralOperator{literal})
+    }
+
     pub fn plus() -> Operator {
         Plus(PlusOperator)
     }
@@ -61,7 +88,17 @@ impl Operator {
     pub fn divide() -> Operator {
         Divide(DivideOperator)
     }
+
+    pub fn named_input(name: String) -> Operator {
+        NamedRef(NamedRefOperator{name})
+    }
+
+    pub fn indexed_input(index: u64) -> Operator {
+        IndexedRef(IndexedRefOperator{index})
+    }
 }
+
+
 
 #[derive(Debug)]
 pub struct PlusOperator;
@@ -73,3 +110,4 @@ pub struct MultiplicationOperator;
 
 #[derive(Debug)]
 pub struct DivideOperator;
+

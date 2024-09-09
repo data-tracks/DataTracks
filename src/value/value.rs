@@ -1,6 +1,6 @@
 use std::cmp::PartialEq;
 use std::collections::BTreeMap;
-use std::fmt::Display;
+use std::fmt::{Display, Formatter};
 use std::ops::Add;
 
 use json::{parse, JsonValue};
@@ -75,6 +75,20 @@ macro_rules! value_display {
             }
         }
     };
+}
+
+impl Display for Value{
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Value::Int(i) => i.fmt(f),
+            Value::Float(float) => float.fmt(f),
+            Value::Bool(b) => b.fmt(f),
+            Value::Text(t) => t.fmt(f),
+            Value::Array(a) => a.fmt(f),
+            Value::Dict(d) => d.fmt(f),
+            Value::Null(n) => n.fmt(f)
+        }
+    }
 }
 
 
