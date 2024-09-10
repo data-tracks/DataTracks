@@ -1,7 +1,7 @@
 use crate::processing::block::Block::{All, Non, Specific};
 use crate::processing::train::MutWagonsFunc;
 use crate::processing::Train;
-use crate::value::Dict;
+use crate::value::{Dict, Value};
 use std::collections::hash_map::Drain;
 use std::collections::HashMap;
 use tracing::log::debug;
@@ -65,7 +65,7 @@ pub(crate) struct SpecificBlock {
     input: Vec<i64>,
     blocks: Vec<i64>,
     func: MutWagonsFunc,
-    buffer: HashMap<i64, Vec<Dict>>,
+    buffer: HashMap<i64, Vec<Value>>,
 }
 
 impl SpecificBlock {
@@ -91,7 +91,7 @@ impl SpecificBlock {
 
 }
 
-fn merge_buffer(drain: Drain<i64, Vec<Dict>>) -> Vec<Train> {
+fn merge_buffer(drain: Drain<i64, Vec<Value>>) -> Vec<Train> {
     let mut trains = vec![];
     for (last, values) in drain {
         trains.push(Train::new(last, values));
@@ -102,7 +102,7 @@ fn merge_buffer(drain: Drain<i64, Vec<Dict>>) -> Vec<Train> {
 pub(crate) struct AllBlock {
     input: Vec<i64>,
     func: MutWagonsFunc,
-    buffer: HashMap<i64, Vec<Dict>>,
+    buffer: HashMap<i64, Vec<Value>>,
     switch: HashMap<i64, bool>
 }
 
@@ -154,7 +154,7 @@ mod test {
 
         let mut trains = vec![];
         for _ in 0..1000 {
-            trains.push(Train::new(0, vec![Dict::from(Value::int(3))]))
+            trains.push(Train::new(0, vec![Value::Dict(Dict::from(Value::int(3)))]))
         }
 
         let instant = Instant::now();

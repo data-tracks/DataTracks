@@ -257,7 +257,7 @@ pub mod tests {
         let mut values = dict_values(vec![Value::text("test"), Value::bool(true), Value::float(3.3), Value::null()]);
 
         for x in 0..1_000_000 {
-            values.push(Dict::from(Value::int(x)))
+            values.push(Value::Dict(Dict::from(Value::int(x))))
         }
 
 
@@ -273,7 +273,7 @@ pub mod tests {
                 assert_eq!(values.len(), t.values.clone().map_or(usize::MAX, |values| values.len()));
                 for (i, value) in t.values.take().unwrap().iter().enumerate() {
                     assert_eq!(value, &values[i]);
-                    assert_ne!(&Value::text(""), value.0.get("$").unwrap())
+                    assert_ne!(&Value::text(""), value.as_dict().unwrap().0.get("$").unwrap())
                 }
             }
             Err(..) => assert!(false),
@@ -283,7 +283,7 @@ pub mod tests {
 
     #[test]
     fn station_two_train() {
-        let values = vec![Dict::from(Value::int(3))];
+        let values = vec![Value::Dict(Dict::from(Value::int(3)))];
         let (tx, rx) = unbounded();
         let control = Arc::new(tx);
 

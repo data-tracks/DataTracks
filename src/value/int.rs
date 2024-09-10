@@ -40,7 +40,7 @@ impl Add<Float> for Int {
     type Output = Float;
 
     fn add(self, other: Float) -> Float {
-        Float(self.0 + other.0, other.1)
+        Float::new(self.0 as f64 + other.as_f64())
     }
 }
 
@@ -49,7 +49,7 @@ impl Sub<Float> for Int {
     type Output = Float;
 
     fn sub(self, other: Float) -> Float {
-        Float(self.0 - other.0, other.1)
+        Float::new(self.0 as f64 - other.as_f64())
     }
 }
 
@@ -71,7 +71,7 @@ impl Add<Box<Text>> for Int {
 
 impl PartialEq<Float> for Int {
     fn eq(&self, other: &Float) -> bool {
-        self.0 == other.0
+        self.0 == other.as_f64() as i64
     }
 }
 

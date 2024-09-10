@@ -1,7 +1,6 @@
 use crate::algebra::algebra::{Algebra, RefHandler};
 use crate::algebra::function::Function;
 use crate::algebra::implement::implement;
-use crate::algebra::AlgebraType;
 use crate::processing::Train;
 use crate::value::Value;
 
@@ -41,7 +40,7 @@ impl Algebra for TrainProject {
 }
 
 impl Project for TrainProject {
-    fn get_input(&self) -> &Box<AlgebraType> {
+    fn get_input(&self) -> &Box<dyn Algebra> {
         &self.input
     }
 }

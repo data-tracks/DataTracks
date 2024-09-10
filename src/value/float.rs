@@ -1,25 +1,29 @@
-use std::fmt::Formatter;
+use std::fmt::{Display, Formatter};
 use std::ops::{Add, Sub};
 
-use crate::value::{Bool, Text};
 use crate::value::int::Int;
 use crate::value::number::Number;
-use crate::value_display;
+use crate::value::{Bool, Text};
 
 #[derive(Eq, Hash, Debug, PartialEq, Clone, Copy)]
-pub struct Float(pub i64, pub u64);
+pub struct Float {
+    pub number: i64,
+    pub shift: u64,
+}
 
 impl Float {
     pub(crate) fn as_f64(&self) -> f64 {
-        self.0 as f64 + self.1 as f64 * 10f64.powi(-(self.1.to_string().len() as i32))
+        self.number as f64 + self.shift as f64 * 10f64.powi(-(self.shift.to_string().len() as i32))
     }
 
     pub(crate) fn new(value: f64) -> Self {
         let parsed = value.to_string();
-        let split = parsed.split_once('.');
+        let number = parsed.replace('.', "");
+        let split = parsed.find('.');
+
         match split {
-            None => Float(value as i64, 0),
-            Some((a, b)) => Float(a.parse().unwrap(), b.parse().unwrap())
+            None => Float { number: value as i64, shift: 0 },
+            Some(i) => Float { number: number.parse().unwrap(), shift: i as u64 }
         }
     }
 }
@@ -31,7 +35,7 @@ impl Number for Float {
     }
 
     fn int(&self) -> i64 {
-        self.0
+        self.number as i64
     }
 }
 
@@ -57,7 +61,7 @@ impl Add<Int> for Float {
     type Output = Float;
 
     fn add(self, other: Int) -> Float {
-        Float(self.0 + other.0, self.1)
+        Float { number: self.number + other.0, shift: self.shift }
     }
 }
 
@@ -66,7 +70,7 @@ impl Sub<Int> for Float {
     type Output = Float;
 
     fn sub(self, other: Int) -> Float {
-        Float(self.0 - other.0, self.1)
+        Float { number: self.number - other.0 * (10 * self.shift) as i64, shift: self.shift }
     }
 }
 
@@ -78,7 +82,7 @@ impl PartialEq<Int> for Float {
 
 impl PartialEq<Bool> for Float {
     fn eq(&self, other: &Bool) -> bool {
-        self.0 > 0 && other.0
+        self.number > 0 && other.0
     }
 }
 
@@ -91,7 +95,13 @@ impl PartialEq<Text> for Float {
     }
 }
 
-value_display!(Float);
+
+impl Display for Float {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_f64())
+    }
+}
+
 
 #[cfg(test)]
 mod tests {

@@ -63,6 +63,37 @@ impl Value {
             Value::Null(_) => ValType::Null
         }
     }
+
+    pub fn as_int(&self) -> Result<Int, ()> {
+        match self {
+            Value::Int(i) => Ok(*i),
+            Value::Float(f) => Ok(Int(f.as_f64() as i64)),
+            Value::Bool(b) => Ok(if b.0 { Int(1) } else { Int(0) }),
+            Value::Text(t) => t.0.parse::<i64>().map(|num| Int(num)).map_err(|_| ()),
+            Value::Array(_) => Err(()),
+            Value::Dict(_) => Err(()),
+            Value::Null(_) => Err(())
+        }
+    }
+
+    pub fn as_float(&self) -> Result<Float, ()> {
+        match self {
+            Value::Int(i) => Ok(Float::new(i.0 as f64)),
+            Value::Float(f) => Ok(*f),
+            Value::Bool(b) => Ok(if b.0 { Float::new(1f64) } else { Float::new(0f64) }),
+            Value::Text(t) => t.0.parse::<f64>().map(|num| Float::new(num)).map_err(|_| ()),
+            Value::Array(_) => Err(()),
+            Value::Dict(_) => Err(()),
+            Value::Null(_) => Err(())
+        }
+    }
+
+    pub fn as_dict(&self) -> Result<Dict, ()> {
+        match self {
+            Value::Int(_) | Value::Float(_) | Value::Bool(_) | Value::Text(_) | Value::Array(_) | Value::Null(_) => Err(()),
+            Value::Dict(d) => Ok(d.clone()),
+        }
+    }
 }
 
 // Define the macro

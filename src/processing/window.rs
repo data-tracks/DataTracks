@@ -193,7 +193,7 @@ mod test {
     use crate::processing::train::Train;
     use crate::processing::window::{BackWindow, Window};
     use crate::util::{new_channel, TimeUnit};
-    use crate::value::{Dict, Value};
+    use crate::value::Value;
 
     #[test]
     fn default_behavior() {
@@ -213,10 +213,10 @@ mod test {
         let res = rx.recv();
         match res {
             Ok(mut t) => {
-                assert_eq!(values.len(), t.values.clone().map_or(usize::MAX, |vec: Vec<Dict>| vec.len()));
+                assert_eq!(values.len(), t.values.clone().map_or(usize::MAX, |vec| vec.len()));
                 for (i, value) in t.values.take().unwrap().into_iter().enumerate() {
                     assert_eq!(value, values[i]);
-                    assert_ne!(Value::text(""), *value.0.get("$").unwrap())
+                    assert_ne!(Value::text(""), *value.as_dict().unwrap().0.get("$").unwrap())
                 }
             }
             Err(..) => assert!(false),
