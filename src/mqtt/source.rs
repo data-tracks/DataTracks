@@ -153,7 +153,7 @@ fn handle_message(mut initial_packet: Packet, outs: &HashMap<i64, Tx<Train>>) {
 }
 
 fn send_message(dict: Dict, outs: &HashMap<i64, Tx<Train>>) {
-    let train = Train::new(-1, vec![dict]);
+    let train = Train::new(-1, vec![Value::Dict(dict)]);
     for tx in outs.values() {
         tx.send(train.clone()).unwrap();
     }

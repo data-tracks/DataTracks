@@ -216,7 +216,7 @@ mod tests {
                 if let Some(vec) = t.values.take() {
                     assert_eq!(values.len(), vec.len());
                     for (i, value) in vec.into_iter().enumerate() {
-                        assert_eq!(value.as_dict().unwrap().get_data().unwrap().clone(), values.get(i).unwrap().get_data().unwrap() + &Value::int(3));
+                        assert_eq!(value.as_dict().unwrap().get_data().unwrap().clone(), values.get(i).unwrap().as_dict().unwrap().get_data().unwrap() + &Value::int(3));
                         assert_ne!(&Value::text(""), value.as_dict().unwrap().get_data().unwrap());
                     }
                 } else {

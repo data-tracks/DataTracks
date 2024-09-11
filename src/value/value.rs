@@ -94,6 +94,13 @@ impl Value {
             Value::Dict(d) => Ok(d.clone()),
         }
     }
+
+    pub fn as_array(&self) -> Result<Array, ()> {
+        match self {
+            Value::Int(_) | Value::Float(_) | Value::Bool(_) | Value::Text(_) | Value::Dict(_) | Value::Null(_) => Err(()),
+            Value::Array(a) => Ok(a.clone()),
+        }
+    }
 }
 
 // Define the macro

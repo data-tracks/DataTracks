@@ -2,7 +2,7 @@ use crate::algebra::Operator::{Divide, Minus, Multiplication, Plus};
 use crate::value::Value;
 use std::str::FromStr;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Operator {
     Plus(PlusOperator),
     Minus(MinusOperator),
@@ -12,39 +12,30 @@ pub enum Operator {
 }
 
 impl Operator {
-    pub fn implement(&self, operators: Vec<fn(Value) -> Value>) -> fn(Value) -> Value {
+    pub fn implement(&self, operators: Vec<Value>) -> Value {
         match self {
             Plus(_) => {
-                |v| {
-                    operators.iter().fold(Value::int(0), |a, b| {
-                        &a + &b(v)
-                    })
-                }
+                operators.iter().fold(Value::int(0), |a, b| {
+                    &a + b
+                })
             }
             Minus(_) => {
-                |v| {
-                    operators.iter().fold(Value::int(0), |a, b| {
-                        &a - &b(v)
-                    })
-                }
+                operators.iter().fold(Value::int(0), |a, b| {
+                    &a - &b
+                })
             }
             Multiplication(_) => {
-                |v| {
-                    operators.iter().fold(Value::int(0), |a, b| {
-                        &a * &b(v)
-                    })
-                }
+                operators.iter().fold(Value::int(0), |a, b| {
+                    &a * &b
+                })
             }
             Divide(_) => {
-                |v| {
-                    operators.iter().fold(Value::int(0), |a, b| {
-                        &a / &b(v)
-                    })
-                }
+                operators.iter().fold(Value::int(0), |a, b| {
+                    &a / &b
+                })
             }
         }
     }
-
     pub fn dump(&self, as_call: bool) -> String {
         match self {
             Plus(_) => {
@@ -79,6 +70,7 @@ impl Operator {
         }
     }
 }
+
 
 impl FromStr for Operator {
     type Err = ();
@@ -115,14 +107,14 @@ impl Operator {
 }
 
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PlusOperator;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MinusOperator;
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MultiplicationOperator;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DivideOperator;
 

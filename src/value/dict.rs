@@ -94,10 +94,10 @@ impl IntoIterator for Dict {
 
 
 impl Dict {
-    pub(crate) fn transform(values: Vec<Value>) -> Vec<Dict> {
+    pub(crate) fn transform(values: Vec<Value>) -> Vec<Value> {
         let mut dicts = vec![];
         for value in values {
-            dicts.push(value.into());
+            dicts.push(Value::Dict(value.into()));
         }
         dicts
     }

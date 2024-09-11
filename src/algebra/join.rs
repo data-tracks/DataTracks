@@ -1,7 +1,7 @@
 use crate::algebra::algebra::{Algebra, RefHandler};
 use crate::algebra::AlgebraType;
 use crate::processing::Train;
-use crate::value::Dict;
+use crate::value::Value;
 
 pub trait Join: Algebra {
     fn left(&self) -> &AlgebraType;
@@ -14,9 +14,9 @@ where
 {
     left: Box<AlgebraType>,
     right: Box<AlgebraType>,
-    left_hash: Option<fn(&Dict) -> Hash>,
-    right_hash: Option<fn(&Dict) -> Hash>,
-    out: Option<fn(Dict, Dict) -> Dict>,
+    left_hash: Option<fn(&Value) -> Hash>,
+    right_hash: Option<fn(&Value) -> Hash>,
+    out: Option<fn(Value, Value) -> Value>,
 }
 
 impl<H> TrainJoin<H>
@@ -26,9 +26,9 @@ where
     pub(crate) fn new(
         left: AlgebraType,
         right: AlgebraType,
-        left_hash: fn(&Dict) -> H,
-        right_hash: fn(&Dict) -> H,
-        out: fn(Dict, Dict) -> Dict,
+        left_hash: fn(&Value) -> H,
+        right_hash: fn(&Value) -> H,
+        out: fn(Value, Value) -> Value,
     ) -> Self {
         TrainJoin {
             left: Box::new(left),
@@ -44,11 +44,11 @@ pub struct JoinHandler<H>
 where
     H: PartialEq + 'static,
 {
-    left_hash: fn(&Dict) -> H,
-    right_hash: fn(&Dict) -> H,
+    left_hash: fn(&Value) -> H,
+    right_hash: fn(&Value) -> H,
     left: Box<dyn RefHandler>,
     right: Box<dyn RefHandler>,
-    out: fn(Dict, Dict) -> Dict,
+    out: fn(Value, Value) -> Value,
 }
 
 
@@ -61,7 +61,7 @@ where
         let mut values = vec![];
         let mut left = self.left.process(stop, wagons.clone());
         let mut right = self.right.process(stop, wagons);
-        let right_hashes: Vec<(H, Dict)> = right.values.take().unwrap().into_iter().map(|value| {
+        let right_hashes: Vec<(H, Value)> = right.values.take().unwrap().into_iter().map(|value| {
             let hash = (self.right_hash)(&value);
             (hash, value)
         }).collect();
@@ -112,11 +112,11 @@ impl<H: PartialEq + 'static> Join for TrainJoin<H> {
 #[cfg(test)]
 mod test {
     use crate::algebra::algebra::Algebra;
-    use crate::algebra::AlgebraType::Scan;
     use crate::algebra::join::TrainJoin;
     use crate::algebra::scan::TrainScan;
+    use crate::algebra::AlgebraType::Scan;
     use crate::processing::Train;
-    use crate::value::Dict;
+    use crate::value::{Dict, Value};
 
     #[test]
     fn one_match() {
@@ -128,13 +128,13 @@ mod test {
         let right = TrainScan::new(1);
 
         let mut join = TrainJoin::new(Scan(left), Scan(right), |val| val.clone(), |val| val.clone(), |left, right| {
-            left.merge(right)
+            Value::Dict(left.as_dict().unwrap().merge(right.as_dict().unwrap()))
         });
 
         let handle = join.get_handler();
         let mut res = handle.process(0, vec![train0, train1]);
-        assert_eq!(res.values.clone().unwrap(), vec![Dict::from(vec![5.5.into(), 5.5.into()])]);
-        assert_ne!(res.values.take().unwrap(), vec![Dict::from(vec![])]);
+        assert_eq!(res.values.clone().unwrap(), vec![Value::Dict(Dict::from(vec![5.5.into(), 5.5.into()]))]);
+        assert_ne!(res.values.take().unwrap(), vec![Value::Dict(Dict::from(vec![]))]);
     }
 
     #[test]
@@ -146,12 +146,12 @@ mod test {
         let right = TrainScan::new(1);
 
         let mut join = TrainJoin::new(Scan(left), Scan(right), |val| val.clone(), |val| val.clone(), |left, right| {
-            left.merge(right)
+            Value::Dict(left.as_dict().unwrap().merge(right.as_dict().unwrap()))
         });
 
         let handle = join.get_handler();
         let mut res = handle.process(0, vec![train0, train1]);
-        assert_eq!(res.values.clone().unwrap(), vec![Dict::from(vec![5.5.into(), 5.5.into()]), Dict::from(vec![5.5.into(), 5.5.into()])]);
+        assert_eq!(res.values.clone().unwrap(), vec![Value::Dict(Dict::from(vec![5.5.into(), 5.5.into()])), Value::Dict(Dict::from(vec![5.5.into(), 5.5.into()]))]);
         assert_ne!(res.values.take().unwrap(), vec![vec![].into()]);
     }
 }

@@ -37,6 +37,12 @@ pub trait RefHandler: Send {
     fn clone(&self) -> Box<dyn RefHandler + Send + 'static>;
 }
 
+pub trait ValueHandler: Send {
+    fn process(&self, value: Value) -> Value;
+
+    fn clone(&self) -> Box<dyn ValueHandler + Send + 'static>;
+}
+
 
 
 
