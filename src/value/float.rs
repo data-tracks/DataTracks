@@ -1,9 +1,8 @@
-use std::fmt::{Display, Formatter};
-use std::ops::{Add, Sub};
-
 use crate::value::int::Int;
 use crate::value::number::Number;
 use crate::value::{Bool, Text};
+use std::fmt::{Display, Formatter};
+use std::ops::{Add, Sub};
 
 #[derive(Eq, Hash, Debug, PartialEq, Clone, Copy)]
 pub struct Float {
@@ -13,7 +12,14 @@ pub struct Float {
 
 impl Float {
     pub(crate) fn as_f64(&self) -> f64 {
-        self.number as f64 + self.shift as f64 * 10f64.powi(-(self.shift.to_string().len() as i32))
+        if self.shift == 0 {
+            self.number as f64
+        } else {
+            let number_text = self.number.to_string();
+            // 10030 / 2 => 5-2 = 3
+            let (left, right) = number_text.split_at(number_text.len() - self.shift as usize);
+            format!("{left}.{right}").parse::<f64>().unwrap()
+        }
     }
 
     pub(crate) fn new(value: f64) -> Self {
@@ -23,7 +29,7 @@ impl Float {
 
         match split {
             None => Float { number: value as i64, shift: 0 },
-            Some(i) => Float { number: number.parse().unwrap(), shift: i as u64 }
+            Some(i) => Float { number: number.parse().unwrap(), shift: (number.len() - i) as u64 }
         }
     }
 }
@@ -106,6 +112,15 @@ impl Display for Float {
 #[cfg(test)]
 mod tests {
     use crate::value::Float;
+
+    #[test]
+    fn serialize_deserialize() {
+        let float = Float::new(35.5);
+
+        let res = float.as_f64();
+
+        assert_eq!(res, 35.5)
+    }
 
     #[test]
     fn add() {

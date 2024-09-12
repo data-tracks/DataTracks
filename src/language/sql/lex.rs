@@ -137,14 +137,14 @@ fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> SqlStateme
             }
             Token::Function(func) => {
                 let stops = vec![Token::BracketClose];
-                if let Ok(op) = Operator::from_str(&func){
-                    let exp = parse_expressions(lexer,&stops);
+                if let Ok(op) = Operator::from_str(&func) {
+                    let exp = parse_expressions(lexer, &stops);
                     if let Ok(exprs) = exp {
                         expressions.push(SqlStatement::Operator(SqlOperator::new(op, exprs, true)))
-                    }else {
+                    } else {
                         panic!("Unknown function arguments!")
                     }
-                }else {
+                } else {
                     panic!("Unknown call operator!")
                 }
             }
@@ -156,6 +156,8 @@ fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> SqlStateme
                         operators.push(exp);
                     }
                     delay = true;
+                } else if t == Token::Dot {
+                    // nothing on purpose
                 } else {
                     panic!("Invalid Token {:?}", t);
                 }

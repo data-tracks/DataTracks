@@ -148,8 +148,6 @@ impl FuncTransform {
 mod tests {
     use std::sync::Arc;
 
-    use crossbeam::channel::unbounded;
-
     use crate::processing::station::Station;
     use crate::processing::tests::dict_values;
     use crate::processing::train::Train;
@@ -158,6 +156,7 @@ mod tests {
     use crate::processing::transform::Transform::Func;
     use crate::util::new_channel;
     use crate::value::Value;
+    use crossbeam::channel::unbounded;
 
     #[test]
     fn transform() {
@@ -166,8 +165,9 @@ mod tests {
         let control = unbounded();
 
         station.set_transform(Func(FuncTransform::new_val(0, |mut x| {
-            x.as_dict().unwrap().0.insert("$".into(), x.as_dict().unwrap().get_data().unwrap() + &Value::int(3));
-            x
+            let mut dict = x.as_dict().unwrap();
+            dict.0.insert("$".into(), x.as_dict().unwrap().get_data().unwrap() + &Value::int(3));
+            Value::Dict(dict)
         })));
 
         let values = dict_values(vec![Value::float(3.3), Value::int(3)]);
@@ -198,11 +198,12 @@ mod tests {
         let control = unbounded();
 
         station.set_transform(Func(FuncTransform::new_val(0, |mut x| {
-            x.as_dict().unwrap().0.insert("$".into(), x.as_dict().unwrap().get_data().unwrap() + &Value::int(3));
-            x
+            let mut dict = x.as_dict().unwrap();
+            dict.0.insert("$".into(), x.as_dict().unwrap().get_data().unwrap() + &Value::int(3));
+            Value::Dict(dict)
         })));
 
-        let values = vec![Value::float(3.3).into(), Value::int(3).into()];
+        let values = dict_values(vec![Value::float(3.3).into(), Value::int(3).into()]);
 
         let (tx, num, rx) = new_channel();
 
