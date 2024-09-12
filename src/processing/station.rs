@@ -261,7 +261,7 @@ pub mod tests {
         }
 
 
-        let (tx, num, rx) = new_channel();
+        let (tx, _num, rx) = new_channel();
 
         station.add_out(0, tx).unwrap();
         station.operate(Arc::new(control.0));
@@ -284,13 +284,13 @@ pub mod tests {
     #[test]
     fn station_two_train() {
         let values = vec![Value::Dict(Dict::from(Value::int(3)))];
-        let (tx, rx) = unbounded();
+        let (tx, _rx) = unbounded();
         let control = Arc::new(tx);
 
         let mut first = Station::new(0);
         let input = first.get_in();
 
-        let (output_tx, num, output_rx) = new_channel();
+        let (output_tx, _num, output_rx) = new_channel();
 
         let mut second = Station::new(1);
         second.add_out(0, output_tx).unwrap();
@@ -351,14 +351,14 @@ pub mod tests {
         for stencil in stencils {
             let plan = Plan::parse(stencil);
 
-            let station = plan.stations.get(&1).unwrap();
+            let _station = plan.stations.get(&1).unwrap();
         }
 
     }
 
     #[test]
     fn too_high() {
-        let (mut station, train_sender, rx, c_rx, a_tx) = create_test_station(10);
+        let (mut station, train_sender, _rx, c_rx, a_tx) = create_test_station(10);
 
         let sender = station.operate(Arc::clone(&a_tx));
         sender.send(Threshold(3)).unwrap();
@@ -375,7 +375,7 @@ pub mod tests {
 
     #[test]
     fn too_high_two() {
-        let (mut station, train_sender, rx, c_rx, a_tx) = create_test_station(100);
+        let (mut station, train_sender, _rx, c_rx, a_tx) = create_test_station(100);
 
         let sender = station.operate(Arc::clone(&a_tx));
         sender.send(Threshold(3)).unwrap();
@@ -394,7 +394,7 @@ pub mod tests {
     #[test]
     fn remove_during_op() {
         let (mut station, train_sender, rx, c_rx, a_tx) = create_test_station(10);
-        let sender = station.operate(Arc::clone(&a_tx));
+        let _sender = station.operate(Arc::clone(&a_tx));
 
         for _ in 0..500 {
             train_sender.send(Train::new(0, dict_values(vec![Value::int(3)]))).unwrap();
@@ -420,7 +420,7 @@ pub mod tests {
     fn minimal_overhead() {
         let (mut station, train_sender, rx, c_rx, a_tx) = create_test_station(0);
 
-        let sender = station.operate(Arc::clone(&a_tx));
+        let _sender = station.operate(Arc::clone(&a_tx));
 
         let mut trains = vec![];
 
@@ -452,18 +452,18 @@ pub mod tests {
         let mut station = Station::new(0);
         let train_sender = station.get_in();
         let (tx, _, rx) = new_channel();
-        let train_receiver = station.add_out(0, tx);
+        let _train_receiver = station.add_out(0, tx);
         let time = duration.clone();
 
 
         station.set_transform(match duration {
             0 => {
-                Transform::Func(FuncTransform::new(Arc::new(move |num, train| {
+                Transform::Func(FuncTransform::new(Arc::new(move |_num, train| {
                     Train::from(train)
                 })))
             },
             _ => {
-                Transform::Func(FuncTransform::new(Arc::new(move |num, train| {
+                Transform::Func(FuncTransform::new(Arc::new(move |_num, train| {
                     sleep(Duration::from_millis(time));
                     Train::from(train)
                 })))

@@ -12,14 +12,7 @@ pub struct Float {
 
 impl Float {
     pub(crate) fn as_f64(&self) -> f64 {
-        if self.shift == 0 {
-            self.number as f64
-        } else {
-            let number_text = self.number.to_string();
-            // 10030 / 2 => 5-2 = 3
-            let (left, right) = number_text.split_at(number_text.len() - self.shift as usize);
-            format!("{left}.{right}").parse::<f64>().unwrap()
-        }
+        self.number as f64 / 10_f64.powi(self.shift as i32)
     }
 
     pub(crate) fn new(value: f64) -> Self {

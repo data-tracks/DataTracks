@@ -9,7 +9,7 @@ pub struct HoMap(HashMap<Value, Value>);
 
 
 impl HoMap {
-    pub fn new(map: HashMap<Value, Value>) -> Self {
+    pub fn _new(map: HashMap<Value, Value>) -> Self {
         HoMap(map)
     }
 }

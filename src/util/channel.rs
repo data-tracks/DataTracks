@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
-use std::sync::{Arc, Condvar, Mutex};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Condvar, Mutex};
 
 pub struct Channel<F>
 where
@@ -96,9 +96,9 @@ where
 
 #[cfg(test)]
 mod test {
-    use std::sync::Arc;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::sync::mpsc::channel;
+    use std::sync::Arc;
     use std::thread::spawn;
     use std::time::Instant;
 
@@ -202,7 +202,7 @@ mod test {
         }
         let std = instant.elapsed();
 
-        let (tx, counter, rc) = new_channel();
+        let (tx, _counter, rc) = new_channel();
 
         instant = Instant::now();
         for _ in 0..1_000_000 {

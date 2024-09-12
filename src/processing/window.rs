@@ -203,7 +203,7 @@ mod test {
 
         let values = dict_values(vec![Value::float(3.3), Value::int(3)]);
 
-        let (tx, num, rx) = new_channel();
+        let (tx, _num, rx) = new_channel();
 
 
         station.add_out(0, tx).unwrap();
@@ -234,7 +234,7 @@ mod test {
         let values = dict_values(vec![Value::float(3.3), Value::int(3)]);
         let after = dict_values(vec!["test".into()]);
 
-        let (tx, num, rx) = new_channel();
+        let (tx, _num, rx) = new_channel();
 
 
         station.add_out(0, tx).unwrap();
@@ -250,7 +250,7 @@ mod test {
         let mut results = vec![];
         station.send(Train::new(0, after.clone())).unwrap();
 
-        for i in 0..3 {
+        for _ in 0..3 {
             results.push(rx.recv().unwrap())
         }
 

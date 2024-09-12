@@ -162,7 +162,7 @@ impl From<Dict> for Value {
 }
 
 impl Value {
-    pub(crate) fn from_json(value: &str) -> Self {
+    pub(crate) fn _from_json(value: &str) -> Self {
         let json = parse(value);
         let mut values = BTreeMap::new();
         match json {
@@ -225,7 +225,7 @@ impl Add for &Value {
 impl Sub for &Value {
     type Output = Value;
 
-    fn sub(self, rhs: Self) -> Self::Output {
+    fn sub(self, _rhs: Self) -> Self::Output {
         match self {
             _ => todo!()
         }
@@ -235,7 +235,7 @@ impl Sub for &Value {
 impl Mul for &Value {
     type Output = Value;
 
-    fn mul(self, rhs: Self) -> Self::Output {
+    fn mul(self, _rhs: Self) -> Self::Output {
         match self {
             _ => todo!()
         }
@@ -245,7 +245,7 @@ impl Mul for &Value {
 impl Div for &Value {
     type Output = Value;
 
-    fn div(self, rhs: Self) -> Self::Output {
+    fn div(self, _rhs: Self) -> Self::Output {
         match self {
             _ => todo!()
         }

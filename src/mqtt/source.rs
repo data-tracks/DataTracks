@@ -35,7 +35,7 @@ impl Source for MqttSource {
         let rt = Runtime::new().unwrap();
         debug!("starting mqtt source...");
 
-        let (tx, rx) = unbounded();
+        let (tx, _rx) = unbounded();
         let outs = self.outs.clone();
         let port = self.port;
         thread::spawn(move || {
@@ -147,7 +147,7 @@ fn handle_message(mut initial_packet: Packet, outs: &HashMap<i64, Tx<Train>>) {
                     packet => debug!("Packet not yet supported {packet:?}")
                 }
             }
-            Err(e) => warn!("Could not read MQTT message.")
+            Err(e) => warn!("Could not read MQTT message. {}", e)
         }
     }
 }
@@ -159,6 +159,6 @@ fn send_message(dict: Dict, outs: &HashMap<i64, Tx<Train>>) {
     }
 }
 
-fn transform_binary(data: Vec<u8>) -> Value {
+fn transform_binary(_data: Vec<u8>) -> Value {
     Value::text(&String::from("test"))
 }

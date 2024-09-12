@@ -76,7 +76,7 @@ impl HttpSource {
         (StatusCode::OK, "Done".to_string())
     }
 
-    async fn startup(self, rx: Receiver<Command>) {
+    async fn startup(self, _rx: Receiver<Command>) {
         info!("starting http source...");
         // We could also read our port in from the environment as well
         let addr = std::net::SocketAddr::from(([0, 0, 0, 0], self.port));
@@ -96,7 +96,7 @@ impl HttpSource {
 
 
 impl Source for HttpSource {
-    fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command> {
+    fn operate(&mut self, _control: Arc<Sender<Command>>) -> Sender<Command> {
         let rt = Runtime::new().unwrap();
 
         let (tx, rx) = unbounded();

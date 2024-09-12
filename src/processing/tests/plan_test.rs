@@ -48,14 +48,14 @@ mod dummy {
             let senders = self.senders.take().unwrap();
             let (tx, rx) = unbounded();
 
-            let handle = spawn(move || {
+            let _handle = spawn(move || {
                 control.send(Ready(stop)).unwrap();
 
                 // wait for ready from callee
                 match rx.recv() {
                     Ok(command) => {
                         match command {
-                            Ready(id) => {}
+                            Ready(_id) => {}
                             _ => panic!()
                         }
                     }
@@ -76,7 +76,7 @@ mod dummy {
         }
 
 
-        fn add_out(&mut self, id: i64, out: Tx<Train>) {
+        fn add_out(&mut self, _id: i64, out: Tx<Train>) {
             self.senders.as_mut().unwrap_or(&mut vec![]).push(out)
         }
 
@@ -225,7 +225,7 @@ pub mod tests {
         let mut first = Station::new(0);
         let input = first.get_in();
 
-        let (output_tx, nums, output_rx) = new_channel();
+        let (output_tx, _nums, output_rx) = new_channel();
 
         let mut second = Station::new(1);
         second.add_out(0, output_tx).unwrap();
@@ -257,9 +257,9 @@ pub mod tests {
         let first_id = first.stop;
         let input = first.get_in();
 
-        let (output1_tx, num, output1_rx) = new_channel();
+        let (output1_tx, _num, output1_rx) = new_channel();
 
-        let (output2_tx, num, output2_rx) = new_channel();
+        let (output2_tx, _num, output2_rx) = new_channel();
 
         let mut second = Station::new(1);
         second.add_out(0, output1_tx).unwrap();
@@ -339,7 +339,7 @@ pub mod tests {
         let (source4, id4) = DummySource::new(4, values4.clone(), Duration::from_millis(1));
 
         let destination = DummyDestination::new(3, 1);
-        let id3 = &destination.get_id();
+        let _id3 = &destination.get_id();
         let clone = destination.results();
 
         plan.add_source(1, Box::new(source1));
@@ -351,9 +351,9 @@ pub mod tests {
         // send ready
         plan.send_control(&id1, Ready(0));
         // source 1 ready + stop
-        for com in vec![Ready(1), Stop(1)] {
+        for _com in vec![Ready(1), Stop(1)] {
             match plan.control_receiver.1.recv() {
-                Ok(command) => {}
+                Ok(_command) => {}
                 Err(_) => panic!()
             }
         }
@@ -362,7 +362,7 @@ pub mod tests {
 
         plan.send_control(&id4, Ready(4));
         // source 1 ready + stop
-        for com in vec![Ready(4), Stop(4), Ready(3), Stop(3)] {
+        for _com in vec![Ready(4), Stop(4), Ready(3), Stop(3)] {
             match plan.control_receiver.1.recv() {
                 Ok(command) => {}
                 Err(_) => panic!()
@@ -380,7 +380,7 @@ pub mod tests {
 
 
         assert_eq!(train.values.clone().unwrap().len(), res.len());
-        for (i, value) in train.values.take().unwrap().into_iter().enumerate() {
+        for (_i, value) in train.values.take().unwrap().into_iter().enumerate() {
             assert!(res.contains(&value))
         }
     }
@@ -388,8 +388,8 @@ pub mod tests {
     #[test]
     fn divide_workload() {
         let mut station = Station::new(0);
-        let station_id = station.id;
-        station.set_transform(Transform::Func(FuncTransform::new_boxed(|num, train| {
+
+        station.set_transform(Transform::Func(FuncTransform::new_boxed(|_num, train| {
             sleep(Duration::from_millis(10));
             Train::from(train)
         })));
@@ -399,7 +399,7 @@ pub mod tests {
         let numbers = 0..1_000;
         let length = numbers.len();
 
-        for num in numbers {
+        for _num in numbers {
             values.push(dict_values(vec![Value::int(3)]));
         }
 
@@ -422,9 +422,9 @@ pub mod tests {
         plan.clone_platform(0);
 
         // source 1 ready + stop, each platform ready, destination ready (+ stop only after stopped)
-        for com in vec![Ready(1), Stop(1), Ready(0), Ready(0), Ready(0), Ready(0), Ready(0)] {
+        for _com in vec![Ready(1), Stop(1), Ready(0), Ready(0), Ready(0), Ready(0), Ready(0)] {
             match plan.control_receiver.1.recv() {
-                Ok(command) => {}
+                Ok(_command) => {}
                 Err(_) => panic!()
             }
         }

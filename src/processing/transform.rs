@@ -4,7 +4,7 @@ use crate::algebra::RefHandler;
 use crate::language::Language;
 use crate::processing::train::Train;
 use crate::processing::transform::Transform::{Func, Lang};
-use crate::value::{Dict, Value};
+use crate::value::Value;
 use crate::{algebra, language};
 
 pub trait Taker: Send {
@@ -151,11 +151,10 @@ mod tests {
     use crate::processing::station::Station;
     use crate::processing::tests::dict_values;
     use crate::processing::train::Train;
-    use crate::processing::transform::Dict;
     use crate::processing::transform::FuncTransform;
     use crate::processing::transform::Transform::Func;
     use crate::util::new_channel;
-    use crate::value::Value;
+    use crate::value::{Dict, Value};
     use crossbeam::channel::unbounded;
 
     #[test]
@@ -164,7 +163,7 @@ mod tests {
 
         let control = unbounded();
 
-        station.set_transform(Func(FuncTransform::new_val(0, |mut x| {
+        station.set_transform(Func(FuncTransform::new_val(0, |x| {
             let mut dict = x.as_dict().unwrap();
             dict.0.insert("$".into(), x.as_dict().unwrap().get_data().unwrap() + &Value::int(3));
             Value::Dict(dict)
@@ -172,7 +171,7 @@ mod tests {
 
         let values = dict_values(vec![Value::float(3.3), Value::int(3)]);
 
-        let (tx, num, rx) = new_channel();
+        let (tx, _num, rx) = new_channel();
 
         station.add_out(0, tx).unwrap();
         station.operate(Arc::new(control.0));
@@ -197,7 +196,7 @@ mod tests {
 
         let control = unbounded();
 
-        station.set_transform(Func(FuncTransform::new_val(0, |mut x| {
+        station.set_transform(Func(FuncTransform::new_val(0, |x| {
             let mut dict = x.as_dict().unwrap();
             dict.0.insert("$".into(), x.as_dict().unwrap().get_data().unwrap() + &Value::int(3));
             Value::Dict(dict)
@@ -205,7 +204,7 @@ mod tests {
 
         let values = dict_values(vec![Value::float(3.3).into(), Value::int(3).into()]);
 
-        let (tx, num, rx) = new_channel();
+        let (tx, _num, rx) = new_channel();
 
         station.add_out(0, tx).unwrap();
         station.operate(Arc::new(control.0));

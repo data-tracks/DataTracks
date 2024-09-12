@@ -106,14 +106,14 @@ async fn get_plans(State(state): State<WebState>) -> impl IntoResponse {
     Json(msg)
 }
 
-async fn get_options(State(state): State<WebState>) -> impl IntoResponse {
+async fn get_options(State(_state): State<WebState>) -> impl IntoResponse {
     let sources = vec![HttpSource::serialize_default().unwrap(), MqttSource::serialize_default().unwrap()];
     let destinations = vec![DebugDestination::serialize_default().unwrap()];
     let msg = json!( {"sources": &sources, "destinations": &destinations});
     Json(msg)
 }
 
-async fn get_status(State(state): State<WebState>) -> impl IntoResponse {
+async fn get_status(State(_state): State<WebState>) -> impl IntoResponse {
     let msg = json!( {"status": "connected"});
     Json(msg)
 }
@@ -138,7 +138,7 @@ async fn start_plan(State(state): State<WebState>, Json(payload): Json<PlanPaylo
     (StatusCode::OK, "Plan started".to_string())
 }
 
-async fn stop_plan(State(state): State<WebState>, Json(payload): Json<PlanPayload>) -> impl IntoResponse {
+async fn stop_plan(State(_state): State<WebState>, Json(payload): Json<PlanPayload>) -> impl IntoResponse {
     debug!("{:?}", payload);
 
     // Return a response

@@ -66,7 +66,6 @@ impl Operator {
                     String::from("/")
                 }
             }
-            _ => panic!("Unexpected case!"),
         }
     }
 }

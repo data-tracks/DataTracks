@@ -20,15 +20,15 @@ pub struct DebugDestination {
 
 impl DebugDestination {
     pub fn new(stop: i64) -> Self {
-        let (tx, num, rx) = new_channel();
+        let (tx, _num, rx) = new_channel();
         DebugDestination { id: GLOBAL_ID.new_id(), stop, receiver: Some(rx), sender: tx }
     }
 }
 
 impl Destination for DebugDestination {
-    fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command> {
+    fn operate(&mut self, _control: Arc<Sender<Command>>) -> Sender<Command> {
         let receiver = self.receiver.take().unwrap();
-        let (tx, rx) = unbounded();
+        let (tx, _rx) = unbounded();
 
         thread::spawn(move || {
             let mut writer = None;

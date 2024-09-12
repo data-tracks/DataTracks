@@ -40,9 +40,8 @@ impl SqlIdentifier {
 }
 
 impl Statement for SqlIdentifier {
-    fn dump(&self, quote: &str) -> String {
-        let mut dump = format!("{}", self.names.join("."));
-        dump
+    fn dump(&self, _quote: &str) -> String {
+        format!("{}", self.names.join("."))
     }
 }
 
@@ -59,8 +58,7 @@ impl SqlAlias {
 
 impl Statement for SqlAlias {
     fn dump(&self, quote: &str) -> String {
-        let mut dump = format!("{} AS {}", self.target.dump(quote), self.alias.dump(quote));
-        dump
+        format!("{} AS {}", self.target.dump(quote), self.alias.dump(quote))
     }
 }
 
@@ -111,7 +109,7 @@ impl SqlValue {
 }
 
 impl Statement for SqlValue {
-    fn dump(&self, quote: &str) -> String {
+    fn dump(&self, _quote: &str) -> String {
         format!("{}", self.value)
     }
 }
