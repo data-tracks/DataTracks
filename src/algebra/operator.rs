@@ -8,7 +8,7 @@ pub enum Operator {
     Minus(MinusOperator),
     Multiplication(MultiplicationOperator),
     Divide(DivideOperator),
-
+    Combine(CombineOperator)
 }
 
 impl Operator {
@@ -33,6 +33,9 @@ impl Operator {
                 operators.iter().fold(Value::int(0), |a, b| {
                     &a / &b
                 })
+            }
+            Operator::Combine(_) => {
+                Value::array(operators)
             }
         }
     }
@@ -65,6 +68,9 @@ impl Operator {
                 } else {
                     String::from("/")
                 }
+            }
+            Operator::Combine(_) => {
+                String::from("")
             }
         }
     }
@@ -116,4 +122,7 @@ pub struct MultiplicationOperator;
 
 #[derive(Debug, Clone)]
 pub struct DivideOperator;
+
+#[derive(Debug, Clone)]
+pub struct CombineOperator;
 

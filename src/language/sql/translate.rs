@@ -1,30 +1,68 @@
-use crate::algebra::AlgebraType::Scan;
-use crate::algebra::{AlgebraType, TrainScan};
+use crate::algebra::AlgebraType::{Project, Scan};
+use crate::algebra::Function::{Input, Literal, NamedInput, Operation};
+use crate::algebra::{AlgebraType, CombineOperator, Function, InputFunction, LiteralOperator, NamedRefOperator, OperationFunction, Operator, TrainProject, TrainScan};
 use crate::language::sql::statement::{SqlIdentifier, SqlSelect, SqlStatement};
+use crate::language::statement::Statement;
 
 pub(crate) fn translate(query: SqlStatement) -> Result<AlgebraType, String> {
-    let mut scans = match query {
+    let scan = match query {
         SqlStatement::Select(s) => handle_select(s)?,
         _ => Err("Could not translate SQL query".to_string())?
     };
-
-    if scans.len() == 1 {
-        return Ok(scans.pop().unwrap())
-    }
-
-
-    Err("Not supported.".to_string())
+    Ok(scan)
 }
 
-fn handle_select(query: SqlSelect) -> Result<Vec<AlgebraType>, String> {
-    let sources = query.froms.into_iter().map(|from| handle_from(from).unwrap()).collect();
-    Ok(sources)
+fn handle_select(query: SqlSelect) -> Result<AlgebraType, String> {
+    let mut sources: Vec<AlgebraType> = query.froms.into_iter().map(|from| handle_from(from).unwrap()).collect();
+    let mut functions: Vec<Function> = query.columns.into_iter().map(|column| handle_column(column).unwrap()).collect();
+
+    let function = match functions.len() {
+        1 => {
+            let function = functions.pop().unwrap();
+            match function {
+                Input(_) => {
+                    return Ok(sources.pop().unwrap())
+                }
+                o => o
+            }
+        }
+        _ => {
+            Operation(OperationFunction::new(Operator::Combine(CombineOperator {}), functions))
+        }
+    };
+
+    let project = Project(TrainProject::new(sources.pop().unwrap(), function));
+
+    Ok(project)
 }
 
 fn handle_from(from: SqlStatement) -> Result<AlgebraType, String> {
     match from {
         SqlStatement::Identifier(i) => handle_table(i),
         _ => Err("Could not translate FROM clause".to_string())
+    }
+}
+
+fn handle_column(column: SqlStatement) -> Result<Function, String> {
+    match column {
+        SqlStatement::Symbol(s) => {
+            if s.symbol == "*" {
+                Ok(Input(InputFunction::new()))
+            } else {
+                Err("Could not translate symbol".to_string())
+            }
+        }
+        SqlStatement::Operator(o) => {
+            let operators = o.operands.into_iter().map(|op| handle_column(op).unwrap()).collect();
+            Ok(Operation(OperationFunction::new(o.operator, operators)))
+        }
+        SqlStatement::Identifier(i) => {
+            Ok(NamedInput(NamedRefOperator::new(i.dump(""))))
+        }
+        SqlStatement::Value(v) => {
+            Ok(Literal(LiteralOperator::new(v.value)))
+        }
+        err => Err(format!("Could not translate operator: {:?}", err))
     }
 }
 

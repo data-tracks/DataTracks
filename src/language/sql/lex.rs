@@ -317,16 +317,12 @@ mod test {
         test_query_diff(query, query);
     }
 
-    fn select<'a>(selects: &str, from: &str) -> String {
+    fn select(selects: &str, from: &str) -> String {
         format!("SELECT {} FROM {}", selects, from)
     }
 
     fn quote(key: &str) -> String {
         format!("'{}'", key)
-    }
-
-    fn test_query(query: &str) {
-        test_query_diff(query, query)
     }
 
     fn test_query_diff(query: &str, expected: &str) {

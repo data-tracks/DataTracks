@@ -148,14 +148,16 @@ impl FuncTransform {
 mod tests {
     use std::sync::Arc;
 
+    use crate::language::Language;
     use crate::processing::station::Station;
     use crate::processing::tests::dict_values;
     use crate::processing::train::Train;
-    use crate::processing::transform::FuncTransform;
     use crate::processing::transform::Transform::Func;
+    use crate::processing::transform::{build_transformer, FuncTransform};
     use crate::util::new_channel;
     use crate::value::{Dict, Value};
     use crossbeam::channel::unbounded;
+
 
     #[test]
     fn transform() {
@@ -224,6 +226,28 @@ mod tests {
                 }
             }
             Err(e) => panic!("Failed to receive: {:?}", e),
+        }
+    }
+
+
+    #[test]
+    fn sql_basic() {
+        check_sql_implement("SELECT * FROM $0", vec![Value::float(3.3)], vec![Value::float(3.3)]);
+    }
+
+    #[test]
+    fn sql_add() {
+        check_sql_implement("SELECT * + 1 FROM $0", vec![Value::float(3.3)], vec![Value::float(4.3)]);
+    }
+
+    fn check_sql_implement(query: &str, input: Vec<Value>, output: Vec<Value>) {
+        let transform = build_transformer(&Language::Sql, query);
+        match transform {
+            Ok(t) => {
+                let result = t.process(0, vec![Train::new(0, input)]);
+                assert_eq!(result.values.unwrap(), output);
+            }
+            Err(_) => panic!(),
         }
     }
 }

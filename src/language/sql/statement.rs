@@ -5,6 +5,7 @@ use crate::value::Value;
 
 pub trait Sql: Statement {}
 
+#[derive(Debug)]
 pub(crate) enum SqlStatement {
     Identifier(SqlIdentifier),
     Select(SqlSelect),
@@ -29,6 +30,7 @@ impl SqlStatement {
     }
 }
 
+#[derive(Debug)]
 pub struct SqlIdentifier {
     pub(crate) names: Vec<String>,
 }
@@ -45,6 +47,7 @@ impl Statement for SqlIdentifier {
     }
 }
 
+#[derive(Debug)]
 pub struct SqlAlias {
     pub(crate) target: Box<SqlStatement>,
     pub(crate) alias: Box<SqlStatement>,
@@ -62,6 +65,7 @@ impl Statement for SqlAlias {
     }
 }
 
+#[derive(Debug)]
 pub struct SqlOperator {
     pub(crate) operator: Operator,
     pub(crate) operands: Vec<SqlStatement>,
@@ -96,6 +100,7 @@ impl Statement for SqlOperator {
     }
 }
 
+#[derive(Debug)]
 pub struct SqlValue {
     pub(crate) value: Value,
 }
@@ -114,6 +119,7 @@ impl Statement for SqlValue {
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct SqlSelect {
     pub(crate) columns: Vec<SqlStatement>,
     pub(crate) froms: Vec<SqlStatement>,
@@ -122,6 +128,7 @@ pub(crate) struct SqlSelect {
     pub(crate) groups: Vec<SqlStatement>,
 }
 
+#[derive(Debug)]
 pub(crate) struct SqlList {
     list: Vec<SqlStatement>,
 }
@@ -138,9 +145,9 @@ impl Statement for SqlList {
     }
 }
 
-
+#[derive(Debug)]
 pub(crate) struct SqlSymbol {
-    symbol: String,
+    pub symbol: String,
 }
 
 impl SqlSymbol {
