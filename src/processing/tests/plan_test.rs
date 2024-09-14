@@ -92,7 +92,7 @@ mod dummy {
             SourceModel { type_name: String::from("Dummy"), id: self.id.to_string(), configs: HashMap::new() }
         }
 
-        fn from(stop_id: i64, configs: HashMap<String, ConfigModel>) -> Result<Box<dyn Source>, String>
+        fn from(_stop_id: i64, _configs: HashMap<String, ConfigModel>) -> Result<Box<dyn Source>, String>
         where
             Self: Sized,
         {
@@ -115,7 +115,7 @@ mod dummy {
 
     impl DummyDestination {
         pub(crate) fn new(stop: i64, wait_result: usize) -> Self {
-            let (tx, num, rx) = new_channel();
+            let (tx, _num, rx) = new_channel();
             DummyDestination {
                 id: GLOBAL_ID.new_id(),
                 stop,
@@ -364,7 +364,7 @@ pub mod tests {
         // source 1 ready + stop
         for _com in vec![Ready(4), Stop(4), Ready(3), Stop(3)] {
             match plan.control_receiver.1.recv() {
-                Ok(command) => {}
+                Ok(_command) => {}
                 Err(_) => panic!()
             }
         }

@@ -236,8 +236,44 @@ mod tests {
     }
 
     #[test]
+    fn sql_basic_named() {
+        check_sql_implement("SELECT $0 FROM $0", vec![Value::float(3.3)], vec![Value::float(3.3)]);
+    }
+
+    #[test]
+    fn sql_basic_key() {
+        check_sql_implement("SELECT $0.age FROM $0", vec![Value::dict_from_pair("age".to_string(), Value::float(3.3))], vec![Value::float(3.3)]);
+    }
+
+    #[test]
     fn sql_add() {
         check_sql_implement("SELECT * + 1 FROM $0", vec![Value::float(3.3)], vec![Value::float(4.3)]);
+    }
+
+    #[test]
+    fn sql_add_multiple() {
+        check_sql_implement("SELECT * + 1 + 0.3 FROM $0", vec![Value::float(3.3)], vec![Value::float(4.6)]);
+    }
+
+    #[test]
+    fn sql_add_key() {
+        check_sql_implement("SELECT $0.age + 1 + 0.3 FROM $0", vec![Value::dict_from_pair("age".to_string(), Value::float(3.3))], vec![Value::float(4.6)]);
+    }
+
+    #[test]
+    fn sql_join() {
+        check_sql_implement_join("SELECT $0 + $1 FROM $0, $1", vec![vec![Value::float(3.3)], vec![Value::float(3.4)]], vec![Value::float(6.7)]);
+    }
+
+    fn check_sql_implement_join(query: &str, inputs: Vec<Vec<Value>>, output: Vec<Value>) {
+        let transform = build_transformer(&Language::Sql, query);
+        match transform {
+            Ok(t) => {
+                let result = t.process(0, inputs.into_iter().enumerate().map(|(i, v)| Train::new(i as i64, v)).collect());
+                assert_eq!(result.values.unwrap(), output);
+            }
+            Err(_) => panic!(),
+        }
     }
 
     fn check_sql_implement(query: &str, input: Vec<Value>, output: Vec<Value>) {

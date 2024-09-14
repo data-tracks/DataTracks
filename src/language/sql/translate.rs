@@ -1,8 +1,8 @@
-use crate::algebra::AlgebraType::{Project, Scan};
+use crate::algebra::AlgebraType::{Join, Project, Scan};
 use crate::algebra::Function::{Input, Literal, NamedInput, Operation};
-use crate::algebra::{AlgebraType, CombineOperator, Function, InputFunction, LiteralOperator, NamedRefOperator, OperationFunction, Operator, TrainProject, TrainScan};
+use crate::algebra::{AlgebraType, CombineOperator, Function, InputFunction, LiteralOperator, NamedRefOperator, OperationFunction, Operator, TrainJoin, TrainProject, TrainScan};
 use crate::language::sql::statement::{SqlIdentifier, SqlSelect, SqlStatement};
-use crate::language::statement::Statement;
+use crate::value::Value;
 
 pub(crate) fn translate(query: SqlStatement) -> Result<AlgebraType, String> {
     let scan = match query {
@@ -16,12 +16,21 @@ fn handle_select(query: SqlSelect) -> Result<AlgebraType, String> {
     let mut sources: Vec<AlgebraType> = query.froms.into_iter().map(|from| handle_from(from).unwrap()).collect();
     let mut functions: Vec<Function> = query.columns.into_iter().map(|column| handle_column(column).unwrap()).collect();
 
+    let source = {
+        let mut join = sources.remove(0);
+        while !sources.is_empty() {
+            let right = sources.remove(0);
+            join = Join(TrainJoin::new(join, right, |v| Value::bool(true), |v| Value::bool(true), |l, r| Value::array(vec![l, r])));
+        }
+        join
+    };
+
     let function = match functions.len() {
         1 => {
             let function = functions.pop().unwrap();
             match function {
                 Input(_) => {
-                    return Ok(sources.pop().unwrap())
+                    return Ok(source)
                 }
                 o => o
             }
@@ -31,7 +40,7 @@ fn handle_select(query: SqlSelect) -> Result<AlgebraType, String> {
         }
     };
 
-    let project = Project(TrainProject::new(sources.pop().unwrap(), function));
+    let project = Project(TrainProject::new(source, function));
 
     Ok(project)
 }
@@ -47,7 +56,7 @@ fn handle_column(column: SqlStatement) -> Result<Function, String> {
     match column {
         SqlStatement::Symbol(s) => {
             if s.symbol == "*" {
-                Ok(Input(InputFunction::new()))
+                Ok(Input(InputFunction::all()))
             } else {
                 Err("Could not translate symbol".to_string())
             }
@@ -57,7 +66,17 @@ fn handle_column(column: SqlStatement) -> Result<Function, String> {
             Ok(Operation(OperationFunction::new(o.operator, operators)))
         }
         SqlStatement::Identifier(i) => {
-            Ok(NamedInput(NamedRefOperator::new(i.dump(""))))
+            match i {
+                mut i if i.names.len() == 1 && i.names.get(0).unwrap().starts_with("$") => {
+                    let index = i.names.pop().unwrap().clone().replace("$", "");
+                    Ok(Input(InputFunction::new(index.parse().unwrap())))
+                }
+                SqlIdentifier { .. } => {
+                    let mut names = i.names.clone();
+                    names.remove(0);
+                    Ok(NamedInput(NamedRefOperator::new(names.join("."))))
+                }
+            }
         }
         SqlStatement::Value(v) => {
             Ok(Literal(LiteralOperator::new(v.value)))

@@ -6,6 +6,7 @@ pub use function::InputFunction;
 pub use function::LiteralOperator;
 pub use function::NamedRefOperator;
 pub use function::OperationFunction;
+pub use join::TrainJoin;
 pub use operator::CombineOperator;
 pub use operator::Operator;
 pub use project::TrainProject;

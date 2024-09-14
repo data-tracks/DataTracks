@@ -48,6 +48,12 @@ impl Value {
         Value::Dict(Dict::new(values))
     }
 
+    pub(crate) fn dict_from_pair(key: String, value: Value) -> Value {
+        let mut map = BTreeMap::new();
+        map.insert(key, value);
+        Value::Dict(Dict::new(map))
+    }
+
     pub fn null() -> Value {
         Value::Null(Null {})
     }

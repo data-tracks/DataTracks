@@ -13,7 +13,7 @@ use logos::{Lexer, Logos};
 pub(crate) enum Token {
     #[regex(r"[a-zA-Z_$][a-zA-Z_$0-9]*\(", | lex | lex.slice().to_owned())]
     Function(String),
-    #[regex(r"[']?[a-zA-Z_$][a-zA-Z_$0-9]*[']?", | lex | lex.slice().to_owned())]
+    #[regex(r"[']?[a-zA-Z_$][a-zA-Z_$0-9.]*[']?", | lex | lex.slice().to_owned())]
     Identifier(String),
     #[regex(r#""[^"\\]*""#, | lex | trim_quotes(lex.slice()))]
     Text(String),
@@ -124,7 +124,10 @@ fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> SqlStateme
 
         match tok {
             Identifier(i) => {
-                expressions.push(SqlStatement::Identifier(SqlIdentifier::new(vec![i])))
+                expressions.push(SqlStatement::Identifier(SqlIdentifier::new(i.split(".").map(|s| s.to_string()).collect::<Vec<String>>())))
+            }
+            Star => {
+                expressions.push(SqlStatement::Symbol(SqlSymbol::new("*")))
             }
             Text(t) => {
                 expressions.push(SqlStatement::Value(SqlValue::new(value::Value::text(&t))))

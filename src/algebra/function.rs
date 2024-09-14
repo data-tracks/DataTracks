@@ -65,21 +65,46 @@ impl Display for Function {
 }
 
 #[derive(Debug, Clone)]
-pub struct InputFunction {}
+pub struct InputFunction {
+    index: usize,
+    all: bool,
+}
 
 impl InputFunction {
-    pub fn new() -> InputFunction {
-        InputFunction {}
+    pub fn new(index: usize) -> Self {
+        InputFunction {
+            index,
+            all: false,
+        }
+    }
+
+    pub fn all() -> Self {
+        InputFunction {
+            index: 0,
+            all: true,
+        }
     }
 }
 
 impl ValueHandler for InputFunction {
     fn process(&self, value: Value) -> Value {
-        value
+        if self.all {
+            return value
+        }
+        match value {
+            Value::Array(a) => {
+                a.0.get(self.index).unwrap_or(&Value::null()).clone()
+            }
+            Value::Dict(d) => {
+                d.0.get(&format!("${}", self.index)).unwrap_or(&Value::null()).clone()
+            }
+            Value::Null(_) => Value::null(),
+            _ => panic!("Could not process {}", value)
+        }
     }
 
     fn clone(&self) -> Box<dyn ValueHandler + Send + 'static> {
-        Box::new(InputFunction::new())
+        Box::new(InputFunction::new(self.index))
     }
 }
 
@@ -120,7 +145,7 @@ impl NamedRefOperator {
 impl ValueHandler for NamedRefOperator {
     fn process(&self, value: Value) -> Value {
         match value {
-            Value::Dict(d) => d.0.get(&self.name).unwrap().clone(),
+            Value::Dict(d) => d.0.get(&self.name).unwrap_or(&Value::null()).clone(),
             Value::Null(_) => Value::null(),
             _ => panic!()
         }

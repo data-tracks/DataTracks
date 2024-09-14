@@ -42,7 +42,22 @@ impl Add for Float {
     type Output = Self;
 
     fn add(self, other: Self) -> Self {
-        Float::new(self.as_f64() + other.as_f64())
+        let mut shift = self.shift as i64 - other.shift as i64;
+        let mut left = self.number;
+        let mut right = other.number;
+        if shift > 0 {
+            // self is bigger fract
+            right *= shift * 10;
+            shift = self.shift as i64;
+        } else if shift < 0 {
+            // other is bigger fract
+            left *= shift * -10;
+            shift = other.shift as i64;
+        } else {
+            shift = self.shift as i64;
+        }
+
+        Float { number: left + right, shift: shift as u64 }
     }
 }
 
