@@ -10,7 +10,7 @@ use crate::value::dict::Dict;
 use crate::value::null::Null;
 use crate::value::r#type::ValType;
 use crate::value::string::Text;
-use crate::value::{Bool, Float, Int};
+use crate::value::{bool, Bool, Float, Int};
 
 #[derive(Eq, PartialEq, Hash, Clone, Debug)]
 pub enum Value {
@@ -105,6 +105,22 @@ impl Value {
         match self {
             Value::Int(_) | Value::Float(_) | Value::Bool(_) | Value::Text(_) | Value::Dict(_) | Value::Null(_) => Err(()),
             Value::Array(a) => Ok(a.clone()),
+        }
+    }
+    pub fn as_bool(&self) -> Result<Bool, ()> {
+        match self {
+            Value::Int(i) => Ok(if i.0 > 0 { Bool(true) } else { Bool(false) }),
+            Value::Float(f) => Ok(if f.number <= 0 { Bool(false) } else { Bool(true) }),
+            Value::Bool(b) => Ok(b.clone()),
+            Value::Text(t) => {
+                match t.0.to_lowercase().trim() {
+                    "true" | "1" => Ok(Bool(true)),
+                    _ => Ok(Bool(false))
+                }
+            },
+            Value::Array(a) => Ok(Bool(!a.0.is_empty())),
+            Value::Dict(d) => Ok(Bool(!d.0.is_empty())),
+            Value::Null(_) => Ok(Bool(false)),
         }
     }
 }

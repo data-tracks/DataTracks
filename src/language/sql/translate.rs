@@ -1,6 +1,6 @@
-use crate::algebra::AlgebraType::{Join, Project, Scan};
+use crate::algebra::AlgebraType::{Filter, Join, Project, Scan};
 use crate::algebra::Function::{Input, Literal, NamedInput, Operation};
-use crate::algebra::{AlgebraType, CombineOperator, Function, InputFunction, LiteralOperator, NamedRefOperator, OperationFunction, Operator, TrainJoin, TrainProject, TrainScan};
+use crate::algebra::{AlgebraType, Function, InputFunction, LiteralOperator, NamedRefOperator, OperationFunction, Operator, TrainFilter, TrainJoin, TrainProject, TrainScan};
 use crate::language::sql::statement::{SqlIdentifier, SqlSelect, SqlStatement};
 use crate::value::Value;
 
@@ -14,20 +14,21 @@ pub(crate) fn translate(query: SqlStatement) -> Result<AlgebraType, String> {
 
 fn handle_select(query: SqlSelect) -> Result<AlgebraType, String> {
     let mut sources: Vec<AlgebraType> = query.froms.into_iter().map(|from| handle_from(from).unwrap()).collect();
-    let mut functions: Vec<Function> = query.columns.into_iter().map(|column| handle_column(column).unwrap()).collect();
+    let mut projections: Vec<Function> = query.columns.into_iter().map(|column| handle_field(column).unwrap()).collect();
+    let mut filters: Vec<Function> = query.wheres.into_iter().map(|w| handle_field(w).unwrap()).collect();
 
     let source = {
         let mut join = sources.remove(0);
         while !sources.is_empty() {
             let right = sources.remove(0);
-            join = Join(TrainJoin::new(join, right, |v| Value::bool(true), |v| Value::bool(true), |l, r| Value::array(vec![l, r])));
+            join = Join(TrainJoin::new(join, right, |_v| Value::bool(true), |_v| Value::bool(true), |l, r| Value::array(vec![l, r])));
         }
         join
     };
 
-    let function = match functions.len() {
+    let function = match projections.len() {
         1 => {
-            let function = functions.pop().unwrap();
+            let function = projections.pop().unwrap();
             match function {
                 Input(_) => {
                     return Ok(source)
@@ -36,13 +37,28 @@ fn handle_select(query: SqlSelect) -> Result<AlgebraType, String> {
             }
         }
         _ => {
-            Operation(OperationFunction::new(Operator::Combine(CombineOperator {}), functions))
+            Operation(OperationFunction::new(Operator::Combine, projections))
         }
     };
 
     let project = Project(TrainProject::new(source, function));
 
-    Ok(project)
+    if filters.is_empty() {
+        return Ok(project);
+    }
+
+
+    let filter = match filters.len() {
+        1 => {
+            filters.pop().unwrap()
+        }
+        _ => {
+            Operation(OperationFunction::new(Operator::And, filters))
+        }
+    };
+
+    Ok(Filter(TrainFilter::new(project, filter)))
+
 }
 
 fn handle_from(from: SqlStatement) -> Result<AlgebraType, String> {
@@ -52,7 +68,7 @@ fn handle_from(from: SqlStatement) -> Result<AlgebraType, String> {
     }
 }
 
-fn handle_column(column: SqlStatement) -> Result<Function, String> {
+fn handle_field(column: SqlStatement) -> Result<Function, String> {
     match column {
         SqlStatement::Symbol(s) => {
             if s.symbol == "*" {
@@ -62,7 +78,7 @@ fn handle_column(column: SqlStatement) -> Result<Function, String> {
             }
         }
         SqlStatement::Operator(o) => {
-            let operators = o.operands.into_iter().map(|op| handle_column(op).unwrap()).collect();
+            let operators = o.operands.into_iter().map(|op| handle_field(op).unwrap()).collect();
             Ok(Operation(OperationFunction::new(o.operator, operators)))
         }
         SqlStatement::Identifier(i) => {

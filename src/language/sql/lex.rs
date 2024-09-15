@@ -3,7 +3,7 @@ use std::vec;
 
 use crate::algebra::Operator;
 use crate::language::sql::buffer::BufferedLexer;
-use crate::language::sql::lex::Token::{As, Comma, From, GroupBy, Identifier, Select, Semi, Star, Text, Where};
+use crate::language::sql::lex::Token::{As, Comma, From, GroupBy, Identifier, Limit, OrderBy, Select, Semi, Star, Text, Where};
 use crate::language::sql::statement::{SqlAlias, SqlIdentifier, SqlList, SqlOperator, SqlSelect, SqlStatement, SqlSymbol, SqlValue};
 use crate::value;
 use logos::{Lexer, Logos};
@@ -38,6 +38,10 @@ pub(crate) enum Token {
     GroupBy,
     #[regex(r"(?i)AS")]
     As,
+    #[regex(r"(?i)LIMIT")]
+    Limit,
+    #[regex(r"(?i)ORDER BY")]
+    OrderBy,
     #[token(",")]
     Comma,
     #[token(".")]
@@ -54,6 +58,8 @@ pub(crate) enum Token {
     BracketClose,
     #[token("=")]
     Eq,
+    #[token(r"(?i)NOT")]
+    Not,
     #[token("<>")]
     Ne,
     #[token("*")]
@@ -83,9 +89,14 @@ fn parse_query<'source>(lexer: &'source mut Lexer<'source, Token>) -> Result<Sql
 
 fn parse_select(lexer: &mut BufferedLexer) -> Result<SqlStatement, String> {
     let fields = parse_expressions(lexer, &[From])?;
-    let froms = parse_expressions(lexer, &[Semi, Where, GroupBy])?;
+    let froms = parse_expressions(lexer, &[Semi, Where, GroupBy, Limit, OrderBy])?;
+    let mut wheres = vec![];
+    if lexer.consume_buffer() == Ok(Where) {
+        wheres = parse_expressions(lexer, &[Semi, GroupBy, Limit, OrderBy])?;
+    }
 
-    Ok(SqlStatement::Select(SqlSelect::new(fields, froms)))
+
+    Ok(SqlStatement::Select(SqlSelect::new(fields, froms, wheres)))
 }
 
 fn parse_expressions(lexer: &mut BufferedLexer, stops: &[Token]) -> Result<Vec<SqlStatement>, String> {
@@ -99,6 +110,8 @@ fn parse_expressions(lexer: &mut BufferedLexer, stops: &[Token]) -> Result<Vec<S
     if let Ok(t) = tok { // ok to be empty, if no more tokens
         if t == Comma {
             expressions.append(&mut parse_expressions(lexer, &stops)?)
+        } else {
+            lexer.buffer(t) // re-add buffer so we can test for stop
         }
     }
     Ok(expressions)
@@ -126,7 +139,7 @@ fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> SqlStateme
             Identifier(i) => {
                 expressions.push(SqlStatement::Identifier(SqlIdentifier::new(i.split(".").map(|s| s.to_string()).collect::<Vec<String>>())))
             }
-            Star => {
+            t if t == Star && expressions.is_empty() => {
                 expressions.push(SqlStatement::Symbol(SqlSymbol::new("*")))
             }
             Text(t) => {
@@ -177,7 +190,7 @@ fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> SqlStateme
 
     if let Some(op) = operator.take() {
         if match op {
-            Operator::Multiplication(_) => true,
+            Operator::Multiplication => true,
             _ => false
         } {
             return SqlStatement::Symbol(SqlSymbol::new("*"));
@@ -203,10 +216,12 @@ fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> SqlStateme
 
 fn parse_operator(tok: Token) -> Option<Operator> {
     match tok {
-        Star => Some(Operator::multiplication()),
+        Star => Some(Operator::multiply()),
         Token::Plus => Some(Operator::plus()),
         Token::Minus => Some(Operator::minus()),
         Token::Divide => Some(Operator::divide()),
+        Token::Eq => Some(Operator::equal()),
+        Token::Not => Some(Operator::not()),
         _ => None
     }
 }
@@ -231,97 +246,108 @@ mod test {
 
     #[test]
     fn test_star() {
-        let query = &select("*", "$0");
+        let query = &select("*", "$0", None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_single() {
-        let query = &select(&quote("name"), "$0");
+        let query = &select(&quote("name"), "$0", None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_list() {
-        let query = &select(&format!("{}, {}", quote("name"), quote("age")), "$0");
+        let query = &select(&format!("{}, {}", quote("name"), quote("age")), "$0", None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_as() {
-        let query = &select(&format!("{} AS {}, {}", quote("name"), quote("n"), quote("age")), "$0");
+        let query = &select(&format!("{} AS {}, {}", quote("name"), quote("n"), quote("age")), "$0", None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_implicit_join() {
-        let query = &select(&format!("{} AS {}, {}", quote("name"), quote("n"), quote("age")), "$0, $1");
+        let query = &select(&format!("{} AS {}, {}", quote("name"), quote("n"), quote("age")), "$0, $1", None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_as_quote() {
-        let query = &select(&format!("{} AS {}, {}", quote("name"), quote("n"), quote("age")), "$0");
+        let query = &select(&format!("{} AS {}, {}", quote("name"), quote("n"), quote("age")), "$0", None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_calculators_add() {
-        let query = &select(&format!("{} + 1, {}", quote("name"), quote("age")), "$0");
+        let query = &select(&format!("{} + 1, {}", quote("name"), quote("age")), "$0", None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_calculators_add_no_space() {
-        let query = &select(&format!("{}+1, {}", quote("name"), quote("age")), "$0");
-        let res = &select(&format!("{} + 1, {}", quote("name"), quote("age")), "$0");
+        let query = &select(&format!("{}+1, {}", quote("name"), quote("age")), "$0", None);
+        let res = &select(&format!("{} + 1, {}", quote("name"), quote("age")), "$0", None);
         test_query_diff(query, res);
     }
 
     #[test]
     fn test_calculators_sub() {
-        let query = &select(&format!("{} - 1, {}", quote("name"), quote("age")), "$0");
+        let query = &select(&format!("{} - 1, {}", quote("name"), quote("age")), "$0", None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_calculators_multi() {
-        let query = &select(&format!("{} * 1, {}", quote("name"), quote("age")), "$0");
+        let query = &select(&format!("{} * 1, {}", quote("name"), quote("age")), "$0", None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_calculators_div() {
-        let query = &select(&format!("{} / 1, {}", quote("name"), quote("age")), "$0");
+        let query = &select(&format!("{} / 1, {}", quote("name"), quote("age")), "$0", None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_calculators_add_nested() {
-        let query = &select(&format!("{} + 1 + 1, {}", quote("name"), quote("age")), "$0");
+        let query = &select(&format!("{} + 1 + 1, {}", quote("name"), quote("age")), "$0", None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_calculators_add_nested_mixed() {
-        let query = &select(&format!("{} / 1 + 3, {}", quote("name"), quote("age")), "$0");
+        let query = &select(&format!("{} / 1 + 3, {}", quote("name"), quote("age")), "$0", None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_calculators_function_call() {
-        let query = &select(&format!("ADD({}, {})", quote("name"), quote("age")), "$0");
+        let query = &select(&format!("ADD({}, {})", quote("name"), quote("age")), "$0", None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_calculators_function_call_nested() {
-        let query = &select(&format!("ADD({}, ADD({}, {}))", quote("name"), quote("age"), quote("age2")), "$0");
+        let query = &select(&format!("ADD({}, ADD({}, {}))", quote("name"), quote("age"), quote("age2")), "$0", None);
         test_query_diff(query, query);
     }
 
-    fn select(selects: &str, from: &str) -> String {
-        format!("SELECT {} FROM {}", selects, from)
+    #[test]
+    fn test_filter() {
+        let query = &select(&format!("{}", quote("name")), "$0", Some(&format!("{} = 3", quote("$0"))));
+        test_query_diff(query, query);
+    }
+
+    fn select(selects: &str, from: &str, wheres: Option<&str>) -> String {
+        let mut select = format!("SELECT {} FROM {}", selects, from);
+        if let Some(wheres) = wheres {
+            select += &format!(" WHERE {}", wheres);
+        }
+        select
+
     }
 
     fn quote(key: &str) -> String {

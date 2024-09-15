@@ -166,8 +166,8 @@ impl Sql for SqlSymbol {}
 
 
 impl SqlSelect {
-    pub(crate) fn new(columns: Vec<SqlStatement>, froms: Vec<SqlStatement>) -> SqlSelect {
-        SqlSelect { columns, froms, wheres: vec![], orders: vec![], groups: vec![] }
+    pub(crate) fn new(columns: Vec<SqlStatement>, froms: Vec<SqlStatement>, wheres: Vec<SqlStatement>) -> SqlSelect {
+        SqlSelect { columns, froms, wheres, orders: vec![], groups: vec![] }
     }
 }
 
@@ -176,11 +176,15 @@ impl Statement for SqlSelect {
     fn dump(&self, quote: &str) -> String {
         let mut select = "SELECT ".to_string();
         if let Some(columns) = self.columns.iter().map(|el| el.dump(quote)).reduce(|a, b| a + ", " + &b) {
-            select = select + &columns;
+            select += &columns;
         }
 
         if let Some(froms) = self.froms.iter().map(|el| el.dump("")).reduce(|a, b| a + ", " + &b) {
-            select = select + " FROM " + &froms;
+            select += format!(" FROM {}", &froms).as_str();
+        }
+
+        if !self.wheres.is_empty() {
+            select += format!(" WHERE {}", self.wheres.iter().map(|el| el.dump(quote)).collect::<Vec<String>>().join(" AND ")).as_str();
         }
 
         select

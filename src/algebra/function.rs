@@ -195,6 +195,6 @@ impl ValueHandler for OperationFunction {
     }
 
     fn clone(&self) -> Box<dyn ValueHandler + Send + 'static> {
-        Box::new(OperationFunction { op: self.op.clone(), operands: self.operands.iter().map(|o| Clone::clone(o)).collect() })
+        Box::new(OperationFunction { op: self.op.clone(), operands: self.operands.iter().map(Clone::clone).collect() })
     }
 }

@@ -1,76 +1,107 @@
-use crate::algebra::Operator::{Divide, Minus, Multiplication, Plus};
+use crate::algebra::Operator::{Divide, Equal, Minus, Multiplication, Not, Plus};
 use crate::value::Value;
 use std::str::FromStr;
 
 #[derive(Debug, Clone)]
 pub enum Operator {
-    Plus(PlusOperator),
-    Minus(MinusOperator),
-    Multiplication(MultiplicationOperator),
-    Divide(DivideOperator),
-    Combine(CombineOperator)
+    Plus,
+    Minus,
+    Multiplication,
+    Divide,
+    Combine,
+    Not,
+    Equal,
+    And
 }
 
 impl Operator {
     pub fn implement(&self, operators: Vec<Value>) -> Value {
         match self {
-            Plus(_) => {
+            Plus => {
                 operators.iter().fold(Value::int(0), |a, b| {
                     &a + b
                 })
             }
-            Minus(_) => {
+            Minus => {
                 operators.iter().fold(Value::int(0), |a, b| {
                     &a - &b
                 })
             }
-            Multiplication(_) => {
+            Multiplication => {
                 operators.iter().fold(Value::int(0), |a, b| {
                     &a * &b
                 })
             }
-            Divide(_) => {
+            Divide => {
                 operators.iter().fold(Value::int(0), |a, b| {
                     &a / &b
                 })
             }
-            Operator::Combine(_) => {
+            Equal => {
+                operators.into_iter().fold(Value::bool(true), |a, b| {
+                    (&a == &b).into()
+                })
+            }
+            Operator::Combine => {
                 Value::array(operators)
+            }
+            Not => {
+                operators.into_iter().fold(Value::bool(false), |a, b| {
+                    (!(&a == &b)).into()
+                })
+            }
+            Operator::And => {
+                operators.into_iter().fold(Value::bool(true), |a, b| {
+                    (a.as_bool().unwrap().0 && b.as_bool().unwrap().0).into()
+                })
             }
         }
     }
     pub fn dump(&self, as_call: bool) -> String {
         match self {
-            Plus(_) => {
+            Plus => {
                 if as_call {
                     String::from("ADD")
                 } else {
                     String::from("+")
                 }
             }
-            Minus(_) => {
+            Minus => {
                 if as_call {
                     String::from("MINUS")
                 } else {
                     String::from("-")
                 }
             }
-            Multiplication(_) => {
+            Multiplication => {
                 if as_call {
                     String::from("MULTIPLICATION")
                 } else {
                     String::from("*")
                 }
             }
-            Divide(_) => {
+            Divide => {
                 if as_call {
                     String::from("DIVIDE")
                 } else {
                     String::from("/")
                 }
             }
-            Operator::Combine(_) => {
+            Operator::Combine => {
                 String::from("")
+            }
+            Not => {
+                String::from("NOT")
+            }
+            Equal => {
+                if as_call {
+                    String::from("EQ")
+                } else {
+                    String::from("=")
+                }
+            }
+            Operator::And => {
+                String::from("AND")
             }
         }
     }
@@ -86,10 +117,10 @@ impl FromStr for Operator {
             trimmed.pop();
         }
         match trimmed.as_str() {
-            "+" | "add" | "plus" => Ok(Plus(PlusOperator)),
-            "-" | "minus" => Ok(Minus(MinusOperator)),
-            "*" | "multiply" => Ok(Multiplication(MultiplicationOperator)),
-            "/" | "divide" => Ok(Divide(DivideOperator)),
+            "+" | "add" | "plus" => Ok(Plus),
+            "-" | "minus" => Ok(Minus),
+            "*" | "multiply" => Ok(Multiplication),
+            "/" | "divide" => Ok(Divide),
             _ => Err(())
         }
     }
@@ -98,31 +129,26 @@ impl FromStr for Operator {
 
 impl Operator {
     pub fn plus() -> Operator {
-        Plus(PlusOperator)
+        Plus
     }
     pub fn minus() -> Operator {
-        Minus(MinusOperator)
+        Minus
     }
-    pub fn multiplication() -> Operator {
-        Multiplication(MultiplicationOperator)
+    pub fn multiply() -> Operator {
+        Multiplication
     }
     pub fn divide() -> Operator {
-        Divide(DivideOperator)
+        Divide
+    }
+
+    pub fn equal() -> Operator {
+        Equal
+    }
+
+    pub fn not() -> Operator {
+        Not
     }
 }
 
 
-#[derive(Debug, Clone)]
-pub struct PlusOperator;
-
-#[derive(Debug, Clone)]
-pub struct MinusOperator;
-#[derive(Debug, Clone)]
-pub struct MultiplicationOperator;
-
-#[derive(Debug, Clone)]
-pub struct DivideOperator;
-
-#[derive(Debug, Clone)]
-pub struct CombineOperator;
 
