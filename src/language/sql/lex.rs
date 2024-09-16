@@ -13,8 +13,6 @@ use logos::{Lexer, Logos};
 pub(crate) enum Token {
     #[regex(r"[a-zA-Z_$][a-zA-Z_$0-9]*\(", | lex | lex.slice().to_owned())]
     Function(String),
-    #[regex(r"[']?[a-zA-Z_$][a-zA-Z_$0-9.]*[']?", | lex | lex.slice().to_owned())]
-    Identifier(String),
     #[regex(r#""[^"\\]*""#, | lex | trim_quotes(lex.slice()))]
     Text(String),
     #[token("false", | _ | false)]
@@ -60,6 +58,10 @@ pub(crate) enum Token {
     Eq,
     #[token(r"(?i)NOT")]
     Not,
+    #[token(r"(?i)AND")]
+    And,
+    #[token(r"(?i)OR")]
+    Or,
     #[token("<>")]
     Ne,
     #[token("*")]
@@ -70,6 +72,8 @@ pub(crate) enum Token {
     Minus,
     #[token("/")]
     Divide,
+    #[regex(r"[']?[a-zA-Z_$][a-zA-Z_$0-9.]*[']?", | lex | lex.slice().to_owned())]
+    Identifier(String),
 }
 
 pub fn parse(query: &str) -> Result<SqlStatement, String> {
@@ -222,6 +226,8 @@ fn parse_operator(tok: Token) -> Option<Operator> {
         Token::Divide => Some(Operator::divide()),
         Token::Eq => Some(Operator::equal()),
         Token::Not => Some(Operator::not()),
+        Token::And => Some(Operator::And),
+        Token::Or => Some(Operator::Or),
         _ => None
     }
 }
@@ -338,6 +344,12 @@ mod test {
     #[test]
     fn test_filter() {
         let query = &select(&format!("{}", quote("name")), "$0", Some(&format!("{} = 3", quote("$0"))));
+        test_query_diff(query, query);
+    }
+
+    #[test]
+    fn test_and_filter() {
+        let query = &select(&format!("{}", quote("name")), "$0", Some(&format!("{} = 3 and {} = 'test'", quote("$0"), quote("name"))));
         test_query_diff(query, query);
     }
 

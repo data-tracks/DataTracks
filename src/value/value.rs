@@ -7,7 +7,6 @@ use json::{parse, JsonValue};
 
 use crate::value::array::Array;
 use crate::value::dict::Dict;
-use crate::value::null::Null;
 use crate::value::r#type::ValType;
 use crate::value::string::Text;
 use crate::value::{bool, Bool, Float, Int};
@@ -20,7 +19,7 @@ pub enum Value {
     Text(Text),
     Array(Array),
     Dict(Dict),
-    Null(Null),
+    Null,
 }
 
 
@@ -55,7 +54,7 @@ impl Value {
     }
 
     pub fn null() -> Value {
-        Value::Null(Null {})
+        Value::Null
     }
 
     pub fn type_(&self) -> ValType {
@@ -66,7 +65,7 @@ impl Value {
             Value::Text(_) => ValType::Text,
             Value::Array(_) => ValType::Array,
             Value::Dict(_) => ValType::Dict,
-            Value::Null(_) => ValType::Null
+            Value::Null => ValType::Null
         }
     }
 
@@ -78,7 +77,7 @@ impl Value {
             Value::Text(t) => t.0.parse::<i64>().map(|num| Int(num)).map_err(|_| ()),
             Value::Array(_) => Err(()),
             Value::Dict(_) => Err(()),
-            Value::Null(_) => Err(())
+            Value::Null => Err(())
         }
     }
 
@@ -90,20 +89,20 @@ impl Value {
             Value::Text(t) => t.0.parse::<f64>().map(|num| Float::new(num)).map_err(|_| ()),
             Value::Array(_) => Err(()),
             Value::Dict(_) => Err(()),
-            Value::Null(_) => Err(())
+            Value::Null => Err(())
         }
     }
 
     pub fn as_dict(&self) -> Result<Dict, ()> {
         match self {
-            Value::Int(_) | Value::Float(_) | Value::Bool(_) | Value::Text(_) | Value::Array(_) | Value::Null(_) => Err(()),
+            Value::Int(_) | Value::Float(_) | Value::Bool(_) | Value::Text(_) | Value::Array(_) | Value::Null => Err(()),
             Value::Dict(d) => Ok(d.clone()),
         }
     }
 
     pub fn as_array(&self) -> Result<Array, ()> {
         match self {
-            Value::Int(_) | Value::Float(_) | Value::Bool(_) | Value::Text(_) | Value::Dict(_) | Value::Null(_) => Err(()),
+            Value::Int(_) | Value::Float(_) | Value::Bool(_) | Value::Text(_) | Value::Dict(_) | Value::Null => Err(()),
             Value::Array(a) => Ok(a.clone()),
         }
     }
@@ -120,7 +119,7 @@ impl Value {
             },
             Value::Array(a) => Ok(Bool(!a.0.is_empty())),
             Value::Dict(d) => Ok(Bool(!d.0.is_empty())),
-            Value::Null(_) => Ok(Bool(false)),
+            Value::Null => Ok(Bool(false)),
         }
     }
 }
@@ -146,7 +145,7 @@ impl Display for Value{
             Value::Text(t) => t.fmt(f),
             Value::Array(a) => a.fmt(f),
             Value::Dict(d) => d.fmt(f),
-            Value::Null(n) => n.fmt(f)
+            Value::Null => write!(f, "null")
         }
     }
 }
@@ -184,7 +183,7 @@ impl From<Dict> for Value {
 }
 
 impl Value {
-    pub(crate) fn _from_json(value: &str) -> Self {
+    pub(crate) fn from_json(value: &str) -> Self {
         let json = parse(value);
         let mut values = BTreeMap::new();
         match json {

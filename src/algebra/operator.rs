@@ -11,7 +11,8 @@ pub enum Operator {
     Combine,
     Not,
     Equal,
-    And
+    And,
+    Or
 }
 
 impl Operator {
@@ -53,6 +54,11 @@ impl Operator {
             Operator::And => {
                 operators.into_iter().fold(Value::bool(true), |a, b| {
                     (a.as_bool().unwrap().0 && b.as_bool().unwrap().0).into()
+                })
+            }
+            Operator::Or => {
+                operators.into_iter().fold(Value::bool(true), |a, b| {
+                    (a.as_bool().unwrap().0 || b.as_bool().unwrap().0).into()
                 })
             }
         }
@@ -102,6 +108,9 @@ impl Operator {
             }
             Operator::And => {
                 String::from("AND")
+            }
+            Operator::Or => {
+                String::from("OR")
             }
         }
     }

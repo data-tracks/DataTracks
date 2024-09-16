@@ -98,7 +98,7 @@ impl ValueHandler for InputFunction {
             Value::Dict(d) => {
                 d.0.get(&format!("${}", self.index)).unwrap_or(&Value::null()).clone()
             }
-            Value::Null(_) => Value::null(),
+            Value::Null => Value::null(),
             _ => panic!("Could not process {}", value)
         }
     }
@@ -146,7 +146,7 @@ impl ValueHandler for NamedRefOperator {
     fn process(&self, value: Value) -> Value {
         match value {
             Value::Dict(d) => d.0.get(&self.name).unwrap_or(&Value::null()).clone(),
-            Value::Null(_) => Value::null(),
+            Value::Null => Value::null(),
             _ => panic!()
         }
     }
@@ -166,7 +166,7 @@ impl ValueHandler for IndexedRefOperator {
     fn process(&self, value: Value) -> Value {
         match value {
             Value::Array(a) => a.0.get(self.index).cloned().unwrap(),
-            Value::Null(_) => Value::null(),
+            Value::Null => Value::null(),
             _ => panic!()
         }
     }
