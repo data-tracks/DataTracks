@@ -1,5 +1,7 @@
-use crate::algebra::algebra::{Algebra, RefHandler};
+use std::vec;
+use crate::algebra::algebra::{Algebra, RefHandler, ValueEnumerator};
 use crate::processing::Train;
+use crate::value::Value;
 
 pub trait Scan: Algebra {}
 
@@ -11,28 +13,47 @@ impl TrainScan {
     pub(crate) fn new(index: i64) -> Self {
         TrainScan { index }
     }
+
+    pub fn next(self, trains: Vec<Train>) -> ScanEnumerator {
+        ScanEnumerator {index: self.index, trains}
+    }
 }
 
 #[derive(Clone)]
-pub struct ScanHandler {
+pub struct ScanEnumerator {
     index: i64,
+    trains: Vec<Train>,
 }
 
-impl RefHandler for ScanHandler {
-    fn process(&self, _stop: i64, wagons: Vec<Train>) -> Train {
+impl Iterator<Item=Value> for ScanEnumerator {
+    type Item = Value;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        todo!()
+    }
+}
+
+impl ValueEnumerator for ScanEnumerator {
+    fn load(&mut self, stop: i64, values: Vec<Value>) {
+        self.trains.append(values)
+    }
+}
+
+impl RefHandler for ScanEnumerator {
+    fn process(&self, _stop: i64, wagons: Vec<Train>) -> Vec<Train> {
         let mut values = vec![];
         wagons.into_iter().filter(|w| w.last == self.index).for_each(|mut t| values.append(t.values.take().unwrap().as_mut()));
-        Train::new(self.index, values)
+        vec![Train::new(self.index, values)]
     }
 
     fn clone(&self) -> Box<dyn RefHandler + Send + 'static> {
-        Box::new(ScanHandler { index: self.index })
+        Box::new(ScanEnumerator { index: self.index, trains: vec![] })
     }
 }
 
 impl Algebra for TrainScan {
-    fn get_handler(&mut self) -> Box<dyn RefHandler + Send> {
-        Box::new(ScanHandler { index: self.index })
+    fn get_enumerator(&mut self) -> Box<dyn RefHandler + Send> {
+        Box::new(ScanEnumerator { index: self.index, trains: vec![] })
     }
 }
 
@@ -51,11 +72,11 @@ mod test {
 
         let mut scan = TrainScan::new(0);
 
-        let handler = scan.get_handler();
+        let handler = scan.get_enumerator();
 
         let mut train_2 = handler.process(0, vec![train]);
 
-        assert_eq!(train_2.values.clone().unwrap(), Dict::transform(vec![3.into(), "test".into()]));
-        assert_ne!(train_2.values.take().unwrap(), Dict::transform(vec![8.into(), "test".into()]));
+        assert_eq!(train_2.get(0).unwrap().values.clone().unwrap(), Dict::transform(vec![3.into(), "test".into()]));
+        assert_ne!(train_2.get_mut(0).unwrap().values.take().unwrap(), Dict::transform(vec![8.into(), "test".into()]));
     }
 }

@@ -246,6 +246,16 @@ mod tests {
     }
 
     #[test]
+    fn sql_basic_filter_match() {
+        check_sql_implement("SELECT $0.age FROM $0 WHERE $0.age = 25", vec![Value::dict_from_pair("age".to_string(), Value::int(25))], vec![Value::int(25)]);
+    }
+
+    #[test]
+    fn sql_basic_filter_non_match() {
+        check_sql_implement("SELECT $0.age FROM $0 WHERE $0.age = 25", vec![Value::dict_from_pair("age".to_string(), Value::int(25))], vec![Value::int(25)]);
+    }
+
+    #[test]
     fn sql_add() {
         check_sql_implement("SELECT * + 1 FROM $0", vec![Value::float(3.3)], vec![Value::float(4.3)]);
     }

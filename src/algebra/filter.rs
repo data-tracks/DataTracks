@@ -1,7 +1,7 @@
-use crate::algebra::algebra::{Algebra, RefHandler, ValueHandler};
+use crate::algebra::algebra::{Algebra, RefHandler, ValueEnumerator, ValueRefHandler};
 use crate::algebra::implement::implement;
 use crate::algebra::{AlgebraType, Function};
-use crate::processing::Train;
+use crate::value::Value;
 
 pub trait Filter: Algebra {
     fn get_input(&self) -> &AlgebraType;
@@ -20,29 +20,36 @@ impl TrainFilter {
 }
 
 
-struct FilterHandler{
-    input: Box<dyn RefHandler>,
-    condition: Box<dyn ValueHandler>
+struct FilterEnumerator {
+    input: dyn ValueEnumerator,
+    condition: Box<dyn ValueRefHandler>
 }
 
-impl RefHandler for  FilterHandler{
-    fn process(&self, stop: i64, wagons: Vec<Train>) -> Train {
-        let mut train = self.input.process(stop, wagons);
-        let filtered = train.values.take().unwrap().into_iter().filter(|v| self.condition.process(v.clone()).as_bool().unwrap().0).collect();
-        Train::new(stop, filtered)
-    }
+impl Iterator for FilterEnumerator {
+    type Item = Value;
 
-    fn clone(&self) -> Box<dyn RefHandler + Send + 'static> {
-        Box::new(FilterHandler { input: self.input.clone(), condition: self.condition.clone() })
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Some(value) = self.input.next() {
+            if self.condition.process(&value){
+                return Some(value);
+            }
+        }
+        None
+    }
+}
+
+impl ValueEnumerator for FilterEnumerator {
+    fn load(&mut self, stop: i64, values: Vec<Value>) {
+        self.input.load(stop, values);
     }
 }
 
 
 impl Algebra for TrainFilter {
-    fn get_handler(&mut self) -> Box<dyn RefHandler + Send> {
+    fn get_enumerator(&mut self) -> Box<dyn ValueEnumerator + Send> {
         let condition = implement(&self.condition);
-        let input = self.input.get_handler();
-        Box::new(FilterHandler { input, condition })
+        let input = self.input.get_enumerator();
+        Box::new(FilterEnumerator { input, condition })
     }
 }
 

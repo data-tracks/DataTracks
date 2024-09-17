@@ -147,7 +147,7 @@ impl ValueHandler for NamedRefOperator {
         match value {
             Value::Dict(d) => d.0.get(&self.name).unwrap_or(&Value::null()).clone(),
             Value::Null => Value::null(),
-            _ => panic!()
+            v => panic!("Could not process {}", v)
         }
     }
 

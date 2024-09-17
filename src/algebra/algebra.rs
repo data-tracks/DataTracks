@@ -13,26 +13,26 @@ pub enum AlgebraType {
 }
 
 impl Algebra for AlgebraType {
-    fn get_handler(&mut self) -> Box<dyn RefHandler + Send> {
+    fn get_enumerator(&mut self) -> Box<dyn RefHandler + Send> {
         match self {
-            AlgebraType::Scan(s) => s.get_handler(),
-            AlgebraType::Project(p) => p.get_handler(),
-            AlgebraType::Filter(f) => f.get_handler(),
-            AlgebraType::Join(j) => j.get_handler()
+            AlgebraType::Scan(s) => s.get_enumerator(),
+            AlgebraType::Project(p) => p.get_enumerator(),
+            AlgebraType::Filter(f) => f.get_enumerator(),
+            AlgebraType::Join(j) => j.get_enumerator()
         }
     }
 }
 
 pub(crate) trait Algebra {
-    fn get_handler(&mut self) -> Box<dyn RefHandler + Send>;
+    fn get_enumerator(&mut self) -> Box<dyn ValueEnumerator + Send>;
 }
 
 pub fn functionize(mut algebra: AlgebraType) -> Result<Box<dyn RefHandler + Send + 'static>, String> {
-    Ok(algebra.get_handler())
+    Ok(algebra.get_enumerator())
 }
 
 pub trait RefHandler: Send {
-    fn process(&self, stop: i64, wagons: Vec<Train>) -> Train;
+    fn process(&self, stop: i64, wagons: Vec<Train>) -> Vec<Train>;
 
     fn clone(&self) -> Box<dyn RefHandler + Send + 'static>;
 }
@@ -41,6 +41,18 @@ pub trait ValueHandler: Send {
     fn process(&self, value: Value) -> Value;
 
     fn clone(&self) -> Box<dyn ValueHandler + Send + 'static>;
+}
+
+pub trait ValueRefHandler: Send {
+    fn process(&self, value: &Value) -> Value;
+}
+
+
+pub trait TrainEnumerator: Iterator<Item = Train> {
+}
+
+pub trait ValueEnumerator: Iterator<Item = Value> {
+    fn load(&mut self, stop: i64, values: Vec<Value>);
 }
 
 

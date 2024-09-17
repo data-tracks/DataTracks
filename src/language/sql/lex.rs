@@ -24,21 +24,21 @@ pub(crate) enum Token {
         r"-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?", | lex | lex.slice().parse::<f64> ().unwrap()
     )]
     Float(f64),
-    #[regex(r"(?i)SELECT")]
+    #[regex("SELECT", ignore(case))]
     Select,
-    #[regex(r"(?i)INSERT")]
+    #[regex("INSERT", ignore(case))]
     Insert,
-    #[regex(r"(?i)FROM")]
+    #[regex("FROM", ignore(case))]
     From,
-    #[regex(r"(?i)WHERE")]
+    #[regex("WHERE", ignore(case))]
     Where,
-    #[regex(r"(?i)GROUP BY")]
+    #[regex("GROUP BY", ignore(case))]
     GroupBy,
-    #[regex(r"(?i)AS")]
+    #[regex("AS", ignore(case))]
     As,
-    #[regex(r"(?i)LIMIT")]
+    #[regex("LIMIT", ignore(case))]
     Limit,
-    #[regex(r"(?i)ORDER BY")]
+    #[regex("ORDER BY", ignore(case))]
     OrderBy,
     #[token(",")]
     Comma,
@@ -56,11 +56,11 @@ pub(crate) enum Token {
     BracketClose,
     #[token("=")]
     Eq,
-    #[token(r"(?i)NOT")]
+    #[token("NOT", ignore(case))]
     Not,
-    #[token(r"(?i)AND")]
+    #[token("AND", ignore(case))]
     And,
-    #[token(r"(?i)OR")]
+    #[token("OR", ignore(case))]
     Or,
     #[token("<>")]
     Ne,
@@ -350,6 +350,13 @@ mod test {
     #[test]
     fn test_and_filter() {
         let query = &select(&format!("{}", quote("name")), "$0", Some(&format!("{} = 3 and {} = 'test'", quote("$0"), quote("name"))));
+        let res = &select(&format!("{}", quote("name")), "$0", Some(&format!("{} = 3 AND {} = 'test'", quote("$0"), quote("name"))));
+        test_query_diff(query, res);
+    }
+
+    #[test]
+    fn test_or_filter() {
+        let query = &select(&format!("{}", quote("name")), "$0", Some(&format!("{} = 3 OR {} = 'test'", quote("$0"), quote("name"))));
         test_query_diff(query, query);
     }
 

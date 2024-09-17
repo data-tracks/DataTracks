@@ -17,7 +17,7 @@ fn handle_select(query: SqlSelect) -> Result<AlgebraType, String> {
     let mut projections: Vec<Function> = query.columns.into_iter().map(|column| handle_field(column).unwrap()).collect();
     let mut filters: Vec<Function> = query.wheres.into_iter().map(|w| handle_field(w).unwrap()).collect();
 
-    let source = {
+    let node = {
         let mut join = sources.remove(0);
         while !sources.is_empty() {
             let right = sources.remove(0);
@@ -26,12 +26,24 @@ fn handle_select(query: SqlSelect) -> Result<AlgebraType, String> {
         join
     };
 
+    let node = match filters.len() {
+        0 => {
+            node
+        }
+        1 => {
+            Filter(TrainFilter::new(node, filters.pop().unwrap()))
+        }
+        _ => {
+            Filter(TrainFilter::new(node, Operation(OperationFunction::new(Operator::And, filters))))
+        }
+    };
+
     let function = match projections.len() {
         1 => {
             let function = projections.pop().unwrap();
             match function {
                 Input(_) => {
-                    return Ok(source)
+                    return Ok(node)
                 }
                 o => o
             }
@@ -41,23 +53,7 @@ fn handle_select(query: SqlSelect) -> Result<AlgebraType, String> {
         }
     };
 
-    let project = Project(TrainProject::new(source, function));
-
-    if filters.is_empty() {
-        return Ok(project);
-    }
-
-
-    let filter = match filters.len() {
-        1 => {
-            filters.pop().unwrap()
-        }
-        _ => {
-            Operation(OperationFunction::new(Operator::And, filters))
-        }
-    };
-
-    Ok(Filter(TrainFilter::new(project, filter)))
+    Ok(Project(TrainProject::new(node, function)))
 
 }
 

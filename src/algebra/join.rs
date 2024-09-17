@@ -88,13 +88,13 @@ where
 }
 
 impl<H: PartialEq + 'static> Algebra for TrainJoin<H> {
-    fn get_handler(&mut self) -> Box<dyn RefHandler + Send> {
+    fn get_enumerator(&mut self) -> Box<dyn RefHandler + Send> {
         let left_hash = self.left_hash.take().unwrap();
         let right_hash = self.right_hash.take().unwrap();
         let out = self.out.take().unwrap();
 
-        let left = self.left.get_handler();
-        let right = self.right.get_handler();
+        let left = self.left.get_enumerator();
+        let right = self.right.get_enumerator();
         Box::new(JoinHandler { left_hash, right_hash, left, right, out })
     }
 }
@@ -131,7 +131,7 @@ mod test {
             Value::Dict(left.as_dict().unwrap().merge(right.as_dict().unwrap()))
         });
 
-        let handle = join.get_handler();
+        let handle = join.get_enumerator();
         let mut res = handle.process(0, vec![train0, train1]);
         assert_eq!(res.values.clone().unwrap(), vec![Value::Dict(Dict::from(vec![5.5.into(), 5.5.into()]))]);
         assert_ne!(res.values.take().unwrap(), vec![Value::Dict(Dict::from(vec![]))]);
@@ -149,7 +149,7 @@ mod test {
             Value::Dict(left.as_dict().unwrap().merge(right.as_dict().unwrap()))
         });
 
-        let handle = join.get_handler();
+        let handle = join.get_enumerator();
         let mut res = handle.process(0, vec![train0, train1]);
         assert_eq!(res.values.clone().unwrap(), vec![Value::Dict(Dict::from(vec![5.5.into(), 5.5.into()])), Value::Dict(Dict::from(vec![5.5.into(), 5.5.into()]))]);
         assert_ne!(res.values.take().unwrap(), vec![vec![].into()]);

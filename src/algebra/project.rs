@@ -38,9 +38,9 @@ impl RefHandler for ProjectHandler {
 }
 
 impl Algebra for TrainProject {
-    fn get_handler(&mut self) -> Box<dyn RefHandler + Send> {
+    fn get_enumerator(&mut self) -> Box<dyn RefHandler + Send> {
         let project = implement(&self.project);
-        let input = self.input.get_handler();
+        let input = self.input.get_enumerator();
         Box::new(ProjectHandler { input, project })
     }
 }
