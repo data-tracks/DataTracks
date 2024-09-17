@@ -62,6 +62,7 @@ pub(crate) enum Token {
     And,
     #[token("OR", ignore(case))]
     Or,
+    #[token("!=")]
     #[token("<>")]
     Ne,
     #[token("*")]

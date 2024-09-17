@@ -1,6 +1,7 @@
-use crate::algebra::algebra::{Algebra, RefHandler, ValueEnumerator, ValueRefHandler};
+use crate::algebra::algebra::{Algebra, ValueEnumerator, ValueRefHandler};
 use crate::algebra::implement::implement;
 use crate::algebra::{AlgebraType, Function};
+use crate::processing::Train;
 use crate::value::Value;
 
 pub trait Filter: Algebra {
@@ -21,7 +22,7 @@ impl TrainFilter {
 
 
 struct FilterEnumerator {
-    input: dyn ValueEnumerator,
+    input: Box<dyn ValueEnumerator<Item=Value>>,
     condition: Box<dyn ValueRefHandler>
 }
 
@@ -39,14 +40,14 @@ impl Iterator for FilterEnumerator {
 }
 
 impl ValueEnumerator for FilterEnumerator {
-    fn load(&mut self, stop: i64, values: Vec<Value>) {
-        self.input.load(stop, values);
+    fn load(&mut self, trains: Vec<Train>) {
+        self.input.load(trains);
     }
 }
 
 
 impl Algebra for TrainFilter {
-    fn get_enumerator(&mut self) -> Box<dyn ValueEnumerator + Send> {
+    fn get_enumerator(&mut self) -> Box<dyn ValueEnumerator<Item=Value> + Send> {
         let condition = implement(&self.condition);
         let input = self.input.get_enumerator();
         Box::new(FilterEnumerator { input, condition })

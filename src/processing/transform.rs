@@ -1,11 +1,10 @@
-use std::sync::Arc;
-
-use crate::algebra::RefHandler;
+use crate::algebra::{RefHandler, ValueEnumerator};
 use crate::language::Language;
 use crate::processing::train::Train;
 use crate::processing::transform::Transform::{Func, Lang};
 use crate::value::Value;
 use crate::{algebra, language};
+use std::sync::Arc;
 
 pub trait Taker: Send {
     fn take(&mut self, wagons: &mut Vec<Train>) -> Vec<Train>;
@@ -55,7 +54,7 @@ impl Transform {
 pub struct LanguageTransform {
     pub(crate) language: Language,
     pub(crate) query: String,
-    func: Box<dyn RefHandler + Send>,
+    func: Box<dyn ValueEnumerator<Item=Value> + Send>,
 }
 
 impl Clone for LanguageTransform {
@@ -75,7 +74,7 @@ impl LanguageTransform {
     }
 }
 
-fn build_transformer(language: &Language, query: &str) -> Result<Box<dyn RefHandler + Send + 'static>, String> {
+fn build_transformer(language: &Language, query: &str) -> Result<Box<dyn ValueEnumerator<Item=Value> + Send + 'static>, String> {
     let algebra = match language {
         Language::Sql => language::sql::transform(query)?,
         Language::Mql => language::mql::transform(query)?
@@ -90,8 +89,8 @@ struct FuncValueHandler {
 }
 
 
-impl RefHandler for FuncValueHandler {
-    fn process(&self, stop: i64, wagons: Vec<Train>) -> Train {
+impl FuncValueHandler {
+    fn process(&self, stop: i64, wagons: Train) -> Train {
         let mut values = vec![];
         for mut train in wagons {
             let mut vals = train.values.take().unwrap().into_iter().map(|v| (self.func)(v)).collect();

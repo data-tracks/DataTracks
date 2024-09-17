@@ -1,7 +1,7 @@
-use std::vec;
 use crate::algebra::algebra::{Algebra, RefHandler, ValueEnumerator};
 use crate::processing::Train;
 use crate::value::Value;
+use std::vec;
 
 pub trait Scan: Algebra {}
 
@@ -25,7 +25,7 @@ pub struct ScanEnumerator {
     trains: Vec<Train>,
 }
 
-impl Iterator<Item=Value> for ScanEnumerator {
+impl Iterator for ScanEnumerator {
     type Item = Value;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -34,8 +34,8 @@ impl Iterator<Item=Value> for ScanEnumerator {
 }
 
 impl ValueEnumerator for ScanEnumerator {
-    fn load(&mut self, stop: i64, values: Vec<Value>) {
-        self.trains.append(values)
+    fn load(&mut self, trains: Vec<Train>) {
+        self.trains.append(&mut trains.clone())
     }
 }
 
@@ -52,7 +52,7 @@ impl RefHandler for ScanEnumerator {
 }
 
 impl Algebra for TrainScan {
-    fn get_enumerator(&mut self) -> Box<dyn RefHandler + Send> {
+    fn get_enumerator(&mut self) -> Box<dyn ValueEnumerator<Item=Value> + Send> {
         Box::new(ScanEnumerator { index: self.index, trains: vec![] })
     }
 }

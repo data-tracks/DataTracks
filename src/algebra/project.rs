@@ -1,8 +1,9 @@
-use crate::algebra::algebra::{Algebra, RefHandler, ValueHandler};
+use crate::algebra::algebra::{Algebra, ValueHandler};
 use crate::algebra::function::Function;
 use crate::algebra::implement::implement;
-use crate::algebra::AlgebraType;
+use crate::algebra::{AlgebraType, ValueEnumerator};
 use crate::processing::Train;
+use crate::value::Value;
 
 pub trait Project: Algebra {
     fn get_input(&self) -> &Box<AlgebraType>;
@@ -21,24 +22,29 @@ impl TrainProject {
 
 
 struct ProjectHandler {
-    input: Box<dyn RefHandler + Send>,
+    input: Box<dyn ValueEnumerator<Item=Value> + Send>,
     project: Box<dyn ValueHandler + Send>,
 }
 
-impl RefHandler for ProjectHandler {
-    fn process(&self, stop: i64, wagons: Vec<Train>) -> Train {
-        let mut train = self.input.process(stop, wagons);
-        let projected = train.values.take().unwrap().into_iter().map(|value| self.project.process(value)).collect();
-        Train::new(stop, projected)
-    }
+impl Iterator for ProjectHandler {
+    type Item = Value;
 
-    fn clone(&self) -> Box<dyn RefHandler + Send + 'static> {
-        Box::new(ProjectHandler { input: self.input.clone(), project: self.project.clone() })
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(value) = self.input.next() {
+            return Some(self.project.process(value))
+        }
+        None
+    }
+}
+
+impl ValueEnumerator for ProjectHandler {
+    fn load(&mut self, trains: Vec<Train>) {
+        self.input.load(trains);
     }
 }
 
 impl Algebra for TrainProject {
-    fn get_enumerator(&mut self) -> Box<dyn RefHandler + Send> {
+    fn get_enumerator(&mut self) -> Box<dyn ValueEnumerator<Item=Value> + Send> {
         let project = implement(&self.project);
         let input = self.input.get_enumerator();
         Box::new(ProjectHandler { input, project })

@@ -13,7 +13,7 @@ pub enum AlgebraType {
 }
 
 impl Algebra for AlgebraType {
-    fn get_enumerator(&mut self) -> Box<dyn RefHandler + Send> {
+    fn get_enumerator(&mut self) -> Box<dyn ValueEnumerator<Item=Value> + Send> {
         match self {
             AlgebraType::Scan(s) => s.get_enumerator(),
             AlgebraType::Project(p) => p.get_enumerator(),
@@ -24,7 +24,7 @@ impl Algebra for AlgebraType {
 }
 
 pub(crate) trait Algebra {
-    fn get_enumerator(&mut self) -> Box<dyn ValueEnumerator + Send>;
+    fn get_enumerator(&mut self) -> Box<dyn ValueEnumerator<Item=Value> + Send>;
 }
 
 pub fn functionize(mut algebra: AlgebraType) -> Result<Box<dyn RefHandler + Send + 'static>, String> {
@@ -48,14 +48,7 @@ pub trait ValueRefHandler: Send {
 }
 
 
-pub trait TrainEnumerator: Iterator<Item = Train> {
+pub trait ValueEnumerator: Iterator {
+    fn load(&mut self, trains: Vec<Train>);
 }
-
-pub trait ValueEnumerator: Iterator<Item = Value> {
-    fn load(&mut self, stop: i64, values: Vec<Value>);
-}
-
-
-
-
 

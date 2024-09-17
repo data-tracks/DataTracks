@@ -1,5 +1,5 @@
 use crate::algebra::algebra::{Algebra, RefHandler};
-use crate::algebra::AlgebraType;
+use crate::algebra::{AlgebraType, ValueEnumerator};
 use crate::processing::Train;
 use crate::value::Value;
 
@@ -46,26 +46,43 @@ where
 {
     left_hash: fn(&Value) -> H,
     right_hash: fn(&Value) -> H,
-    left: Box<dyn RefHandler>,
-    right: Box<dyn RefHandler>,
+    left: Box<dyn ValueEnumerator<Item=Value>>,
+    right: Box<dyn ValueEnumerator<Item=Value>>,
     out: fn(Value, Value) -> Value,
+    cache_left: Vec<(H, Value)>,
+    cache_right: Vec<(H, Value)>,
+    left_index: usize,
+    right_index: usize,
 }
 
-
-
-impl<H> RefHandler for JoinHandler<H>
+impl<H> Iterator for JoinHandler<H>
 where
-    H: PartialEq + 'static,
+    H: 'static + PartialEq,
 {
-    fn process(&self, stop: i64, wagons: Vec<Train>) -> Train {
+    type Item = Value;
+
+    fn next(&mut self) -> Option<Self::Item> {
         let mut values = vec![];
-        let mut left = self.left.process(stop, wagons.clone());
-        let mut right = self.right.process(stop, wagons);
-        let right_hashes: Vec<(H, Value)> = right.values.take().unwrap().into_iter().map(|value| {
+
+        if self.cache_right.is_empty() {
+            if !self.next_right() {
+                return None;
+            }
+        }
+
+
+        if self.cache_left.is_empty() {
+            if !self.next_left() {
+                return None;
+            }
+        }
+
+
+        let right_hashes: Vec<(H, Value)> = right.into_iter().map(|value| {
             let hash = (self.right_hash)(&value);
             (hash, value)
         }).collect();
-        for l_value in left.values.take().unwrap() {
+        for l_value in left {
             let l_hash = (self.left_hash)(&l_value);
             for (r_hash, r_val) in &right_hashes {
                 if l_hash == *r_hash {
@@ -73,17 +90,48 @@ where
                 }
             }
         }
-        Train::new(stop, values)
+    }
+}
+
+impl<H> JoinHandler<H>
+where
+    H: 'static + PartialEq,
+{
+    fn next_left(&mut self) -> bool {
+        if let Some(val) = self.left.next() {
+            self.cache_left.push((self.left_hash(&val.clone()), val));
+            self.left_index += 1;
+            true
+        } else {
+            if self.left_index < self.cache_left {
+                self.left_index += 1;
+                true
+            }
+            false
+        }
     }
 
-    fn clone(&self) -> Box<dyn RefHandler + Send + 'static> {
-        Box::new(JoinHandler{
-            left_hash: self.left_hash,
-            right_hash: self.right_hash,
-            left: self.left.clone(),
-            right: self.right.clone(),
-            out: self.out,
-        })
+    fn next_right(&mut self) -> bool {
+        if let Some(val) = self.right.next() {
+            self.cache_right.push((self.left_hash(&val.clone()), val));
+            self.right_index += 1;
+            true
+        } else {
+            if self.left_index < self.cache_left {
+                self.left_index += 1;
+                true
+            }
+            false
+        }
+    }
+}
+
+impl<H> ValueEnumerator for JoinHandler<H>
+where
+    H: PartialEq + 'static,
+{
+    fn load(&mut self, trains: Vec<Train>) {
+        todo!()
     }
 }
 
