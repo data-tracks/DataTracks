@@ -55,6 +55,25 @@ where
     right_index: usize,
 }
 
+impl<H> JoinHandler<H>
+where
+    H: PartialEq + 'static,
+{
+    pub(crate) fn new(left_hash: fn(&Value) -> H, right_hash: fn(&Value) -> H, output: fn(Value, Value) -> Value, left: Box<dyn ValueEnumerator<Item=Value>>, right: Box<dyn ValueEnumerator<Item=Value>>) -> Self {
+        JoinHandler{
+            left_hash,
+            right_hash,
+            left,
+            right,
+            out: output,
+            cache_left: vec![],
+            cache_right: vec![],
+            left_index: 0,
+            right_index: 0,
+        }
+    }
+}
+
 impl<H> Iterator for JoinHandler<H>
 where
     H: 'static + PartialEq,
@@ -62,32 +81,24 @@ where
     type Item = Value;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let mut values = vec![];
+        // only first time
+        if self.cache_left.is_empty() && !self.next_left() {
+            return None;
+        }
 
-        if self.cache_right.is_empty() {
+        loop {
             if !self.next_right() {
-                return None;
-            }
-        }
-
-
-        if self.cache_left.is_empty() {
-            if !self.next_left() {
-                return None;
-            }
-        }
-
-
-        let right_hashes: Vec<(H, Value)> = right.into_iter().map(|value| {
-            let hash = (self.right_hash)(&value);
-            (hash, value)
-        }).collect();
-        for l_value in left {
-            let l_hash = (self.left_hash)(&l_value);
-            for (r_hash, r_val) in &right_hashes {
-                if l_hash == *r_hash {
-                    values.push((self.out)(l_value.clone(), r_val.clone()));
+                if !self.next_left() {
+                    return None // cannot advance further
                 }
+                self.right_index = 0;
+            }
+
+            let left = &self.cache_left.get(self.left_index)?.0;
+            let right = &self.cache_right.get(self.right_index)?.0;
+
+            if left == right {
+                return Some(self.out(left.clone(), right.clone()))
             }
         }
     }
@@ -131,19 +142,24 @@ where
     H: PartialEq + 'static,
 {
     fn load(&mut self, trains: Vec<Train>) {
-        todo!()
+        self.left.load(trains.clone());
+        self.right.load(trains);
+    }
+
+    fn clone(&self) -> Box<dyn ValueEnumerator<Item=Value> + Send + 'static> {
+        Box::new(JoinHandler::new(self.left_hash, self.right_hash, self.out, self.left.clone(), self.right.clone()))
     }
 }
 
 impl<H: PartialEq + 'static> Algebra for TrainJoin<H> {
-    fn get_enumerator(&mut self) -> Box<dyn RefHandler + Send> {
+    fn get_enumerator(&mut self) -> Box<dyn ValueEnumerator<Item=Value> + Send> {
         let left_hash = self.left_hash.take().unwrap();
         let right_hash = self.right_hash.take().unwrap();
         let out = self.out.take().unwrap();
 
         let left = self.left.get_enumerator();
         let right = self.right.get_enumerator();
-        Box::new(JoinHandler { left_hash, right_hash, left, right, out })
+        Box::new(JoinHandler::new(left_hash, right_hash, out, left, right ))
     }
 }
 
@@ -168,8 +184,8 @@ mod test {
 
     #[test]
     fn one_match() {
-        let train0 = Train::new(0, Dict::transform(vec![3.into(), 5.5.into()]));
-        let train1 = Train::new(1, Dict::transform(vec![5.5.into(), "test".into()]));
+        let left = Dict::transform(vec![3.into(), 5.5.into()]);
+        let right = Dict::transform(vec![5.5.into(), "test".into()]);
 
         let left = TrainScan::new(0);
 
@@ -180,8 +196,8 @@ mod test {
         });
 
         let handle = join.get_enumerator();
-        let mut res = handle.process(0, vec![train0, train1]);
-        assert_eq!(res.values.clone().unwrap(), vec![Value::Dict(Dict::from(vec![5.5.into(), 5.5.into()]))]);
+        let mut res = handle(0, vec![left, right]);
+        assert_eq!(res.clone().unwrap(), vec![Value::Dict(Dict::from(vec![5.5.into(), 5.5.into()]))]);
         assert_ne!(res.values.take().unwrap(), vec![Value::Dict(Dict::from(vec![]))]);
     }
 

@@ -5,6 +5,8 @@ use std::vec;
 
 pub trait Scan: Algebra {}
 
+
+#[derive(Clone)]
 pub struct TrainScan {
     index: i64,
 }
@@ -13,29 +15,57 @@ impl TrainScan {
     pub(crate) fn new(index: i64) -> Self {
         TrainScan { index }
     }
-
-    pub fn next(self, trains: Vec<Train>) -> ScanEnumerator {
-        ScanEnumerator {index: self.index, trains}
-    }
 }
 
 #[derive(Clone)]
 pub struct ScanEnumerator {
     index: i64,
+    values: Vec<Value>,
     trains: Vec<Train>,
+}
+
+impl ScanEnumerator {
+    pub(crate) fn next_train(&mut self) -> bool {
+        loop {
+            if self.trains.is_empty() {
+                return false;
+            } else {
+                let mut train = self.trains.remove(0);
+                if let Some(mut values) = train.values.take() {
+                    if values.is_empty() {
+                        self.values.append(&mut values);
+                        return true;
+                    }
+                }
+            }
+        }
+    }
 }
 
 impl Iterator for ScanEnumerator {
     type Item = Value;
 
     fn next(&mut self) -> Option<Self::Item> {
-        todo!()
+        if self.values.is_empty() {
+            if !self.next_train() {
+                return None
+            }
+        }
+        Some(self.values.remove(0))
     }
 }
 
 impl ValueEnumerator for ScanEnumerator {
-    fn load(&mut self, trains: Vec<Train>) {
-        self.trains.append(&mut trains.clone())
+    fn load(&mut self, mut trains: Vec<Train>) {
+        for train in trains {
+            if train.last == self.index {
+                self.trains.push(train);
+            }
+        }
+    }
+
+    fn clone(&self) -> Box<dyn ValueEnumerator<Item=Value> + Send + 'static> {
+        Box::new(ScanEnumerator { index: self.index, values: vec![], trains: self.trains.clone() })
     }
 }
 
@@ -47,13 +77,13 @@ impl RefHandler for ScanEnumerator {
     }
 
     fn clone(&self) -> Box<dyn RefHandler + Send + 'static> {
-        Box::new(ScanEnumerator { index: self.index, trains: vec![] })
+        Box::new(ScanEnumerator { index: self.index, values: vec![], trains: vec![] })
     }
 }
 
 impl Algebra for TrainScan {
     fn get_enumerator(&mut self) -> Box<dyn ValueEnumerator<Item=Value> + Send> {
-        Box::new(ScanEnumerator { index: self.index, trains: vec![] })
+        Box::new(ScanEnumerator { index: self.index, values: vec![], trains: vec![] })
     }
 }
 

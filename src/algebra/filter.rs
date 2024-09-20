@@ -43,6 +43,10 @@ impl ValueEnumerator for FilterEnumerator {
     fn load(&mut self, trains: Vec<Train>) {
         self.input.load(trains);
     }
+
+    fn clone(&self) -> Box<dyn ValueEnumerator<Item=Value> + Send + 'static> {
+        Box::new(FilterEnumerator{input: Box::new(self.input.clone()), condition: self.condition.clone()})
+    }
 }
 
 

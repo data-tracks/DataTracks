@@ -50,5 +50,7 @@ pub trait ValueRefHandler: Send {
 
 pub trait ValueEnumerator: Iterator {
     fn load(&mut self, trains: Vec<Train>);
+
+    fn clone(&self) -> Box<dyn ValueEnumerator<Item=Value> + Send + 'static>;
 }
 

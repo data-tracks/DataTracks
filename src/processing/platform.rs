@@ -111,7 +111,7 @@ fn optimize(stop: i64, transform: Option<Transform>, mut window: Box<dyn Taker>,
     if let Some(transform) = transform {
         Box::new(move |trains| {
             let windowed = window.take(trains);
-            let mut train = transform.apply(stop, windowed);
+            let mut train = transform.optimize(stop, windowed);
             train.last = stop;
             sender.send(train);
         })

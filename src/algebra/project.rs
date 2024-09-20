@@ -41,6 +41,10 @@ impl ValueEnumerator for ProjectHandler {
     fn load(&mut self, trains: Vec<Train>) {
         self.input.load(trains);
     }
+
+    fn clone(&self) -> Box<dyn ValueEnumerator<Item=Value> + Send + 'static> {
+        Box::new(ProjectHandler{input: self.input.clone(), project: self.project.clone()})
+    }
 }
 
 impl Algebra for TrainProject {
