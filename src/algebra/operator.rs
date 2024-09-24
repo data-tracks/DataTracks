@@ -1,5 +1,6 @@
 use crate::algebra::Operator::{Divide, Equal, Minus, Multiplication, Not, Plus};
 use crate::value::Value;
+use crate::value::Value::{Array, Bool, Dict, Float, Int, Null, Text};
 use std::str::FromStr;
 
 #[derive(Debug, Clone)]
@@ -39,17 +40,25 @@ impl Operator {
                 })
             }
             Equal => {
-                operators.into_iter().fold(Value::bool(true), |a, b| {
-                    (&a == &b).into()
-                })
+                operators.into_iter().reduce(|a, b| {
+                    println!("{} == {}", a, b);
+                    (a == b).into()
+                }).unwrap()
             }
             Operator::Combine => {
                 Value::array(operators)
             }
             Not => {
-                operators.into_iter().fold(Value::bool(false), |a, b| {
-                    (!(&a == &b)).into()
-                })
+                let value = Value::bool(!operators.get(0).unwrap().as_bool().unwrap().0);
+                match operators.get(0).unwrap() {
+                    Int(_) => Int(value.as_int().unwrap()),
+                    Float(_) => Float(value.as_float().unwrap()),
+                    Bool(_) => Bool(value.as_bool().unwrap()),
+                    Text(_) => Text(value.as_text().unwrap()),
+                    Array(_) => Array(value.as_array().unwrap()),
+                    Dict(_) => Dict(value.as_dict().unwrap()),
+                    Null => Value::null()
+                }
             }
             Operator::And => {
                 operators.into_iter().fold(Value::bool(true), |a, b| {

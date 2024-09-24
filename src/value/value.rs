@@ -11,7 +11,7 @@ use crate::value::r#type::ValType;
 use crate::value::string::Text;
 use crate::value::{bool, Bool, Float, Int};
 
-#[derive(Eq, PartialEq, Hash, Clone, Debug)]
+#[derive(Eq, Hash, Clone, Debug)]
 pub enum Value {
     Int(Int),
     Float(Float),
@@ -116,10 +116,22 @@ impl Value {
                     "true" | "1" => Ok(Bool(true)),
                     _ => Ok(Bool(false))
                 }
-            },
+            }
             Value::Array(a) => Ok(Bool(!a.0.is_empty())),
             Value::Dict(d) => Ok(Bool(!d.0.is_empty())),
             Value::Null => Ok(Bool(false)),
+        }
+    }
+
+    pub fn as_text(&self) -> Result<Text, ()> {
+        match self {
+            Value::Int(i) => Ok(Text(i.0.to_string())),
+            Value::Float(f) => Ok(Text(f.as_f64().to_string())),
+            Value::Bool(b) => Ok(Text(b.0.to_string())),
+            Value::Text(t) => Ok(t.clone()),
+            Value::Array(a) => Ok(Text(format!("[{}]", a.0.iter().map(|v| v.as_text().unwrap().0).collect::<Vec<String>>().join(",")))),
+            Value::Dict(d) => Ok(Text(format!("[{}]", d.0.iter().map(|(k, v)| format!("{}:{}", k, v.as_text().unwrap().0)).collect::<Vec<String>>().join(",")))),
+            Value::Null => Ok(Text("null".to_owned()))
         }
     }
 }
@@ -136,7 +148,40 @@ macro_rules! value_display {
     };
 }
 
-impl Display for Value{
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        match self {
+            Value::Int(i) => {
+                i.0 == other.as_int().unwrap().0
+            }
+            Value::Float(f) => {
+                f.number == other.as_float().unwrap().number && f.shift == other.as_float().unwrap().shift
+            }
+            Value::Bool(b) => {
+                b.0 == other.as_bool().unwrap().0
+            }
+            Value::Text(t) => {
+                t.0 == other.as_text().unwrap().0
+            }
+            Value::Array(a) => {
+                let array = other.as_array().unwrap();
+                a.0.len() == array.0.len() && a.0.iter().zip(array.0.iter()).all(|(a, b)| a == b)
+            }
+            Value::Dict(d) => {
+                let other = other.as_dict().unwrap();
+                d.0.len() == other.0.len() && d.0.keys().eq(other.0.keys()) && d.0.values().eq(other.0.values())
+            }
+            Value::Null => {
+                match other {
+                    Value::Null => true,
+                    _ => false
+                }
+            }
+        }
+    }
+}
+
+impl Display for Value {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Value::Int(i) => i.fmt(f),
@@ -170,7 +215,6 @@ impl From<&str> for Value {
 }
 
 impl From<bool> for Value {
-
     fn from(value: bool) -> Self {
         Value::bool(value)
     }
@@ -189,7 +233,7 @@ impl Value {
         match json {
             Ok(json) => {
                 for (key, value) in json.entries() {
-                    values.insert(key.into(), value.into() );
+                    values.insert(key.into(), value.into());
                 }
             }
             Err(_) => panic!("Could not parse Dict")
@@ -198,7 +242,7 @@ impl Value {
     }
 }
 
-impl From<&JsonValue> for Value{
+impl From<&JsonValue> for Value {
     fn from(value: &JsonValue) -> Self {
         match value {
             JsonValue::Null => Value::null(),
@@ -207,7 +251,7 @@ impl From<&JsonValue> for Value{
             JsonValue::Number(a) => Value::int(a.as_fixed_point_i64(0).unwrap()),
             JsonValue::Boolean(a) => Value::bool(*a),
             JsonValue::Object(elements) => {
-                Value::dict(elements.iter().map(|(k,v)| (k.to_string(), v.into())).collect())
+                Value::dict(elements.iter().map(|(k, v)| (k.to_string(), v.into())).collect())
             }
             JsonValue::Array(elements) => {
                 Value::array(elements.iter().map(|arg0: &JsonValue| arg0.into()).collect())

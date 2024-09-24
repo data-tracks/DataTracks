@@ -32,7 +32,7 @@ impl ScanEnumerator {
             } else {
                 let mut train = self.trains.remove(0);
                 if let Some(mut values) = train.values.take() {
-                    if values.is_empty() {
+                    if !values.is_empty() {
                         self.values.append(&mut values);
                         return true;
                     }
