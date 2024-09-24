@@ -270,14 +270,14 @@ impl Add for &Value {
                 match rhs {
                     Value::Int(b) => Value::Int(*a + *b),
                     Value::Float(b) => Value::Float(*a + *b),
-                    _ => panic!("Cannot add.")
+                    i => panic!("Cannot add {}.", i)
                 }
             }
             Value::Float(a) => {
                 match rhs {
                     Value::Int(b) => Value::Float(*b + *a),
                     Value::Float(b) => Value::Float(*b + *a),
-                    _ => panic!("Cannot add.")
+                    i => panic!("Cannot add {}.", i)
                 }
             }
             _ => {

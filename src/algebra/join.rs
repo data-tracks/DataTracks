@@ -1,4 +1,4 @@
-use crate::algebra::algebra::{Algebra};
+use crate::algebra::algebra::Algebra;
 use crate::algebra::{AlgebraType, ValueEnumerator};
 use crate::processing::Train;
 use crate::value::Value;
@@ -8,7 +8,7 @@ pub trait Join: Algebra {
     fn right(&self) -> &AlgebraType;
 }
 
-pub struct TrainJoin{
+pub struct TrainJoin {
     left: Box<AlgebraType>,
     right: Box<AlgebraType>,
     left_hash: Option<fn(&Value) -> Value>,
@@ -48,7 +48,7 @@ pub struct JoinHandler {
 
 impl JoinHandler {
     pub(crate) fn new(left_hash: fn(&Value) -> Value, right_hash: fn(&Value) -> Value, output: fn(Value, Value) -> Value, left: Box<dyn ValueEnumerator<Item=Value> + Send>, right: Box<dyn ValueEnumerator<Item=Value> + Send>) -> Self {
-        JoinHandler{
+        JoinHandler {
             left_hash,
             right_hash,
             left,
@@ -66,6 +66,7 @@ impl Iterator for JoinHandler {
     type Item = Value;
 
     fn next(&mut self) -> Option<Self::Item> {
+
         // only first time
         if self.cache_left.is_empty() && !self.next_left() {
             return None;
@@ -74,16 +75,17 @@ impl Iterator for JoinHandler {
         loop {
             if !self.next_right() {
                 if !self.next_left() {
-                    return None // cannot advance further
+                    return None; // cannot advance further
                 }
                 self.right_index = 0;
             }
 
-            let left = &self.cache_left.get(self.left_index)?.0;
-            let right = &self.cache_right.get(self.right_index)?.0;
+            let left = &self.cache_left.get(self.left_index)?;
+            let right = &self.cache_right.get(self.right_index)?;
 
-            if left == right {
-                return Some((self.out)(left.clone(), right.clone()))
+
+            if left.0 == right.0 {
+                return Some((self.out)(left.1.clone(), right.1.clone()));
             }
         }
     }
@@ -93,13 +95,16 @@ impl JoinHandler {
     fn next_left(&mut self) -> bool {
         if let Some(val) = self.left.next() {
             self.cache_left.push(((self.left_hash)(&val.clone()), val));
-            self.left_index += 1;
+            if self.cache_left.len() > 1 {
+                self.left_index += 1;
+            }
             true
         } else {
             if self.left_index < self.cache_left.len() {
                 self.left_index += 1;
+
                 true
-            }else {
+            } else {
                 false
             }
         }
@@ -108,13 +113,16 @@ impl JoinHandler {
     fn next_right(&mut self) -> bool {
         if let Some(val) = self.right.next() {
             self.cache_right.push(((self.left_hash)(&val.clone()), val));
-            self.right_index += 1;
+            if self.cache_right.len() > 1 {
+                self.right_index += 1;
+            }
             true
         } else {
             if self.left_index < self.cache_left.len() {
-                self.left_index += 1;
+                self.right_index += 1;
+
                 true
-            }else {
+            } else {
                 false
             }
         }
@@ -140,7 +148,7 @@ impl Algebra for TrainJoin {
 
         let left = self.left.get_enumerator();
         let right = self.right.get_enumerator();
-        Box::new(JoinHandler::new(left_hash, right_hash, out, left, right ))
+        Box::new(JoinHandler::new(left_hash, right_hash, out, left, right))
     }
 }
 
@@ -165,8 +173,8 @@ mod test {
 
     #[test]
     fn one_match() {
-        let left = Train::new( 0, Dict::transform(vec![3.into(), 5.5.into()]));
-        let right = Train::new( 1, Dict::transform(vec![5.5.into(), "test".into()]));
+        let left = Train::new(0, Dict::transform(vec![3.into(), 5.5.into()]));
+        let right = Train::new(1, Dict::transform(vec![5.5.into(), "test".into()]));
 
         let left_scan = TrainScan::new(0);
 
