@@ -56,7 +56,7 @@ impl Iterator for ScanEnumerator {
 }
 
 impl ValueEnumerator for ScanEnumerator {
-    fn load(&mut self, mut trains: Vec<Train>) {
+    fn load(&mut self, trains: Vec<Train>) {
         for train in trains {
             if train.last == self.index {
                 self.trains.push(train);
@@ -102,11 +102,12 @@ mod test {
 
         let mut scan = TrainScan::new(0);
 
-        let handler = scan.get_enumerator();
+        let mut handler = scan.get_enumerator();
+        handler.load(vec![train]);
 
-        let mut train_2 = handler.process(0, vec![train]);
+        let mut train_2 = handler.drain_to_train(0);
 
-        assert_eq!(train_2.get(0).unwrap().values.clone().unwrap(), Dict::transform(vec![3.into(), "test".into()]));
-        assert_ne!(train_2.get_mut(0).unwrap().values.take().unwrap(), Dict::transform(vec![8.into(), "test".into()]));
+        assert_eq!(train_2.values.clone().unwrap(), Dict::transform(vec![3.into(), "test".into()]));
+        assert_ne!(train_2.values.take().unwrap(), Dict::transform(vec![8.into(), "test".into()]));
     }
 }

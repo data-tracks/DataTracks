@@ -458,14 +458,14 @@ pub mod tests {
 
         station.set_transform(match duration {
             0 => {
-                Transform::Func(FuncTransform::new(Arc::new(move |_num, train| {
-                    Train::from(train)
+                Transform::Func(FuncTransform::new(Arc::new(move |_num, value| {
+                    value
                 })))
             },
             _ => {
-                Transform::Func(FuncTransform::new(Arc::new(move |_num, train| {
+                Transform::Func(FuncTransform::new(Arc::new(move |_num, value| {
                     sleep(Duration::from_millis(time));
-                    Train::from(train)
+                    value
                 })))
         } });
 

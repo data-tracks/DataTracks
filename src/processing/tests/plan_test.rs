@@ -391,7 +391,7 @@ pub mod tests {
 
         station.set_transform(Transform::Func(FuncTransform::new_boxed(|_num, train| {
             sleep(Duration::from_millis(10));
-            Train::from(train)
+            train
         })));
 
         let mut values = vec![];

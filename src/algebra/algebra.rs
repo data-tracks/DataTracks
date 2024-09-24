@@ -9,7 +9,7 @@ pub enum AlgebraType {
     Scan(TrainScan),
     Project(TrainProject),
     Filter(TrainFilter),
-    Join(TrainJoin<Value>),
+    Join(TrainJoin),
 }
 
 impl Algebra for AlgebraType {
@@ -23,11 +23,11 @@ impl Algebra for AlgebraType {
     }
 }
 
-pub(crate) trait Algebra {
+pub trait Algebra {
     fn get_enumerator(&mut self) -> Box<dyn ValueEnumerator<Item=Value> + Send>;
 }
 
-pub fn functionize(mut algebra: AlgebraType) -> Result<Box<dyn RefHandler + Send + 'static>, String> {
+pub fn functionize(mut algebra: AlgebraType) -> Result<Box<dyn ValueEnumerator<Item=Value> + Send + 'static>, String> {
     Ok(algebra.get_enumerator())
 }
 
@@ -45,11 +45,21 @@ pub trait ValueHandler: Send {
 
 pub trait ValueRefHandler: Send {
     fn process(&self, value: &Value) -> Value;
+
+    fn clone(&self) -> Box<dyn ValueRefHandler + Send + 'static>;
 }
 
 
-pub trait ValueEnumerator: Iterator {
+pub trait ValueEnumerator: Iterator<Item = Value> + Send + 'static {
     fn load(&mut self, trains: Vec<Train>);
+
+    fn drain(&mut self) -> Vec<Value>{
+        self.into_iter().collect()
+    }
+
+    fn drain_to_train(&mut self, stop: i64) -> Train {
+        Train::new(stop, self.drain())
+    }
 
     fn clone(&self) -> Box<dyn ValueEnumerator<Item=Value> + Send + 'static>;
 }

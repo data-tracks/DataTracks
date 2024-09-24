@@ -109,11 +109,11 @@ impl Platform {
 
 fn optimize(stop: i64, transform: Option<Transform>, mut window: Box<dyn Taker>, sender: Sender) -> MutWagonsFunc {
     if let Some(transform) = transform {
-        Box::new(move |trains| {
-            let windowed = window.take(trains);
-            let mut train = transform.optimize(stop, windowed);
-            train.last = stop;
-            sender.send(train);
+        let mut enumerator = transform.optimize();
+        Box::new(move |train| {
+            let windowed = window.take(train);
+            enumerator.load(windowed);
+            sender.send(enumerator.drain_to_train(stop));
         })
     } else {
         Box::new(move |trains| {

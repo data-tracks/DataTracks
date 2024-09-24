@@ -1,4 +1,4 @@
-use crate::algebra::algebra::{Algebra, RefHandler};
+use crate::algebra::algebra::{Algebra};
 use crate::algebra::{AlgebraType, ValueEnumerator};
 use crate::processing::Train;
 use crate::value::Value;
@@ -8,26 +8,20 @@ pub trait Join: Algebra {
     fn right(&self) -> &AlgebraType;
 }
 
-pub struct TrainJoin<Hash>
-where
-    Hash: PartialEq,
-{
+pub struct TrainJoin{
     left: Box<AlgebraType>,
     right: Box<AlgebraType>,
-    left_hash: Option<fn(&Value) -> Hash>,
-    right_hash: Option<fn(&Value) -> Hash>,
+    left_hash: Option<fn(&Value) -> Value>,
+    right_hash: Option<fn(&Value) -> Value>,
     out: Option<fn(Value, Value) -> Value>,
 }
 
-impl<H> TrainJoin<H>
-where
-    H: PartialEq,
-{
+impl TrainJoin {
     pub(crate) fn new(
         left: AlgebraType,
         right: AlgebraType,
-        left_hash: fn(&Value) -> H,
-        right_hash: fn(&Value) -> H,
+        left_hash: fn(&Value) -> Value,
+        right_hash: fn(&Value) -> Value,
         out: fn(Value, Value) -> Value,
     ) -> Self {
         TrainJoin {
@@ -40,26 +34,20 @@ where
     }
 }
 
-pub struct JoinHandler<H>
-where
-    H: PartialEq + 'static,
-{
-    left_hash: fn(&Value) -> H,
-    right_hash: fn(&Value) -> H,
-    left: Box<dyn ValueEnumerator<Item=Value>>,
-    right: Box<dyn ValueEnumerator<Item=Value>>,
+pub struct JoinHandler {
+    left_hash: fn(&Value) -> Value,
+    right_hash: fn(&Value) -> Value,
+    left: Box<dyn ValueEnumerator<Item=Value> + Send>,
+    right: Box<dyn ValueEnumerator<Item=Value> + Send>,
     out: fn(Value, Value) -> Value,
-    cache_left: Vec<(H, Value)>,
-    cache_right: Vec<(H, Value)>,
+    cache_left: Vec<(Value, Value)>,
+    cache_right: Vec<(Value, Value)>,
     left_index: usize,
     right_index: usize,
 }
 
-impl<H> JoinHandler<H>
-where
-    H: PartialEq + 'static,
-{
-    pub(crate) fn new(left_hash: fn(&Value) -> H, right_hash: fn(&Value) -> H, output: fn(Value, Value) -> Value, left: Box<dyn ValueEnumerator<Item=Value>>, right: Box<dyn ValueEnumerator<Item=Value>>) -> Self {
+impl JoinHandler {
+    pub(crate) fn new(left_hash: fn(&Value) -> Value, right_hash: fn(&Value) -> Value, output: fn(Value, Value) -> Value, left: Box<dyn ValueEnumerator<Item=Value> + Send>, right: Box<dyn ValueEnumerator<Item=Value> + Send>) -> Self {
         JoinHandler{
             left_hash,
             right_hash,
@@ -74,10 +62,7 @@ where
     }
 }
 
-impl<H> Iterator for JoinHandler<H>
-where
-    H: 'static + PartialEq,
-{
+impl Iterator for JoinHandler {
     type Item = Value;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -98,49 +83,45 @@ where
             let right = &self.cache_right.get(self.right_index)?.0;
 
             if left == right {
-                return Some(self.out(left.clone(), right.clone()))
+                return Some((self.out)(left.clone(), right.clone()))
             }
         }
     }
 }
 
-impl<H> JoinHandler<H>
-where
-    H: 'static + PartialEq,
-{
+impl JoinHandler {
     fn next_left(&mut self) -> bool {
         if let Some(val) = self.left.next() {
-            self.cache_left.push((self.left_hash(&val.clone()), val));
+            self.cache_left.push(((self.left_hash)(&val.clone()), val));
             self.left_index += 1;
             true
         } else {
-            if self.left_index < self.cache_left {
+            if self.left_index < self.cache_left.len() {
                 self.left_index += 1;
                 true
+            }else {
+                false
             }
-            false
         }
     }
 
     fn next_right(&mut self) -> bool {
         if let Some(val) = self.right.next() {
-            self.cache_right.push((self.left_hash(&val.clone()), val));
+            self.cache_right.push(((self.left_hash)(&val.clone()), val));
             self.right_index += 1;
             true
         } else {
-            if self.left_index < self.cache_left {
+            if self.left_index < self.cache_left.len() {
                 self.left_index += 1;
                 true
+            }else {
+                false
             }
-            false
         }
     }
 }
 
-impl<H> ValueEnumerator for JoinHandler<H>
-where
-    H: PartialEq + 'static,
-{
+impl ValueEnumerator for JoinHandler {
     fn load(&mut self, trains: Vec<Train>) {
         self.left.load(trains.clone());
         self.right.load(trains);
@@ -151,7 +132,7 @@ where
     }
 }
 
-impl<H: PartialEq + 'static> Algebra for TrainJoin<H> {
+impl Algebra for TrainJoin {
     fn get_enumerator(&mut self) -> Box<dyn ValueEnumerator<Item=Value> + Send> {
         let left_hash = self.left_hash.take().unwrap();
         let right_hash = self.right_hash.take().unwrap();
@@ -163,7 +144,7 @@ impl<H: PartialEq + 'static> Algebra for TrainJoin<H> {
     }
 }
 
-impl<H: PartialEq + 'static> Join for TrainJoin<H> {
+impl Join for TrainJoin {
     fn left(&self) -> &AlgebraType {
         &self.left
     }
@@ -184,20 +165,22 @@ mod test {
 
     #[test]
     fn one_match() {
-        let left = Dict::transform(vec![3.into(), 5.5.into()]);
-        let right = Dict::transform(vec![5.5.into(), "test".into()]);
+        let left = Train::new( 0, Dict::transform(vec![3.into(), 5.5.into()]));
+        let right = Train::new( 1, Dict::transform(vec![5.5.into(), "test".into()]));
 
-        let left = TrainScan::new(0);
+        let left_scan = TrainScan::new(0);
 
-        let right = TrainScan::new(1);
+        let right_scan = TrainScan::new(1);
 
-        let mut join = TrainJoin::new(Scan(left), Scan(right), |val| val.clone(), |val| val.clone(), |left, right| {
+        let mut join = TrainJoin::new(Scan(left_scan), Scan(right_scan), |val| val.clone(), |val| val.clone(), |left, right| {
             Value::Dict(left.as_dict().unwrap().merge(right.as_dict().unwrap()))
         });
 
-        let handle = join.get_enumerator();
-        let mut res = handle(0, vec![left, right]);
-        assert_eq!(res.clone().unwrap(), vec![Value::Dict(Dict::from(vec![5.5.into(), 5.5.into()]))]);
+        let mut handle = join.get_enumerator();
+        handle.load(vec![left]);
+        handle.load(vec![right]);
+        let mut res = handle.drain_to_train(3);
+        assert_eq!(res.clone().values.unwrap(), vec![Value::Dict(Dict::from(vec![5.5.into(), 5.5.into()]))]);
         assert_ne!(res.values.take().unwrap(), vec![Value::Dict(Dict::from(vec![]))]);
     }
 
@@ -213,8 +196,9 @@ mod test {
             Value::Dict(left.as_dict().unwrap().merge(right.as_dict().unwrap()))
         });
 
-        let handle = join.get_enumerator();
-        let mut res = handle.process(0, vec![train0, train1]);
+        let mut handle = join.get_enumerator();
+        handle.load(vec![train0.clone(), train1.clone()]);
+        let mut res = handle.drain_to_train(3);
         assert_eq!(res.values.clone().unwrap(), vec![Value::Dict(Dict::from(vec![5.5.into(), 5.5.into()])), Value::Dict(Dict::from(vec![5.5.into(), 5.5.into()]))]);
         assert_ne!(res.values.take().unwrap(), vec![vec![].into()]);
     }

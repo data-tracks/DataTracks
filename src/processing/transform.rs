@@ -1,20 +1,31 @@
-use crate::algebra::{RefHandler, TrainScan, ValueEnumerator};
+use crate::algebra::{Algebra, TrainScan, ValueEnumerator};
 use crate::language::Language;
 use crate::processing::train::Train;
 use crate::processing::transform::Transform::{Func, Lang};
 use crate::value::Value;
 use crate::{algebra, language};
 use std::sync::Arc;
-use tracing_subscriber::fmt::writer::EitherWriter::B;
 
 pub trait Taker: Send {
     fn take(&mut self, wagons: &mut Vec<Train>) -> Vec<Train>;
 }
 
-#[derive(Clone)]
 pub enum Transform {
     Func(FuncTransform),
     Lang(LanguageTransform),
+}
+
+impl Clone for Transform {
+    fn clone(&self) -> Self {
+        match self {
+            Func(f) => {
+                Func(Clone::clone(f))
+            }
+            Lang(language) => {
+                Lang(language.clone())
+            }
+        }
+    }
 }
 
 
@@ -45,7 +56,7 @@ impl Transform {
 
     pub fn optimize(&self) -> Box<dyn ValueEnumerator<Item=Value> + Send> {
         match self {
-            Func(f) => Box::new(f),
+            Func(f) => ValueEnumerator::clone(f),
             Lang(f) => f.func.clone()
         }
     }
@@ -84,58 +95,37 @@ fn build_transformer(language: &Language, query: &str) -> Result<Box<dyn ValueEn
 }
 
 
-#[derive(Clone)]
-struct FuncValueHandler {
-    func: fn(train: Value) -> Value,
-}
-
-
-impl FuncValueHandler {
-    fn process(&self, stop: i64, wagons: Train) -> Train {
-        let mut values = vec![];
-        for mut train in wagons {
-            let mut vals = train.values.take().unwrap().into_iter().map(|v| (self.func)(v)).collect();
-            values.append(&mut vals);
-        }
-
-        Train::new(stop, values)
-    }
-
-    fn clone(&self) -> Box<dyn RefHandler + Send + 'static> {
-        Box::new(FuncValueHandler { func: self.func })
-    }
-}
-
-#[derive(Clone)]
 pub struct FuncTransform {
-    pub input: ScanEnumerator,
-    pub func: Arc<dyn Fn(i64, Vec<Train>) -> Train + Send + Sync>,
+    pub input: Box<dyn ValueEnumerator<Item=Value> + Send + 'static>,
+    pub func: Arc<dyn Fn(i64, Value) -> Value + Send + Sync>,
+}
+
+impl Clone for FuncTransform {
+    fn clone(&self) -> Self {
+        FuncTransform { input: self.input.clone(), func: self.func.clone() }
+    }
 }
 
 impl Default for FuncTransform {
     fn default() -> Self {
-        Self::new(Arc::new(|_stop, trains| Train::from(trains)))
+        Self::new(Arc::new(|_stop, value| value))
     }
 }
 
 impl FuncTransform {
-    pub(crate) fn new_boxed(func: fn(i64, Vec<Train>) -> Train) -> Self {
+    pub(crate) fn new_boxed(func: fn(i64, Value) -> Value) -> Self {
         Self::new(Arc::new(func))
     }
 
-    pub(crate) fn new(func: Arc<(dyn Fn(i64, Vec<Train>) -> Train + Send + Sync)>) -> Self {
-        FuncTransform{ input: TrainScan::new(), func }
+    pub(crate) fn new(func: Arc<(dyn Fn(i64, Value) -> Value + Send + Sync)>) -> Self {
+        let mut scan = TrainScan::new(0);
+        let enumerator = scan.get_enumerator();
+        FuncTransform{ input: enumerator, func }
     }
 
     pub(crate) fn new_val(_stop: i64, func: fn(Value) -> Value) -> FuncTransform {
-        Self::new(Arc::new(move |stop, wagons| {
-            let mut values = vec![];
-            for mut train in wagons {
-                let mut vals = train.values.take().unwrap().into_iter().map(func).collect();
-                values.append(&mut vals);
-            }
-
-            Train::new(stop, values)
+        Self::new(Arc::new(move |_stop, value| {
+            func(value)
         }))
     }
 
@@ -148,13 +138,17 @@ impl Iterator for FuncTransform {
     type Item = Value;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if
+        if let Some(val) = self.input.next() {
+            Some((self.func)(0, val.into()))
+        }else {
+            None
+        }
     }
 }
 
 impl ValueEnumerator for FuncTransform {
-    fn load(&mut self, mut trains: Vec<Train>) {
-        self.input
+    fn load(&mut self, trains: Vec<Train>) {
+        self.input.load(trains);
     }
 
     fn clone(&self) -> Box<dyn ValueEnumerator<Item=Value> + Send + 'static> {
@@ -165,8 +159,6 @@ impl ValueEnumerator for FuncTransform {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use crate::language::Language;
     use crate::processing::station::Station;
     use crate::processing::tests::dict_values;
@@ -176,7 +168,8 @@ mod tests {
     use crate::util::new_channel;
     use crate::value::{Dict, Value};
     use crossbeam::channel::unbounded;
-
+    use std::sync::Arc;
+    use std::vec;
 
     #[test]
     fn transform() {
@@ -296,9 +289,14 @@ mod tests {
 
     fn check_sql_implement_join(query: &str, inputs: Vec<Vec<Value>>, output: Vec<Value>) {
         let transform = build_transformer(&Language::Sql, query);
+
         match transform {
-            Ok(t) => {
-                let result = t.process(0, inputs.into_iter().enumerate().map(|(i, v)| Train::new(i as i64, v)).collect());
+            Ok(mut t) => {
+                for (i, input) in inputs.into_iter().enumerate() {
+                    t.load(vec![Train::new(i as i64, input)]);
+                }
+
+                let result = t.drain_to_train(0);
                 assert_eq!(result.values.unwrap(), output);
             }
             Err(_) => panic!(),
@@ -308,8 +306,9 @@ mod tests {
     fn check_sql_implement(query: &str, input: Vec<Value>, output: Vec<Value>) {
         let transform = build_transformer(&Language::Sql, query);
         match transform {
-            Ok(t) => {
-                let result = t.process(0, vec![Train::new(0, input)]);
+            Ok(mut t) => {
+                t.load(input.into_iter().map(|v| Train::new(0, vec![v])).collect());
+                let result = t.drain_to_train(0);
                 assert_eq!(result.values.unwrap(), output);
             }
             Err(_) => panic!(),

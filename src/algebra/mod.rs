@@ -1,6 +1,6 @@
 pub use algebra::functionize;
+pub use algebra::Algebra;
 pub use algebra::AlgebraType;
-pub use algebra::RefHandler;
 pub use algebra::ValueEnumerator;
 pub use filter::TrainFilter;
 pub use function::Function;

@@ -1,4 +1,4 @@
-use crate::algebra::algebra::{Algebra, ValueEnumerator, ValueRefHandler};
+use crate::algebra::algebra::{Algebra, ValueEnumerator, ValueHandler};
 use crate::algebra::implement::implement;
 use crate::algebra::{AlgebraType, Function};
 use crate::processing::Train;
@@ -22,8 +22,8 @@ impl TrainFilter {
 
 
 struct FilterEnumerator {
-    input: Box<dyn ValueEnumerator<Item=Value>>,
-    condition: Box<dyn ValueRefHandler>
+    input: Box<dyn ValueEnumerator<Item=Value> + Send + 'static>,
+    condition: Box<dyn ValueHandler>
 }
 
 impl Iterator for FilterEnumerator {
@@ -31,8 +31,10 @@ impl Iterator for FilterEnumerator {
 
     fn next(&mut self) -> Option<Self::Item> {
         while let Some(value) = self.input.next() {
-            if self.condition.process(&value){
-                return Some(value);
+            if let Ok(bool) = self.condition.process(value.clone()).as_bool(){
+                if bool.0 {
+                    return Some(value)
+                }
             }
         }
         None
@@ -45,7 +47,7 @@ impl ValueEnumerator for FilterEnumerator {
     }
 
     fn clone(&self) -> Box<dyn ValueEnumerator<Item=Value> + Send + 'static> {
-        Box::new(FilterEnumerator{input: Box::new(self.input.clone()), condition: self.condition.clone()})
+        Box::new(FilterEnumerator{input: self.input.clone(), condition: self.condition.clone()})
     }
 }
 
