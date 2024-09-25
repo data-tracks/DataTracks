@@ -4,13 +4,13 @@ use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::ops::{Add, Div, Mul, Sub};
 
-use json::{parse, JsonValue};
-
 use crate::value::array::Array;
 use crate::value::dict::Dict;
 use crate::value::r#type::ValType;
 use crate::value::string::Text;
 use crate::value::{bool, Bool, Float, Int};
+use json::{parse, JsonValue};
+use tracing::warn;
 
 #[derive(Eq, Clone, Debug)]
 pub enum Value {
@@ -151,30 +151,34 @@ macro_rules! value_display {
 
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
-        match self {
-            Value::Int(i) => {
-                i.0 == other.as_int().unwrap().0
+        warn!("{} == {}", self, other);
+
+        match (self, other) {
+            (Value::Null, Value::Null) => true,
+            (Value::Null, _) | (_, Value::Null) => false,
+            (Value::Int(i), Value::Int(other_i)) => i.0 == other_i.0,
+            (Value::Int(_), Value::Float(_)) => other == &Value::Float(self.as_float().unwrap()),
+            (Value::Float(_), Value::Int(_)) => self == &Value::Float(other.as_float().unwrap()),
+            (Value::Float(f), Value::Float(other_f)) => {
+                let a = f.normalize();
+                let b = other_f.normalize();
+                a.number == b.number && a.shift == b.shift
             }
-            Value::Float(f) => {
-                f.number == other.as_float().unwrap().number && f.shift == other.as_float().unwrap().shift
-            }
-            Value::Bool(b) => {
-                b.0 == other.as_bool().unwrap().0
-            }
-            Value::Text(t) => {
-                t.0 == other.as_text().unwrap().0
-            }
-            Value::Array(a) => {
-                let array = other.as_array().unwrap();
-                a.0.len() == array.0.len() && a.0.iter().zip(array.0.iter()).all(|(a, b)| a == b)
-            }
-            Value::Dict(d) => {
-                let other = other.as_dict().unwrap();
+
+            (Value::Bool(b), _) => other.as_bool().map(|other| other.0 == b.0).unwrap_or(false),
+
+            (Value::Text(t), _) => other.as_text().map(|other| other.0 == t.0).unwrap_or(false),
+
+            (Value::Array(a), _) => other.as_array().map(|other| {
+                a.0.len() == other.0.len() && a.0.iter().zip(other.0.iter()).all(|(a, b)| a == b)
+            }).unwrap_or(false),
+
+            (Value::Dict(d), _) => other.as_dict().map(|other| {
                 d.0.len() == other.0.len() && d.0.keys().eq(other.0.keys()) && d.0.values().eq(other.0.values())
-            }
-            Value::Null => {
-                matches!(other, Value::Null)
-            }
+            }).unwrap_or(false),
+
+            // Fallback: not equal if types don't match or other cases aren't handled
+            (_, _) => false,
         }
     }
 }

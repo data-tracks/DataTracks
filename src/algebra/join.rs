@@ -98,29 +98,35 @@ impl JoinHandler {
             if self.cache_left.len() > 1 {
                 self.left_index += 1;
             }
-            true
-        } else if self.left_index < self.cache_left.len() {
-            self.left_index += 1;
-
+            self.right_index = 0; // we reset right
             true
         } else {
-            false
+            if self.left_index < self.cache_left.len() - 1 {
+                self.left_index += 1;
+                self.right_index = 0;
+
+                true
+            } else {
+                false
+            }
         }
     }
 
     fn next_right(&mut self) -> bool {
         if let Some(val) = self.right.next() {
-            self.cache_right.push(((self.left_hash)(&val.clone()), val));
+            self.cache_right.push(((self.right_hash)(&val.clone()), val));
             if self.cache_right.len() > 1 {
                 self.right_index += 1;
             }
             true
-        } else if self.left_index < self.cache_left.len() {
-            self.right_index += 1;
-
-            true
         } else {
-            false
+            if self.right_index < self.cache_right.len() - 1 { // index 0 length 1 cannot go further
+                self.right_index += 1;
+
+                true
+            } else {
+                false
+            }
         }
     }
 }
