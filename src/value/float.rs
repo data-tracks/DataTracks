@@ -1,6 +1,7 @@
 use crate::value::int::Int;
 use crate::value::number::Number;
 use crate::value::{Bool, Text};
+use std::cmp::min;
 use std::fmt::{Display, Formatter};
 use std::ops::{Add, Sub};
 
@@ -9,6 +10,7 @@ pub struct Float {
     pub number: i64,
     pub shift: u64,
 }
+
 
 impl Float {
     pub(crate) fn as_f64(&self) -> f64 {
@@ -23,6 +25,17 @@ impl Float {
         match split {
             None => Float { number: value as i64, shift: 0 },
             Some(i) => Float { number: number.parse().unwrap(), shift: (number.len() - i) as u64 }
+        }
+    }
+
+    pub(crate) fn normalize(&self) -> Self {
+        let nulls = min(self.number.trailing_zeros() as u64, self.shift);
+        if nulls > 0 {
+            let number = self.number.to_string().trim_end_matches('0').parse().unwrap();
+            let shift = self.shift - nulls;
+            Float { number, shift }
+        }else {
+            *self
         }
     }
 }
