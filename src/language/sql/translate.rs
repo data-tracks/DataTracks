@@ -79,8 +79,8 @@ fn handle_field(column: SqlStatement) -> Result<Function, String> {
         }
         SqlStatement::Identifier(i) => {
             match i {
-                mut i if i.names.len() == 1 && i.names.get(0).unwrap().starts_with("$") => {
-                    let index = i.names.pop().unwrap().clone().replace("$", "");
+                mut i if i.names.len() == 1 && i.names.get(0).unwrap().starts_with('$') => {
+                    let index = i.names.pop().unwrap().clone().replace('$', "");
                     Ok(Input(InputFunction::new(index.parse().unwrap())))
                 }
                 SqlIdentifier { .. } => {

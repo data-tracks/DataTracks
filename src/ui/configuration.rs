@@ -3,9 +3,12 @@ use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum ConfigModel {
-    StringConf(StringModel),
-    NumberConf(NumberModel),
-    ListConf(ListModel),
+    #[serde(rename = "StringConf")]
+    String(StringModel),
+    #[serde(rename = "NumberConf")]
+    Number(NumberModel),
+    #[serde(rename = "ListConf")]
+    List(ListModel),
 }
 
 #[derive(Serialize, Deserialize)]

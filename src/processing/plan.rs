@@ -12,7 +12,6 @@ use crate::processing::destination::Destination;
 use crate::processing::plan::Status::Stopped;
 use crate::processing::source::Source;
 use crate::processing::station::{Command, Station};
-use crate::ui::ConfigModel::StringConf;
 use crate::ui::{ConfigContainer, ConfigModel, StringModel};
 use crate::util::GLOBAL_ID;
 
@@ -388,14 +387,14 @@ impl From<processing::transform::Transform> for ConfigContainer {
         match value {
             processing::transform::Transform::Func(_) => {
                 let mut map = HashMap::new();
-                map.insert(String::from("type"), StringConf(StringModel::new("Function")));
-                map.insert(String::from("query"), StringConf(StringModel::new("")));
+                map.insert(String::from("type"), ConfigModel::String(StringModel::new("Function")));
+                map.insert(String::from("query"), ConfigModel::String(StringModel::new("")));
                 ConfigContainer::new(String::from("Transform"), map)
             }
             processing::transform::Transform::Lang(l) => {
                 let mut map = HashMap::new();
-                map.insert(String::from("language"), StringConf(StringModel::new(&l.language.to_string())));
-                map.insert(String::from("query"), StringConf(StringModel::new(&l.query.to_string())));
+                map.insert(String::from("language"), ConfigModel::String(StringModel::new(&l.language.to_string())));
+                map.insert(String::from("query"), ConfigModel::String(StringModel::new(&l.query.to_string())));
                 ConfigContainer::new(String::from("Transform"), map)
             }
         }

@@ -99,14 +99,12 @@ impl JoinHandler {
                 self.left_index += 1;
             }
             true
-        } else {
-            if self.left_index < self.cache_left.len() {
-                self.left_index += 1;
+        } else if self.left_index < self.cache_left.len() {
+            self.left_index += 1;
 
-                true
-            } else {
-                false
-            }
+            true
+        } else {
+            false
         }
     }
 
@@ -117,14 +115,12 @@ impl JoinHandler {
                 self.right_index += 1;
             }
             true
-        } else {
-            if self.left_index < self.cache_left.len() {
-                self.right_index += 1;
+        } else if self.left_index < self.cache_left.len() {
+            self.right_index += 1;
 
-                true
-            } else {
-                false
-            }
+            true
+        } else {
+            false
         }
     }
 }

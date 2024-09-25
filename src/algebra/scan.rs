@@ -46,10 +46,8 @@ impl Iterator for ScanEnumerator {
     type Item = Value;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.values.is_empty() {
-            if !self.next_train() {
-                return None
-            }
+        if self.values.is_empty() && !self.next_train() {
+            return None
         }
         Some(self.values.remove(0))
     }

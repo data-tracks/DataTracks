@@ -139,7 +139,7 @@ impl Iterator for FuncTransform {
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(val) = self.input.next() {
-            Some((self.func)(0, val.into()))
+            Some((self.func)(0, val))
         }else {
             None
         }

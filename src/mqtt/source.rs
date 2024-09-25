@@ -2,7 +2,6 @@ use crate::processing::plan::SourceModel;
 use crate::processing::source::Source;
 use crate::processing::station::Command;
 use crate::processing::Train;
-use crate::ui::ConfigModel::StringConf;
 use crate::ui::{ConfigModel, StringModel};
 use crate::util::{Tx, GLOBAL_ID};
 use crate::value::{Dict, Value};
@@ -68,10 +67,10 @@ impl Source for MqttSource {
     fn from(stop_id: i64, configs: HashMap<String, ConfigModel>) -> Result<Box<dyn Source>, String> {
         if let Some(value) = configs.get("port") {
             return match value {
-                ConfigModel::StringConf(port) => {
+                ConfigModel::String(port) => {
                     Ok(Box::new(MqttSource::new(stop_id, port.string.parse::<u16>().unwrap())))
                 }
-                ConfigModel::NumberConf(port) => {
+                ConfigModel::Number(port) => {
                     Ok(Box::new(MqttSource::new(stop_id, port.number as u16)))
                 }
                 _ => Err(String::from("Could not create HttpSource."))
@@ -82,7 +81,7 @@ impl Source for MqttSource {
 
     fn serialize_default() -> Result<SourceModel, ()> {
         let mut configs = HashMap::new();
-        configs.insert(String::from("port"), StringConf(StringModel::new("7777")));
+        configs.insert(String::from("port"), ConfigModel::String(StringModel::new("7777")));
         Ok(SourceModel { type_name: String::from("Mqtt"), id: String::from("Mqtt"), configs })
     }
 }

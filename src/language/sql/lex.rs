@@ -1,5 +1,5 @@
 use std::str::FromStr;
-use std::vec;
+use std::{mem, vec};
 
 use crate::algebra::Operator;
 use crate::language::sql::buffer::BufferedLexer;
@@ -142,7 +142,7 @@ fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> SqlStateme
 
         match tok {
             Identifier(i) => {
-                expressions.push(SqlStatement::Identifier(SqlIdentifier::new(i.split(".").map(|s| s.to_string()).collect::<Vec<String>>())))
+                expressions.push(SqlStatement::Identifier(SqlIdentifier::new(i.split('.').map(|s| s.to_string()).collect::<Vec<String>>())))
             }
             t if t == Star && expressions.is_empty() => {
                 expressions.push(SqlStatement::Symbol(SqlSymbol::new("*")))
@@ -189,15 +189,12 @@ fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> SqlStateme
             delay = false;
         } else if let Some(op) = operator.take() {
             operators.push(expressions.pop().unwrap());
-            expressions.push(SqlStatement::Operator(SqlOperator::new(op, operators.drain(..).collect(), false)));
+            expressions.push(SqlStatement::Operator(SqlOperator::new(op, mem::take(&mut operators), false)));
         }
     }
 
     if let Some(op) = operator.take() {
-        if match op {
-            Operator::Multiplication => true,
-            _ => false
-        } {
+        if matches!(op, Operator::Multiplication ) {
             return SqlStatement::Symbol(SqlSymbol::new("*"));
         }
     }

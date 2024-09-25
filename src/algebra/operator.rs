@@ -26,17 +26,17 @@ impl Operator {
             }
             Minus => {
                 operators.iter().fold(Value::int(0), |a, b| {
-                    &a - &b
+                    &a - b
                 })
             }
             Multiplication => {
                 operators.iter().fold(Value::int(0), |a, b| {
-                    &a * &b
+                    &a * b
                 })
             }
             Divide => {
                 operators.iter().fold(Value::int(0), |a, b| {
-                    &a / &b
+                    &a / b
                 })
             }
             Equal => {
@@ -131,7 +131,7 @@ impl FromStr for Operator {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut trimmed = s.to_lowercase();
-        if s.ends_with("(") {
+        if s.ends_with('(') {
             trimmed.pop();
         }
         match trimmed.as_str() {

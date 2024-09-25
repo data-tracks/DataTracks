@@ -43,7 +43,7 @@ impl SqlIdentifier {
 
 impl Statement for SqlIdentifier {
     fn dump(&self, _quote: &str) -> String {
-        format!("{}", self.names.join("."))
+        self.names.join(".").to_string()
     }
 }
 

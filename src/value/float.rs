@@ -7,7 +7,7 @@ use std::ops::{Add, Sub};
 #[derive(Eq, Hash, Debug, PartialEq, Clone, Copy)]
 pub struct Float {
     pub number: i64,
-    pub shift: u64,
+    pub shift: u8,
 }
 
 impl Float {
@@ -22,7 +22,7 @@ impl Float {
 
         match split {
             None => Float { number: value as i64, shift: 0 },
-            Some(i) => Float { number: number.parse().unwrap(), shift: (number.len() - i) as u64 }
+            Some(i) => Float { number: number.parse().unwrap(), shift: (number.len() - i) as u8 }
         }
     }
 }
@@ -34,7 +34,7 @@ impl Number for Float {
     }
 
     fn int(&self) -> i64 {
-        self.number as i64
+        self.number
     }
 }
 
@@ -45,19 +45,22 @@ impl Add for Float {
         let mut shift = self.shift as i64 - other.shift as i64;
         let mut left = self.number;
         let mut right = other.number;
-        if shift > 0 {
-            // self is bigger fract
-            right *= shift * 10;
-            shift = self.shift as i64;
-        } else if shift < 0 {
-            // other is bigger fract
-            left *= shift * -10;
-            shift = other.shift as i64;
-        } else {
-            shift = self.shift as i64;
+
+        match shift {
+            s if s > 0 => {
+                // self is bigger fract
+                right *= shift * 10;
+                shift = self.shift as i64;
+            }
+            s if s < 0 => {
+                // other is bigger fract
+                left *= shift * -10;
+                shift = other.shift as i64;
+            }
+            _ => shift = self.shift as i64
         }
 
-        Float { number: left + right, shift: shift as u64 }
+        Float { number: left + right, shift: shift as u8 }
     }
 }
 

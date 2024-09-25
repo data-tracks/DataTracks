@@ -1,6 +1,7 @@
 use std::cmp::PartialEq;
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
+use std::hash::{Hash, Hasher};
 use std::ops::{Add, Div, Mul, Sub};
 
 use json::{parse, JsonValue};
@@ -11,7 +12,7 @@ use crate::value::r#type::ValType;
 use crate::value::string::Text;
 use crate::value::{bool, Bool, Float, Int};
 
-#[derive(Eq, Hash, Clone, Debug)]
+#[derive(Eq, Clone, Debug)]
 pub enum Value {
     Int(Int),
     Float(Float),
@@ -74,7 +75,7 @@ impl Value {
             Value::Int(i) => Ok(*i),
             Value::Float(f) => Ok(Int(f.as_f64() as i64)),
             Value::Bool(b) => Ok(if b.0 { Int(1) } else { Int(0) }),
-            Value::Text(t) => t.0.parse::<i64>().map(|num| Int(num)).map_err(|_| ()),
+            Value::Text(t) => t.0.parse::<i64>().map(Int).map_err(|_| ()),
             Value::Array(_) => Err(()),
             Value::Dict(_) => Err(()),
             Value::Null => Err(())
@@ -86,7 +87,7 @@ impl Value {
             Value::Int(i) => Ok(Float::new(i.0 as f64)),
             Value::Float(f) => Ok(*f),
             Value::Bool(b) => Ok(if b.0 { Float::new(1f64) } else { Float::new(0f64) }),
-            Value::Text(t) => t.0.parse::<f64>().map(|num| Float::new(num)).map_err(|_| ()),
+            Value::Text(t) => t.0.parse::<f64>().map(Float::new).map_err(|_| ()),
             Value::Array(_) => Err(()),
             Value::Dict(_) => Err(()),
             Value::Null => Err(())
@@ -172,10 +173,41 @@ impl PartialEq for Value {
                 d.0.len() == other.0.len() && d.0.keys().eq(other.0.keys()) && d.0.values().eq(other.0.values())
             }
             Value::Null => {
-                match other {
-                    Value::Null => true,
-                    _ => false
+                matches!(other, Value::Null)
+            }
+        }
+    }
+}
+
+impl Hash for Value {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            Value::Int(i) => {
+                i.0.hash(state);
+            }
+            Value::Float(f) => {
+                state.write_i64(f.number);
+                state.write_u8(f.shift);
+            }
+            Value::Bool(b) => {
+                b.0.hash(state);
+            }
+            Value::Text(t) => {
+                t.0.hash(state);
+            }
+            Value::Array(a) => {
+                for val in &a.0 {
+                    val.hash(state)
                 }
+            }
+            Value::Dict(d) => {
+                for (k, v) in &d.0 {
+                    k.hash(state);
+                    v.hash(state);
+                }
+            }
+            Value::Null => {
+                "null".hash(state);
             }
         }
     }

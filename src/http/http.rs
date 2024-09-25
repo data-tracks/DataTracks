@@ -129,10 +129,10 @@ impl Source for HttpSource {
     fn from(stop_id: i64, configs: HashMap<String, ConfigModel>) -> Result<Box<dyn Source>, String> {
         if let Some(value) = configs.get("port") {
             return match value {
-                ConfigModel::StringConf(port) => {
+                ConfigModel::String(port) => {
                     Ok(Box::new(HttpSource::new(stop_id, port.string.parse::<u16>().unwrap())))
                 }
-                ConfigModel::NumberConf(port) => {
+                ConfigModel::Number(port) => {
                     Ok(Box::new(HttpSource::new(stop_id, port.number as u16)))
                 }
                 _ => Err(String::from("Could not create HttpSource."))

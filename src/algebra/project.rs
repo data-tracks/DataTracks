@@ -6,7 +6,7 @@ use crate::processing::Train;
 use crate::value::Value;
 
 pub trait Project: Algebra {
-    fn get_input(&self) -> &Box<AlgebraType>;
+    fn get_input(&self) -> &AlgebraType;
 }
 
 pub struct TrainProject {
@@ -56,7 +56,7 @@ impl Algebra for TrainProject {
 }
 
 impl Project for TrainProject {
-    fn get_input(&self) -> &Box<AlgebraType> {
+    fn get_input(&self) -> &AlgebraType {
         &self.input
     }
 }

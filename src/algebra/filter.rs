@@ -30,7 +30,7 @@ impl Iterator for FilterEnumerator {
     type Item = Value;
 
     fn next(&mut self) -> Option<Self::Item> {
-        while let Some(value) = self.input.next() {
+        for value in self.input.by_ref() {
             if let Ok(bool) = self.condition.process(value.clone()).as_bool(){
                 if bool.0 {
                     return Some(value)
