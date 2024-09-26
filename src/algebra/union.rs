@@ -18,7 +18,7 @@ impl Algebra for Union {
     type Iterator = UnionIterator;
 
     fn derive_iterator(&mut self) -> Self::Iterator {
-        let mut inputs: Vec<_> = self.inputs.iter_mut().by_ref().map(| mut i| i.derive_iterator()).collect();
+        let inputs: Vec<_> = self.inputs.iter_mut().by_ref().map(|i| i.derive_iterator()).collect();
         if 0 < inputs.len() {
             UnionIterator{ inputs , distinct: self.distinct, index: 0 }
         }else {

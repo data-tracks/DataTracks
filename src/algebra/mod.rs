@@ -1,6 +1,7 @@
 pub use algebra::build_iterator;
 pub use algebra::Algebra;
 pub use algebra::AlgebraType;
+pub use algebra::BoxedIterator;
 pub use algebra::ValueIterator;
 pub use filter::Filter;
 pub use function::Function;
@@ -12,7 +13,6 @@ pub use join::Join;
 pub use operator::Operator;
 pub use project::Project;
 pub use scan::Scan;
-pub use algebra::BoxedIterator;
 
 mod project;
 mod algebra;
@@ -23,4 +23,5 @@ mod operator;
 mod implement;
 mod function;
 mod union;
+mod aggregate;
 
