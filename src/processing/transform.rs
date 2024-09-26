@@ -1,4 +1,4 @@
-use crate::algebra::{Algebra, TrainScan, ValueEnumerator};
+use crate::algebra::{Algebra, BoxedIterator, Scan, ValueIterator};
 use crate::language::Language;
 use crate::processing::train::Train;
 use crate::processing::transform::Transform::{Func, Lang};
@@ -54,9 +54,9 @@ impl Transform {
         }
     }
 
-    pub fn optimize(&self) -> Box<dyn ValueEnumerator<Item=Value> + Send> {
+    pub fn optimize(&self) -> Box<dyn ValueIterator<Item=Value> + Send> {
         match self {
-            Func(f) => ValueEnumerator::clone(f),
+            Func(f) => ValueIterator::clone(f),
             Lang(f) => f.func.clone()
         }
     }
@@ -66,7 +66,7 @@ impl Transform {
 pub struct LanguageTransform {
     pub(crate) language: Language,
     pub(crate) query: String,
-    func: Box<dyn ValueEnumerator<Item=Value> + Send>,
+    func: Box<dyn ValueIterator<Item=Value> + Send>,
 }
 
 impl Clone for LanguageTransform {
@@ -86,17 +86,17 @@ impl LanguageTransform {
     }
 }
 
-fn build_transformer(language: &Language, query: &str) -> Result<Box<dyn ValueEnumerator<Item=Value> + Send + 'static>, String> {
+fn build_transformer(language: &Language, query: &str) -> Result<Box<dyn ValueIterator<Item=Value> + Send + 'static>, String> {
     let algebra = match language {
         Language::Sql => language::sql::transform(query)?,
         Language::Mql => language::mql::transform(query)?
     };
-    algebra::functionize(algebra)
+    algebra::build_iterator(algebra)
 }
 
 
 pub struct FuncTransform {
-    pub input: Box<dyn ValueEnumerator<Item=Value> + Send + 'static>,
+    pub input: Box<dyn ValueIterator<Item=Value> + Send + 'static>,
     pub func: Arc<dyn Fn(i64, Value) -> Value + Send + Sync>,
 }
 
@@ -118,9 +118,9 @@ impl FuncTransform {
     }
 
     pub(crate) fn new(func: Arc<(dyn Fn(i64, Value) -> Value + Send + Sync)>) -> Self {
-        let mut scan = TrainScan::new(0);
-        let enumerator = scan.get_enumerator();
-        FuncTransform{ input: enumerator, func }
+        let mut scan = Scan::new(0);
+        let iterator = scan.derive_iterator();
+        FuncTransform{ input: Box::new(iterator), func }
     }
 
     pub(crate) fn new_val(_stop: i64, func: fn(Value) -> Value) -> FuncTransform {
@@ -146,12 +146,12 @@ impl Iterator for FuncTransform {
     }
 }
 
-impl ValueEnumerator for FuncTransform {
+impl ValueIterator for FuncTransform {
     fn load(&mut self, trains: Vec<Train>) {
         self.input.load(trains);
     }
 
-    fn clone(&self) -> Box<dyn ValueEnumerator<Item=Value> + Send + 'static> {
+    fn clone(&self) -> BoxedIterator {
         Box::new(FuncTransform { input: self.input.clone(), func: self.func.clone() })
     }
 }

@@ -1,32 +1,29 @@
-use crate::algebra::algebra::{Algebra, ValueEnumerator, ValueHandler};
+use crate::algebra::algebra::{Algebra, ValueIterator, ValueHandler, BoxedIterator};
 use crate::algebra::implement::implement;
 use crate::algebra::{AlgebraType, Function};
 use crate::processing::Train;
 use crate::value::Value;
 
-pub trait Filter: Algebra {
-    fn get_input(&self) -> &AlgebraType;
-}
 
-
-pub struct TrainFilter {
+#[derive(Clone)]
+pub struct Filter {
     input: Box<AlgebraType>,
     condition: Function,
 }
 
-impl TrainFilter {
+impl Filter {
     pub fn new(input: AlgebraType, condition: Function) -> Self {
-        TrainFilter { input: Box::new(input), condition }
+        Filter { input: Box::new(input), condition }
     }
 }
 
 
-struct FilterEnumerator {
-    input: Box<dyn ValueEnumerator<Item=Value> + Send + 'static>,
+pub struct FilterIterator {
+    input: BoxedIterator,
     condition: Box<dyn ValueHandler>
 }
 
-impl Iterator for FilterEnumerator {
+impl Iterator for FilterIterator {
     type Item = Value;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -41,27 +38,23 @@ impl Iterator for FilterEnumerator {
     }
 }
 
-impl ValueEnumerator for FilterEnumerator {
+impl ValueIterator for FilterIterator {
     fn load(&mut self, trains: Vec<Train>) {
         self.input.load(trains);
     }
 
-    fn clone(&self) -> Box<dyn ValueEnumerator<Item=Value> + Send + 'static> {
-        Box::new(FilterEnumerator{input: self.input.clone(), condition: self.condition.clone()})
+    fn clone(&self) -> BoxedIterator {
+        Box::new(FilterIterator {input: self.input.clone(), condition: self.condition.clone()})
     }
 }
 
 
-impl Algebra for TrainFilter {
-    fn get_enumerator(&mut self) -> Box<dyn ValueEnumerator<Item=Value> + Send> {
+impl Algebra for Filter {
+    type Iterator = FilterIterator;
+
+    fn derive_iterator(&mut self) -> FilterIterator {
         let condition = implement(&self.condition);
-        let input = self.input.get_enumerator();
-        Box::new(FilterEnumerator { input, condition })
-    }
-}
-
-impl Filter for TrainFilter {
-    fn get_input(&self) -> &AlgebraType {
-        &self.input
+        let input = self.input.derive_iterator();
+        FilterIterator { input, condition }
     }
 }

@@ -1,30 +1,28 @@
-use crate::algebra::algebra::{Algebra, RefHandler, ValueEnumerator};
+use crate::algebra::algebra::{Algebra, RefHandler, ValueIterator};
 use crate::processing::Train;
 use crate::value::Value;
 use std::vec;
-
-pub trait Scan: Algebra {}
-
+use crate::algebra::BoxedIterator;
 
 #[derive(Clone)]
-pub struct TrainScan {
+pub struct Scan {
     index: i64,
 }
 
-impl TrainScan {
+impl Scan {
     pub(crate) fn new(index: i64) -> Self {
-        TrainScan { index }
+        Scan { index }
     }
 }
 
 #[derive(Clone)]
-pub struct ScanEnumerator {
+pub struct ScanIterator {
     index: i64,
     values: Vec<Value>,
     trains: Vec<Train>,
 }
 
-impl ScanEnumerator {
+impl ScanIterator {
     pub(crate) fn next_train(&mut self) -> bool {
         loop {
             if self.trains.is_empty() {
@@ -42,7 +40,7 @@ impl ScanEnumerator {
     }
 }
 
-impl Iterator for ScanEnumerator {
+impl Iterator for ScanIterator {
     type Item = Value;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -53,7 +51,7 @@ impl Iterator for ScanEnumerator {
     }
 }
 
-impl ValueEnumerator for ScanEnumerator {
+impl ValueIterator for ScanIterator {
     fn load(&mut self, trains: Vec<Train>) {
         for train in trains {
             if train.last == self.index {
@@ -62,12 +60,12 @@ impl ValueEnumerator for ScanEnumerator {
         }
     }
 
-    fn clone(&self) -> Box<dyn ValueEnumerator<Item=Value> + Send + 'static> {
-        Box::new(ScanEnumerator { index: self.index, values: vec![], trains: self.trains.clone() })
+    fn clone(&self) -> BoxedIterator {
+        Box::new(ScanIterator { index: self.index, values: vec![], trains: self.trains.clone() })
     }
 }
 
-impl RefHandler for ScanEnumerator {
+impl RefHandler for ScanIterator {
     fn process(&self, _stop: i64, wagons: Vec<Train>) -> Vec<Train> {
         let mut values = vec![];
         wagons.into_iter().filter(|w| w.last == self.index).for_each(|mut t| values.append(t.values.take().unwrap().as_mut()));
@@ -75,22 +73,23 @@ impl RefHandler for ScanEnumerator {
     }
 
     fn clone(&self) -> Box<dyn RefHandler + Send + 'static> {
-        Box::new(ScanEnumerator { index: self.index, values: vec![], trains: vec![] })
+        Box::new(ScanIterator { index: self.index, values: vec![], trains: vec![] })
     }
 }
 
-impl Algebra for TrainScan {
-    fn get_enumerator(&mut self) -> Box<dyn ValueEnumerator<Item=Value> + Send> {
-        Box::new(ScanEnumerator { index: self.index, values: vec![], trains: vec![] })
+impl Algebra for Scan {
+    type Iterator = ScanIterator;
+
+    fn derive_iterator(&mut self) -> Self::Iterator {
+        ScanIterator { index: self.index, values: vec![], trains: vec![] }
     }
 }
-
-impl Scan for TrainScan {}
 
 #[cfg(test)]
 mod test {
     use crate::algebra::algebra::Algebra;
-    use crate::algebra::scan::TrainScan;
+    use crate::algebra::scan::Scan;
+    use crate::algebra::ValueIterator;
     use crate::processing::Train;
     use crate::value::Dict;
 
@@ -98,9 +97,9 @@ mod test {
     fn simple_scan() {
         let train = Train::new(0, Dict::transform(vec![3.into(), "test".into()]));
 
-        let mut scan = TrainScan::new(0);
+        let mut scan = Scan::new(0);
 
-        let mut handler = scan.get_enumerator();
+        let mut handler = scan.derive_iterator();
         handler.load(vec![train]);
 
         let mut train_2 = handler.drain_to_train(0);

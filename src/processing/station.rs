@@ -235,18 +235,17 @@ pub(crate) enum Command {
 pub mod tests {
     use std::sync::Arc;
     use std::thread::sleep;
-    use std::time::{Duration, Instant};
-
-    use crossbeam::channel::{unbounded, Receiver, Sender};
+    use std::time::Duration;
 
     use crate::processing::plan::Plan;
     use crate::processing::station::Command::{Okay, Ready, Threshold};
     use crate::processing::station::{Command, Station};
-    use crate::processing::tests::dict_values;
+    pub use crate::processing::tests::dict_values;
     use crate::processing::train::Train;
     use crate::processing::transform::{FuncTransform, Transform};
     use crate::util::{new_channel, Rx, Tx};
     use crate::value::{Dict, Value};
+    use crossbeam::channel::{unbounded, Receiver, Sender};
 
     #[test]
     fn start_stop_test() {
@@ -416,37 +415,54 @@ pub mod tests {
         assert_eq!(values.len(), 1_000)
     }
 
-    #[test]
-    fn minimal_overhead() {
-        let (mut station, train_sender, rx, c_rx, a_tx) = create_test_station(0);
+    // fix for parameterized
+    mod overhead_tests {
+        use crate::processing::station::tests::create_test_station;
+        use crate::processing::station::tests::Value;
+        use crate::processing::station::Command::Ready;
+        pub use crate::processing::tests::dict_values;
+        use crate::processing::Train;
+        use rstest::rstest;
+        use std::sync::Arc;
+        use std::time::Instant;
 
-        let _sender = station.operate(Arc::clone(&a_tx));
 
-        let mut trains = vec![];
+        #[rstest]
+        #[case("Int", dict_values(vec![Value::int(3)]))]
+        #[case("Float", dict_values(vec![Value::float(1.2)]))]
+        #[case("Text", dict_values(vec![Value::text("test")]))]
+        #[case("Bool", dict_values(vec![Value::bool(true)]))]
+        #[case("Array", dict_values(vec![Value::array([1.2.into(), 1.2.into()].into())]))]
+        pub fn minimal_overhead( #[case] name: &str, #[case] values: Vec<Value>) {
+            let (mut station, train_sender, rx, c_rx, a_tx) = create_test_station(0);
 
-        for _ in 0..1_000 {
-            trains.push(Train::new(0, dict_values(vec![Value::int(3)])));
-        }
+            let _sender = station.operate(Arc::clone(&a_tx));
 
-        // the station should open a platform
-        for state in vec![Ready(0)] {
-            assert_eq!(state, c_rx.recv().unwrap())
-        }
-        let time = Instant::now();
+            let mut trains = vec![];
+
+            for _ in 0..1_000 {
+                trains.push(Train::new(0, values.clone()));
+            }
+
+            // the station should open a platform
+            for state in vec![Ready(0)] {
+                assert_eq!(state, c_rx.recv().unwrap())
+            }
+            let time = Instant::now();
 
         for train in trains {
             train_sender.send(train).unwrap();
         }
 
-        let mut values: i32 = 0;
+            for _ in 0..1_000 {
+                let _ = rx.recv();
+            }
 
-        while values < 1_000 {
-            rx.recv().unwrap();
-            values += 1;
+            let elapsed = time.elapsed().as_nanos();
+            println!("time {}: {} nanos, per entry {}ns", name, elapsed, elapsed/1_000 );
         }
-        let elapsed = time.elapsed().as_nanos();
-        println!("time: {}nanos, per entry {}ns", elapsed, elapsed/1_000 );
     }
+
 
     fn create_test_station(duration: u64) -> (Station, Tx<Train>, Rx<Train>, Receiver<Command>, Arc<Sender<Command>>) {
         let mut station = Station::new(0);

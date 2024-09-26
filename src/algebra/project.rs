@@ -1,32 +1,29 @@
 use crate::algebra::algebra::{Algebra, ValueHandler};
 use crate::algebra::function::Function;
 use crate::algebra::implement::implement;
-use crate::algebra::{AlgebraType, ValueEnumerator};
+use crate::algebra::{AlgebraType, BoxedIterator, ValueIterator};
 use crate::processing::Train;
 use crate::value::Value;
 
-pub trait Project: Algebra {
-    fn get_input(&self) -> &AlgebraType;
-}
-
-pub struct TrainProject {
+#[derive(Clone)]
+pub struct Project {
     input: Box<AlgebraType>,
     project: Function,
 }
 
-impl TrainProject {
+impl Project {
     pub fn new(input: AlgebraType, project: Function) -> Self {
-        TrainProject { input: Box::new(input), project }
+        Project { input: Box::new(input), project }
     }
 }
 
 
-struct ProjectHandler {
-    input: Box<dyn ValueEnumerator<Item=Value> + Send>,
+pub struct ProjectIterator {
+    input: BoxedIterator,
     project: Box<dyn ValueHandler + Send>,
 }
 
-impl Iterator for ProjectHandler {
+impl Iterator for ProjectIterator {
     type Item = Value;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -37,26 +34,22 @@ impl Iterator for ProjectHandler {
     }
 }
 
-impl ValueEnumerator for ProjectHandler {
+impl ValueIterator for ProjectIterator {
     fn load(&mut self, trains: Vec<Train>) {
         self.input.load(trains);
     }
 
-    fn clone(&self) -> Box<dyn ValueEnumerator<Item=Value> + Send + 'static> {
-        Box::new(ProjectHandler{input: self.input.clone(), project: self.project.clone()})
+    fn clone(&self) -> BoxedIterator {
+        Box::new(ProjectIterator {input: self.input.clone(), project: self.project.clone()})
     }
 }
 
-impl Algebra for TrainProject {
-    fn get_enumerator(&mut self) -> Box<dyn ValueEnumerator<Item=Value> + Send> {
+impl Algebra for Project {
+    type Iterator = ProjectIterator;
+
+    fn derive_iterator(&mut self) -> ProjectIterator {
         let project = implement(&self.project);
-        let input = self.input.get_enumerator();
-        Box::new(ProjectHandler { input, project })
-    }
-}
-
-impl Project for TrainProject {
-    fn get_input(&self) -> &AlgebraType {
-        &self.input
+        let input = self.input.derive_iterator();
+        ProjectIterator { input, project }
     }
 }

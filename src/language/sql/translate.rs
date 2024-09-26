@@ -1,6 +1,7 @@
+use crate::algebra;
 use crate::algebra::AlgebraType::{Filter, Join, Project, Scan};
 use crate::algebra::Function::{Input, Literal, NamedInput, Operation};
-use crate::algebra::{AlgebraType, Function, InputFunction, LiteralOperator, NamedRefOperator, OperationFunction, Operator, TrainFilter, TrainJoin, TrainProject, TrainScan};
+use crate::algebra::{AlgebraType, Function, InputFunction, LiteralOperator, NamedRefOperator, OperationFunction, Operator};
 use crate::language::sql::statement::{SqlIdentifier, SqlSelect, SqlStatement};
 use crate::value::Value;
 
@@ -21,7 +22,7 @@ fn handle_select(query: SqlSelect) -> Result<AlgebraType, String> {
         let mut join = sources.remove(0);
         while !sources.is_empty() {
             let right = sources.remove(0);
-            join = Join(TrainJoin::new(join, right, |_v| Value::bool(true), |_v| Value::bool(true), |l, r| Value::array(vec![l, r])));
+            join = Join(algebra::Join::new(join, right, |_v| Value::bool(true), |_v| Value::bool(true), |l, r| Value::array(vec![l, r])));
         }
         join
     };
@@ -31,10 +32,10 @@ fn handle_select(query: SqlSelect) -> Result<AlgebraType, String> {
             node
         }
         1 => {
-            Filter(TrainFilter::new(node, filters.pop().unwrap()))
+            Filter(algebra::Filter::new(node, filters.pop().unwrap()))
         }
         _ => {
-            Filter(TrainFilter::new(node, Operation(OperationFunction::new(Operator::And, filters))))
+            Filter(algebra::Filter::new(node, Operation(OperationFunction::new(Operator::And, filters))))
         }
     };
 
@@ -53,7 +54,7 @@ fn handle_select(query: SqlSelect) -> Result<AlgebraType, String> {
         }
     };
 
-    Ok(Project(TrainProject::new(node, function)))
+    Ok(Project(algebra::Project::new(node, function)))
 
 }
 
@@ -102,7 +103,7 @@ fn handle_table(identifier: SqlIdentifier) -> Result<AlgebraType, String> {
         s if s.starts_with('$') => s.strip_prefix('$')
             .ok_or("Prefix not found".to_string())
             .and_then(|rest| rest.parse::<i64>().map_err(|_| "Could not parse number".to_string()))
-            .map(|num| Scan(TrainScan::new(num)))?,
+            .map(|num| Scan(algebra::Scan::new(num)))?,
         _ => Err("Could not translate table".to_string())?
     };
     Ok(scan)

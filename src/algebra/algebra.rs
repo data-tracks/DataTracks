@@ -1,34 +1,43 @@
-use crate::algebra::filter::TrainFilter;
-use crate::algebra::join::TrainJoin;
-use crate::algebra::project::TrainProject;
-use crate::algebra::scan::TrainScan;
+use crate::algebra::filter::Filter;
+use crate::algebra::join::Join;
+use crate::algebra::project::Project;
+use crate::algebra::scan::Scan;
+use crate::algebra::union::Union;
 use crate::processing::Train;
 use crate::value::Value;
 
+pub type BoxedIterator = Box<dyn ValueIterator<Item=Value> + Send + 'static>;
+
+#[derive(Clone)]
 pub enum AlgebraType {
-    Scan(TrainScan),
-    Project(TrainProject),
-    Filter(TrainFilter),
-    Join(TrainJoin),
+    Scan(Scan),
+    Project(Project),
+    Filter(Filter),
+    Join(Join),
+    Union(Union)
 }
 
 impl Algebra for AlgebraType {
-    fn get_enumerator(&mut self) -> Box<dyn ValueEnumerator<Item=Value> + Send> {
+    type Iterator = Box<dyn ValueIterator<Item=Value> + Send>;
+
+    fn derive_iterator(&mut self) -> Self::Iterator {
         match self {
-            AlgebraType::Scan(s) => s.get_enumerator(),
-            AlgebraType::Project(p) => p.get_enumerator(),
-            AlgebraType::Filter(f) => f.get_enumerator(),
-            AlgebraType::Join(j) => j.get_enumerator()
+            AlgebraType::Scan(s) => Box::new(s.derive_iterator()),
+            AlgebraType::Project(p) => Box::new(p.derive_iterator()),
+            AlgebraType::Filter(f) => Box::new(f.derive_iterator()),
+            AlgebraType::Join(j) => Box::new(j.derive_iterator()),
+            AlgebraType::Union(u) => Box::new(u.derive_iterator())
         }
     }
 }
 
-pub trait Algebra {
-    fn get_enumerator(&mut self) -> Box<dyn ValueEnumerator<Item=Value> + Send>;
+pub trait Algebra: Clone {
+    type Iterator: Iterator<Item = Value> + Send + 'static;
+    fn derive_iterator(&mut self) -> Self::Iterator;
 }
 
-pub fn functionize(mut algebra: AlgebraType) -> Result<Box<dyn ValueEnumerator<Item=Value> + Send + 'static>, String> {
-    Ok(algebra.get_enumerator())
+pub fn build_iterator(mut algebra: AlgebraType) -> Result<BoxedIterator, String> {
+    Ok(algebra.derive_iterator())
 }
 
 pub trait RefHandler: Send {
@@ -50,7 +59,7 @@ pub trait ValueRefHandler: Send {
 }
 
 
-pub trait ValueEnumerator: Iterator<Item = Value> + Send + 'static {
+pub trait ValueIterator: Iterator<Item = Value> + Send + 'static {
     fn load(&mut self, trains: Vec<Train>);
 
     fn drain(&mut self) -> Vec<Value>{
@@ -61,6 +70,6 @@ pub trait ValueEnumerator: Iterator<Item = Value> + Send + 'static {
         Train::new(stop, self.drain())
     }
 
-    fn clone(&self) -> Box<dyn ValueEnumerator<Item=Value> + Send + 'static>;
+    fn clone(&self) -> BoxedIterator;
 }
 
