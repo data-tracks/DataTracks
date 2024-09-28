@@ -1,5 +1,4 @@
-use crate::algebra::algebra::ValueHandler;
-use crate::algebra::function::Operator;
+use crate::algebra::function::{Implementable, Operator};
 use crate::algebra::BoxedValueHandler;
 
 pub fn implement(function: &Operator) -> BoxedValueHandler {
@@ -7,5 +6,5 @@ pub fn implement(function: &Operator) -> BoxedValueHandler {
 }
 
 pub fn implement_func(function: &Operator) -> BoxedValueHandler {
-    ValueHandler::clone(function)
+    function.implement()
 }

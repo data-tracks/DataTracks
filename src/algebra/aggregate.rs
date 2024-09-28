@@ -39,7 +39,7 @@ impl AggIterator {
 
     pub(crate) fn reload_values(&mut self) {
         while let Some(value) = self.input.next() {
-            self.aggregates.load(value);
+            self.aggregates.load(&value);
         }
         self.values.append(&mut self.aggregates.get());
 
@@ -76,7 +76,7 @@ impl ValueIterator for AggIterator {
 }
 
 trait ValueLoader {
-    fn load(&mut self, value: Value);
+    fn load(&mut self, value: &Value);
 
     fn get(&self) -> Vec<Value>;
 }
@@ -88,7 +88,7 @@ pub enum AggFunction {
 }
 
 impl ValueLoader for AggFunction {
-    fn load(&mut self, value: Value) {
+    fn load(&mut self, value: &Value) {
         match self {
             AggFunction::Count(c) => c.load(value),
         }
@@ -108,7 +108,7 @@ pub struct CountOperator {
 }
 
 impl ValueLoader for CountOperator {
-    fn load(&mut self, _value: Value) {
+    fn load(&mut self, _value: &Value) {
         self.count += 1;
     }
 

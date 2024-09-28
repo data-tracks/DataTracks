@@ -186,8 +186,8 @@ impl TupleFunction {
 }
 
 impl ValueHandler for TupleFunction {
-    fn process(&self, value: Value) -> Value {
-        let children = self.children.iter().map(|c| c.process(value.clone())).collect();
+    fn process(&self, value: &Value) -> Value {
+        let children = self.children.iter().map(|c| c.process(value)).collect();
         (self.func)(&children)
     }
 

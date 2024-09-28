@@ -28,7 +28,7 @@ impl Iterator for ProjectIterator {
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(value) = self.input.next() {
-            return Some(self.project.process(value))
+            return Some(self.project.process(&value))
         }
         None
     }

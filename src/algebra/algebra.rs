@@ -49,15 +49,9 @@ pub trait RefHandler: Send {
 }
 
 pub trait ValueHandler: Send {
-    fn process(&self, value: Value) -> Value;
-
-    fn clone(&self) -> BoxedValueHandler;
-}
-
-pub trait ValueRefHandler: Send {
     fn process(&self, value: &Value) -> Value;
 
-    fn clone(&self) -> Box<dyn ValueRefHandler + Send + 'static>;
+    fn clone(&self) -> BoxedValueHandler;
 }
 
 

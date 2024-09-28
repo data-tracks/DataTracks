@@ -52,7 +52,7 @@ impl Implementable for Operator {
 
 
 impl ValueHandler for Operator {
-    fn process(&self, value: Value) -> Value {
+    fn process(&self, value: &Value) -> Value {
         match self {
             Literal(l) => l.process(value),
             NamedInput(n) => n.process(value),
@@ -68,7 +68,7 @@ impl ValueHandler for Operator {
             NamedInput(n) => ValueHandler::clone(n),
             IndexedInput(i) => ValueHandler::clone(i),
             Input(i) => ValueHandler::clone(i),
-            _ => panic!()
+            Operation(o) => o.implement()
         }
     }
 }
@@ -109,9 +109,9 @@ impl InputFunction {
 }
 
 impl ValueHandler for InputFunction {
-    fn process(&self, value: Value) -> Value {
+    fn process(&self, value: &Value) -> Value {
         if self.all {
-            return value;
+            return value.clone();
         }
         match value {
             Value::Array(a) => {
@@ -126,7 +126,7 @@ impl ValueHandler for InputFunction {
     }
 
     fn clone(&self) -> BoxedValueHandler {
-        Box::new(InputFunction::new(self.index))
+        Box::new(InputFunction { index: self.index, all: self.all })
     }
 }
 
@@ -152,7 +152,7 @@ impl LiteralOperator {
 
 
 impl ValueHandler for LiteralOperator {
-    fn process(&self, _value: Value) -> Value {
+    fn process(&self, _value: &Value) -> Value {
         self.literal.clone()
     }
 
@@ -180,7 +180,7 @@ impl NamedRefOperator {
 }
 
 impl ValueHandler for NamedRefOperator {
-    fn process(&self, value: Value) -> Value {
+    fn process(&self, value: &Value) -> Value {
         match value {
             Value::Dict(d) => d.0.get(&self.name).unwrap_or(&Value::null()).clone(),
             Value::Null => Value::null(),
@@ -207,7 +207,7 @@ pub struct IndexedRefOperator {
 }
 
 impl ValueHandler for IndexedRefOperator {
-    fn process(&self, value: Value) -> Value {
+    fn process(&self, value: &Value) -> Value {
         match value {
             Value::Array(a) => a.0.get(self.index).cloned().unwrap(),
             Value::Null => Value::null(),

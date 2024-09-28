@@ -28,7 +28,7 @@ impl Iterator for FilterIterator {
 
     fn next(&mut self) -> Option<Self::Item> {
         for value in self.input.by_ref() {
-            if let Ok(bool) = self.condition.process(value.clone()).as_bool(){
+            if let Ok(bool) = self.condition.process(&value).as_bool() {
                 if bool.0 {
                     return Some(value)
                 }
