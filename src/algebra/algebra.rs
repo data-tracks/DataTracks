@@ -8,6 +8,8 @@ use crate::value::Value;
 
 pub type BoxedIterator = Box<dyn ValueIterator<Item=Value> + Send + 'static>;
 
+pub type BoxedValueHandler = Box<dyn ValueHandler + Send + 'static>;
+
 #[derive(Clone)]
 pub enum AlgebraType {
     Scan(Scan),
@@ -49,7 +51,7 @@ pub trait RefHandler: Send {
 pub trait ValueHandler: Send {
     fn process(&self, value: Value) -> Value;
 
-    fn clone(&self) -> Box<dyn ValueHandler + Send + 'static>;
+    fn clone(&self) -> BoxedValueHandler;
 }
 
 pub trait ValueRefHandler: Send {

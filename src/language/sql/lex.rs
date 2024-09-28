@@ -1,7 +1,7 @@
 use std::str::FromStr;
 use std::{mem, vec};
 
-use crate::algebra::Operator;
+use crate::algebra::Op;
 use crate::language::sql::buffer::BufferedLexer;
 use crate::language::sql::lex::Token::{As, Comma, From, GroupBy, Identifier, Limit, OrderBy, Select, Semi, Star, Text, Where};
 use crate::language::sql::statement::{SqlAlias, SqlIdentifier, SqlList, SqlOperator, SqlSelect, SqlStatement, SqlSymbol, SqlValue};
@@ -73,6 +73,8 @@ pub(crate) enum Token {
     Minus,
     #[token("/")]
     Divide,
+    #[token("COUNT")]
+    Count,
     #[regex(r"[']?[a-zA-Z_$][a-zA-Z_$0-9.]*[']?", | lex | lex.slice().to_owned())]
     Identifier(String),
 }
@@ -158,7 +160,7 @@ fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> SqlStateme
             }
             Token::Function(func) => {
                 let stops = vec![Token::BracketClose];
-                if let Ok(op) = Operator::from_str(&func) {
+                if let Ok(op) = Op::from_str(&func) {
                     let exp = parse_expressions(lexer, &stops);
                     if let Ok(exprs) = exp {
                         expressions.push(SqlStatement::Operator(SqlOperator::new(op, exprs, true)))
@@ -194,7 +196,7 @@ fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> SqlStateme
     }
 
     if let Some(op) = operator.take() {
-        if matches!(op, Operator::Multiplication ) {
+        if matches!(op, Op::Multiplication ) {
             return SqlStatement::Symbol(SqlSymbol::new("*"));
         }
     }
@@ -216,16 +218,16 @@ fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> SqlStateme
     statement
 }
 
-fn parse_operator(tok: Token) -> Option<Operator> {
+fn parse_operator(tok: Token) -> Option<Op> {
     match tok {
-        Star => Some(Operator::multiply()),
-        Token::Plus => Some(Operator::plus()),
-        Token::Minus => Some(Operator::minus()),
-        Token::Divide => Some(Operator::divide()),
-        Token::Eq => Some(Operator::equal()),
-        Token::Not => Some(Operator::not()),
-        Token::And => Some(Operator::And),
-        Token::Or => Some(Operator::Or),
+        Star => Some(Op::multiply()),
+        Token::Plus => Some(Op::plus()),
+        Token::Minus => Some(Op::minus()),
+        Token::Divide => Some(Op::divide()),
+        Token::Eq => Some(Op::equal()),
+        Token::Not => Some(Op::not()),
+        Token::And => Some(Op::And),
+        Token::Or => Some(Op::Or),
         _ => None
     }
 }

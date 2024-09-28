@@ -2,15 +2,16 @@ pub use algebra::build_iterator;
 pub use algebra::Algebra;
 pub use algebra::AlgebraType;
 pub use algebra::BoxedIterator;
+pub use algebra::BoxedValueHandler;
 pub use algebra::ValueIterator;
 pub use filter::Filter;
-pub use function::Function;
 pub use function::InputFunction;
 pub use function::LiteralOperator;
 pub use function::NamedRefOperator;
 pub use function::OperationFunction;
+pub use function::Operator;
 pub use join::Join;
-pub use operator::Operator;
+pub use operator::Op;
 pub use project::Project;
 pub use scan::Scan;
 

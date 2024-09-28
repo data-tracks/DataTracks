@@ -1,10 +1,14 @@
-use crate::algebra::Operator::{Divide, Equal, Minus, Multiplication, Not, Plus};
+use crate::algebra::algebra::ValueHandler;
+use crate::algebra::function::Implementable;
+use crate::algebra::operator::Function::Tuple;
+use crate::algebra::operator::Op::{Divide, Equal, Minus, Multiplication, Not, Plus};
+use crate::algebra::{BoxedValueHandler, Operator};
 use crate::value::Value;
 use crate::value::Value::{Array, Bool, Dict, Float, Int, Null, Text};
 use std::str::FromStr;
 
 #[derive(Debug, Clone)]
-pub enum Operator {
+pub enum Op {
     Plus,
     Minus,
     Multiplication,
@@ -13,62 +17,91 @@ pub enum Operator {
     Not,
     Equal,
     And,
-    Or
+    Or,
 }
 
-impl Operator {
-    pub fn implement(&self, operators: Vec<Value>) -> Value {
+
+impl Op {
+    pub fn implement(&self, operators: Vec<Operator>) -> Function {
+        let operands = operators.into_iter().map(|o| o.implement()).collect();
         match self {
             Plus => {
-                operators.iter().fold(Value::int(0), |a, b| {
-                    &a + b
-                })
+                Tuple(
+                    TupleFunction::new(|value| {
+                        value.iter().fold(Value::int(0), |a, b| {
+                            &a + b
+                        })
+                    }, operands)
+                )
             }
             Minus => {
-                operators.iter().fold(Value::int(0), |a, b| {
-                    &a - b
-                })
+                Tuple(
+                    TupleFunction::new(move |value| {
+                        let a = value.get(0).unwrap();
+                        let b = value.get(1).unwrap();
+                        a - b
+                    }, operands)
+                )
             }
             Multiplication => {
-                operators.iter().fold(Value::int(0), |a, b| {
-                    &a * b
-                })
+                Tuple(
+                    TupleFunction::new(move |value| {
+                        value.iter().fold(Value::int(1), |a, b| {
+                            &a * b
+                        })
+                    }, operands)
+                )
             }
             Divide => {
-                operators.iter().fold(Value::int(0), |a, b| {
-                    &a / b
-                })
+                Tuple(
+                    TupleFunction::new(move |value| {
+                        let a = value.get(0).unwrap();
+                        let b = value.get(1).unwrap();
+                        a / b
+                    }, operands)
+                )
             }
             Equal => {
-                operators.into_iter().reduce(|a, b| {
-                    println!("{} == {}", a, b);
-                    (a == b).into()
-                }).unwrap()
+                Tuple(
+                    TupleFunction::new(move |value| {
+                        let a = value.get(0).unwrap();
+                        let b = value.get(1).unwrap();
+                        (a.clone() == b.clone()).into()
+                    }, operands)
+                )
             }
-            Operator::Combine => {
-                Value::array(operators)
+            Op::Combine => {
+                Tuple(TupleFunction::new(move |value| {
+                    Value::array(value.iter().map(|v| (*v).clone()).collect())
+                }, operands))
             }
             Not => {
-                let value = Value::bool(!operators.get(0).unwrap().as_bool().unwrap().0);
-                match operators.get(0).unwrap() {
-                    Int(_) => Int(value.as_int().unwrap()),
-                    Float(_) => Float(value.as_float().unwrap()),
-                    Bool(_) => Bool(value.as_bool().unwrap()),
-                    Text(_) => Text(value.as_text().unwrap()),
-                    Array(_) => Array(value.as_array().unwrap()),
-                    Dict(_) => Dict(value.as_dict().unwrap()),
-                    Null => Value::null()
-                }
+                Tuple(TupleFunction::new(move |vec| {
+                    let value = Value::bool(vec.get(0).unwrap().as_bool().unwrap().0);
+                    match vec.get(0).unwrap() {
+                        Int(_) => Int(value.as_int().unwrap()),
+                        Float(_) => Float(value.as_float().unwrap()),
+                        Bool(_) => Bool(value.as_bool().unwrap()),
+                        Text(_) => Text(value.as_text().unwrap()),
+                        Array(_) => Array(value.as_array().unwrap()),
+                        Dict(_) => Dict(value.as_dict().unwrap()),
+                        Null => Value::null()
+                    }
+                }, operands))
             }
-            Operator::And => {
-                operators.into_iter().fold(Value::bool(true), |a, b| {
-                    (a.as_bool().unwrap().0 && b.as_bool().unwrap().0).into()
-                })
+            Op::And => {
+                Tuple(TupleFunction::new(move |value| {
+                    value.iter().fold(Value::bool(true), |a, b| {
+                        (a.as_bool().unwrap().0 && b.as_bool().unwrap().0).into()
+                    })
+                }, operands))
             }
-            Operator::Or => {
-                operators.into_iter().fold(Value::bool(true), |a, b| {
-                    (a.as_bool().unwrap().0 || b.as_bool().unwrap().0).into()
-                })
+            Op::Or => {
+                Tuple(TupleFunction::new(move |value| {
+                    value.iter().fold(Value::bool(true), |a, b| {
+                        (a.as_bool().unwrap().0 || b.as_bool().unwrap().0).into()
+                    })
+                }, operands))
             }
         }
     }
@@ -102,7 +135,7 @@ impl Operator {
                     String::from("/")
                 }
             }
-            Operator::Combine => {
+            Op::Combine => {
                 String::from("")
             }
             Not => {
@@ -115,18 +148,56 @@ impl Operator {
                     String::from("=")
                 }
             }
-            Operator::And => {
+            Op::And => {
                 String::from("AND")
             }
-            Operator::Or => {
+            Op::Or => {
                 String::from("OR")
             }
         }
     }
 }
 
+pub enum Function {
+    Tuple(TupleFunction)
+}
 
-impl FromStr for Operator {
+impl Implementable for Function {
+    type Result = BoxedValueHandler;
+
+    fn implement(&self) -> Self::Result {
+        match self {
+            Tuple(t) => t.clone(),
+        }
+    }
+}
+
+
+pub struct TupleFunction {
+    func: fn(&Vec<Value>) -> Value,
+    children: Vec<BoxedValueHandler>,
+}
+
+
+impl TupleFunction {
+    pub fn new(func: fn(&Vec<Value>) -> Value, children: Vec<BoxedValueHandler>) -> Self {
+        TupleFunction { func, children }
+    }
+}
+
+impl ValueHandler for TupleFunction {
+    fn process(&self, value: Value) -> Value {
+        let children = self.children.iter().map(|c| c.process(value.clone())).collect();
+        (self.func)(&children)
+    }
+
+    fn clone(&self) -> BoxedValueHandler {
+        Box::new(TupleFunction::new(self.func, self.children.iter().map(|c| (*c).clone()).collect()))
+    }
+}
+
+
+impl FromStr for Op {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -145,28 +216,29 @@ impl FromStr for Operator {
 }
 
 
-impl Operator {
-    pub fn plus() -> Operator {
+impl Op {
+    pub fn plus() -> Op {
         Plus
     }
-    pub fn minus() -> Operator {
+    pub fn minus() -> Op {
         Minus
     }
-    pub fn multiply() -> Operator {
+    pub fn multiply() -> Op {
         Multiplication
     }
-    pub fn divide() -> Operator {
+    pub fn divide() -> Op {
         Divide
     }
 
-    pub fn equal() -> Operator {
+    pub fn equal() -> Op {
         Equal
     }
 
-    pub fn not() -> Operator {
+    pub fn not() -> Op {
         Not
     }
 }
+
 
 
 

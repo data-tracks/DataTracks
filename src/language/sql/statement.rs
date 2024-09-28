@@ -1,4 +1,4 @@
-use crate::algebra::Operator;
+use crate::algebra::Op;
 use crate::language::statement::Statement;
 use crate::value;
 use crate::value::Value;
@@ -67,13 +67,13 @@ impl Statement for SqlAlias {
 
 #[derive(Debug)]
 pub struct SqlOperator {
-    pub(crate) operator: Operator,
+    pub(crate) operator: Op,
     pub(crate) operands: Vec<SqlStatement>,
     pub(crate) is_call: bool // call: Function(op1, op2), no call: op1 op op2
 }
 
 impl SqlOperator {
-    pub fn new(operator: Operator, operands: Vec<SqlStatement>, is_call: bool) -> Self {
+    pub fn new(operator: Op, operands: Vec<SqlStatement>, is_call: bool) -> Self {
         SqlOperator { operator, operands, is_call }
     }
 }

@@ -1,6 +1,6 @@
-use crate::algebra::algebra::{Algebra, ValueIterator, ValueHandler, BoxedIterator};
+use crate::algebra::algebra::{Algebra, BoxedIterator, ValueIterator};
 use crate::algebra::implement::implement;
-use crate::algebra::{AlgebraType, Function};
+use crate::algebra::{AlgebraType, BoxedValueHandler, Operator};
 use crate::processing::Train;
 use crate::value::Value;
 
@@ -8,11 +8,11 @@ use crate::value::Value;
 #[derive(Clone)]
 pub struct Filter {
     input: Box<AlgebraType>,
-    condition: Function,
+    condition: Operator,
 }
 
 impl Filter {
-    pub fn new(input: AlgebraType, condition: Function) -> Self {
+    pub fn new(input: AlgebraType, condition: Operator) -> Self {
         Filter { input: Box::new(input), condition }
     }
 }
@@ -20,7 +20,7 @@ impl Filter {
 
 pub struct FilterIterator {
     input: BoxedIterator,
-    condition: Box<dyn ValueHandler>
+    condition: BoxedValueHandler
 }
 
 impl Iterator for FilterIterator {

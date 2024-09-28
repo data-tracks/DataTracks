@@ -1,5 +1,5 @@
 use crate::algebra::algebra::{Algebra, ValueHandler};
-use crate::algebra::function::Function;
+use crate::algebra::function::Operator;
 use crate::algebra::implement::implement;
 use crate::algebra::{AlgebraType, BoxedIterator, ValueIterator};
 use crate::processing::Train;
@@ -8,11 +8,11 @@ use crate::value::Value;
 #[derive(Clone)]
 pub struct Project {
     input: Box<AlgebraType>,
-    project: Function,
+    project: Operator,
 }
 
 impl Project {
-    pub fn new(input: AlgebraType, project: Function) -> Self {
+    pub fn new(input: AlgebraType, project: Operator) -> Self {
         Project { input: Box::new(input), project }
     }
 }

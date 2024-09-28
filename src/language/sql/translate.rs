@@ -1,7 +1,7 @@
 use crate::algebra;
 use crate::algebra::AlgebraType::{Filter, Join, Project, Scan};
-use crate::algebra::Function::{Input, Literal, NamedInput, Operation};
-use crate::algebra::{AlgebraType, Function, InputFunction, LiteralOperator, NamedRefOperator, OperationFunction, Operator};
+use crate::algebra::Operator::{Input, Literal, NamedInput, Operation};
+use crate::algebra::{AlgebraType, InputFunction, LiteralOperator, NamedRefOperator, Op, OperationFunction, Operator};
 use crate::language::sql::statement::{SqlIdentifier, SqlSelect, SqlStatement};
 use crate::value::Value;
 
@@ -15,8 +15,8 @@ pub(crate) fn translate(query: SqlStatement) -> Result<AlgebraType, String> {
 
 fn handle_select(query: SqlSelect) -> Result<AlgebraType, String> {
     let mut sources: Vec<AlgebraType> = query.froms.into_iter().map(|from| handle_from(from).unwrap()).collect();
-    let mut projections: Vec<Function> = query.columns.into_iter().map(|column| handle_field(column).unwrap()).collect();
-    let mut filters: Vec<Function> = query.wheres.into_iter().map(|w| handle_field(w).unwrap()).collect();
+    let mut projections: Vec<Operator> = query.columns.into_iter().map(|column| handle_field(column).unwrap()).collect();
+    let mut filters: Vec<Operator> = query.wheres.into_iter().map(|w| handle_field(w).unwrap()).collect();
 
     let node = {
         let mut join = sources.remove(0);
@@ -35,7 +35,7 @@ fn handle_select(query: SqlSelect) -> Result<AlgebraType, String> {
             Filter(algebra::Filter::new(node, filters.pop().unwrap()))
         }
         _ => {
-            Filter(algebra::Filter::new(node, Operation(OperationFunction::new(Operator::And, filters))))
+            Filter(algebra::Filter::new(node, Operation(OperationFunction::new(Op::And, filters))))
         }
     };
 
@@ -50,7 +50,7 @@ fn handle_select(query: SqlSelect) -> Result<AlgebraType, String> {
             }
         }
         _ => {
-            Operation(OperationFunction::new(Operator::Combine, projections))
+            Operation(OperationFunction::new(Op::Combine, projections))
         }
     };
 
@@ -65,7 +65,7 @@ fn handle_from(from: SqlStatement) -> Result<AlgebraType, String> {
     }
 }
 
-fn handle_field(column: SqlStatement) -> Result<Function, String> {
+fn handle_field(column: SqlStatement) -> Result<Operator, String> {
     match column {
         SqlStatement::Symbol(s) => {
             if s.symbol == "*" {

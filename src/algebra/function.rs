@@ -1,58 +1,80 @@
 use crate::algebra::algebra::ValueHandler;
-use crate::algebra::function::Function::{IndexedInput, Literal, NamedInput, Operation};
-use crate::algebra::Function::Input;
-use crate::algebra::Operator;
+use crate::algebra::function::Operator::{IndexedInput, Input, Literal, NamedInput, Operation};
+use crate::algebra::operator::Op;
+use crate::algebra::BoxedValueHandler;
 use crate::value::Value;
 use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Clone)]
-pub enum Function {
+pub enum Operator {
     Literal(LiteralOperator),
     NamedInput(NamedRefOperator),
     IndexedInput(IndexedRefOperator),
     Operation(OperationFunction),
-    Input(InputFunction)
+    Input(InputFunction),
 }
 
-impl Function {
-    pub fn literal(literal: Value) -> Function {
+impl Operator {
+    pub fn literal(literal: Value) -> Operator {
         Literal(LiteralOperator { literal })
     }
 
-    pub fn named_input(name: String) -> Function {
+    pub fn named_input(name: String) -> Operator {
         NamedInput(NamedRefOperator { name })
     }
 
-    pub fn indexed_input(index: usize) -> Function {
+    pub fn indexed_input(index: usize) -> Operator {
         IndexedInput(IndexedRefOperator { index })
     }
 }
 
 
-impl ValueHandler for Function {
-    fn process(&self, value: Value) -> Value {
-        match self {
-            Literal(l) => l.process(value),
-            NamedInput(n) => n.process(value),
-            IndexedInput(i) => i.process(value),
-            Operation(o) => o.process(value),
-            Input(i) => i.process(value),
-        }
-    }
+pub trait Implementable {
+    type Result;
 
-    fn clone(&self) -> Box<dyn ValueHandler + Send + 'static> {
+    fn implement(&self) -> Self::Result;
+}
+
+
+impl Implementable for Operator {
+    type Result = BoxedValueHandler;
+
+    fn implement(&self) -> Self::Result {
         match self {
-            Literal(l) => ValueHandler::clone(l),
-            NamedInput(n) => ValueHandler::clone(n),
-            IndexedInput(i) => ValueHandler::clone(i),
-            Operation(o) => ValueHandler::clone(o),
-            Input(i) => ValueHandler::clone(i),
+            Literal(l) => l.implement(),
+            NamedInput(n) => n.implement(),
+            IndexedInput(i) => i.implement(),
+            Operation(o) => o.implement(),
+            Input(i) => i.implement(),
         }
     }
 }
 
 
-impl Display for Function {
+impl ValueHandler for Operator {
+    fn process(&self, value: Value) -> Value {
+        match self {
+            Literal(l) => l.process(value),
+            NamedInput(n) => n.process(value),
+            IndexedInput(i) => i.process(value),
+            Input(i) => i.process(value),
+            _ => panic!()
+        }
+    }
+
+    fn clone(&self) -> BoxedValueHandler {
+        match self {
+            Literal(l) => ValueHandler::clone(l),
+            NamedInput(n) => ValueHandler::clone(n),
+            IndexedInput(i) => ValueHandler::clone(i),
+            Input(i) => ValueHandler::clone(i),
+            _ => panic!()
+        }
+    }
+}
+
+
+impl Display for Operator {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Literal(l) => write!(f, "{}", l.literal),
@@ -89,7 +111,7 @@ impl InputFunction {
 impl ValueHandler for InputFunction {
     fn process(&self, value: Value) -> Value {
         if self.all {
-            return value
+            return value;
         }
         match value {
             Value::Array(a) => {
@@ -103,8 +125,16 @@ impl ValueHandler for InputFunction {
         }
     }
 
-    fn clone(&self) -> Box<dyn ValueHandler + Send + 'static> {
+    fn clone(&self) -> BoxedValueHandler {
         Box::new(InputFunction::new(self.index))
+    }
+}
+
+impl Implementable for InputFunction {
+    type Result = BoxedValueHandler;
+
+    fn implement(&self) -> Self::Result {
+        ValueHandler::clone(self)
     }
 }
 
@@ -126,8 +156,15 @@ impl ValueHandler for LiteralOperator {
         self.literal.clone()
     }
 
-    fn clone(&self) -> Box<dyn ValueHandler + Send + 'static> {
+    fn clone(&self) -> BoxedValueHandler {
         Box::new(LiteralOperator { literal: self.literal.clone() })
+    }
+}
+
+impl Implementable for LiteralOperator {
+    type Result = BoxedValueHandler;
+    fn implement(&self) -> Self::Result {
+        ValueHandler::clone(self)
     }
 }
 
@@ -151,8 +188,15 @@ impl ValueHandler for NamedRefOperator {
         }
     }
 
-    fn clone(&self) -> Box<dyn ValueHandler + Send + 'static> {
+    fn clone(&self) -> BoxedValueHandler {
         Box::new(NamedRefOperator { name: self.name.clone() })
+    }
+}
+
+impl Implementable for NamedRefOperator {
+    type Result = BoxedValueHandler;
+    fn implement(&self) -> Self::Result {
+        ValueHandler::clone(self)
     }
 }
 
@@ -171,30 +215,38 @@ impl ValueHandler for IndexedRefOperator {
         }
     }
 
-    fn clone(&self) -> Box<dyn ValueHandler + Send + 'static> {
+    fn clone(&self) -> BoxedValueHandler {
         Box::new(IndexedRefOperator { index: self.index })
     }
 }
 
+impl Implementable for IndexedRefOperator {
+    type Result = BoxedValueHandler;
+
+    fn implement(&self) -> Self::Result {
+        ValueHandler::clone(self)
+    }
+}
+
+
 
 #[derive(Debug, Clone)]
 pub struct OperationFunction {
-    pub op: Operator,
-    pub operands: Vec<Function>,
+    pub op: Op,
+    pub operands: Vec<Operator>,
 }
 
 impl OperationFunction {
-    pub fn new(op: Operator, operands: Vec<Function>) -> OperationFunction {
+    pub fn new(op: Op, operands: Vec<Operator>) -> OperationFunction {
         OperationFunction { op, operands }
     }
 }
 
-impl ValueHandler for OperationFunction {
-    fn process(&self, value: Value) -> Value {
-        self.op.implement(self.operands.iter().map(|v| v.process(value.clone())).collect())
-    }
+impl Implementable for OperationFunction {
+    type Result = BoxedValueHandler;
 
-    fn clone(&self) -> Box<dyn ValueHandler + Send + 'static> {
-        Box::new(OperationFunction { op: self.op.clone(), operands: self.operands.iter().map(Clone::clone).collect() })
+    fn implement(&self) -> Self::Result {
+        let function = self.op.implement(self.operands.clone());
+        function.implement()
     }
 }
