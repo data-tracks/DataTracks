@@ -287,6 +287,11 @@ mod tests {
         check_sql_implement_join("SELECT $0 + $1 FROM $0, $1", vec![vec![Value::float(3.3)], vec![Value::float(3.4)]], vec![Value::float(6.7)]);
     }
 
+    #[test]
+    fn sql_count_single() {
+        check_sql_implement("SELECT COUNT(*) FROM $0", vec![Value::float(3.3)], vec![Value::int(1)]);
+    }
+
     fn check_sql_implement_join(query: &str, inputs: Vec<Vec<Value>>, output: Vec<Value>) {
         let transform = build_transformer(&Language::Sql, query);
 

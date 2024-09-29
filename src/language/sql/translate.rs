@@ -1,7 +1,7 @@
 use crate::algebra;
 use crate::algebra::AlgebraType::{Filter, Join, Project, Scan};
 use crate::algebra::Operator::{Input, Literal, NamedInput, Operation};
-use crate::algebra::{AlgebraType, InputFunction, LiteralOperator, NamedRefOperator, Op, OperationFunction, Operator};
+use crate::algebra::{AggContainable, AlgebraType, InputFunction, LiteralOperator, NamedRefOperator, Op, OperationFunction, Operator};
 use crate::language::sql::statement::{SqlIdentifier, SqlSelect, SqlStatement};
 use crate::value::Value;
 
@@ -27,7 +27,7 @@ fn handle_select(query: SqlSelect) -> Result<AlgebraType, String> {
         join
     };
 
-    let node = match filters.len() {
+    let mut node = match filters.len() {
         0 => {
             node
         }
@@ -39,7 +39,7 @@ fn handle_select(query: SqlSelect) -> Result<AlgebraType, String> {
         }
     };
 
-    let function = match projections.len() {
+    let mut function = match projections.len() {
         1 => {
             let function = projections.pop().unwrap();
             match function {
@@ -53,6 +53,12 @@ fn handle_select(query: SqlSelect) -> Result<AlgebraType, String> {
             Operation(OperationFunction::new(Op::Combine, projections))
         }
     };
+
+    let mut aggs = function.nested_aggregations();
+
+    if !aggs.is_empty() {
+        node = algebra::Aggregate::new(Box::new(node), aggs, vec![])
+    }
 
     Ok(Project(algebra::Project::new(node, function)))
 

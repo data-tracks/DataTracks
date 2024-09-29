@@ -2,6 +2,7 @@ use crate::algebra::algebra::ValueHandler;
 use crate::algebra::function::Operator::{IndexedInput, Input, Literal, NamedInput, Operation};
 use crate::algebra::operator::Op;
 use crate::algebra::BoxedValueHandler;
+use crate::algebra::Operator::Aggregation;
 use crate::value::Value;
 use std::fmt::{Display, Formatter};
 
@@ -11,6 +12,7 @@ pub enum Operator {
     NamedInput(NamedRefOperator),
     IndexedInput(IndexedRefOperator),
     Operation(OperationFunction),
+    Aggregation(Box<AggregationFunction>),
     Input(InputFunction),
 }
 
@@ -28,24 +30,38 @@ impl Operator {
     }
 }
 
+impl AggContainable for Operator {
+    fn nested_aggregations(&mut self) -> Vec<&mut AggregationFunction> {
+        match self {
+            Literal(l) => vec![],
+            NamedInput(n) => vec![],
+            IndexedInput(i) => vec![],
+            Operation(o) => vec![],
+            Input(i) => vec![],
+            Aggregation(a) => vec![a]
+        }
+    }
+}
 
-pub trait Implementable {
-    type Result;
-
-    fn implement(&self) -> Self::Result;
+pub trait AggContainable {
+    fn nested_aggregations(&mut self) -> Vec<&mut AggregationFunction>;
 }
 
 
-impl Implementable for Operator {
-    type Result = BoxedValueHandler;
+pub trait Implementable<Implementation> {
+    fn implement(&self) -> Result<Implementation, ()>;
+}
 
-    fn implement(&self) -> Self::Result {
+
+impl Implementable<BoxedValueHandler> for Operator {
+    fn implement(&self) -> Result<BoxedValueHandler, ()> {
         match self {
             Literal(l) => l.implement(),
             NamedInput(n) => n.implement(),
             IndexedInput(i) => i.implement(),
             Operation(o) => o.implement(),
             Input(i) => i.implement(),
+            Aggregation(a) => a.implement()
         }
     }
 }
@@ -68,7 +84,7 @@ impl ValueHandler for Operator {
             NamedInput(n) => ValueHandler::clone(n),
             IndexedInput(i) => ValueHandler::clone(i),
             Input(i) => ValueHandler::clone(i),
-            Operation(o) => o.implement()
+            Operation(o) | Aggregation(o) => o.implement().unwrap(),
         }
     }
 }
@@ -80,7 +96,7 @@ impl Display for Operator {
             Literal(l) => write!(f, "{}", l.literal),
             NamedInput(name) => write!(f, "${}", name.name),
             IndexedInput(index) => write!(f, "${}", index.index),
-            Operation(op) => write!(f, "{}", op.op.dump(true)),
+            Operation(op) | Aggregation(op) => write!(f, "{}", op.op.dump(true)),
             Input(_) => write!(f, "!"),
         }
     }
@@ -130,11 +146,9 @@ impl ValueHandler for InputFunction {
     }
 }
 
-impl Implementable for InputFunction {
-    type Result = BoxedValueHandler;
-
-    fn implement(&self) -> Self::Result {
-        ValueHandler::clone(self)
+impl Implementable<BoxedValueHandler> for InputFunction {
+    fn implement(&self) -> Result<BoxedValueHandler, ()> {
+        Ok(ValueHandler::clone(self))
     }
 }
 
@@ -161,10 +175,9 @@ impl ValueHandler for LiteralOperator {
     }
 }
 
-impl Implementable for LiteralOperator {
-    type Result = BoxedValueHandler;
-    fn implement(&self) -> Self::Result {
-        ValueHandler::clone(self)
+impl Implementable<BoxedValueHandler> for LiteralOperator {
+    fn implement(&self) -> Result<BoxedValueHandler, ()> {
+        Ok(ValueHandler::clone(self))
     }
 }
 
@@ -193,10 +206,9 @@ impl ValueHandler for NamedRefOperator {
     }
 }
 
-impl Implementable for NamedRefOperator {
-    type Result = BoxedValueHandler;
-    fn implement(&self) -> Self::Result {
-        ValueHandler::clone(self)
+impl Implementable<BoxedValueHandler> for NamedRefOperator {
+    fn implement(&self) -> Result<BoxedValueHandler, ()> {
+        Ok(ValueHandler::clone(self))
     }
 }
 
@@ -220,14 +232,11 @@ impl ValueHandler for IndexedRefOperator {
     }
 }
 
-impl Implementable for IndexedRefOperator {
-    type Result = BoxedValueHandler;
-
-    fn implement(&self) -> Self::Result {
-        ValueHandler::clone(self)
+impl Implementable<BoxedValueHandler> for IndexedRefOperator {
+    fn implement(&self) -> Result<BoxedValueHandler, ()> {
+        Ok(ValueHandler::clone(self))
     }
 }
-
 
 
 #[derive(Debug, Clone)]
@@ -236,17 +245,29 @@ pub struct OperationFunction {
     pub operands: Vec<Operator>,
 }
 
+
 impl OperationFunction {
     pub fn new(op: Op, operands: Vec<Operator>) -> OperationFunction {
         OperationFunction { op, operands }
     }
 }
 
-impl Implementable for OperationFunction {
-    type Result = BoxedValueHandler;
+impl AggContainable for OperationFunction {
+    fn nested_aggregations(&mut self) -> Vec<&mut AggregationFunction> {
+        self.operands.iter().map(|mut o| o.nested_aggregations()).collect()
+    }
+}
 
-    fn implement(&self) -> Self::Result {
+impl Implementable<BoxedValueHandler> for OperationFunction {
+    fn implement(&self) -> Result<BoxedValueHandler, ()> {
         let function = self.op.implement(self.operands.clone());
         function.implement()
     }
 }
+
+#[derive(Clone, Debug)]
+pub struct AggregationFunction {
+    pub op: Op,
+    pub input: Operator,
+}
+

@@ -1,3 +1,4 @@
+use crate::algebra::aggregate::{Aggregate, ValueLoader};
 use crate::algebra::filter::Filter;
 use crate::algebra::join::Join;
 use crate::algebra::project::Project;
@@ -10,17 +11,20 @@ pub type BoxedIterator = Box<dyn ValueIterator<Item=Value> + Send + 'static>;
 
 pub type BoxedValueHandler = Box<dyn ValueHandler + Send + 'static>;
 
+pub type BoxedValueLoader = Box<dyn ValueLoader + Send + 'static>;
+
 #[derive(Clone)]
 pub enum AlgebraType {
     Scan(Scan),
     Project(Project),
     Filter(Filter),
     Join(Join),
-    Union(Union)
+    Union(Union),
+    Aggregate(Aggregate),
 }
 
 impl Algebra for AlgebraType {
-    type Iterator = Box<dyn ValueIterator<Item=Value> + Send>;
+    type Iterator = BoxedIterator;
 
     fn derive_iterator(&mut self) -> Self::Iterator {
         match self {
@@ -28,7 +32,8 @@ impl Algebra for AlgebraType {
             AlgebraType::Project(p) => Box::new(p.derive_iterator()),
             AlgebraType::Filter(f) => Box::new(f.derive_iterator()),
             AlgebraType::Join(j) => Box::new(j.derive_iterator()),
-            AlgebraType::Union(u) => Box::new(u.derive_iterator())
+            AlgebraType::Union(u) => Box::new(u.derive_iterator()),
+            AlgebraType::Aggregate(a) => Box::new(a.derive_iterator()),
         }
     }
 }

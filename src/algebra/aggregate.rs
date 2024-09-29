@@ -1,16 +1,22 @@
-use crate::algebra::{Algebra, AlgebraType, BoxedIterator, ValueIterator};
+use crate::algebra::algebra::BoxedValueLoader;
+use crate::algebra::function::{AggregationFunction, Implementable};
+use crate::algebra::{Algebra, AlgebraType, BoxedIterator, BoxedValueHandler, Operator, ValueIterator};
 use crate::processing::Train;
 use crate::value::Value;
+use std::collections::hash_map::DefaultHasher;
+use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 
 #[derive(Clone)]
 pub struct Aggregate {
     input: Box<AlgebraType>,
-    aggregates: AggFunction,
+    aggregates: Vec<AggregationFunction>,
+    group: Operator,
 }
 
 impl Aggregate {
-    pub fn new(input: Box<AlgebraType>, aggregates: AggFunction) -> Aggregate {
-        Aggregate { input, aggregates }
+    pub fn new(input: Box<AlgebraType>, aggregates: Vec<AggregationFunction>, group: Operator) -> Self {
+        Aggregate { input, aggregates, group }
     }
 }
 
@@ -20,29 +26,56 @@ impl Algebra for Aggregate {
 
     fn derive_iterator(&mut self) -> Self::Iterator {
         let iter = self.input.derive_iterator();
-        AggIterator::new(iter, self.aggregates.clone())
+        let hash = self.group.implement().unwrap();
+        let aggregates = self.aggregates.iter().map(|a| a.implement()).collect();
+        AggIterator::new(iter, aggregates, hash)
     }
 }
 
 
 pub struct AggIterator {
     input: BoxedIterator,
+    groups: HashMap<u64, Vec<Value>>,
+    hashes: HashMap<u64, Value>,
     values: Vec<Value>,
-    aggregates: AggFunction,
+    hasher: BoxedValueHandler,
+    aggregates: Vec<BoxedValueLoader>,
     reloaded: bool,
 }
 
 impl AggIterator {
-    pub fn new(input: BoxedIterator, aggregates: AggFunction) -> AggIterator {
-        AggIterator { input, values: vec![], aggregates, reloaded: false }
+    pub fn new(input: BoxedIterator, aggregates: Vec<BoxedValueLoader>, hasher: BoxedValueHandler) -> AggIterator {
+        AggIterator { input, groups: Default::default(), hashes: Default::default(), values: vec![], hasher, aggregates, reloaded: false }
     }
 
     pub(crate) fn reload_values(&mut self) {
-        while let Some(value) = self.input.next() {
-            self.aggregates.load(&value);
-        }
-        self.values.append(&mut self.aggregates.get());
+        self.values.clear();
+        self.groups.clear();
+        self.hashes.clear();
 
+        let mut hasher = DefaultHasher::new();
+
+        while let Some(value) = self.input.next() {
+            let keys = self.hasher.process(&value);
+            keys.hash(&mut hasher);
+            let hash = hasher.finish();
+
+            self.hashes.entry(hash).or_insert(keys);
+            self.groups.entry(hash).or_insert(vec![]).push(value);
+        }
+
+        for (_hash, values) in &self.groups {
+            for value in values {
+                for mut agg in &self.aggregates {
+                    agg.load(&value)
+                }
+            }
+            let mut values = vec![];
+            for agg in &self.aggregates {
+                values.push(agg.get());
+            }
+            self.values.push(values.into());
+        }
 
         self.reloaded = true;
     }
@@ -71,32 +104,32 @@ impl ValueIterator for AggIterator {
     }
 
     fn clone(&self) -> BoxedIterator {
-        Box::new(AggIterator::new(self.input.clone(), self.aggregates.clone()))
+        Box::new(AggIterator::new(self.input.clone(), self.aggregates.clone(), self.hasher.clone()))
     }
 }
 
-trait ValueLoader {
+pub trait ValueLoader {
     fn load(&mut self, value: &Value);
 
-    fn get(&self) -> Vec<Value>;
+    fn get(&self) -> Value;
 }
 
 
 #[derive(Clone)]
-pub enum AggFunction {
-    Count(CountOperator)
+pub enum AggOp {
+    Count(CountOperator),
 }
 
-impl ValueLoader for AggFunction {
+impl ValueLoader for AggOp {
     fn load(&mut self, value: &Value) {
         match self {
-            AggFunction::Count(c) => c.load(value),
+            AggOp::Count(c) => c.load(value),
         }
     }
 
-    fn get(&self) -> Vec<Value> {
+    fn get(&self) -> Value {
         match self {
-            AggFunction::Count(c) => c.get(),
+            AggOp::Count(c) => c.get(),
         }
     }
 }
@@ -107,12 +140,18 @@ pub struct CountOperator {
     count: usize,
 }
 
+impl CountOperator {
+    pub fn new() -> CountOperator {
+        CountOperator { count: 0 }
+    }
+}
+
 impl ValueLoader for CountOperator {
     fn load(&mut self, _value: &Value) {
         self.count += 1;
     }
 
-    fn get(&self) -> Vec<Value> {
-        vec![Value::int(self.count as i64)]
+    fn get(&self) -> Value {
+        Value::int(self.count as i64)
     }
 }

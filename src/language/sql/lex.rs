@@ -252,121 +252,129 @@ mod test {
 
     #[test]
     fn test_star() {
-        let query = &select("*", "$0", None);
+        let query = &select("*", "$0", None, None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_single() {
-        let query = &select(&quote("name"), "$0", None);
+        let query = &select(&quote("name"), "$0", None, None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_list() {
-        let query = &select(&format!("{}, {}", quote("name"), quote("age")), "$0", None);
+        let query = &select(&format!("{}, {}", quote("name"), quote("age")), "$0", None, None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_as() {
-        let query = &select(&format!("{} AS {}, {}", quote("name"), quote("n"), quote("age")), "$0", None);
+        let query = &select(&format!("{} AS {}, {}", quote("name"), quote("n"), quote("age")), "$0", None, None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_implicit_join() {
-        let query = &select(&format!("{} AS {}, {}", quote("name"), quote("n"), quote("age")), "$0, $1", None);
+        let query = &select(&format!("{} AS {}, {}", quote("name"), quote("n"), quote("age")), "$0, $1", None, None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_as_quote() {
-        let query = &select(&format!("{} AS {}, {}", quote("name"), quote("n"), quote("age")), "$0", None);
+        let query = &select(&format!("{} AS {}, {}", quote("name"), quote("n"), quote("age")), "$0", None, None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_calculators_add() {
-        let query = &select(&format!("{} + 1, {}", quote("name"), quote("age")), "$0", None);
+        let query = &select(&format!("{} + 1, {}", quote("name"), quote("age")), "$0", None, None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_calculators_add_no_space() {
-        let query = &select(&format!("{}+1, {}", quote("name"), quote("age")), "$0", None);
-        let res = &select(&format!("{} + 1, {}", quote("name"), quote("age")), "$0", None);
+        let query = &select(&format!("{}+1, {}", quote("name"), quote("age")), "$0", None, None);
+        let res = &select(&format!("{} + 1, {}", quote("name"), quote("age")), "$0", None, None);
         test_query_diff(query, res);
     }
 
     #[test]
     fn test_calculators_sub() {
-        let query = &select(&format!("{} - 1, {}", quote("name"), quote("age")), "$0", None);
+        let query = &select(&format!("{} - 1, {}", quote("name"), quote("age")), "$0", None, None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_calculators_multi() {
-        let query = &select(&format!("{} * 1, {}", quote("name"), quote("age")), "$0", None);
+        let query = &select(&format!("{} * 1, {}", quote("name"), quote("age")), "$0", None, None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_calculators_div() {
-        let query = &select(&format!("{} / 1, {}", quote("name"), quote("age")), "$0", None);
+        let query = &select(&format!("{} / 1, {}", quote("name"), quote("age")), "$0", None, None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_calculators_add_nested() {
-        let query = &select(&format!("{} + 1 + 1, {}", quote("name"), quote("age")), "$0", None);
+        let query = &select(&format!("{} + 1 + 1, {}", quote("name"), quote("age")), "$0", None, None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_calculators_add_nested_mixed() {
-        let query = &select(&format!("{} / 1 + 3, {}", quote("name"), quote("age")), "$0", None);
+        let query = &select(&format!("{} / 1 + 3, {}", quote("name"), quote("age")), "$0", None, None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_calculators_function_call() {
-        let query = &select(&format!("ADD({}, {})", quote("name"), quote("age")), "$0", None);
+        let query = &select(&format!("ADD({}, {})", quote("name"), quote("age")), "$0", None, None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_calculators_function_call_nested() {
-        let query = &select(&format!("ADD({}, ADD({}, {}))", quote("name"), quote("age"), quote("age2")), "$0", None);
+        let query = &select(&format!("ADD({}, ADD({}, {}))", quote("name"), quote("age"), quote("age2")), "$0", None, None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_filter() {
-        let query = &select(&format!("{}", quote("name")), "$0", Some(&format!("{} = 3", quote("$0"))));
+        let query = &select(&format!("{}", quote("name")), "$0", Some(&format!("{} = 3", quote("$0"))), None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_and_filter() {
-        let query = &select(&format!("{}", quote("name")), "$0", Some(&format!("{} = 3 and {} = 'test'", quote("$0"), quote("name"))));
-        let res = &select(&format!("{}", quote("name")), "$0", Some(&format!("{} = 3 AND {} = 'test'", quote("$0"), quote("name"))));
+        let query = &select(&format!("{}", quote("name")), "$0", Some(&format!("{} = 3 and {} = 'test'", quote("$0"), quote("name"))), None);
+        let res = &select(&format!("{}", quote("name")), "$0", Some(&format!("{} = 3 AND {} = 'test'", quote("$0"), quote("name"))), None);
         test_query_diff(query, res);
     }
 
     #[test]
     fn test_or_filter() {
-        let query = &select(&format!("{}", quote("name")), "$0", Some(&format!("{} = 3 OR {} = 'test'", quote("$0"), quote("name"))));
+        let query = &select(&format!("{}", quote("name")), "$0", Some(&format!("{} = 3 OR {} = 'test'", quote("$0"), quote("name"))), None);
         test_query_diff(query, query);
     }
 
-    fn select(selects: &str, from: &str, wheres: Option<&str>) -> String {
+    #[test]
+    fn test_aggregate_count_single() {
+        let query = &select(&format!("COUNT({})", quote("name")), "$0", None, None);
+        test_query_diff(query, query);
+    }
+
+    fn select(selects: &str, from: &str, wheres: Option<&str>, group_by: Option<&str>) -> String {
         let mut select = format!("SELECT {} FROM {}", selects, from);
         if let Some(wheres) = wheres {
             select += &format!(" WHERE {}", wheres);
         }
+        if let Some(group) = group_by {
+            select += &format!(" GROUP BY {}", group);
+        }
         select
-
     }
 
     fn quote(key: &str) -> String {

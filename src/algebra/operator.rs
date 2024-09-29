@@ -1,7 +1,9 @@
-use crate::algebra::algebra::ValueHandler;
+use crate::algebra::aggregate::{AggOp, CountOperator};
+use crate::algebra::algebra::{BoxedValueLoader, ValueHandler};
 use crate::algebra::function::Implementable;
-use crate::algebra::operator::Function::Tuple;
+use crate::algebra::operator::Function::{Aggregate, Tuple};
 use crate::algebra::operator::Op::{Divide, Equal, Minus, Multiplication, Not, Plus};
+use crate::algebra::Op::Count;
 use crate::algebra::{BoxedValueHandler, Operator};
 use crate::value::Value;
 use crate::value::Value::{Array, Bool, Dict, Float, Int, Null, Text};
@@ -18,12 +20,13 @@ pub enum Op {
     Equal,
     And,
     Or,
+    Count
 }
 
 
 impl Op {
     pub fn implement(&self, operators: Vec<Operator>) -> Function {
-        let operands = operators.into_iter().map(|o| o.implement()).collect();
+        let operands = operators.into_iter().map(|o| o.implement().unwrap()).collect();
         match self {
             Plus => {
                 Tuple(
@@ -103,8 +106,21 @@ impl Op {
                     })
                 }, operands))
             }
+            Count => {
+                Aggregate(
+                    AggOp::Count(CountOperator::new())
+                )
+            }
         }
     }
+
+    pub fn is_agg(&self) -> bool {
+        match self {
+            Count => true,
+            _ => false
+        }
+    }
+
     pub fn dump(&self, as_call: bool) -> String {
         match self {
             Plus => {
@@ -154,20 +170,32 @@ impl Op {
             Op::Or => {
                 String::from("OR")
             }
+            Op::Count => {
+                String::from("COUNT")
+            }
         }
     }
 }
 
 pub enum Function {
-    Tuple(TupleFunction)
+    Tuple(TupleFunction),
+    Aggregate(AggOp)
 }
 
-impl Implementable for Function {
-    type Result = BoxedValueHandler;
-
-    fn implement(&self) -> Self::Result {
+impl Implementable<BoxedValueHandler> for Function {
+    fn implement(&self) -> Result<BoxedValueHandler, ()> {
         match self {
-            Tuple(t) => t.clone(),
+            Tuple(t) => Ok(t.clone()),
+            _ => Err(())
+        }
+    }
+}
+
+impl Implementable<BoxedValueLoader> for Function {
+    fn implement(&self) -> Result<BoxedValueLoader, ()> {
+        match self {
+            Aggregate(a) => Ok(Box::new(a.clone())),
+            _ => Err(())
         }
     }
 }
@@ -210,6 +238,7 @@ impl FromStr for Op {
             "-" | "minus" => Ok(Minus),
             "*" | "multiply" => Ok(Multiplication),
             "/" | "divide" => Ok(Divide),
+            "count" => Ok(Count),
             _ => Err(())
         }
     }

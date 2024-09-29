@@ -23,7 +23,6 @@ pub enum Value {
     Null,
 }
 
-
 impl Value {
     pub fn text(string: &str) -> Value {
         Value::Text(Text(string.parse().unwrap()))
@@ -148,6 +147,7 @@ macro_rules! value_display {
         }
     };
 }
+
 
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {

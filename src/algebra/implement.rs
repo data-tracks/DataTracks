@@ -6,5 +6,5 @@ pub fn implement(function: &Operator) -> BoxedValueHandler {
 }
 
 pub fn implement_func(function: &Operator) -> BoxedValueHandler {
-    function.implement()
+    function.implement().unwrap()
 }

@@ -1,3 +1,4 @@
+pub use aggregate::Aggregate;
 pub use algebra::build_iterator;
 pub use algebra::Algebra;
 pub use algebra::AlgebraType;
@@ -5,6 +6,7 @@ pub use algebra::BoxedIterator;
 pub use algebra::BoxedValueHandler;
 pub use algebra::ValueIterator;
 pub use filter::Filter;
+pub use function::AggContainable;
 pub use function::InputFunction;
 pub use function::LiteralOperator;
 pub use function::NamedRefOperator;
