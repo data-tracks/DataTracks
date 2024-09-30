@@ -1,9 +1,10 @@
-use crate::algebra::aggregate::{AggOp, CountOperator};
+use crate::algebra::aggregate::CountOperator;
 use crate::algebra::algebra::{BoxedValueLoader, ValueHandler};
 use crate::algebra::function::Implementable;
-use crate::algebra::operator::Function::{Aggregate, Tuple};
-use crate::algebra::operator::Op::{Divide, Equal, Minus, Multiplication, Not, Plus};
-use crate::algebra::Op::Count;
+use crate::algebra::operator::AggOp::Count;
+use crate::algebra::operator::TupleOp::{Divide, Equal, Minus, Multiplication, Not, Plus};
+use crate::algebra::Op::Tuple;
+use crate::algebra::TupleOp::{And, Combine, Or};
 use crate::algebra::{BoxedValueHandler, Operator};
 use crate::value::Value;
 use crate::value::Value::{Array, Bool, Dict, Float, Int, Null, Text};
@@ -11,6 +12,29 @@ use std::str::FromStr;
 
 #[derive(Debug, Clone)]
 pub enum Op {
+    Agg(AggOp),
+    Tuple(TupleOp),
+}
+
+
+impl Op {
+    pub(crate) fn dump(&self, as_call: bool) -> String {
+        match self {
+            Op::Agg(a) => a.dump(as_call),
+            Tuple(t) => t.dump(as_call)
+        }
+    }
+
+    pub(crate) fn implement(&self, operators: Vec<Operator>) -> BoxedValueHandler {
+        match self {
+            Op::Agg(_) => panic!("Aggregations should have been replaced!"),
+            Tuple(t) => t.implement(operators)
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum TupleOp {
     Plus,
     Minus,
     Multiplication,
@@ -20,16 +44,15 @@ pub enum Op {
     Equal,
     And,
     Or,
-    Count
 }
 
 
-impl Op {
-    pub fn implement(&self, operators: Vec<Operator>) -> Function {
+impl TupleOp {
+    pub fn implement(&self, operators: Vec<Operator>) -> BoxedValueHandler {
         let operands = operators.into_iter().map(|o| o.implement().unwrap()).collect();
         match self {
             Plus => {
-                Tuple(
+                Box::new(
                     TupleFunction::new(|value| {
                         value.iter().fold(Value::int(0), |a, b| {
                             &a + b
@@ -37,8 +60,9 @@ impl Op {
                     }, operands)
                 )
             }
+
             Minus => {
-                Tuple(
+                Box::new(
                     TupleFunction::new(move |value| {
                         let a = value.get(0).unwrap();
                         let b = value.get(1).unwrap();
@@ -47,7 +71,7 @@ impl Op {
                 )
             }
             Multiplication => {
-                Tuple(
+                Box::new(
                     TupleFunction::new(move |value| {
                         value.iter().fold(Value::int(1), |a, b| {
                             &a * b
@@ -56,7 +80,7 @@ impl Op {
                 )
             }
             Divide => {
-                Tuple(
+                Box::new(
                     TupleFunction::new(move |value| {
                         let a = value.get(0).unwrap();
                         let b = value.get(1).unwrap();
@@ -65,7 +89,7 @@ impl Op {
                 )
             }
             Equal => {
-                Tuple(
+                Box::new(
                     TupleFunction::new(move |value| {
                         let a = value.get(0).unwrap();
                         let b = value.get(1).unwrap();
@@ -73,53 +97,50 @@ impl Op {
                     }, operands)
                 )
             }
-            Op::Combine => {
-                Tuple(TupleFunction::new(move |value| {
-                    Value::array(value.iter().map(|v| (*v).clone()).collect())
-                }, operands))
+            Combine => {
+                Box::new(
+                    TupleFunction::new(move |value| {
+                        Value::array(value.iter().map(|v| (*v).clone()).collect())
+                    }, operands)
+                )
             }
             Not => {
-                Tuple(TupleFunction::new(move |vec| {
-                    let value = Value::bool(vec.get(0).unwrap().as_bool().unwrap().0);
-                    match vec.get(0).unwrap() {
-                        Int(_) => Int(value.as_int().unwrap()),
-                        Float(_) => Float(value.as_float().unwrap()),
-                        Bool(_) => Bool(value.as_bool().unwrap()),
-                        Text(_) => Text(value.as_text().unwrap()),
-                        Array(_) => Array(value.as_array().unwrap()),
-                        Dict(_) => Dict(value.as_dict().unwrap()),
-                        Null => Value::null()
-                    }
-                }, operands))
+                Box::new(
+                    TupleFunction::new(move |vec| {
+                        let value = Value::bool(vec.get(0).unwrap().as_bool().unwrap().0);
+                        match vec.get(0).unwrap() {
+                            Int(_) => Int(value.as_int().unwrap()),
+                            Float(_) => Float(value.as_float().unwrap()),
+                            Bool(_) => Bool(value.as_bool().unwrap()),
+                            Text(_) => Text(value.as_text().unwrap()),
+                            Array(_) => Array(value.as_array().unwrap()),
+                            Dict(_) => Dict(value.as_dict().unwrap()),
+                            Null => Value::null()
+                        }
+                    }, operands)
+                )
             }
-            Op::And => {
-                Tuple(TupleFunction::new(move |value| {
-                    value.iter().fold(Value::bool(true), |a, b| {
-                        (a.as_bool().unwrap().0 && b.as_bool().unwrap().0).into()
-                    })
-                }, operands))
+            And => {
+                Box::new(
+                    TupleFunction::new(move |value| {
+                        value.iter().fold(Value::bool(true), |a, b| {
+                            (a.as_bool().unwrap().0 && b.as_bool().unwrap().0).into()
+                        })
+                    }, operands)
+                )
             }
-            Op::Or => {
-                Tuple(TupleFunction::new(move |value| {
-                    value.iter().fold(Value::bool(true), |a, b| {
-                        (a.as_bool().unwrap().0 || b.as_bool().unwrap().0).into()
-                    })
-                }, operands))
-            }
-            Count => {
-                Aggregate(
-                    AggOp::Count(CountOperator::new())
+            Or => {
+                Box::new(
+                    TupleFunction::new(move |value| {
+                        value.iter().fold(Value::bool(true), |a, b| {
+                            (a.as_bool().unwrap().0 || b.as_bool().unwrap().0).into()
+                        })
+                    }, operands)
                 )
             }
         }
     }
 
-    pub fn is_agg(&self) -> bool {
-        match self {
-            Count => true,
-            _ => false
-        }
-    }
 
     pub fn dump(&self, as_call: bool) -> String {
         match self {
@@ -151,7 +172,7 @@ impl Op {
                     String::from("/")
                 }
             }
-            Op::Combine => {
+            TupleOp::Combine => {
                 String::from("")
             }
             Not => {
@@ -164,48 +185,43 @@ impl Op {
                     String::from("=")
                 }
             }
-            Op::And => {
+            And => {
                 String::from("AND")
             }
-            Op::Or => {
+            Or => {
                 String::from("OR")
             }
-            Op::Count => {
-                String::from("COUNT")
-            }
         }
     }
 }
 
-pub enum Function {
-    Tuple(TupleFunction),
-    Aggregate(AggOp)
+#[derive(Debug, Clone)]
+pub enum AggOp {
+    Count
 }
 
-impl Implementable<BoxedValueHandler> for Function {
-    fn implement(&self) -> Result<BoxedValueHandler, ()> {
+impl AggOp {
+    pub(crate) fn dump(&self, _as_call: bool) -> String {
         match self {
-            Tuple(t) => Ok(t.clone()),
-            _ => Err(())
+            Count => "COUNT".to_string(),
         }
     }
 }
 
-impl Implementable<BoxedValueLoader> for Function {
+impl Implementable<BoxedValueLoader> for AggOp {
     fn implement(&self) -> Result<BoxedValueLoader, ()> {
         match self {
-            Aggregate(a) => Ok(Box::new(a.clone())),
-            _ => Err(())
+            Count => Ok(Box::new(CountOperator::new()))
         }
     }
 }
+
 
 
 pub struct TupleFunction {
     func: fn(&Vec<Value>) -> Value,
     children: Vec<BoxedValueHandler>,
 }
-
 
 impl TupleFunction {
     pub fn new(func: fn(&Vec<Value>) -> Value, children: Vec<BoxedValueHandler>) -> Self {
@@ -224,7 +240,6 @@ impl ValueHandler for TupleFunction {
     }
 }
 
-
 impl FromStr for Op {
     type Err = ();
 
@@ -234,37 +249,46 @@ impl FromStr for Op {
             trimmed.pop();
         }
         match trimmed.as_str() {
-            "+" | "add" | "plus" => Ok(Plus),
-            "-" | "minus" => Ok(Minus),
-            "*" | "multiply" => Ok(Multiplication),
-            "/" | "divide" => Ok(Divide),
-            "count" => Ok(Count),
+            "+" | "add" | "plus" => Ok(Tuple(Plus)),
+            "-" | "minus" => Ok(Tuple(Minus)),
+            "*" | "multiply" => Ok(Tuple(Multiplication)),
+            "/" | "divide" => Ok(Tuple(Divide)),
             _ => Err(())
         }
     }
 }
 
-
 impl Op {
     pub fn plus() -> Op {
-        Plus
+        Tuple(Plus)
     }
     pub fn minus() -> Op {
-        Minus
+        Tuple(Minus)
     }
     pub fn multiply() -> Op {
-        Multiplication
+        Tuple(Multiplication)
     }
     pub fn divide() -> Op {
-        Divide
+        Tuple(Divide)
     }
 
     pub fn equal() -> Op {
-        Equal
+        Tuple(Equal)
     }
 
     pub fn not() -> Op {
-        Not
+        Tuple(Not)
+    }
+
+    pub fn and() -> Op {
+        Tuple(And)
+    }
+    pub fn or() -> Op {
+        Tuple(Or)
+    }
+
+    pub(crate) fn combine() -> Op {
+        Tuple(Combine)
     }
 }
 

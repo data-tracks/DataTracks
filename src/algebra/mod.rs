@@ -6,14 +6,15 @@ pub use algebra::BoxedIterator;
 pub use algebra::BoxedValueHandler;
 pub use algebra::ValueIterator;
 pub use filter::Filter;
-pub use function::AggContainable;
 pub use function::InputFunction;
 pub use function::LiteralOperator;
 pub use function::NamedRefOperator;
 pub use function::OperationFunction;
 pub use function::Operator;
 pub use join::Join;
+pub use operator::AggOp;
 pub use operator::Op;
+pub use operator::TupleOp;
 pub use project::Project;
 pub use scan::Scan;
 

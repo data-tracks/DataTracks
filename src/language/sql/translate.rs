@@ -1,7 +1,7 @@
 use crate::algebra;
-use crate::algebra::AlgebraType::{Filter, Join, Project, Scan};
+use crate::algebra::AlgebraType::{Aggregate, Filter, Join, Project, Scan};
 use crate::algebra::Operator::{Input, Literal, NamedInput, Operation};
-use crate::algebra::{AggContainable, AlgebraType, InputFunction, LiteralOperator, NamedRefOperator, Op, OperationFunction, Operator};
+use crate::algebra::{AggOp, AlgebraType, InputFunction, LiteralOperator, NamedRefOperator, Op, OperationFunction, Operator};
 use crate::language::sql::statement::{SqlIdentifier, SqlSelect, SqlStatement};
 use crate::value::Value;
 
@@ -35,7 +35,7 @@ fn handle_select(query: SqlSelect) -> Result<AlgebraType, String> {
             Filter(algebra::Filter::new(node, filters.pop().unwrap()))
         }
         _ => {
-            Filter(algebra::Filter::new(node, Operation(OperationFunction::new(Op::And, filters))))
+            Filter(algebra::Filter::new(node, Operation(OperationFunction::new(Op::and(), filters))))
         }
     };
 
@@ -50,18 +50,32 @@ fn handle_select(query: SqlSelect) -> Result<AlgebraType, String> {
             }
         }
         _ => {
-            Operation(OperationFunction::new(Op::Combine, projections))
+            Operation(OperationFunction::new(Op::combine(), projections))
         }
     };
 
-    let mut aggs = function.nested_aggregations();
+    let mut aggs = function.replace::<Operator, (AggOp, Vec<Operator>)>(|mut o| {
+        // we replace the operator
+        match o {
+            Operation(mut op) => {
+                match op.op {
+                    Op::Agg(a) => {
+                        o = NamedInput(NamedRefOperator::new(String::from("1")));
+
+                        vec![(a, op.operands)]
+                    }
+                    _ => return
+                }
+            }
+            _ => vec![]
+        }
+    });
 
     if !aggs.is_empty() {
-        node = algebra::Aggregate::new(Box::new(node), aggs, vec![])
+        node = Aggregate(algebra::Aggregate::new(Box::new(node), aggs, None))
     }
 
     Ok(Project(algebra::Project::new(node, function)))
-
 }
 
 fn handle_from(from: SqlStatement) -> Result<AlgebraType, String> {

@@ -1,7 +1,8 @@
 use std::str::FromStr;
 use std::{mem, vec};
 
-use crate::algebra::Op;
+use crate::algebra::Op::Tuple;
+use crate::algebra::{Op, TupleOp};
 use crate::language::sql::buffer::BufferedLexer;
 use crate::language::sql::lex::Token::{As, Comma, From, GroupBy, Identifier, Limit, OrderBy, Select, Semi, Star, Text, Where};
 use crate::language::sql::statement::{SqlAlias, SqlIdentifier, SqlList, SqlOperator, SqlSelect, SqlStatement, SqlSymbol, SqlValue};
@@ -195,10 +196,8 @@ fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> SqlStateme
         }
     }
 
-    if let Some(op) = operator.take() {
-        if matches!(op, Op::Multiplication ) {
-            return SqlStatement::Symbol(SqlSymbol::new("*"));
-        }
+    if let Some(Tuple(TupleOp::Multiplication)) = operator.take() {
+        return SqlStatement::Symbol(SqlSymbol::new("*"));
     }
 
     let statement = match expressions.len() {
@@ -226,8 +225,8 @@ fn parse_operator(tok: Token) -> Option<Op> {
         Token::Divide => Some(Op::divide()),
         Token::Eq => Some(Op::equal()),
         Token::Not => Some(Op::not()),
-        Token::And => Some(Op::And),
-        Token::Or => Some(Op::Or),
+        Token::And => Some(Op::and()),
+        Token::Or => Some(Op::or()),
         _ => None
     }
 }

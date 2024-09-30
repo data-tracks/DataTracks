@@ -1,6 +1,7 @@
 use crate::algebra::algebra::BoxedValueLoader;
-use crate::algebra::function::{AggregationFunction, Implementable};
-use crate::algebra::{Algebra, AlgebraType, BoxedIterator, BoxedValueHandler, Operator, ValueIterator};
+use crate::algebra::function::Implementable;
+use crate::algebra::operator::AggOp;
+use crate::algebra::{Algebra, AlgebraType, BoxedIterator, BoxedValueHandler, InputFunction, Op, OperationFunction, Operator, ValueIterator};
 use crate::processing::Train;
 use crate::value::Value;
 use std::collections::hash_map::DefaultHasher;
@@ -10,13 +11,20 @@ use std::hash::{Hash, Hasher};
 #[derive(Clone)]
 pub struct Aggregate {
     input: Box<AlgebraType>,
-    aggregates: Vec<AggregationFunction>,
+    aggregates: Vec<(AggOp, Operator)>,
     group: Operator,
 }
 
 impl Aggregate {
-    pub fn new(input: Box<AlgebraType>, aggregates: Vec<AggregationFunction>, group: Operator) -> Self {
-        Aggregate { input, aggregates, group }
+    pub fn new(input: Box<AlgebraType>, aggregates: Vec<(AggOp, Vec<Operator>)>, group: Option<Operator>) -> Self {
+        let aggregates = aggregates.into_iter().map(|(op, ops)| {
+            if ops.len() == 1 {
+                (op, ops.get(0).unwrap())
+            } else {
+                (op, &Operator::Operation(OperationFunction::new(Op::combine(), ops)))
+            }
+        }).collect();
+        Aggregate { input, aggregates, group: group.unwrap_or(Operator::Input(InputFunction::all())) }
     }
 }
 
@@ -115,27 +123,7 @@ pub trait ValueLoader {
 }
 
 
-#[derive(Clone)]
-pub enum AggOp {
-    Count(CountOperator),
-}
-
-impl ValueLoader for AggOp {
-    fn load(&mut self, value: &Value) {
-        match self {
-            AggOp::Count(c) => c.load(value),
-        }
-    }
-
-    fn get(&self) -> Value {
-        match self {
-            AggOp::Count(c) => c.get(),
-        }
-    }
-}
-
-
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct CountOperator {
     count: usize,
 }
