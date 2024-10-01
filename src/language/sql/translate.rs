@@ -55,8 +55,6 @@ fn handle_select(query: SqlSelect) -> Result<AlgebraType, String> {
         }
     };
 
-    println!("{:?}", function);
-
     let aggs = function.replace(|o| {
         // we replace the operator
         return match &o.op {

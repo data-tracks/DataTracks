@@ -73,7 +73,7 @@ impl AggIterator {
         while let Some(value) = self.input.next() {
             let mut hasher = DefaultHasher::new();
             let keys = self.hasher.process(&value);
-            println!("{:?}", keys);
+
             keys.hash(&mut hasher);
 
             let hash = hasher.finish();
