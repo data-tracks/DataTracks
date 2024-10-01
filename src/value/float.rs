@@ -3,7 +3,7 @@ use crate::value::number::Number;
 use crate::value::{Bool, Text};
 use std::cmp::min;
 use std::fmt::{Display, Formatter};
-use std::ops::{Add, Sub};
+use std::ops::{Add, Div, Sub};
 
 #[derive(Eq, Hash, Debug, PartialEq, Clone, Copy)]
 pub struct Float {
@@ -82,6 +82,14 @@ impl Sub for Float {
 
     fn sub(self, other: Self) -> Self {
         Float::new(self.as_f64() - other.as_f64())
+    }
+}
+
+impl Div for Float {
+    type Output = Self;
+
+    fn div(self, other: Self) -> Self {
+        Float::new(self.as_f64() / other.as_f64())
     }
 }
 

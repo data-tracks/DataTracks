@@ -30,7 +30,7 @@ impl Aggregate {
                 };
                 (op, ops)
             }).collect(),
-            group: group.unwrap_or(Operator::input()),
+            group: group.unwrap_or(Operator::literal(Value::bool(true))),
         }
     }
 }
@@ -68,12 +68,14 @@ impl AggIterator {
         self.groups.clear();
         self.hashes.clear();
 
-        let mut hasher = DefaultHasher::new();
+
 
         while let Some(value) = self.input.next() {
-            println!("{:?}", value);
+            let mut hasher = DefaultHasher::new();
             let keys = self.hasher.process(&value);
+            println!("{:?}", keys);
             keys.hash(&mut hasher);
+
             let hash = hasher.finish();
 
             self.hashes.entry(hash).or_insert(keys);
@@ -143,7 +145,7 @@ pub struct CountOperator {
 }
 
 impl CountOperator {
-    pub fn new() -> CountOperator {
+    pub fn new() -> Self {
         CountOperator { count: 0 }
     }
 }
@@ -159,5 +161,57 @@ impl ValueLoader for CountOperator {
 
     fn get(&self) -> Value {
         Value::int(self.count as i64)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SumOperator {
+    sum: Value,
+}
+
+impl SumOperator {
+    pub fn new() -> Self {
+        SumOperator { sum: Value::float(0.0) }
+    }
+}
+
+impl ValueLoader for SumOperator {
+    fn clone(&self) -> BoxedValueLoader {
+        Box::new(SumOperator::new())
+    }
+
+    fn load(&mut self, value: &Value) {
+        self.sum += value.clone();
+    }
+
+    fn get(&self) -> Value {
+        self.sum.clone()
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct AvgOperator {
+    sum: Value,
+    count: usize,
+}
+
+impl AvgOperator {
+    pub fn new() -> Self {
+        AvgOperator { sum: Value::float(0.0), count: 0 }
+    }
+}
+
+impl ValueLoader for AvgOperator {
+    fn clone(&self) -> BoxedValueLoader {
+        Box::new(SumOperator::new())
+    }
+
+    fn load(&mut self, value: &Value) {
+        self.sum += value.clone();
+        self.count += 1;
+    }
+
+    fn get(&self) -> Value {
+        &self.sum.clone() / &Value::float(self.count as f64)
     }
 }

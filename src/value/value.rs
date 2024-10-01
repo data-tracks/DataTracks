@@ -2,7 +2,7 @@ use std::cmp::PartialEq;
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
-use std::ops::{Add, Div, Mul, Sub};
+use std::ops::{Add, AddAssign, Div, Mul, Sub};
 
 use crate::value::array::Array;
 use crate::value::dict::Dict;
@@ -47,9 +47,9 @@ impl Value {
         Value::Dict(Dict::new(values))
     }
 
-    pub(crate) fn dict_from_pair(key: String, value: Value) -> Value {
+    pub(crate) fn dict_from_pair(key: &str, value: Value) -> Value {
         let mut map = BTreeMap::new();
-        map.insert(key, value);
+        map.insert(key.to_string(), value);
         Value::Dict(Dict::new(map))
     }
 
@@ -323,6 +323,44 @@ impl Add for &Value {
     }
 }
 
+
+impl AddAssign for Value {
+    fn add_assign(&mut self, rhs: Self) {
+        match self {
+            Value::Int(i) => {
+                i.0 += rhs.as_int().unwrap().0;
+            }
+            Value::Float(f) => {
+                let rhs = rhs.as_float().unwrap();
+                if f.shift > rhs.shift {
+                    let diff = f.shift - rhs.shift;
+                    f.number += rhs.number * (10 ^ diff) as i64;
+                    f.shift = f.shift;
+                } else if f.shift < rhs.shift {
+                    let diff = rhs.shift - f.shift;
+                    f.number = f.number * (10 ^ diff) as i64 + rhs.number;
+                    f.shift = rhs.shift;
+                } else {
+                    f.number += rhs.number;
+                }
+            }
+            Value::Bool(b) => {
+                b.0 = b.0 && rhs.as_bool().unwrap().0
+            }
+            Value::Text(t) => {
+                t.0 += &rhs.as_text().unwrap().0
+            }
+            Value::Array(a) => {
+                a.0.push(rhs)
+            }
+            Value::Dict(d) => {
+                d.0.append(&mut rhs.as_dict().unwrap().0)
+            }
+            Value::Null => {}
+        }
+    }
+}
+
 impl Sub for &Value {
     type Output = Value;
 
@@ -348,7 +386,15 @@ impl Div for &Value {
 
     fn div(self, _rhs: Self) -> Self::Output {
         match self {
-            _ => todo!()
+            Value::Int(i) => {
+                let _rhs = _rhs.as_int().unwrap();
+                Value::Int(*i / _rhs)
+            }
+            Value::Float(f) => {
+                let _rhs = _rhs.as_float().unwrap();
+                Value::Float(*f / _rhs)
+            }
+            _ => panic!()
         }
     }
 }
@@ -356,9 +402,10 @@ impl Div for &Value {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
     use crate::value::Value;
+    use std::collections::hash_map::DefaultHasher;
+    use std::collections::HashMap;
+    use std::hash::{Hash, Hasher};
 
     #[test]
     fn value_equality() {
@@ -424,5 +471,19 @@ mod tests {
         for (i, raw) in raws.iter().enumerate() {
             assert_eq!(raw, &values[i])
         }
+    }
+
+    #[test]
+    fn hash() {
+        let mut hasher = DefaultHasher::new();
+        let a = Value::bool(true);
+        a.hash(&mut hasher);
+        let a = hasher.finish();
+        let mut hasher = DefaultHasher::new();
+        let b = Value::bool(true);
+        b.hash(&mut hasher);
+        let b = hasher.finish();
+
+        assert_eq!(a, b);
     }
 }

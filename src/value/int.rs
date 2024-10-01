@@ -1,5 +1,5 @@
 use std::fmt::{Debug, Formatter};
-use std::ops::{Add, Sub};
+use std::ops::{Add, Div, Sub};
 
 use crate::value::number::Number;
 use crate::value::{Bool, Float, Text};
@@ -31,6 +31,14 @@ impl Sub for Int {
 
     fn sub(self, other: Self) -> Self {
         Int(self.0 - other.0)
+    }
+}
+
+impl Div for Int {
+    type Output = Self;
+
+    fn div(self, other: Self) -> Self {
+        Int(self.0 / other.0)
     }
 }
 

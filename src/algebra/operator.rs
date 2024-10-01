@@ -1,7 +1,7 @@
-use crate::algebra::aggregate::CountOperator;
+use crate::algebra::aggregate::{AvgOperator, CountOperator, SumOperator};
 use crate::algebra::algebra::{BoxedValueLoader, ValueHandler};
 use crate::algebra::function::{Implementable, Operator};
-use crate::algebra::operator::AggOp::Count;
+use crate::algebra::operator::AggOp::{Avg, Count, Sum};
 use crate::algebra::operator::TupleOp::{Divide, Equal, Minus, Multiplication, Not, Plus};
 use crate::algebra::BoxedValueHandler;
 use crate::algebra::Op::{Agg, Tuple};
@@ -226,13 +226,17 @@ impl TupleOp {
 
 #[derive(Debug, Clone)]
 pub enum AggOp {
-    Count
+    Count,
+    Sum,
+    Avg
 }
 
 impl AggOp {
     pub(crate) fn dump(&self, _as_call: bool) -> String {
         match self {
             Count => "COUNT".to_string(),
+            Sum => "SUM".to_string(),
+            AggOp::Avg => "AVG".to_string()
         }
     }
 }
@@ -240,7 +244,9 @@ impl AggOp {
 impl Implementable<BoxedValueLoader> for AggOp {
     fn implement(&self) -> Result<BoxedValueLoader, ()> {
         match self {
-            Count => Ok(Box::new(CountOperator::new()))
+            Count => Ok(Box::new(CountOperator::new())),
+            Sum => Ok(Box::new(SumOperator::new())),
+            AggOp::Avg => Ok(Box::new(AvgOperator::new())),
         }
     }
 }
@@ -284,6 +290,8 @@ impl FromStr for Op {
             "*" | "multiply" => Ok(Tuple(Multiplication)),
             "/" | "divide" => Ok(Tuple(Divide)),
             "count" => Ok(Agg(Count)),
+            "sum" => Ok(Agg(Sum)),
+            "avg" => Ok(Agg(Avg)),
             _ => Err(())
         }
     }

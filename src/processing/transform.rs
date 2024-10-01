@@ -254,17 +254,17 @@ mod tests {
 
     #[test]
     fn sql_basic_key() {
-        check_sql_implement("SELECT $0.age FROM $0", vec![Value::dict_from_pair("age".to_string(), Value::float(3.3))], vec![Value::float(3.3)]);
+        check_sql_implement("SELECT $0.age FROM $0", vec![Value::dict_from_pair("age", Value::float(3.3))], vec![Value::float(3.3)]);
     }
 
     #[test]
     fn sql_basic_filter_match() {
-        check_sql_implement("SELECT $0.age FROM $0 WHERE $0.age = 25", vec![Value::dict_from_pair("age".to_string(), Value::int(25))], vec![Value::int(25)]);
+        check_sql_implement("SELECT $0.age FROM $0 WHERE $0.age = 25", vec![Value::dict_from_pair("age", Value::int(25))], vec![Value::int(25)]);
     }
 
     #[test]
     fn sql_basic_filter_non_match() {
-        check_sql_implement("SELECT $0.age FROM $0 WHERE $0.age = 25", vec![Value::dict_from_pair("age".to_string(), Value::int(25))], vec![Value::int(25)]);
+        check_sql_implement("SELECT $0.age FROM $0 WHERE $0.age = 25", vec![Value::dict_from_pair("age", Value::int(25))], vec![Value::int(25)]);
     }
 
     #[test]
@@ -279,7 +279,7 @@ mod tests {
 
     #[test]
     fn sql_add_key() {
-        check_sql_implement("SELECT $0.age + 1 + 0.3 FROM $0", vec![Value::dict_from_pair("age".to_string(), Value::float(3.3))], vec![Value::float(4.6)]);
+        check_sql_implement("SELECT $0.age + 1 + 0.3 FROM $0", vec![Value::dict_from_pair("age", Value::float(3.3))], vec![Value::float(4.6)]);
     }
 
     #[test]
@@ -290,6 +290,21 @@ mod tests {
     #[test]
     fn sql_count_single() {
         check_sql_implement("SELECT COUNT(*) FROM $0", vec![Value::float(3.3)], vec![Value::int(1)]);
+    }
+
+    #[test]
+    fn sql_count_name() {
+        check_sql_implement("SELECT COUNT($0.age) FROM $0", vec![Value::dict_from_pair("age", Value::float(3.3))], vec![Value::int(1)]);
+    }
+
+    #[test]
+    fn sql_sum_name() {
+        check_sql_implement("SELECT SUM($0.age) FROM $0", vec![Value::dict_from_pair("age", Value::float(3.3))], vec![Value::float(3.3)]);
+    }
+
+    #[test]
+    fn sql_avg_name() {
+        check_sql_implement("SELECT AVG($0.age) FROM $0", vec![Value::dict_from_pair("age", Value::float(3.3)), Value::dict_from_pair("age", Value::float(3.7))], vec![Value::float(3.5)]);
     }
 
     fn check_sql_implement_join(query: &str, inputs: Vec<Vec<Value>>, output: Vec<Value>) {
