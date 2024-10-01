@@ -1,7 +1,7 @@
 use crate::algebra::algebra::BoxedValueLoader;
 use crate::algebra::function::Implementable;
 use crate::algebra::operator::AggOp;
-use crate::algebra::{Algebra, AlgebraType, BoxedIterator, BoxedValueHandler, InputFunction, Op, OperationFunction, Operator, ValueIterator};
+use crate::algebra::{Algebra, AlgebraType, BoxedIterator, BoxedValueHandler, Operator, ValueIterator};
 use crate::processing::Train;
 use crate::value::Value;
 use std::collections::hash_map::DefaultHasher;
@@ -17,14 +17,21 @@ pub struct Aggregate {
 
 impl Aggregate {
     pub fn new(input: Box<AlgebraType>, aggregates: Vec<(AggOp, Vec<Operator>)>, group: Option<Operator>) -> Self {
-        let aggregates = aggregates.into_iter().map(|(op, ops)| {
-            if ops.len() == 1 {
-                (op, ops.get(0).unwrap())
-            } else {
-                (op, &Operator::Operation(OperationFunction::new(Op::combine(), ops)))
-            }
-        }).collect();
-        Aggregate { input, aggregates, group: group.unwrap_or(Operator::Input(InputFunction::all())) }
+        Aggregate {
+            input,
+            aggregates: aggregates.into_iter().map(|(op, ops)| {
+                let ops = match ops {
+                    mut ops if ops.len() == 1 => {
+                        ops.pop().unwrap()
+                    }
+                    ops => {
+                        Operator::combine(ops)
+                    }
+                };
+                (op, ops)
+            }).collect(),
+            group: group.unwrap_or(Operator::input()),
+        }
     }
 }
 
@@ -35,7 +42,7 @@ impl Algebra for Aggregate {
     fn derive_iterator(&mut self) -> Self::Iterator {
         let iter = self.input.derive_iterator();
         let hash = self.group.implement().unwrap();
-        let aggregates = self.aggregates.iter().map(|a| a.implement()).collect();
+        let aggregates = self.aggregates.iter().map(|(a, o)| (a.implement().unwrap(), o.implement().unwrap())).collect();
         AggIterator::new(iter, aggregates, hash)
     }
 }
@@ -47,12 +54,12 @@ pub struct AggIterator {
     hashes: HashMap<u64, Value>,
     values: Vec<Value>,
     hasher: BoxedValueHandler,
-    aggregates: Vec<BoxedValueLoader>,
+    aggregates: Vec<(BoxedValueLoader, BoxedValueHandler)>,
     reloaded: bool,
 }
 
 impl AggIterator {
-    pub fn new(input: BoxedIterator, aggregates: Vec<BoxedValueLoader>, hasher: BoxedValueHandler) -> AggIterator {
+    pub fn new(input: BoxedIterator, aggregates: Vec<(BoxedValueLoader, BoxedValueHandler)>, hasher: BoxedValueHandler) -> AggIterator {
         AggIterator { input, groups: Default::default(), hashes: Default::default(), values: vec![], hasher, aggregates, reloaded: false }
     }
 
@@ -64,6 +71,7 @@ impl AggIterator {
         let mut hasher = DefaultHasher::new();
 
         while let Some(value) = self.input.next() {
+            println!("{:?}", value);
             let keys = self.hasher.process(&value);
             keys.hash(&mut hasher);
             let hash = hasher.finish();
@@ -74,15 +82,19 @@ impl AggIterator {
 
         for (_hash, values) in &self.groups {
             for value in values {
-                for mut agg in &self.aggregates {
-                    agg.load(&value)
+                for (ref mut agg, op) in &mut self.aggregates {
+                    agg.load(&op.process(&value))
                 }
             }
             let mut values = vec![];
-            for agg in &self.aggregates {
+            for (agg, _) in &self.aggregates {
                 values.push(agg.get());
             }
-            self.values.push(values.into());
+            if values.len() == 1 {
+                self.values.push(values.pop().unwrap());
+            } else {
+                self.values.push(values.into());
+            }
         }
 
         self.reloaded = true;
@@ -94,10 +106,10 @@ impl Iterator for AggIterator {
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            if self.reloaded {
-                self.reload_values();
-            } else if let Some(value) = self.values.pop() {
+            if let Some(value) = self.values.pop() {
                 return Some(value);
+            } else if !self.reloaded {
+                self.reload_values();
             } else {
                 return None;
             }
@@ -112,11 +124,13 @@ impl ValueIterator for AggIterator {
     }
 
     fn clone(&self) -> BoxedIterator {
-        Box::new(AggIterator::new(self.input.clone(), self.aggregates.clone(), self.hasher.clone()))
+        Box::new(AggIterator::new(self.input.clone(), self.aggregates.iter().map(|(a, o)| ((*a).clone(), (*o).clone())).collect(), self.hasher.clone()))
     }
 }
 
 pub trait ValueLoader {
+    fn clone(&self) -> BoxedValueLoader;
+
     fn load(&mut self, value: &Value);
 
     fn get(&self) -> Value;
@@ -135,6 +149,10 @@ impl CountOperator {
 }
 
 impl ValueLoader for CountOperator {
+    fn clone(&self) -> BoxedValueLoader {
+        Box::new(CountOperator::new())
+    }
+
     fn load(&mut self, _value: &Value) {
         self.count += 1;
     }

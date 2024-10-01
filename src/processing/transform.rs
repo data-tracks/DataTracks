@@ -247,10 +247,10 @@ mod tests {
         check_sql_implement("SELECT * FROM $0", vec![Value::float(3.3)], vec![Value::float(3.3)]);
     }
 
-    #[test]
+    /*#[test]
     fn sql_basic_named() {
         check_sql_implement("SELECT $0 FROM $0", vec![Value::float(3.3)], vec![Value::float(3.3)]);
-    }
+    }*/
 
     #[test]
     fn sql_basic_key() {

@@ -1,7 +1,8 @@
 use crate::algebra;
 use crate::algebra::AlgebraType::{Aggregate, Filter, Join, Project, Scan};
-use crate::algebra::Operator::{Input, Literal, NamedInput, Operation};
-use crate::algebra::{AggOp, AlgebraType, InputFunction, LiteralOperator, NamedRefOperator, Op, OperationFunction, Operator};
+use crate::algebra::Op::Tuple;
+use crate::algebra::TupleOp::Input;
+use crate::algebra::{AlgebraType, Op, Operator, Replaceable};
 use crate::language::sql::statement::{SqlIdentifier, SqlSelect, SqlStatement};
 use crate::value::Value;
 
@@ -35,44 +36,45 @@ fn handle_select(query: SqlSelect) -> Result<AlgebraType, String> {
             Filter(algebra::Filter::new(node, filters.pop().unwrap()))
         }
         _ => {
-            Filter(algebra::Filter::new(node, Operation(OperationFunction::new(Op::and(), filters))))
+            Filter(algebra::Filter::new(node, Operator::new(Op::and(), filters)))
         }
     };
 
     let mut function = match projections.len() {
         1 => {
             let function = projections.pop().unwrap();
-            match function {
-                Input(_) => {
+            match function.op {
+                Tuple(Input(_)) => {
                     return Ok(node)
                 }
-                o => o
+                ref _o => function.clone()
             }
         }
         _ => {
-            Operation(OperationFunction::new(Op::combine(), projections))
+            Operator::new(Op::combine(), projections)
         }
     };
 
-    let mut aggs = function.replace::<Operator, (AggOp, Vec<Operator>)>(|mut o| {
-        // we replace the operator
-        match o {
-            Operation(mut op) => {
-                match op.op {
-                    Op::Agg(a) => {
-                        o = NamedInput(NamedRefOperator::new(String::from("1")));
+    println!("{:?}", function);
 
-                        vec![(a, op.operands)]
-                    }
-                    _ => return
-                }
+    let aggs = function.replace(|o| {
+        // we replace the operator
+        return match &o.op {
+            Op::Agg(a) => {
+                let replaced = (a.clone(), o.operands.clone());
+
+                o.op = Op::input();
+                o.operands = vec![];
+
+                return vec![replaced]
             }
             _ => vec![]
         }
     });
 
     if !aggs.is_empty() {
-        node = Aggregate(algebra::Aggregate::new(Box::new(node), aggs, None))
+        node = Aggregate(algebra::Aggregate::new(Box::new(node), aggs, None));
+        return Ok(node);
     }
 
     Ok(Project(algebra::Project::new(node, function)))
@@ -89,30 +91,30 @@ fn handle_field(column: SqlStatement) -> Result<Operator, String> {
     match column {
         SqlStatement::Symbol(s) => {
             if s.symbol == "*" {
-                Ok(Input(InputFunction::all()))
+                Ok(Operator::input())
             } else {
                 Err("Could not translate symbol".to_string())
             }
         }
         SqlStatement::Operator(o) => {
             let operators = o.operands.into_iter().map(|op| handle_field(op).unwrap()).collect();
-            Ok(Operation(OperationFunction::new(o.operator, operators)))
+            Ok(Operator::new(o.operator, operators))
         }
         SqlStatement::Identifier(i) => {
             match i {
                 mut i if i.names.len() == 1 && i.names.get(0).unwrap().starts_with('$') => {
                     let index = i.names.pop().unwrap().clone().replace('$', "");
-                    Ok(Input(InputFunction::new(index.parse().unwrap())))
+                    Ok(Operator::index(index.parse().unwrap()))
                 }
                 SqlIdentifier { .. } => {
                     let mut names = i.names.clone();
                     names.remove(0);
-                    Ok(NamedInput(NamedRefOperator::new(names.join("."))))
+                    Ok(Operator::name(&names.join(".")))
                 }
             }
         }
         SqlStatement::Value(v) => {
-            Ok(Literal(LiteralOperator::new(v.value)))
+            Ok(Operator::literal(v.value))
         }
         err => Err(format!("Could not translate operator: {:?}", err))
     }

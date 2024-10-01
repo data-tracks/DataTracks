@@ -1,11 +1,11 @@
 use crate::algebra::aggregate::CountOperator;
 use crate::algebra::algebra::{BoxedValueLoader, ValueHandler};
-use crate::algebra::function::Implementable;
+use crate::algebra::function::{Implementable, Operator};
 use crate::algebra::operator::AggOp::Count;
 use crate::algebra::operator::TupleOp::{Divide, Equal, Minus, Multiplication, Not, Plus};
-use crate::algebra::Op::Tuple;
-use crate::algebra::TupleOp::{And, Combine, Or};
-use crate::algebra::{BoxedValueHandler, Operator};
+use crate::algebra::BoxedValueHandler;
+use crate::algebra::Op::{Agg, Tuple};
+use crate::algebra::TupleOp::{And, Combine, Index, Input, Or};
 use crate::value::Value;
 use crate::value::Value::{Array, Bool, Dict, Float, Int, Null, Text};
 use std::str::FromStr;
@@ -44,6 +44,10 @@ pub enum TupleOp {
     Equal,
     And,
     Or,
+    Input(InputOp),
+    Name(NameOp),
+    Index(IndexOp),
+    Literal(LiteralOp),
 }
 
 
@@ -138,6 +142,18 @@ impl TupleOp {
                     }, operands)
                 )
             }
+            Input(i) => {
+                ValueHandler::clone(i)
+            }
+            TupleOp::Name(n) => {
+                n.implement().unwrap()
+            }
+            Index(i) => {
+                i.implement().unwrap()
+            }
+            TupleOp::Literal(lit) => {
+                lit.implement().unwrap()
+            }
         }
     }
 
@@ -172,7 +188,7 @@ impl TupleOp {
                     String::from("/")
                 }
             }
-            TupleOp::Combine => {
+            Combine => {
                 String::from("")
             }
             Not => {
@@ -191,9 +207,22 @@ impl TupleOp {
             Or => {
                 String::from("OR")
             }
+            Input(_) => {
+                String::from("*")
+            }
+            TupleOp::Name(name) => {
+                String::from(name.name.clone())
+            }
+            Index(i) => {
+                i.index.to_string()
+            }
+            TupleOp::Literal(value) => {
+                value.literal.to_string()
+            }
         }
     }
 }
+
 
 #[derive(Debug, Clone)]
 pub enum AggOp {
@@ -217,7 +246,6 @@ impl Implementable<BoxedValueLoader> for AggOp {
 }
 
 
-
 pub struct TupleFunction {
     func: fn(&Vec<Value>) -> Value,
     children: Vec<BoxedValueHandler>,
@@ -229,6 +257,7 @@ impl TupleFunction {
     }
 }
 
+
 impl ValueHandler for TupleFunction {
     fn process(&self, value: &Value) -> Value {
         let children = self.children.iter().map(|c| c.process(value)).collect();
@@ -239,6 +268,7 @@ impl ValueHandler for TupleFunction {
         Box::new(TupleFunction::new(self.func, self.children.iter().map(|c| (*c).clone()).collect()))
     }
 }
+
 
 impl FromStr for Op {
     type Err = ();
@@ -253,10 +283,149 @@ impl FromStr for Op {
             "-" | "minus" => Ok(Tuple(Minus)),
             "*" | "multiply" => Ok(Tuple(Multiplication)),
             "/" | "divide" => Ok(Tuple(Divide)),
+            "count" => Ok(Agg(Count)),
             _ => Err(())
         }
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct IndexOp {
+    index: usize,
+}
+
+impl IndexOp {
+    pub fn new(index: usize) -> Self {
+        IndexOp {
+            index,
+        }
+    }
+}
+
+impl ValueHandler for IndexOp {
+    fn process(&self, value: &Value) -> Value {
+        match value {
+            Array(a) => {
+                a.0.get(self.index).unwrap_or(&Value::null()).clone()
+            }
+            Dict(d) => {
+                d.0.get(&format!("${}", self.index)).unwrap_or(&Value::null()).clone()
+            }
+            Null => Value::null(),
+            _ => panic!("Could not process {}", value)
+        }
+    }
+
+    fn clone(&self) -> BoxedValueHandler {
+        Box::new(IndexOp { index: self.index })
+    }
+}
+
+impl Implementable<BoxedValueHandler> for IndexOp {
+    fn implement(&self) -> Result<BoxedValueHandler, ()> {
+        Ok(ValueHandler::clone(self))
+    }
+}
+
+
+#[derive(Debug, Clone)]
+pub struct LiteralOp {
+    pub literal: Value,
+}
+
+impl LiteralOp {
+    pub fn new(literal: Value) -> LiteralOp {
+        LiteralOp { literal }
+    }
+}
+
+
+impl ValueHandler for LiteralOp {
+    fn process(&self, _value: &Value) -> Value {
+        self.literal.clone()
+    }
+
+    fn clone(&self) -> BoxedValueHandler {
+        Box::new(LiteralOp { literal: self.literal.clone() })
+    }
+}
+
+impl Implementable<BoxedValueHandler> for LiteralOp {
+    fn implement(&self) -> Result<BoxedValueHandler, ()> {
+        Ok(ValueHandler::clone(self))
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct InputOp {}
+
+impl ValueHandler for InputOp {
+    fn process(&self, value: &Value) -> Value {
+        value.clone()
+    }
+
+    fn clone(&self) -> BoxedValueHandler {
+        Box::new(InputOp {})
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct NameOp {
+    pub name: String,
+}
+
+impl NameOp {
+    pub fn new(name: String) -> NameOp {
+        NameOp { name }
+    }
+}
+
+impl ValueHandler for NameOp {
+    fn process(&self, value: &Value) -> Value {
+        match value {
+            Dict(d) => d.0.get(&self.name).unwrap_or(&Value::null()).clone(),
+            Null => Value::null(),
+            v => panic!("Could not process {}", v)
+        }
+    }
+
+    fn clone(&self) -> BoxedValueHandler {
+        Box::new(NameOp { name: self.name.clone() })
+    }
+}
+
+impl Implementable<BoxedValueHandler> for NameOp {
+    fn implement(&self) -> Result<BoxedValueHandler, ()> {
+        Ok(ValueHandler::clone(self))
+    }
+}
+
+
+#[derive(Debug, Clone)]
+pub struct IndexedRefOperator {
+    pub index: usize,
+}
+
+impl ValueHandler for IndexedRefOperator {
+    fn process(&self, value: &Value) -> Value {
+        match value {
+            Array(a) => a.0.get(self.index).cloned().unwrap(),
+            Null => Value::null(),
+            _ => panic!()
+        }
+    }
+
+    fn clone(&self) -> BoxedValueHandler {
+        Box::new(IndexedRefOperator { index: self.index })
+    }
+}
+
+impl Implementable<BoxedValueHandler> for IndexedRefOperator {
+    fn implement(&self) -> Result<BoxedValueHandler, ()> {
+        Ok(ValueHandler::clone(self))
+    }
+}
+
 
 impl Op {
     pub fn plus() -> Op {
@@ -289,6 +458,14 @@ impl Op {
 
     pub(crate) fn combine() -> Op {
         Tuple(Combine)
+    }
+
+    pub(crate) fn index(index: usize) -> Op {
+        Tuple(Index(IndexOp::new(index)))
+    }
+
+    pub(crate) fn input() -> Op {
+        Tuple(Input(InputOp {}))
     }
 }
 
