@@ -100,13 +100,13 @@ fn handle_field(column: SqlStatement) -> Result<Operator, String> {
         }
         SqlStatement::Identifier(i) => {
             match i {
-                mut i if i.names.len() == 1 && i.names.get(0).unwrap().starts_with('$') => {
+                /*mut i if i.names.len() == 1 && i.names.get(0).unwrap().starts_with('$') => {
                     let index = i.names.pop().unwrap().clone().replace('$', "");
                     Ok(Operator::index(index.parse().unwrap()))
-                }
+                }*/
                 SqlIdentifier { .. } => {
                     let mut names = i.names.clone();
-                    names.remove(0);
+                    //names.remove(0);
                     Ok(Operator::name(&names.join(".")))
                 }
             }

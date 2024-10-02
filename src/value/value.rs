@@ -44,13 +44,40 @@ impl Value {
     }
 
     pub(crate) fn dict(values: BTreeMap<String, Value>) -> Value {
-        Value::Dict(Dict::new(values))
+        let mut map = BTreeMap::new();
+
+        values.into_iter().for_each(|(k, v)| {
+            match v {
+                Value::Dict(d) => {
+                    flatten(d, vec![k]).into_iter().for_each(|(k,v)| {
+                        map.insert(k, v);
+                    });
+                },
+                _ => {
+                    map.insert(k, v);
+                },
+            };
+        });
+
+        Value::Dict(Dict::new(map))
     }
 
     pub(crate) fn dict_from_pair(key: &str, value: Value) -> Value {
         let mut map = BTreeMap::new();
-        map.insert(key.to_string(), value);
+        match value {
+            Value::Dict(d) => {
+                d.0.into_iter().for_each(|(k,v)|{
+                    map.insert(format!("{}.{}", key, k),v); {  }
+                })
+            }
+            _ => {
+                map.insert(key.to_string(), value);
+            }
+        }
+
         Value::Dict(Dict::new(map))
+
+
     }
 
     pub fn null() -> Value {
@@ -134,6 +161,21 @@ impl Value {
             Value::Null => Ok(Text("null".to_owned()))
         }
     }
+}
+
+fn flatten(dict: Dict, prefix: Vec<String>) -> Vec<(String, Value)> {
+    let mut values = vec![];
+    dict.into_iter().for_each(|(k, v)| {
+        match v {
+            Value::Dict(d) => {
+                let mut prefix = prefix.clone();
+                prefix.push(k);
+                values.append(&mut flatten(d, prefix))
+            },
+            _ => values.push((k, v)),
+        }
+    });
+    values
 }
 
 // Define the macro

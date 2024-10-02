@@ -1,8 +1,8 @@
 use crate::algebra::algebra::{Algebra, RefHandler, ValueIterator};
+use crate::algebra::BoxedIterator;
 use crate::processing::Train;
 use crate::value::Value;
 use std::vec;
-use crate::algebra::BoxedIterator;
 
 #[derive(Clone)]
 pub struct Scan {
@@ -53,8 +53,12 @@ impl Iterator for ScanIterator {
 
 impl ValueIterator for ScanIterator {
     fn load(&mut self, trains: Vec<Train>) {
-        for train in trains {
+        for mut train in trains {
             if train.last == self.index {
+                train.values = Some(train.values.unwrap().into_iter().map(|d| {
+                    // we add the index as key value
+                    Value::dict_from_pair(&format!("${}", self.index), d)
+                }).collect());
                 self.trains.push(train);
             }
         }

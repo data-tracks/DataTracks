@@ -66,7 +66,7 @@ impl Transform {
 pub struct LanguageTransform {
     pub(crate) language: Language,
     pub(crate) query: String,
-    func: Box<dyn ValueIterator<Item=Value> + Send>,
+    func: BoxedIterator,
 }
 
 impl Clone for LanguageTransform {
@@ -96,7 +96,7 @@ fn build_transformer(language: &Language, query: &str) -> Result<Box<dyn ValueIt
 
 
 pub struct FuncTransform {
-    pub input: Box<dyn ValueIterator<Item=Value> + Send + 'static>,
+    pub input: BoxedIterator,
     pub func: Arc<dyn Fn(i64, Value) -> Value + Send + Sync>,
 }
 
@@ -247,10 +247,10 @@ mod tests {
         check_sql_implement("SELECT * FROM $0", vec![Value::float(3.3)], vec![Value::float(3.3)]);
     }
 
-    /*#[test]
+    #[test]
     fn sql_basic_named() {
         check_sql_implement("SELECT $0 FROM $0", vec![Value::float(3.3)], vec![Value::float(3.3)]);
-    }*/
+    }
 
     #[test]
     fn sql_basic_key() {
