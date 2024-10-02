@@ -10,7 +10,7 @@ use crate::value::Value;
 use crate::value::Value::{Array, Bool, Dict, Float, Int, Null, Text};
 use std::str::FromStr;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Op {
     Agg(AggOp),
     Tuple(TupleOp),
@@ -33,7 +33,7 @@ impl Op {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TupleOp {
     Plus,
     Minus,
@@ -224,7 +224,7 @@ impl TupleOp {
 }
 
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum AggOp {
     Count,
     Sum,
@@ -297,7 +297,7 @@ impl FromStr for Op {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct IndexOp {
     index: usize,
 }
@@ -336,7 +336,7 @@ impl Implementable<BoxedValueHandler> for IndexOp {
 }
 
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct LiteralOp {
     pub literal: Value,
 }
@@ -364,7 +364,7 @@ impl Implementable<BoxedValueHandler> for LiteralOp {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct InputOp {}
 
 impl ValueHandler for InputOp {
@@ -377,7 +377,7 @@ impl ValueHandler for InputOp {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct NameOp {
     pub name: String,
 }

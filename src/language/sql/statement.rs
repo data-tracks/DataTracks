@@ -166,8 +166,8 @@ impl Sql for SqlSymbol {}
 
 
 impl SqlSelect {
-    pub(crate) fn new(columns: Vec<SqlStatement>, froms: Vec<SqlStatement>, wheres: Vec<SqlStatement>) -> SqlSelect {
-        SqlSelect { columns, froms, wheres, orders: vec![], groups: vec![] }
+    pub(crate) fn new(columns: Vec<SqlStatement>, froms: Vec<SqlStatement>, wheres: Vec<SqlStatement>, groups: Vec<SqlStatement>) -> SqlSelect {
+        SqlSelect { columns, froms, wheres, orders: vec![], groups }
     }
 }
 

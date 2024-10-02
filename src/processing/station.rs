@@ -433,6 +433,7 @@ pub mod tests {
         #[case("Text", dict_values(vec![Value::text("test")]))]
         #[case("Bool", dict_values(vec![Value::bool(true)]))]
         #[case("Array", dict_values(vec![Value::array([1.2.into(), 1.2.into()].into())]))]
+        #[case("Dict", dict_values(vec![Value::dict_from_kv("age", 25.into())]))]
         pub fn minimal_overhead( #[case] name: &str, #[case] values: Vec<Value>) {
             let (mut station, train_sender, rx, c_rx, a_tx) = create_test_station(0);
 

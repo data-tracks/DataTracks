@@ -98,13 +98,22 @@ fn parse_query<'source>(lexer: &'source mut Lexer<'source, Token>) -> Result<Sql
 fn parse_select(lexer: &mut BufferedLexer) -> Result<SqlStatement, String> {
     let fields = parse_expressions(lexer, &[From])?;
     let froms = parse_expressions(lexer, &[Semi, Where, GroupBy, Limit, OrderBy])?;
+
+    let mut last_end = lexer.consume_buffer();
     let mut wheres = vec![];
-    if lexer.consume_buffer() == Ok(Where) {
+    if last_end == Ok(Where) {
         wheres = parse_expressions(lexer, &[Semi, GroupBy, Limit, OrderBy])?;
+
+        last_end = lexer.consume_buffer();
+    }
+
+    let mut groups = vec![];
+    if last_end == Ok(GroupBy) {
+        groups = parse_expressions(lexer, &[Semi, Limit, OrderBy])?
     }
 
 
-    Ok(SqlStatement::Select(SqlSelect::new(fields, froms, wheres)))
+    Ok(SqlStatement::Select(SqlSelect::new(fields, froms, wheres, groups)))
 }
 
 fn parse_expressions(lexer: &mut BufferedLexer, stops: &[Token]) -> Result<Vec<SqlStatement>, String> {

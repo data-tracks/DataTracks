@@ -41,9 +41,9 @@ impl Algebra for Aggregate {
 
     fn derive_iterator(&mut self) -> Self::Iterator {
         let iter = self.input.derive_iterator();
-        let hash = self.group.implement().unwrap();
+        let group = self.group.implement().unwrap();
         let aggregates = self.aggregates.iter().map(|(a, o)| (a.implement().unwrap(), o.implement().unwrap())).collect();
-        AggIterator::new(iter, aggregates, hash)
+        AggIterator::new(iter, aggregates, group)
     }
 }
 
@@ -59,15 +59,14 @@ pub struct AggIterator {
 }
 
 impl AggIterator {
-    pub fn new(input: BoxedIterator, aggregates: Vec<(BoxedValueLoader, BoxedValueHandler)>, hasher: BoxedValueHandler) -> AggIterator {
-        AggIterator { input, groups: Default::default(), hashes: Default::default(), values: vec![], hasher, aggregates, reloaded: false }
+    pub fn new(input: BoxedIterator, aggregates: Vec<(BoxedValueLoader, BoxedValueHandler)>, group: BoxedValueHandler) -> AggIterator {
+        AggIterator { input, groups: Default::default(), hashes: Default::default(), values: vec![], hasher: group, aggregates, reloaded: false }
     }
 
     pub(crate) fn reload_values(&mut self) {
         self.values.clear();
         self.groups.clear();
         self.hashes.clear();
-
 
 
         while let Some(value) = self.input.next() {
@@ -82,7 +81,7 @@ impl AggIterator {
             self.groups.entry(hash).or_insert(vec![]).push(value);
         }
 
-        for (_hash, values) in &self.groups {
+        for (hash, values) in &self.groups {
             for value in values {
                 for (ref mut agg, op) in &mut self.aggregates {
                     agg.load(&op.process(&value))
@@ -94,6 +93,8 @@ impl AggIterator {
             }
             if values.len() == 1 {
                 self.values.push(values.pop().unwrap());
+            } else if values.len() == 0 {
+                self.values.push(self.hashes.get(&hash).unwrap().clone());
             } else {
                 self.values.push(values.into());
             }

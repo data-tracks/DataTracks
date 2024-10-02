@@ -62,7 +62,7 @@ impl Value {
         Value::Dict(Dict::new(map))
     }
 
-    pub(crate) fn dict_from_pair(key: &str, value: Value) -> Value {
+    pub(crate) fn dict_from_kv(key: &str, value: Value) -> Value {
         let mut map = BTreeMap::new();
         match value {
             Value::Dict(d) => {

@@ -13,7 +13,7 @@ pub trait Implementable<Implementation> {
     fn implement(&self) -> Result<Implementation, ()>;
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Operator {
     pub op: Op,
     pub operands: Vec<Operator>,

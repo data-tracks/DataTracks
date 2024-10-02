@@ -18,6 +18,10 @@ fn handle_select(query: SqlSelect) -> Result<AlgebraType, String> {
     let mut sources: Vec<AlgebraType> = query.froms.into_iter().map(|from| handle_from(from).unwrap()).collect();
     let mut projections: Vec<Operator> = query.columns.into_iter().map(|column| handle_field(column).unwrap()).collect();
     let mut filters: Vec<Operator> = query.wheres.into_iter().map(|w| handle_field(w).unwrap()).collect();
+    let mut groups: Vec<Operator> = query.groups.into_iter().map(|g| handle_field(g).unwrap()).collect();
+
+    // we remove existing field in group by
+    //projections = projections.into_iter().filter(|p| !groups.contains(p)).collect();
 
     let node = {
         let mut join = sources.remove(0);
@@ -70,8 +74,14 @@ fn handle_select(query: SqlSelect) -> Result<AlgebraType, String> {
         }
     });
 
-    if !aggs.is_empty() {
-        node = Aggregate(algebra::Aggregate::new(Box::new(node), aggs, None));
+    if !aggs.is_empty() || !groups.is_empty() {
+        let group = match groups.len() {
+            1 => Some(groups.pop().unwrap()),
+            0 => None,
+            _ => Some(Operator::combine(groups))
+        };
+
+        node = Aggregate(algebra::Aggregate::new(Box::new(node), aggs, group));
         return Ok(node);
     }
 

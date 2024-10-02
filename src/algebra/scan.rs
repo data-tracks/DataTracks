@@ -57,7 +57,7 @@ impl ValueIterator for ScanIterator {
             if train.last == self.index {
                 train.values = Some(train.values.unwrap().into_iter().map(|d| {
                     // we add the index as key value
-                    Value::dict_from_pair(&format!("${}", self.index), d)
+                    Value::dict_from_kv(&format!("${}", self.index), d)
                 }).collect());
                 self.trains.push(train);
             }
