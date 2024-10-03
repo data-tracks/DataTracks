@@ -20,8 +20,6 @@ fn handle_select(query: SqlSelect) -> Result<AlgebraType, String> {
     let mut filters: Vec<Operator> = query.wheres.into_iter().map(|w| handle_field(w).unwrap()).collect();
     let mut groups: Vec<Operator> = query.groups.into_iter().map(|g| handle_field(g).unwrap()).collect();
 
-    // we remove existing field in group by
-    //projections = projections.into_iter().filter(|p| !groups.contains(p)).collect();
 
     let node = {
         let mut join = sources.remove(0);
@@ -61,14 +59,14 @@ fn handle_select(query: SqlSelect) -> Result<AlgebraType, String> {
 
     let aggs = function.replace(|o| {
         // we replace the operator
-        return match &o.op {
+        match &o.op {
             Op::Agg(a) => {
                 let replaced = (a.clone(), o.operands.clone());
 
                 o.op = Op::input();
                 o.operands = vec![];
 
-                return vec![replaced]
+                vec![replaced]
             }
             _ => vec![]
         }
@@ -109,17 +107,8 @@ fn handle_field(column: SqlStatement) -> Result<Operator, String> {
             Ok(Operator::new(o.operator, operators))
         }
         SqlStatement::Identifier(i) => {
-            match i {
-                /*mut i if i.names.len() == 1 && i.names.get(0).unwrap().starts_with('$') => {
-                    let index = i.names.pop().unwrap().clone().replace('$', "");
-                    Ok(Operator::index(index.parse().unwrap()))
-                }*/
-                SqlIdentifier { .. } => {
-                    let mut names = i.names.clone();
-                    //names.remove(0);
-                    Ok(Operator::name(&names.join(".")))
-                }
-            }
+            let names = i.names.clone();
+            Ok(Operator::name(&names.join(".")))
         }
         SqlStatement::Value(v) => {
             Ok(Operator::literal(v.value))

@@ -51,7 +51,7 @@ impl Replaceable for Operator {
     fn replace(&mut self, replace: fn(&mut Operator) -> Vec<(AggOp, Vec<Operator>)>) -> Vec<(AggOp, Vec<Operator>)> {
         match &self.op {
             Op::Agg(_) => replace(self),
-            Tuple(_) => self.operands.iter_mut().map(|o| o.replace(replace)).flatten().collect()
+            Tuple(_) => self.operands.iter_mut().flat_map(|o| o.replace(replace)).collect()
         }
     }
 }

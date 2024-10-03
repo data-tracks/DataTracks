@@ -19,7 +19,7 @@ impl Algebra for Union {
 
     fn derive_iterator(&mut self) -> Self::Iterator {
         let inputs: Vec<_> = self.inputs.iter_mut().by_ref().map(|i| i.derive_iterator()).collect();
-        if 0 < inputs.len() {
+        if !inputs.is_empty() {
             UnionIterator{ inputs , distinct: self.distinct, index: 0 }
         }else {
             panic!("Cannot derive empty union iterator");

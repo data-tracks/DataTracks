@@ -374,16 +374,19 @@ impl AddAssign for Value {
             }
             Value::Float(f) => {
                 let rhs = rhs.as_float().unwrap();
-                if f.shift > rhs.shift {
-                    let diff = f.shift - rhs.shift;
-                    f.number += rhs.number * (10 ^ diff) as i64;
-                    f.shift = f.shift;
-                } else if f.shift < rhs.shift {
-                    let diff = rhs.shift - f.shift;
-                    f.number = f.number * (10 ^ diff) as i64 + rhs.number;
-                    f.shift = rhs.shift;
-                } else {
-                    f.number += rhs.number;
+                match (f, rhs) {
+                    (l, r) if l.shift > r.shift => {
+                        let diff = l.shift - r.shift;
+                        l.number += r.number * (10 ^ diff) as i64;
+                    }
+                    (l, r) if l.shift < r.shift => {
+                        let diff = r.shift - l.shift;
+                        l.number = l.number * (10 ^ diff) as i64 + r.number;
+                        l.shift = r.shift;
+                    }
+                    (l, r) => {
+                        l.number += r.number;
+                    }
                 }
             }
             Value::Bool(b) => {

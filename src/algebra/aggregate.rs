@@ -69,7 +69,7 @@ impl AggIterator {
         self.hashes.clear();
 
 
-        while let Some(value) = self.input.next() {
+        for value in self.input.by_ref() {
             let mut hasher = DefaultHasher::new();
             let keys = self.hasher.process(&value);
 
@@ -78,13 +78,13 @@ impl AggIterator {
             let hash = hasher.finish();
 
             self.hashes.entry(hash).or_insert(keys);
-            self.groups.entry(hash).or_insert(vec![]).push(value);
+            self.groups.entry(hash).or_default().push(value);
         }
 
         for (hash, values) in &self.groups {
             for value in values {
                 for (ref mut agg, op) in &mut self.aggregates {
-                    agg.load(&op.process(&value))
+                    agg.load(&op.process(value))
                 }
             }
             let mut values = vec![];
@@ -93,8 +93,8 @@ impl AggIterator {
             }
             if values.len() == 1 {
                 self.values.push(values.pop().unwrap());
-            } else if values.len() == 0 {
-                self.values.push(self.hashes.get(&hash).unwrap().clone());
+            } else if values.is_empty() {
+                self.values.push(self.hashes.get(hash).unwrap().clone());
             } else {
                 self.values.push(values.into());
             }

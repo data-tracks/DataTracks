@@ -269,12 +269,12 @@ mod tests {
 
     #[test]
     fn sql_add() {
-        check_sql_implement("SELECT * + 1 FROM $0", vec![Value::float(3.3)], vec![Value::float(4.3)]);
+        check_sql_implement("SELECT $0 + 1 FROM $0", vec![Value::float(3.3)], vec![Value::float(4.3)]);
     }
 
     #[test]
     fn sql_add_multiple() {
-        check_sql_implement("SELECT * + 1 + 0.3 FROM $0", vec![Value::float(3.3)], vec![Value::float(4.6)]);
+        check_sql_implement("SELECT $0 + 1 + 0.3 FROM $0", vec![Value::float(3.3)], vec![Value::float(4.6)]);
     }
 
     #[test]
@@ -309,7 +309,7 @@ mod tests {
 
     #[test]
     fn sql_group_single() {
-        check_sql_implement("SELECT $0 FROM $0 GROUP BY $0",
+        check_sql_implement("SELECT COUNT($0) FROM $0 GROUP BY $0",
                             vec![Value::float(3.3), Value::float(3.3), Value::float(3.1)],
                             vec![Value::float(3.1), Value::float(3.3)]);
     }

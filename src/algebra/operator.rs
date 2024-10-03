@@ -20,14 +20,14 @@ pub enum Op {
 impl Op {
     pub(crate) fn dump(&self, as_call: bool) -> String {
         match self {
-            Op::Agg(a) => a.dump(as_call),
+            Agg(a) => a.dump(as_call),
             Tuple(t) => t.dump(as_call)
         }
     }
 
     pub(crate) fn implement(&self, operators: Vec<Operator>) -> BoxedValueHandler {
         match self {
-            Op::Agg(_) => panic!("Aggregations should have been replaced!"),
+            Agg(_) => panic!("Aggregations should have been replaced!"),
             Tuple(t) => t.implement(operators)
         }
     }
@@ -211,7 +211,7 @@ impl TupleOp {
                 String::from("*")
             }
             TupleOp::Name(name) => {
-                String::from(name.name.clone())
+                name.name.clone()
             }
             Index(i) => {
                 i.index.to_string()
@@ -393,7 +393,7 @@ impl ValueHandler for NameOp {
         match value {
             Dict(d) => d.0.get(&self.name).unwrap_or(&Value::null()).clone(),
             Null => Value::null(),
-            v => panic!("Could not process {}", v)
+            v => panic!("Could not process {} with key {}", v, self.name)
         }
     }
 
