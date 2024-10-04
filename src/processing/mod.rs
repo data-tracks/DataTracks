@@ -16,3 +16,4 @@ mod platform;
 mod layout;
 mod tests;
 mod debug;
+mod depot;

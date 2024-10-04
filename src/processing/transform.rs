@@ -264,7 +264,7 @@ mod tests {
 
     #[test]
     fn sql_basic_filter_non_match() {
-        check_sql_implement("SELECT $0.age FROM $0 WHERE $0.age = 25", vec![Value::dict_from_kv("age", Value::int(25))], vec![Value::int(25)]);
+        check_sql_implement("SELECT $0.age FROM $0 WHERE $0.age = 23", vec![Value::dict_from_kv("age", Value::int(25))], vec![]);
     }
 
     #[test]

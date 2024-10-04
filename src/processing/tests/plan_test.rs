@@ -461,5 +461,34 @@ pub mod tests {
         let lock = result.lock().unwrap();
         assert_eq!(lock.len(), 1)
     }
+
+    #[test]
+    fn advertise_name_join_test() {
+        let mut plan = Plan::parse("0-1{SELECT $0.id FROM $0, $3 WHERE $0.name = $3.name}-2\n3{sql|SELECT company.name, company.id FROM company}<1");
+
+        let mut values = vec![];
+
+        let hello = Value::Dict(Dict::from_json(r#"{"msg": "hello", "$topic": ["command"]}"#));
+        values.push(vec![hello]);
+        values.push(vec![Value::from(Dict::from(Value::float(3.6)))]);
+
+        let (source, id) = DummySource::new(0, values, Duration::from_millis(1));
+
+        plan.add_source(0, Box::new(source));
+
+        let destination = DummyDestination::new(2, 1);
+        let result = destination.results();
+        plan.add_destination(2, Box::new(destination));
+
+        plan.operate();
+
+        plan.send_control(&id, Ready(0));
+
+        for command in [Ready(0), Stop(0), Ready(2), Stop(2)] {
+            assert_eq!(command.type_id(), plan.control_receiver.1.recv().unwrap().type_id());
+        }
+        let lock = result.lock().unwrap();
+        assert_eq!(lock.len(), 1)
+    }
 }
 
