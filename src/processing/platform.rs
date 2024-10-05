@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use crate::processing::block::Block;
 use crate::processing::layout::Layout;
+use crate::processing::puller::Puller;
 use crate::processing::sender::Sender;
 use crate::processing::station::Command::{Okay, Ready, Threshold};
 use crate::processing::station::{Command, Station};
@@ -21,6 +22,7 @@ pub(crate) struct Platform {
     id: i64,
     control: Receiver<Command>,
     receiver: Rx<Train>,
+    puller: Vec<Puller>,
     sender: Option<Sender>,
     transform: Option<Transform>,
     layout: Layout,
@@ -67,6 +69,7 @@ impl Platform {
 
 
         let mut block = Block::new(self.inputs.clone(), self.blocks.clone(), process);
+
 
         control.send(Ready(stop)).unwrap();
 

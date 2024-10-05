@@ -29,7 +29,7 @@ impl Block {
         match self {
             Non(n) => n.next(train),
             Specific(s) => s.next(train),
-            All(a) => a.next(train)
+            All(a) => a.next(train),
         }
     }
 }

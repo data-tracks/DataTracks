@@ -82,13 +82,17 @@ impl Plan {
             }
 
             let mut last = -1;
-            for stop in line.1.iter().enumerate() {
-                if stop.0 != 0 {
-                    dump += "-";
+            for (index, stop_number) in line.1.iter().enumerate() {
+                if index != 0 {
+                    dump += match &self.stations[stop_number] {
+                        s if s.pull.contains(&last) => "-<",
+                        s if s.block.contains(&last) => "-|",
+                        _ => "--",
+                    };
                 }
-                dump += &self.stations[stop.1].dump(last, dumped_stations.contains(&stop.1.clone()));
-                last = *stop.1;
-                dumped_stations.push(*stop.1)
+                dump += &self.stations[stop_number].dump(dumped_stations.contains(&stop_number));
+                last = *stop_number;
+                dumped_stations.push(stop_number)
             }
         }
 
@@ -184,20 +188,31 @@ impl Plan {
 
         let mut last = None;
 
+        let mut last_char = '_';
+
         for char in stencil.chars() {
             if is_text && char != '"' {
                 temp.push(char);
+                last_char = char;
                 continue;
             }
 
 
             match char {
-                '-' => {
-                    let station = Station::parse(temp.clone(), last);
-                    last = Some(station.stop);
-                    self.build(line, station);
+                // }--1 or }>- 1 or }-<1 or }-|1
+                '-' | '<' | '|' => {
+                    if last_char == '-' || last_char == '>' {
+                        let mut blueprint = temp.clone();
+                        blueprint.remove(blueprint.len() - 1); // remove last }-
 
-                    temp = String::default();
+                        let station = Station::parse(blueprint, last);
+                        last = Some(station.stop);
+                        self.build(line, station);
+
+                        temp = String::default();
+                    }
+                    temp.push(char);
+
                 }
 
                 '"' => {
@@ -208,6 +223,7 @@ impl Plan {
                     temp.push(char);
                 }
             }
+            last_char = char;
         }
 
         if !temp.is_empty() {
@@ -290,8 +306,8 @@ impl PlanStage {
     pub(crate) const WINDOW_CLOSE: char = ']';
     pub(crate) const TRANSFORM_OPEN: char = '{';
     pub(crate) const TRANSFORM_CLOSE: char = '}';
-    pub(crate) const LAYOUT_OPEN: char = '(';
-    pub(crate) const LAYOUT_CLOSE: char = ')';
+    pub(crate) const LAYOUT_OPEN: char = '<';
+    pub(crate) const LAYOUT_CLOSE: char = '>';
 
     pub(crate) fn is_open(char: char) -> bool {
         matches!(char, PlanStage::LAYOUT_OPEN | PlanStage::TRANSFORM_OPEN | PlanStage::WINDOW_OPEN)
@@ -410,8 +426,23 @@ mod test {
     fn parse_line_stop_stencil() {
         let stencils = vec![
             "1",
-            "1-2",
-            "1-2-3",
+            "1--2",
+            "1--2--3",
+        ];
+
+        for stencil in stencils {
+            let plan = Plan::parse(stencil);
+            assert_eq!(plan.dump(), stencil)
+        }
+    }
+
+    #[test]
+    fn parse_line_different_modes() {
+        let stencils = vec![
+            "1",
+            "1--2",
+            "1-<2",
+            "1-|2"
         ];
 
         for stencil in stencils {
@@ -423,10 +454,10 @@ mod test {
     #[test]
     fn parse_multiline_stop_stencil() {
         let stencils = vec![
-            "1-2\
-            3-2",
-            "1-2-3\
-            4-3",
+            "1--2\n\
+            3--2",
+            "1--2--3\n\
+            4--3",
         ];
 
         for stencil in stencils {
@@ -438,7 +469,7 @@ mod test {
     #[test]
     fn stencil_transform_sql() {
         let stencils = vec![
-            "1-2{sql|SELECT * FROM $1}",
+            "1--2{sql|SELECT * FROM $1}",
         ];
 
         for stencil in stencils {
@@ -450,7 +481,7 @@ mod test {
     //#[test]
     fn stencil_transform_mql() {
         let stencils = vec![
-            "1-2{sql|db.$1.find({})}",
+            "1--2{sql|db.$1.find({})}",
         ];
 
         for stencil in stencils {
@@ -463,8 +494,8 @@ mod test {
     #[test]
     fn stencil_window() {
         let stencils = vec![
-            "1-2[3s]",
-            "1-2[3s@13:15]",
+            "1--2[3s]",
+            "1--2[3s@13:15]",
         ];
 
         for stencil in stencils {
@@ -476,8 +507,10 @@ mod test {
     #[test]
     fn stencil_block() {
         let stencils = vec![
-            "1-2-3\n4-|2",
-            "1-|2-3\n4-2",
+            "1--2--3\n\
+            4-|2",
+            "1-|2--3\n\
+            4--2",
         ];
 
         for stencil in stencils {
@@ -489,7 +522,8 @@ mod test {
     #[test]
     fn stencil_branch() {
         let stencils = vec![
-            "1-2{sql|SELECT $1.name FROM $1}\n1-3{sql|SELECT $1.age FROM $1}",
+            "1--2{sql|SELECT $1.name FROM $1}\n\
+            1--3{sql|SELECT $1.age FROM $1}",
             /*"1-2{sql|$1 HAS name}\n1-3{sql|SELECT $1.age FROM $1}",
             "1-2{sql|$1 HAS NOT name}\n1-3{sql|SELECT $1.age FROM $1}",
             //

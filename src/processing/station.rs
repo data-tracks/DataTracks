@@ -23,6 +23,7 @@ pub(crate) struct Station {
     pub(crate) window: Window,
     pub(crate) transform: Option<Transform>,
     pub(crate) block: Vec<i64>,
+    pub(crate) pull: Vec<i64>,
     pub(crate) inputs: Vec<i64>,
     pub(crate) layout: Layout,
     control: (channel::Sender<Command>, Receiver<Command>),
@@ -48,13 +49,20 @@ impl Station {
             window: Window::default(),
             transform: None,
             block: vec![],
+            pull: vec![],
             inputs: vec![],
             layout: Layout::default(),
             control: (control.0.clone(), control.1.clone()),
         }
     }
 
+    // |1 or <1 or -1
     pub(crate) fn parse(stencil: String, last: Option<i64>) -> Self{
+        let mut stencil = stencil;
+        if stencil.starts_with('-') {
+            stencil = stencil[1..].to_string()
+        }
+
         let mut temp = String::default();
         let mut is_text = false;
         let mut stages = vec![];
@@ -120,10 +128,10 @@ impl Station {
             }
         }
 
-        Self::parse_stages(last, stages )
+        Self::parse_parts(last, stages)
     }
 
-    pub(crate) fn parse_stages(last: Option<i64>, parts: Vec<(PlanStage, String)>) -> Self {
+    pub(crate) fn parse_parts(last: Option<i64>, parts: Vec<(PlanStage, String)>) -> Self {
         let mut station: Station = Station::default();
         for stage in parts {
             match stage.0 {
@@ -135,6 +143,9 @@ impl Station {
                     // test for blocks
                     if num.starts_with('|'){
                         station.add_block(last.unwrap_or(-1));
+                        num.remove(0);
+                    } else if num.starts_with('<') {
+                        station.add_pull(last.unwrap_or(-1));
                         num.remove(0);
                     }
                     station.set_stop(num.parse().unwrap())
@@ -184,11 +195,9 @@ impl Station {
         self.incoming.0.send(train).map_err(|e| e.to_string())
     }
 
-    pub fn dump(&self, line: i64, already_dumped: bool) -> String {
+    pub fn dump(&self, already_dumped: bool) -> String {
         let mut dump = "".to_string();
-        if self.block.contains(&line) {
-            dump += "|";
-        }
+
         dump += &self.stop.to_string();
         dump += &self.window.dump();
         if !already_dumped {
@@ -217,6 +226,10 @@ impl Station {
 
     fn add_explicit_layout(&mut self, layout: Layout) {
         self.layout = layout;
+    }
+
+    fn add_pull(&mut self, last: i64) {
+        self.pull.push(last)
     }
 }
 

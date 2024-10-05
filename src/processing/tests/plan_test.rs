@@ -464,11 +464,22 @@ pub mod tests {
 
     #[test]
     fn advertise_name_join_test() {
-        let mut plan = Plan::parse("0-1{SELECT $0.id FROM $0, $3 WHERE $0.name = $3.name}-2\n3{sql|SELECT company.name, company.id FROM company}<1");
+        let mut plan = Plan::parse(
+            "\
+            0(name:any)--1{bind|$company<-$0.id}--2\n\
+            \n\
+            Sources\n\
+            MQTT{url:'127.0.0.1'}->0\n\
+            Outputs\n\
+            MQTT{url:'127.0.0.1'}<-2\n\
+            Transformers\n\
+            $company: Postres{query:'SELECT id, name FROM company WHERE name = ?'}
+            "
+        );
 
         let mut values = vec![];
 
-        let hello = Value::Dict(Dict::from_json(r#"{"msg": "hello", "$topic": ["command"]}"#));
+        let hello = Value::Dict(Dict::from_json(r#"{company: "Surrer AG", "msg": "hello", "$topic": ["purchase"]}"#));
         values.push(vec![hello]);
         values.push(vec![Value::from(Dict::from(Value::float(3.6)))]);
 
