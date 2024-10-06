@@ -136,7 +136,7 @@ impl Station {
         for stage in parts {
             match stage.0 {
                 PlanStage::Window => station.set_window(Window::parse(stage.1)),
-                PlanStage::Transform => station.set_transform(Transform::parse(stage.1).unwrap()),
+                PlanStage::Transform => station.set_transform(Transform::parse(&stage.1).unwrap()),
                 PlanStage::Layout => station.add_explicit_layout(Field::parse(stage.1)),
                 PlanStage::Num => {
                     let mut num = stage.1;

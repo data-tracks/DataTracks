@@ -5,6 +5,7 @@ use crate::processing::station::Command;
 use crate::processing::train::Train;
 use crate::util::Tx;
 use crossbeam::channel::Sender;
+use serde_json::{Map, Value};
 
 pub trait Destination: Send {
     fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command>;
@@ -19,4 +20,14 @@ pub trait Destination: Send {
     fn serialize_default() -> Option<DestinationModel>
     where
         Self: Sized;
+
+    fn parse(type_: &str, options: Map<String, Value>) -> Result<Box<dyn Destination>, String> {
+        match type_.to_ascii_lowercase().as_str() {
+            "mqtt" => {}
+            "dummy" => {}
+            _ => {
+                Err(format!("Invalid type: {}", type_))
+            }
+        }
+    }
 }

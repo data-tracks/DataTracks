@@ -1,19 +1,20 @@
-use core::default::Default;
-use crossbeam::channel;
-use crossbeam::channel::{unbounded, Sender};
-use serde::ser::SerializeStruct;
-use serde::{Deserialize, Serialize, Serializer};
-use std::cmp::PartialEq;
-use std::collections::HashMap;
-use std::sync::Arc;
-
 use crate::processing;
 use crate::processing::destination::Destination;
 use crate::processing::plan::Status::Stopped;
 use crate::processing::source::Source;
 use crate::processing::station::{Command, Station};
+use crate::processing::transform;
 use crate::ui::{ConfigContainer, ConfigModel, StringModel};
 use crate::util::GLOBAL_ID;
+use core::default::Default;
+use crossbeam::channel;
+use crossbeam::channel::{unbounded, Sender};
+use serde::ser::SerializeStruct;
+use serde::{Deserialize, Serialize, Serializer};
+use serde_json::{json, Map};
+use std::cmp::PartialEq;
+use std::collections::HashMap;
+use std::sync::Arc;
 
 pub struct Plan {
     pub id: i64,
@@ -25,6 +26,7 @@ pub struct Plan {
     controls: HashMap<i64, Vec<Sender<Command>>>,
     pub(crate) control_receiver: (Arc<Sender<Command>>, channel::Receiver<Command>),
     pub(crate) status: Status,
+    transforms: HashMap<String, transform::Transform>,
 }
 
 impl Default for Plan {
@@ -40,6 +42,7 @@ impl Default for Plan {
             controls: Default::default(),
             control_receiver: (Arc::new(tx), rx),
             status: Stopped,
+            transforms: Default::default(),
         }
     }
 }
@@ -174,10 +177,42 @@ impl Plan {
 
     pub fn parse(stencil: &str) -> Self {
         let mut plan = Plan::default();
+        let mut phase = Stencil::Network;
+
 
         let lines = stencil.split('\n');
-        for line in lines.enumerate() {
-            plan.parse_line(line.0 as i64, line.1);
+        for (line_number, line) in lines.enumerate() {
+            match line.to_lowercase().trim() {
+                "in" => {
+                    phase = Stencil::In;
+                    continue;
+                },
+                "out" => {
+                    phase = Stencil::Out;
+                    continue;
+                },
+                "transform" => {
+                    phase = Stencil::Transform;
+                    continue;
+                },
+                _ => {}
+            }
+
+            match phase {
+                Stencil::In => {
+                    plan.parse_in(line);
+                }
+                Stencil::Out => {
+                    plan.parse_out(line);
+                }
+                Stencil::Transform => {
+                    plan.parse_transform(line);
+                }
+                _ => {
+                    plan.parse_line(line_number as i64, line);
+                }
+            }
+            
         }
 
         plan
@@ -199,9 +234,9 @@ impl Plan {
 
 
             match char {
-                // }--1 or }>- 1 or }-<1 or }-|1
-                '-' | '<' | '|' => {
-                    if last_char == '-' || last_char == '>' {
+                // }--1 or }-|1
+                '-' | '|' => {
+                    if last_char == '-' {
                         let mut blueprint = temp.clone();
                         blueprint.remove(blueprint.len() - 1); // remove last }-
 
@@ -212,7 +247,6 @@ impl Plan {
                         temp = String::default();
                     }
                     temp.push(char);
-
                 }
 
                 '"' => {
@@ -285,6 +319,50 @@ impl Plan {
         assert_eq!(stop, destination.get_stop());
         self.destinations.entry(stop).or_default().push(destination);
     }
+
+    fn parse_in(&mut self, stencil: &str) -> Result<(), String> {
+        let (stop, type_, options) = Self::split_name_options(stencil)?;
+
+        let source = Source::parse(type_, options)?;
+        self.add_source(stop, source);
+        Ok(())
+    }
+
+    fn split_name_options(stencil: &str) -> Result<(i64, &str, Map<String, serde_json::Value>), String> {
+        let stop = stencil.split(':').last().unwrap();
+        let stop = stop.parse::<i64>().unwrap();
+
+        let (type_, template) = stencil.split_once('{').ok_or(format!("Invalid template: {}", stencil))?;
+        let options = json!("{".to_string() + template.trim()).as_object().ok_or(format!("Invalid options: {}", template))?.clone();
+        Ok((stop, type_, options))
+    }
+
+    fn parse_out(&mut self, stencil: &str) -> Result<(), String> {
+        let (stop, type_, options) = Self::split_name_options(stencil)?;
+
+        let out = Destination::parse(type_, options)?;
+        self.add_source(stop, out);
+        Ok(())
+    }
+
+    fn parse_transform(&mut self, stencil: &str) -> Result<(), String> {
+        let (name, stencil) = stencil.split_once(':').ok_or("No name for transformer provided")?;
+        let transform = transform::Transform::parse(stencil)?;
+
+        self.add_transform(name, transform);
+        Ok(())
+    }
+
+    fn add_transform(&mut self, name: &str, transform: transform::Transform) {
+        self.transforms.insert(name.to_string(), transform);
+    }
+}
+
+enum Stencil {
+    Network,
+    In,
+    Out,
+    Transform,
 }
 
 
@@ -528,6 +606,22 @@ mod test {
             "1-2{sql|$1 HAS NOT name}\n1-3{sql|SELECT $1.age FROM $1}",
             //
             "1-2{mql|db.$1.has(name: 1)}\n1-3{db.$1.find({},{age:1}}",*/
+        ];
+
+        for stencil in stencils {
+            let plan = Plan::parse(stencil);
+            assert_eq!(plan.dump(), stencil)
+        }
+    }
+
+    #[test]
+    fn stencil_source() {
+        let stencils = vec![
+            "\
+            1--2\n\
+            In\n\
+            Mqtt{url: '127.0.0.1'}:1
+            "
         ];
 
         for stencil in stencils {

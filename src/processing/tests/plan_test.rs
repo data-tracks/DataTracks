@@ -466,12 +466,12 @@ pub mod tests {
     fn advertise_name_join_test() {
         let mut plan = Plan::parse(
             "\
-            0(name:any)--1{bind|$company<-$0.id}--2\n\
+            0--1{sql|SELECT id, name FROM $company($0.name)}--2\n\
             \n\
             Sources\n\
-            MQTT{url:'127.0.0.1'}->0\n\
+            MQTT{url:'127.0.0.1'}:0\n\
             Outputs\n\
-            MQTT{url:'127.0.0.1'}<-2\n\
+            MQTT{url:'127.0.0.1'}:2\n\
             Transformers\n\
             $company: Postres{query:'SELECT id, name FROM company WHERE name = ?'}
             "

@@ -37,7 +37,7 @@ impl Default for Transform {
 
 
 impl Transform {
-    pub fn parse(stencil: String) -> Result<Transform, String> {
+    pub fn parse(stencil: &str) -> Result<Transform, String> {
         match stencil.split_once('|') {
             None => Err("Wrong transform format.".to_string()),
             Some((module, logic)) => match Language::try_from(module) {

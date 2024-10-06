@@ -7,6 +7,7 @@ use crate::processing::train::Train;
 use crate::ui::ConfigModel;
 use crate::util::Tx;
 use crossbeam::channel::Sender;
+use serde_json::{Map, Value};
 
 pub trait Source: Send {
     fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command>;
@@ -26,5 +27,7 @@ pub trait Source: Send {
     fn serialize_default() -> Result<SourceModel, ()>
     where
         Self: Sized;
+
+    fn parse(type_: &str, options: Map<String, Value>) -> Result<Box<dyn Source>, String> {}
 }
 
