@@ -13,6 +13,7 @@ pub trait Taker: Send {
 pub enum Transform {
     Func(FuncTransform),
     Lang(LanguageTransform),
+    Custom
 }
 
 impl Clone for Transform {
@@ -24,6 +25,7 @@ impl Clone for Transform {
             Lang(language) => {
                 Lang(language.clone())
             }
+            Transform::Custom => Transform::Custom
         }
     }
 }
@@ -50,14 +52,16 @@ impl Transform {
     pub fn dump(&self) -> String {
         match self {
             Func(f) => f.dump(),
-            Lang(f) => f.dump()
+            Lang(f) => f.dump(),
+            Transform::Custom => Transform::Custom.to_string()
         }
     }
 
     pub fn optimize(&self) -> Box<dyn ValueIterator<Item=Value> + Send> {
         match self {
             Func(f) => ValueIterator::clone(f),
-            Lang(f) => f.func.clone()
+            Lang(f) => f.func.clone(),
+            Transform::Custom => todo!()
         }
     }
 }

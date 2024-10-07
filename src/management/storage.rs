@@ -1,23 +1,22 @@
 use crate::processing::destination::Destination;
 use crate::processing::source::Source;
-use crate::processing::Plan;
+use crate::processing::{transform, Plan};
+use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::sync::Mutex;
 
+#[derive(Default)]
 pub struct Storage {
     pub plans: Mutex<HashMap<i64, Plan>>,
-}
-
-impl Default for Storage {
-    fn default() -> Self {
-        Self::new()
-    }
+    pub ins: Mutex<HashMap<String, fn(Map<String, Value>) -> Box<dyn Source>>>,
+    pub outs: Mutex<HashMap<String, fn(Map<String, Value>) -> Box<dyn Destination>>>,
+    pub transforms: Mutex<HashMap<String, fn(String, Value) -> Box<transform::Transform>>>
 }
 
 
 impl Storage {
     pub(crate) fn new() -> Storage {
-        Storage { plans: Mutex::new(HashMap::new()) }
+        Default::default()
     }
 
     pub fn add_plan(&mut self, plan: Plan) {

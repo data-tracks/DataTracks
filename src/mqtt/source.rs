@@ -7,6 +7,7 @@ use crate::util::{Tx, GLOBAL_ID};
 use crate::value::{Dict, Value};
 use crossbeam::channel::{unbounded, Sender};
 use mqtt_packet_3_5::{MqttPacket, PacketDecoder, PublishPacket};
+use serde_json::Map;
 use std::collections::{BTreeMap, HashMap};
 use std::io::Write;
 use std::net::{TcpListener, TcpStream};
@@ -30,6 +31,10 @@ impl MqttSource {
 }
 
 impl Source for MqttSource {
+    fn parse(stop: i64, options: Map<String, serde_json::Value>) -> Result<Box<dyn Source>, String> {
+        Ok(Box::new(MqttSource::new(stop, options.get(&"port").unwrap().as_str().unwrap().parse().unwrap())))
+    }
+
     fn operate(&mut self, _control: Arc<Sender<Command>>) -> Sender<Command> {
         let rt = Runtime::new().unwrap();
         debug!("starting mqtt source...");

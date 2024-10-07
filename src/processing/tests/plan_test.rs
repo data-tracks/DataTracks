@@ -1,5 +1,5 @@
 #[cfg(test)]
-mod dummy {
+pub mod dummy {
     use std::collections::HashMap;
     use std::sync::{Arc, Mutex};
     use std::thread::{sleep, spawn};
@@ -104,7 +104,7 @@ mod dummy {
         }
     }
 
-    pub(crate) struct DummyDestination {
+    pub struct DummyDestination {
         id: i64,
         stop: i64,
         result_amount: usize,

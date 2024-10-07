@@ -1,7 +1,7 @@
 use crate::processing;
 use crate::processing::destination::Destination;
 use crate::processing::plan::Status::Stopped;
-use crate::processing::source::Source;
+use crate::processing::source::{parse_source, Source};
 use crate::processing::station::{Command, Station};
 use crate::processing::transform;
 use crate::ui::{ConfigContainer, ConfigModel, StringModel};
@@ -323,7 +323,7 @@ impl Plan {
     fn parse_in(&mut self, stencil: &str) -> Result<(), String> {
         let (stop, type_, options) = Self::split_name_options(stencil)?;
 
-        let source = Source::parse(type_, options)?;
+        let source = parse_source(type_, options, stop)?;
         self.add_source(stop, source);
         Ok(())
     }
