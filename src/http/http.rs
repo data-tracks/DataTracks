@@ -1,3 +1,4 @@
+use crate::processing::option::Configurable;
 use crate::processing::plan::SourceModel;
 use crate::processing::source::Source;
 use crate::processing::station::Command;
@@ -25,14 +26,15 @@ use tracing::{debug, info};
 #[derive(Clone)]
 pub struct HttpSource {
     id: i64,
+    url: String,
     stop: i64,
     port: u16,
     outs: HashMap<i64, Tx<Train>>,
 }
 
 impl HttpSource {
-    pub(crate) fn new(stop: i64, port: u16) -> Self {
-        HttpSource { id: GLOBAL_ID.new_id(), stop, port, outs: Default::default() }
+    pub(crate) fn new(stop: i64, url: String, port: u16) -> Self {
+        HttpSource { id: GLOBAL_ID.new_id(), stop, url, port, outs: Default::default() }
     }
 
 
@@ -94,13 +96,25 @@ impl HttpSource {
     }
 }
 
+impl Configurable for HttpSource {
+    fn get_name(&self) -> String {
+        String::from("Http")
+    }
+
+    fn get_options(&self) -> Map<String, Value> {
+        let mut options = Map::new();
+        options.insert(String::from("url"), Value::String(self.url.clone()));
+        options.insert(String::from("port"), Value::Number(self.port.into()));
+        options
+    }
+}
 
 impl Source for HttpSource {
     fn parse(stop: i64, options: Map<String, Value>) -> Result<Self, String>
     where
         Self: Sized,
     {
-        Ok(HttpSource::new(stop, options.get("port").unwrap().as_u64().unwrap() as u16))
+        Ok(HttpSource::new(stop, String::from(options.get("url").unwrap().as_str().unwrap()), options.get("port").unwrap().as_u64().unwrap() as u16))
     }
 
     fn operate(&mut self, _control: Arc<Sender<Command>>) -> Sender<Command> {
@@ -129,31 +143,38 @@ impl Source for HttpSource {
         self.id
     }
 
-    fn get_name(&self) -> String {
-        String::from("Http")
-    }
-
-    fn dump(&self) -> String {
-        format!("{}{{port: {}}}:{}", self.get_name(), self.port, self.get_stop())
-    }
 
     fn serialize(&self) -> SourceModel {
         SourceModel { type_name: String::from("Http"), id: self.id.to_string(), configs: HashMap::new() }
     }
 
     fn from(stop_id: i64, configs: HashMap<String, ConfigModel>) -> Result<Box<dyn Source>, String> {
-        if let Some(value) = configs.get("port") {
-            return match value {
-                ConfigModel::String(port) => {
-                    Ok(Box::new(HttpSource::new(stop_id, port.string.parse::<u16>().unwrap())))
+        let port = match configs.get("port") {
+            Some(port) => {
+                match port {
+                    ConfigModel::String(port) => {
+                        port.string.parse::<u16>().unwrap()
+                    }
+                    ConfigModel::Number(port) => {
+                        port.number as u16
+                    }
+                    _ => return Err(String::from("Could not create HttpSource."))
                 }
-                ConfigModel::Number(port) => {
-                    Ok(Box::new(HttpSource::new(stop_id, port.number as u16)))
+            },
+            _ => return Err(String::from("Could not create HttpSource."))
+        };
+        let url = match configs.get("url") {
+            Some(url) => {
+                match url {
+                    ConfigModel::String(url) => {
+                        url.string.clone()
+                    }
+                    _ => return Err(String::from("Could not create HttpSource."))
                 }
-                _ => Err(String::from("Could not create HttpSource."))
-            };
-        }
-        Err(String::from("Could not create HttpSource."))
+            }
+            _ => return Err(String::from("Could not create HttpSource."))
+        };
+        Ok(Box::new(HttpSource::new(stop_id, url, port)))
     }
 
     fn serialize_default() -> Result<SourceModel, ()> {

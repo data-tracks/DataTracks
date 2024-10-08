@@ -1,4 +1,5 @@
 use crate::processing::destination::Destination;
+use crate::processing::option::Configurable;
 use crate::processing::plan::DestinationModel;
 use crate::processing::station::Command;
 use crate::processing::Train;
@@ -23,6 +24,16 @@ impl DebugDestination {
     pub fn new(stop: i64) -> Self {
         let (tx, _num, rx) = new_channel();
         DebugDestination { id: GLOBAL_ID.new_id(), stop, receiver: Some(rx), sender: tx }
+    }
+}
+
+impl Configurable for DebugDestination {
+    fn get_options(&self) -> Map<String, Value> {
+        Map::new()
+    }
+
+    fn get_name(&self) -> String {
+        String::from("Debug")
     }
 }
 
@@ -79,13 +90,6 @@ impl Destination for DebugDestination {
         self.id
     }
 
-    fn get_name(&self) -> String {
-        String::from("Debug")
-    }
-
-    fn dump(&self) -> String {
-        format!("{}{{}}:{}", self.get_name(), self.get_stop())
-    }
 
     fn serialize(&self) -> DestinationModel {
         DestinationModel { type_name: String::from("Debug"), id: self.id.to_string(), configs: HashMap::new() }

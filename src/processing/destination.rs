@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::mqtt::MqttDestination;
+use crate::processing::option::Configurable;
 use crate::processing::plan::DestinationModel;
 use crate::processing::station::Command;
 #[cfg(test)]
@@ -20,7 +21,7 @@ pub fn parse_destination(type_: &str, options: Map<String, Value>, stop: i64) ->
     Ok(destination)
 }
 
-pub trait Destination: Send {
+pub trait Destination: Send + Configurable + Sync {
     fn parse(stop: i64, options: Map<String, Value>) -> Result<Self, String>
     where
         Self: Sized;
@@ -32,9 +33,9 @@ pub trait Destination: Send {
 
     fn get_id(&self) -> i64;
 
-    fn get_name(&self) -> String;
-
-    fn dump(&self) -> String;
+    fn dump_destination(&self) -> String {
+        format!("{}:{}", Configurable::dump(self), self.get_stop())
+    }
 
     fn serialize(&self) -> DestinationModel;
 

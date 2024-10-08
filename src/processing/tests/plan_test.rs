@@ -6,6 +6,7 @@ pub mod dummy {
     use std::time::Duration;
 
     use crate::processing::destination::Destination;
+    use crate::processing::option::Configurable;
     use crate::processing::plan::{DestinationModel, SourceModel};
     use crate::processing::source::Source;
     use crate::processing::station::Command;
@@ -37,6 +38,21 @@ pub mod dummy {
         }
     }
 
+    impl Configurable for DummySource {
+        fn get_name(&self) -> String {
+            String::from("Dummy")
+        }
+
+        fn get_options(&self) -> Map<String, serde_json::Value> {
+            let mut options = serde_json::map::Map::new();
+            if self.initial_delay.as_millis() != 0 {
+                options.insert(String::from("initial_delay"), serde_json::Value::from(self.initial_delay.as_millis() as i64));
+            }
+            options.insert(String::from("delay"), serde_json::Value::from(self.delay.as_millis() as i64));
+
+            options
+        }
+    }
 
     impl Source for DummySource {
         fn parse(stop: i64, options: Map<String, serde_json::Value>) -> Result<Self, String> {
@@ -100,18 +116,6 @@ pub mod dummy {
             self.id
         }
 
-        fn get_name(&self) -> String {
-            String::from("Dummy")
-        }
-
-        fn dump(&self) -> String {
-            if self.initial_delay.as_millis() != 0 {
-                format!("{}{{delay: {}, initial_delay: {}}}:{}", self.get_name(), self.delay.as_millis(), self.initial_delay.as_millis(), self.get_stop())
-            } else {
-                format!("{}{{delay: {}}}:{}", self.get_name(), self.delay.as_millis(), self.get_stop())
-            }
-        }
-
         fn serialize(&self) -> SourceModel {
             SourceModel { type_name: String::from("Dummy"), id: self.id.to_string(), configs: HashMap::new() }
         }
@@ -152,6 +156,18 @@ pub mod dummy {
 
         pub(crate) fn results(&self) -> Arc<Mutex<Vec<Train>>> {
             Arc::clone(&self.results)
+        }
+    }
+
+    impl Configurable for DummyDestination {
+        fn get_name(&self) -> String {
+            String::from("Dummy")
+        }
+
+        fn get_options(&self) -> Map<String, serde_json::Value> {
+            let mut options = serde_json::map::Map::new();
+            options.insert(String::from("result_size"), serde_json::Value::from(self.result_size));
+            options
         }
     }
 
@@ -205,14 +221,6 @@ pub mod dummy {
 
         fn get_id(&self) -> i64 {
             self.id
-        }
-
-        fn get_name(&self) -> String {
-            String::from("Dummy")
-        }
-
-        fn dump(&self) -> String {
-            format!("{}{{result_size: {}}}:{}", self.get_name(), self.result_size, self.get_stop())
         }
 
         fn serialize(&self) -> DestinationModel {

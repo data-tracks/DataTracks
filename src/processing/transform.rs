@@ -1,9 +1,11 @@
 use crate::algebra::{Algebra, BoxedIterator, Scan, ValueIterator};
 use crate::language::Language;
+use crate::processing::option::Configurable;
 use crate::processing::train::Train;
 use crate::processing::transform::Transform::{Func, Lang};
 use crate::value::Value;
 use crate::{algebra, language};
+use serde_json::Map;
 use std::sync::Arc;
 
 pub trait Taker: Send {
@@ -73,6 +75,25 @@ impl Transform {
         }
     }
 }
+
+impl Configurable for Transform {
+    fn get_name(&self) -> String {
+        match self {
+            Func(_) => {
+                "Func".to_string()
+            }
+            Lang(l) => {
+                l.language.to_string()
+            }
+            Transform::Custom => String::from("Custom")
+        }
+    }
+
+    fn get_options(&self) -> Map<String, serde_json::Value> {
+        todo!()
+    }
+}
+
 
 
 pub struct LanguageTransform {

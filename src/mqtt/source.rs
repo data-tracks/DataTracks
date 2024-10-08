@@ -1,3 +1,4 @@
+use crate::processing::option::Configurable;
 use crate::processing::plan::SourceModel;
 use crate::processing::source::Source;
 use crate::processing::station::Command;
@@ -6,7 +7,6 @@ use crate::ui::{ConfigModel, StringModel};
 use crate::util::{Tx, GLOBAL_ID};
 use crate::value::{Dict, Value};
 use crossbeam::channel::{unbounded, Sender};
-use json::JsonValue::Number;
 use mqtt_packet_3_5::{MqttPacket, PacketDecoder, PublishPacket};
 use serde_json::Map;
 use std::collections::{BTreeMap, HashMap};
@@ -29,6 +29,19 @@ pub struct MqttSource {
 impl MqttSource {
     pub fn new(stop: i64, url: String, port: u16) -> Self {
         MqttSource { port, stop, url, id: GLOBAL_ID.new_id(), outs: HashMap::new() }
+    }
+}
+
+impl Configurable for MqttSource {
+    fn get_name(&self) -> String {
+        String::from("Mqtt")
+    }
+
+    fn get_options(&self) -> Map<String, serde_json::Value> {
+        let mut options = serde_json::map::Map::new();
+        options.insert("url".to_string(), serde_json::Value::String(self.url.clone()));
+        options.insert("port".to_string(), serde_json::Value::Number(self.port.into()));
+        options
     }
 }
 
@@ -67,14 +80,6 @@ impl Source for MqttSource {
 
     fn get_id(&self) -> i64 {
         self.id
-    }
-
-    fn get_name(&self) -> String {
-        String::from("Mqtt")
-    }
-
-    fn dump(&self) -> String {
-        format!("{}{{\"url\": \"{}\", \"port\": {}}}:{}", self.get_name(), self.url, self.port, self.get_stop())
     }
 
     fn serialize(&self) -> SourceModel {

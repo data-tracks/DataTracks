@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::mqtt::MqttSource;
+use crate::processing::option::Configurable;
 use crate::processing::plan::SourceModel;
 use crate::processing::station::Command;
 #[cfg(test)]
@@ -22,7 +23,7 @@ pub fn parse_source(type_: &str, options: Map<String, Value>, stop: i64) -> Resu
     Ok(source)
 }
 
-pub trait Source: Send {
+pub trait Source: Send + Sync + Configurable {
     fn parse(stop: i64, options: Map<String, Value>) -> Result<Self, String>
     where
         Self: Sized;
@@ -35,9 +36,9 @@ pub trait Source: Send {
 
     fn get_id(&self) -> i64;
 
-    fn get_name(&self) -> String;
-
-    fn dump(&self) -> String;
+    fn dump_source(&self) -> String {
+        format!("{}:{}", Configurable::dump(self), self.get_stop())
+    }
 
     fn serialize(&self) -> SourceModel;
 
@@ -50,4 +51,5 @@ pub trait Source: Send {
         Self: Sized;
 
 }
+
 

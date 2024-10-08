@@ -83,14 +83,14 @@ impl Plan {
             dump += "\nIn\n";
             let mut sorted = self.sources.values().collect::<Vec<&Box<dyn Source>>>();
             sorted.sort_by_key(|s| s.get_name());
-            dump += &sorted.into_iter().map(|s| s.dump()).collect::<Vec<_>>().join("\n")
+            dump += &sorted.into_iter().map(|s| s.dump_source()).collect::<Vec<_>>().join("\n")
         }
 
         if !self.destinations.is_empty() {
             dump += "\nOut\n";
             let mut sorted = self.destinations.values().collect::<Vec<&Box<dyn Destination>>>();
             sorted.sort_by_key(|s| s.get_name());
-            dump += &sorted.into_iter().map(|s| s.dump()).collect::<Vec<_>>().join("\n")
+            dump += &sorted.into_iter().map(|s| s.dump_destination()).collect::<Vec<_>>().join("\n")
         }
 
         if !self.transforms.is_empty() {
@@ -662,7 +662,23 @@ mod test {
             "\
             1--2\n\
             In\n\
-            Mqtt{\"url\": \"127.0.0.1\", \"port\": 8080}:1\
+            Mqtt{\"port\":8080,\"url\":\"127.0.0.1\"}:1\
+            "
+        ];
+
+        for stencil in stencils {
+            let plan = Plan::parse(stencil).unwrap();
+            assert_eq!(plan.dump(), stencil)
+        }
+    }
+
+    #[test]
+    fn stencil_destination() {
+        let stencils = vec![
+            "\
+            1--2\n\
+            Out\n\
+            Dummy{\"result_size\":0}:1\
             "
         ];
 

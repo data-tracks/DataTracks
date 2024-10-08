@@ -1,4 +1,5 @@
 use crate::processing::destination::Destination;
+use crate::processing::option::Configurable;
 use crate::processing::plan::DestinationModel;
 use crate::processing::station::Command;
 use crate::processing::Train;
@@ -14,6 +15,18 @@ pub struct MqttDestination {
 impl MqttDestination {
     pub fn new(port: u16) -> Self {
         MqttDestination { port }
+    }
+}
+
+impl Configurable for MqttDestination {
+    fn get_options(&self) -> Map<String, Value> {
+        let map = Map::new();
+
+        map
+    }
+
+    fn get_name(&self) -> String {
+        String::from("Mqtt")
     }
 }
 
@@ -36,14 +49,6 @@ impl Destination for MqttDestination {
 
     fn get_id(&self) -> i64 {
         todo!()
-    }
-
-    fn get_name(&self) -> String {
-        String::from("Mqtt")
-    }
-
-    fn dump(&self) -> String {
-        format!("{}{{port: {}}}:{}", self.get_name(), self.port, self.get_stop())
     }
 
     fn serialize(&self) -> DestinationModel {
