@@ -96,6 +96,13 @@ impl HttpSource {
 
 
 impl Source for HttpSource {
+    fn parse(stop: i64, options: Map<String, Value>) -> Result<Self, String>
+    where
+        Self: Sized,
+    {
+        Ok(HttpSource::new(stop, options.get("port").unwrap().as_u64().unwrap() as u16))
+    }
+
     fn operate(&mut self, _control: Arc<Sender<Command>>) -> Sender<Command> {
         let rt = Runtime::new().unwrap();
 
@@ -120,6 +127,14 @@ impl Source for HttpSource {
 
     fn get_id(&self) -> i64 {
         self.id
+    }
+
+    fn get_name(&self) -> String {
+        String::from("Http")
+    }
+
+    fn dump(&self) -> String {
+        format!("{}{{port: {}}}:{}", self.get_name(), self.port, self.get_stop())
     }
 
     fn serialize(&self) -> SourceModel {

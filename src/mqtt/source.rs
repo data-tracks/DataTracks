@@ -6,6 +6,7 @@ use crate::ui::{ConfigModel, StringModel};
 use crate::util::{Tx, GLOBAL_ID};
 use crate::value::{Dict, Value};
 use crossbeam::channel::{unbounded, Sender};
+use json::JsonValue::Number;
 use mqtt_packet_3_5::{MqttPacket, PacketDecoder, PublishPacket};
 use serde_json::Map;
 use std::collections::{BTreeMap, HashMap};
@@ -18,6 +19,7 @@ use tracing::{debug, warn};
 
 pub struct MqttSource {
     id: i64,
+    url: String,
     port: u16,
     stop: i64,
     outs: HashMap<i64, Tx<Train>>,
@@ -25,14 +27,16 @@ pub struct MqttSource {
 
 
 impl MqttSource {
-    pub fn new(stop: i64, port: u16) -> Self {
-        MqttSource { port, stop, id: GLOBAL_ID.new_id(), outs: HashMap::new() }
+    pub fn new(stop: i64, url: String, port: u16) -> Self {
+        MqttSource { port, stop, url, id: GLOBAL_ID.new_id(), outs: HashMap::new() }
     }
 }
 
 impl Source for MqttSource {
-    fn parse(stop: i64, options: Map<String, serde_json::Value>) -> Result<Box<dyn Source>, String> {
-        Ok(Box::new(MqttSource::new(stop, options.get(&"port").unwrap().as_str().unwrap().parse().unwrap())))
+    fn parse(stop: i64, options: Map<String, serde_json::Value>) -> Result<Self, String> {
+        let port = options.get("port").unwrap().as_u64().unwrap_or(9999);
+        let url = options.get("url").unwrap().as_str().unwrap().parse().unwrap();
+        Ok(MqttSource::new(stop, url, port as u16))
     }
 
     fn operate(&mut self, _control: Arc<Sender<Command>>) -> Sender<Command> {
@@ -65,23 +69,45 @@ impl Source for MqttSource {
         self.id
     }
 
+    fn get_name(&self) -> String {
+        String::from("Mqtt")
+    }
+
+    fn dump(&self) -> String {
+        format!("{}{{\"url\": \"{}\", \"port\": {}}}:{}", self.get_name(), self.url, self.port, self.get_stop())
+    }
+
     fn serialize(&self) -> SourceModel {
         SourceModel { type_name: String::from("Mqtt"), id: self.id.to_string(), configs: HashMap::new() }
     }
 
     fn from(stop_id: i64, configs: HashMap<String, ConfigModel>) -> Result<Box<dyn Source>, String> {
-        if let Some(value) = configs.get("port") {
-            return match value {
-                ConfigModel::String(port) => {
-                    Ok(Box::new(MqttSource::new(stop_id, port.string.parse::<u16>().unwrap())))
+        let port = match configs.get("port") {
+            Some(port) => {
+                match port {
+                    ConfigModel::String(port) => {
+                        port.string.parse::<u16>().unwrap()
+                    }
+                    ConfigModel::Number(port) => {
+                        port.number as u16
+                    }
+                    _ => return Err(String::from("Could not create HttpSource."))
                 }
-                ConfigModel::Number(port) => {
-                    Ok(Box::new(MqttSource::new(stop_id, port.number as u16)))
+            },
+            _ => return Err(String::from("Could not create HttpSource."))
+        };
+        let url = match configs.get("url") {
+            Some(url) => {
+                match url {
+                    ConfigModel::String(url) => {
+                        url.string.clone()
+                    }
+                    _ => return Err(String::from("Could not create HttpSource."))
                 }
-                _ => Err(String::from("Could not create HttpSource."))
-            };
-        }
-        Err(String::from("Could not create MqttSource."))
+            }
+            _ => return Err(String::from("Could not create HttpSource."))
+        };
+        Ok(Box::new(MqttSource::new(stop_id, url, port)))
     }
 
     fn serialize_default() -> Result<SourceModel, ()> {

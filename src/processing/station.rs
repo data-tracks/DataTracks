@@ -331,7 +331,7 @@ pub mod tests {
     fn sql_parse_block() {
         let stencil = "1-|3{sql|Select * From $1}";
 
-        let plan = Plan::parse(stencil);
+        let plan = Plan::parse(stencil).unwrap();
 
         let station = plan.stations.get(&3).unwrap();
 
@@ -361,7 +361,7 @@ pub mod tests {
         ];
 
         for stencil in stencils {
-            let plan = Plan::parse(stencil);
+            let plan = Plan::parse(stencil).unwrap();
 
             let _station = plan.stations.get(&1).unwrap();
         }

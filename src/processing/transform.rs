@@ -53,7 +53,15 @@ impl Transform {
         match self {
             Func(f) => f.dump(),
             Lang(f) => f.dump(),
-            Transform::Custom => Transform::Custom.to_string()
+            Transform::Custom => String::from("Custom")
+        }
+    }
+
+    pub fn get_name(&self) -> String {
+        match self {
+            Func(_) => "Func".to_string(),
+            Lang(_) => "Lang".to_string(),
+            Transform::Custom => "Custom".to_string()
         }
     }
 

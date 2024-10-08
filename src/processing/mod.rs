@@ -1,8 +1,6 @@
 pub use crate::http::http::HttpSource;
 pub use debug::DebugDestination;
 pub use plan::Plan;
-pub use tests::dummy::DummyDestination;
-pub use tests::dummy::DummySource;
 pub use train::Train;
 
 pub(crate) mod station;

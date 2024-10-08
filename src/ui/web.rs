@@ -121,7 +121,13 @@ async fn get_status(State(_state): State<WebState>) -> impl IntoResponse {
 async fn create_plan(State(state): State<WebState>, Json(payload): Json<CreatePlanPayload>) -> impl IntoResponse {
     debug!("{:?}", payload);
 
-    let mut plan = Plan::parse(payload.plan.as_str());
+    let plan = Plan::parse(payload.plan.as_str());
+
+    let mut plan = match plan {
+        Ok(plan) => plan,
+        Err(e) => return (StatusCode::BAD_REQUEST, e.to_string()),
+    };
+
     plan.set_name(payload.name);
     state.storage.lock().unwrap().add_plan(plan);
 

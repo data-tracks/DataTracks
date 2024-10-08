@@ -1,6 +1,5 @@
 use crate::processing::destination::Destination;
 use crate::processing::plan::DestinationModel;
-use crate::processing::source::Source;
 use crate::processing::station::Command;
 use crate::processing::Train;
 use crate::util::Tx;
@@ -19,7 +18,7 @@ impl MqttDestination {
 }
 
 impl Destination for MqttDestination {
-    fn parse(stop: i64, options: Map<String, Value>) -> Result<Box<dyn Source>, String> {
+    fn parse(stop: i64, options: Map<String, Value>) -> Result<Self, String> {
         todo!()
     }
 
@@ -37,6 +36,14 @@ impl Destination for MqttDestination {
 
     fn get_id(&self) -> i64 {
         todo!()
+    }
+
+    fn get_name(&self) -> String {
+        String::from("Mqtt")
+    }
+
+    fn dump(&self) -> String {
+        format!("{}{{port: {}}}:{}", self.get_name(), self.port, self.get_stop())
     }
 
     fn serialize(&self) -> DestinationModel {

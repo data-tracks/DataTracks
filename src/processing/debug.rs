@@ -4,6 +4,7 @@ use crate::processing::station::Command;
 use crate::processing::Train;
 use crate::util::{new_channel, Rx, Tx, GLOBAL_ID};
 use crossbeam::channel::{unbounded, Sender};
+use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufWriter, Write};
@@ -26,6 +27,13 @@ impl DebugDestination {
 }
 
 impl Destination for DebugDestination {
+    fn parse(stop: i64, _options: Map<String, Value>) -> Result<Self, String>
+    where
+        Self: Sized,
+    {
+        Ok(DebugDestination::new(stop))
+    }
+
     fn operate(&mut self, _control: Arc<Sender<Command>>) -> Sender<Command> {
         let receiver = self.receiver.take().unwrap();
         let (tx, _rx) = unbounded();
@@ -69,6 +77,14 @@ impl Destination for DebugDestination {
 
     fn get_id(&self) -> i64 {
         self.id
+    }
+
+    fn get_name(&self) -> String {
+        String::from("Debug")
+    }
+
+    fn dump(&self) -> String {
+        format!("{}{{}}:{}", self.get_name(), self.get_stop())
     }
 
     fn serialize(&self) -> DestinationModel {

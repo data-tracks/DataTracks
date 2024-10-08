@@ -5,8 +5,6 @@ pub mod dummy {
     use std::thread::{sleep, spawn};
     use std::time::Duration;
 
-    use crossbeam::channel::{unbounded, Sender};
-
     use crate::processing::destination::Destination;
     use crate::processing::plan::{DestinationModel, SourceModel};
     use crate::processing::source::Source;
@@ -16,6 +14,8 @@ pub mod dummy {
     use crate::ui::ConfigModel;
     use crate::util::{new_channel, Rx, Tx, GLOBAL_ID};
     use crate::value::Value;
+    use crossbeam::channel::{unbounded, Sender};
+    use serde_json::Map;
 
     pub struct DummySource {
         id: i64,
@@ -39,6 +39,18 @@ pub mod dummy {
 
 
     impl Source for DummySource {
+        fn parse(stop: i64, options: Map<String, serde_json::Value>) -> Result<Self, String> {
+            let delay = Duration::from_millis(options.get("delay").unwrap().as_u64().unwrap());
+
+            if options.contains_key("initial_delay") {
+                let initial_delay = Duration::from_millis(options.get("initial_delay").unwrap().as_u64().unwrap());
+
+                Ok(DummySource::new_with_delay(stop, vec![], initial_delay, delay).0)
+            } else {
+                Ok(DummySource::new(stop, vec![], delay).0)
+            }
+        }
+
         fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command> {
             let stop = self.stop;
 
@@ -88,6 +100,18 @@ pub mod dummy {
             self.id
         }
 
+        fn get_name(&self) -> String {
+            String::from("Dummy")
+        }
+
+        fn dump(&self) -> String {
+            if self.initial_delay.as_millis() != 0 {
+                format!("{}{{delay: {}, initial_delay: {}}}:{}", self.get_name(), self.delay.as_millis(), self.initial_delay.as_millis(), self.get_stop())
+            } else {
+                format!("{}{{delay: {}}}:{}", self.get_name(), self.delay.as_millis(), self.get_stop())
+            }
+        }
+
         fn serialize(&self) -> SourceModel {
             SourceModel { type_name: String::from("Dummy"), id: self.id.to_string(), configs: HashMap::new() }
         }
@@ -107,19 +131,19 @@ pub mod dummy {
     pub struct DummyDestination {
         id: i64,
         stop: i64,
-        result_amount: usize,
+        result_size: usize,
         pub(crate) results: Arc<Mutex<Vec<Train>>>,
         receiver: Option<Rx<Train>>,
         sender: Tx<Train>,
     }
 
     impl DummyDestination {
-        pub(crate) fn new(stop: i64, wait_result: usize) -> Self {
+        pub(crate) fn new(stop: i64, result_size: usize) -> Self {
             let (tx, _num, rx) = new_channel();
             DummyDestination {
                 id: GLOBAL_ID.new_id(),
                 stop,
-                result_amount: wait_result,
+                result_size,
                 results: Arc::new(Mutex::new(vec![])),
                 receiver: Some(rx),
                 sender: tx,
@@ -132,11 +156,16 @@ pub mod dummy {
     }
 
     impl Destination for DummyDestination {
+        fn parse(stop: i64, options: Map<String, serde_json::Value>) -> Result<Self, String> {
+            let result_size = options.get("result_size").unwrap().as_u64().unwrap() as usize;
+            Ok(DummyDestination::new(stop, result_size))
+        }
+
         fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command> {
             let stop = self.stop;
             let local = self.results();
             let receiver = self.receiver.take().unwrap();
-            let result_amount = self.result_amount as usize;
+            let result_amount = self.result_size as usize;
             let (tx, rx) = unbounded();
 
             spawn(move || {
@@ -176,6 +205,14 @@ pub mod dummy {
 
         fn get_id(&self) -> i64 {
             self.id
+        }
+
+        fn get_name(&self) -> String {
+            String::from("Dummy")
+        }
+
+        fn dump(&self) -> String {
+            format!("{}{{result_size: {}}}:{}", self.get_name(), self.result_size, self.get_stop())
         }
 
         fn serialize(&self) -> DestinationModel {
@@ -299,7 +336,7 @@ pub mod tests {
         let values = vec![dict_values(vec![3.into(), "test".into(), true.into(), Value::null()])];
         let stencil = "3{sql|Select * From $0}";
 
-        let mut plan = Plan::parse(stencil);
+        let mut plan = Plan::parse(stencil).unwrap();
 
         let (source, id) = DummySource::new(3, values.clone(), Duration::from_millis(3));
 
@@ -331,7 +368,7 @@ pub mod tests {
     fn sql_parse_block_one() {
         let stencil = "1-|2-3\n4-2";
 
-        let mut plan = Plan::parse(stencil);
+        let mut plan = Plan::parse(stencil).unwrap();
         let values1 = vec![vec![Value::from(Dict::from(Value::from(3.3)))], vec![Value::from(Dict::from(Value::from(3.1)))]];
         let (source1, id1) = DummySource::new(1, values1.clone(), Duration::from_millis(1));
 
@@ -435,7 +472,7 @@ pub mod tests {
 
     #[test]
     fn full_test() {
-        let mut plan = Plan::parse("0-1($:f)-2");
+        let mut plan = Plan::parse("0-1($:f)-2").unwrap();
 
         let mut values = vec![];
 
@@ -475,7 +512,7 @@ pub mod tests {
             Transformers\n\
             $company: Postres{query:'SELECT id, name FROM company WHERE name = ?'}
             "
-        );
+        ).unwrap();
 
         let mut values = vec![];
 
