@@ -2,8 +2,8 @@ use crate::processing::destination::{parse_destination, Destination};
 use crate::processing::plan::Status::Stopped;
 use crate::processing::source::{parse_source, Source};
 use crate::processing::station::{Command, Station};
-use crate::processing::transform;
 use crate::processing::transform::Transform::Custom;
+use crate::processing::{transform, Train};
 use crate::ui::{ConfigContainer, ConfigModel, StringModel};
 use crate::util::GLOBAL_ID;
 use core::default::Default;
@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize, Serializer};
 use serde_json::{Map, Value};
 use std::cmp::PartialEq;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 pub struct Plan {
     pub id: i64,
@@ -22,12 +22,19 @@ pub struct Plan {
     lines: HashMap<i64, Vec<i64>>,
     pub(crate) stations: HashMap<i64, Station>,
     stations_to_in_outs: HashMap<i64, Vec<i64>>,
-    sources: HashMap<i64, Box<dyn Source>>,
-    destinations: HashMap<i64, Box<dyn Destination>>,
+    pub sources: HashMap<i64, Box<dyn Source>>,
+    pub destinations: HashMap<i64, Box<dyn Destination>>,
     controls: HashMap<i64, Vec<Sender<Command>>>,
     pub(crate) control_receiver: (Arc<Sender<Command>>, channel::Receiver<Command>),
     pub(crate) status: Status,
     transforms: HashMap<String, transform::Transform>,
+}
+
+#[cfg(test)]
+impl Plan {
+    pub(crate) fn get_result(&self, id: i64) -> Arc<Mutex<Vec<Train>>> {
+        self.destinations.get(&id).unwrap().get_result_handle()
+    }
 }
 
 impl Default for Plan {
@@ -356,7 +363,7 @@ impl Plan {
         Ok(())
     }
 
-    fn split_name_options(stencil: &str) -> Result<(i64, &str, Map<String, serde_json::Value>), String> {
+    fn split_name_options(stencil: &str) -> Result<(i64, &str, Map<String, Value>), String> {
         let (stencil, stop) = stencil.rsplit_once("}:").unwrap();
         let stop = stop.parse::<i64>().unwrap();
 
@@ -674,6 +681,24 @@ mod test {
 
     #[test]
     fn stencil_destination() {
+        let stencils = vec![
+            "\
+            1--2\n\
+            In\n\
+            Mqtt{\"port\":8080,\"url\":\"127.0.0.1\"}:1\n\
+            Out\n\
+            Dummy{\"result_size\":0}:1\
+            "
+        ];
+
+        for stencil in stencils {
+            let plan = Plan::parse(stencil).unwrap();
+            assert_eq!(plan.dump(), stencil)
+        }
+    }
+
+    #[test]
+    fn stencil_source_and_destination() {
         let stencils = vec![
             "\
             1--2\n\

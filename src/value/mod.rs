@@ -11,7 +11,7 @@ mod float;
 mod int;
 mod number;
 mod string;
-mod value;
+pub(crate) mod value;
 mod bool;
 mod null;
 mod array;

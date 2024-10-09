@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use crate::mqtt::MqttDestination;
 use crate::processing::option::Configurable;
@@ -42,4 +42,9 @@ pub trait Destination: Send + Configurable + Sync {
     fn serialize_default() -> Option<DestinationModel>
     where
         Self: Sized;
+
+    #[cfg(test)]
+    fn get_result_handle(&self) -> Arc<Mutex<Vec<Train>>> {
+        panic!()
+    }
 }

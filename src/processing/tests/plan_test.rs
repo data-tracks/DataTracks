@@ -58,13 +58,40 @@ pub mod dummy {
         fn parse(stop: i64, options: Map<String, serde_json::Value>) -> Result<Self, String> {
             let delay = Duration::from_millis(options.get("delay").unwrap().as_u64().unwrap());
 
-            if options.contains_key("initial_delay") {
+            let values = options.get("values").unwrap_or_else(|| &serde_json::Value::Object(serde_json::Map::new()));
+
+            let values: Vec<Vec<Value>> = match values {
+                serde_json::Value::Array(values) => {
+                    let mut transformed: Vec<Vec<Value>> = vec![];
+                    for value in values {
+                        match value {
+                            serde_json::Value::Array(vals) => {
+                                transformed.push(vals.iter().map(|v| v.clone().into()).collect());
+                            }
+                            _ => panic!()
+                        }
+                    }
+                    transformed
+                },
+                _ => vec![],
+            };
+
+
+            let mut source = if options.contains_key("initial_delay") {
                 let initial_delay = Duration::from_millis(options.get("initial_delay").unwrap().as_u64().unwrap());
 
-                Ok(DummySource::new_with_delay(stop, vec![], initial_delay, delay).0)
+                DummySource::new_with_delay(stop, values, initial_delay, delay).0
             } else {
-                Ok(DummySource::new(stop, vec![], delay).0)
-            }
+                DummySource::new(stop, values, delay).0
+            };
+
+            match options.get("id") {
+                None => {},
+                Some(id) => {
+                    source.id = id.as_i64().unwrap();
+                }
+            };
+            Ok(source)
         }
 
         fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command> {
@@ -174,7 +201,14 @@ pub mod dummy {
     impl Destination for DummyDestination {
         fn parse(stop: i64, options: Map<String, serde_json::Value>) -> Result<Self, String> {
             let result_size = options.get("result_size").unwrap().as_u64().unwrap() as usize;
-            Ok(DummyDestination::new(stop, result_size))
+
+            let mut destination = DummyDestination::new(stop, result_size);
+
+            if let Some(id) = options.get("id") {
+                destination.id = id.as_i64().unwrap();
+            }
+
+            Ok(destination)
         }
 
         fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command> {
@@ -233,17 +267,17 @@ pub mod dummy {
         {
             None
         }
+
+        fn get_result_handle(&self) -> Arc<Mutex<Vec<Train>>> {
+            self.results.clone()
+        }
+
     }
 }
 
 
 #[cfg(test)]
 pub mod tests {
-    use std::any::Any;
-    use std::thread::sleep;
-    use std::time::{Duration, SystemTime};
-    use std::vec;
-
     use crate::processing::destination::Destination;
     use crate::processing::plan::Plan;
     use crate::processing::station::Command::{Ready, Stop};
@@ -253,6 +287,10 @@ pub mod tests {
     use crate::processing::Train;
     use crate::util::new_channel;
     use crate::value::{Dict, Value};
+    use std::any::Any;
+    use std::thread::sleep;
+    use std::time::{Duration, SystemTime};
+    use std::vec;
 
     pub fn dict_values(values: Vec<Value>) -> Vec<Value> {
         let mut dicts = vec![];
@@ -342,17 +380,26 @@ pub mod tests {
     #[test]
     fn sql_parse_transform() {
         let values = vec![dict_values(vec![3.into(), "test".into(), true.into(), Value::null()])];
-        let stencil = "3{sql|Select * From $0}";
+        let id = 3;
+        let destination = 4;
+        let stencil = format!("\
+        3{{sql|Select * From $0}}\n\
+        In\n\
+        Dummy{{\"id\": {}, \"duration\":{},\"values\":{}}}:3\n\
+        Out\n\
+        Dummy{{\"id\": {},\"result_size\":{}}}:3", id, destination, 3, <Vec<Vec<Value>> as Into<Value>>::into(values), values.len());
 
-        let mut plan = Plan::parse(stencil).unwrap();
+        let mut plan = Plan::parse(&stencil).unwrap();
 
-        let (source, id) = DummySource::new(3, values.clone(), Duration::from_millis(3));
+        let clone = plan.get_result(destination);
+
+        /*let (source, id) = DummySource::new(3, values.clone(), Duration::from_millis(3));
 
         let destination = DummyDestination::new(3, values.len());
         let clone = destination.results();
 
         plan.add_source(3, Box::new(source));
-        plan.add_destination(3, Box::new(destination));
+        plan.add_destination(3, Box::new(destination));*/
 
 
         plan.operate();
