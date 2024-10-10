@@ -10,9 +10,10 @@ use crate::value::r#type::ValType;
 use crate::value::string::Text;
 use crate::value::{bool, Bool, Float, Int};
 use json::{parse, JsonValue};
+use serde::{Deserialize, Serialize};
 use tracing::warn;
 
-#[derive(Eq, Clone, Debug)]
+#[derive(Eq, Clone, Debug, Serialize, Deserialize)]
 pub enum Value {
     Int(Int),
     Float(Float),

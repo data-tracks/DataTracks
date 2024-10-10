@@ -1,8 +1,8 @@
+use crate::value::Value;
+use serde::{Deserialize, Serialize};
 use std::fmt::Formatter;
 
-use crate::value::Value;
-
-#[derive(Eq, Hash, Clone, Debug, PartialEq)]
+#[derive(Eq, Hash, Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Array(pub Vec<Value>);
 
 impl Array {

@@ -1,11 +1,11 @@
-use std::fmt::{Debug, Formatter};
-use std::ops::{Add, Div, Sub};
-
 use crate::value::number::Number;
 use crate::value::{Bool, Float, Text};
 use crate::value_display;
+use serde::{Deserialize, Serialize};
+use std::fmt::{Debug, Formatter};
+use std::ops::{Add, Div, Sub};
 
-#[derive(Eq, Hash, PartialEq, Clone, Copy, Debug)]
+#[derive(Eq, Hash, PartialEq, Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Int(pub(crate) i64);
 
 impl Number for Int {

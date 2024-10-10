@@ -3,11 +3,11 @@ use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::hash::Hash;
 
-use json::parse;
-
 use crate::value::Value;
+use json::parse;
+use serde::{Deserialize, Serialize};
 
-#[derive(Eq, Clone, Debug, Hash, PartialEq, Default)]
+#[derive(Eq, Clone, Debug, Hash, PartialEq, Default, Serialize, Deserialize)]
 pub struct Dict(pub BTreeMap<String, Value>);
 
 impl Dict {

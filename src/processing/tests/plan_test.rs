@@ -58,24 +58,21 @@ pub mod dummy {
         fn parse(stop: i64, options: Map<String, serde_json::Value>) -> Result<Self, String> {
             let delay = Duration::from_millis(options.get("delay").unwrap().as_u64().unwrap());
 
-            let values = options.get("values").unwrap_or_else(|| &serde_json::Value::Object(serde_json::Map::new()));
+            let values = options.get("values").cloned().unwrap_or_else(|| serde_json::Value::Object(serde_json::Map::new()));
 
-            let values: Vec<Vec<Value>> = match values {
-                serde_json::Value::Array(values) => {
-                    let mut transformed: Vec<Vec<Value>> = vec![];
-                    for value in values {
-                        match value {
-                            serde_json::Value::Array(vals) => {
-                                transformed.push(vals.iter().map(|v| v.clone().into()).collect());
-                            }
-                            _ => panic!()
+            let values: Value = serde_json::from_value(values).unwrap();
+
+            let values = match values {
+                Value::Array(a) => {
+                    a.0.into_iter().map(|v| match v {
+                        Value::Array(a) => {
+                            a.0
                         }
-                    }
-                    transformed
+                        _ => vec![]
+                    }).collect()
                 },
-                _ => vec![],
+                _ => vec![]
             };
-
 
             let mut source = if options.contains_key("initial_delay") {
                 let initial_delay = Duration::from_millis(options.get("initial_delay").unwrap().as_u64().unwrap());
@@ -385,9 +382,9 @@ pub mod tests {
         let stencil = format!("\
         3{{sql|Select * From $0}}\n\
         In\n\
-        Dummy{{\"id\": {}, \"duration\":{},\"values\":{}}}:3\n\
+        Dummy{{\"id\": {}, \"delay\":{},\"values\":{}}}:3\n\
         Out\n\
-        Dummy{{\"id\": {},\"result_size\":{}}}:3", id, destination, 3, <Vec<Vec<Value>> as Into<Value>>::into(values), values.len());
+        Dummy{{\"id\": {},\"result_size\":{}}}:3", id, 3, dump(&values), destination, values.len());
 
         let mut plan = Plan::parse(&stencil).unwrap();
 
@@ -417,6 +414,11 @@ pub mod tests {
         for mut train in results.clone() {
             assert_eq!(train.values.take().unwrap(), *values.get(0).unwrap())
         }
+    }
+
+    fn dump(value: &Vec<Vec<Value>>) -> String {
+        let values: Value = value.iter().cloned().map(|v| v.into()).collect::<Vec<_>>().into();
+        serde_json::to_string(&values).unwrap()
     }
 
     #[test]
@@ -594,4 +596,3 @@ pub mod tests {
         assert_eq!(lock.len(), 1)
     }
 }
-

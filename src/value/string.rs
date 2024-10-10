@@ -1,10 +1,10 @@
+use crate::value::{Bool, Float, Int};
+use crate::value_display;
+use serde::{Deserialize, Serialize};
 use std::cmp::PartialEq;
 use std::fmt::Formatter;
 
-use crate::value::{Bool, Float, Int};
-use crate::value_display;
-
-#[derive(Eq, Hash, Debug, PartialEq, Clone)]
+#[derive(Eq, Hash, Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct Text(pub String);
 
 impl PartialEq<Int> for Text {

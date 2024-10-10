@@ -1,11 +1,12 @@
 use crate::value::int::Int;
 use crate::value::number::Number;
 use crate::value::{Bool, Text};
+use serde::{Deserialize, Serialize};
 use std::cmp::min;
 use std::fmt::{Display, Formatter};
 use std::ops::{Add, Div, Sub};
 
-#[derive(Eq, Hash, Debug, PartialEq, Clone, Copy)]
+#[derive(Eq, Hash, Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub struct Float {
     pub number: i64,
     pub shift: u8,

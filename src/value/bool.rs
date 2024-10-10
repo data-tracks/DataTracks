@@ -1,9 +1,9 @@
-use std::fmt::Formatter;
-
 use crate::value::{Float, Int, Text};
 use crate::value_display;
+use serde::{Deserialize, Serialize};
+use std::fmt::Formatter;
 
-#[derive(Eq, PartialEq, Hash, Clone, Debug)]
+#[derive(Eq, PartialEq, Hash, Clone, Debug, Serialize, Deserialize)]
 pub struct Bool(pub bool);
 
 
