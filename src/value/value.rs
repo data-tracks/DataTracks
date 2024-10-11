@@ -66,11 +66,11 @@ impl Value {
     pub(crate) fn dict_from_kv(key: &str, value: Value) -> Value {
         let mut map = BTreeMap::new();
         match value {
-            Value::Dict(d) => {
-                d.0.into_iter().for_each(|(k,v)|{
+            /*Value::Dict(d) => {
+                d.into_iter().for_each(|(k,v)|{
                     map.insert(format!("{}.{}", key, k),v); {  }
                 })
-            }
+            }*/
             _ => {
                 map.insert(key.to_string(), value);
             }
@@ -146,7 +146,7 @@ impl Value {
                 }
             }
             Value::Array(a) => Ok(Bool(!a.0.is_empty())),
-            Value::Dict(d) => Ok(Bool(!d.0.is_empty())),
+            Value::Dict(d) => Ok(Bool(!d.is_empty())),
             Value::Null => Ok(Bool(false)),
         }
     }
@@ -158,7 +158,7 @@ impl Value {
             Value::Bool(b) => Ok(Text(b.0.to_string())),
             Value::Text(t) => Ok(t.clone()),
             Value::Array(a) => Ok(Text(format!("[{}]", a.0.iter().map(|v| v.as_text().unwrap().0).collect::<Vec<String>>().join(",")))),
-            Value::Dict(d) => Ok(Text(format!("[{}]", d.0.iter().map(|(k, v)| format!("{}:{}", k, v.as_text().unwrap().0)).collect::<Vec<String>>().join(",")))),
+            Value::Dict(d) => Ok(Text(format!("[{}]", d.iter().map(|(k, v)| format!("{}:{}", k, v.as_text().unwrap().0)).collect::<Vec<String>>().join(",")))),
             Value::Null => Ok(Text("null".to_owned()))
         }
     }
@@ -217,7 +217,7 @@ impl PartialEq for Value {
             }).unwrap_or(false),
 
             (Value::Dict(d), _) => other.as_dict().map(|other| {
-                d.0.len() == other.0.len() && d.0.keys().eq(other.0.keys()) && d.0.values().eq(other.0.values())
+                d.len() == other.len() && d.keys().eq(other.keys()) && d.values().eq(other.values())
             }).unwrap_or(false),
 
             // Fallback: not equal if types don't match or other cases aren't handled
@@ -248,7 +248,7 @@ impl Hash for Value {
                 }
             }
             Value::Dict(d) => {
-                for (k, v) in &d.0 {
+                for (k, v) in d.clone() {
                     k.hash(state);
                     v.hash(state);
                 }
@@ -400,7 +400,7 @@ impl AddAssign for Value {
                 a.0.push(rhs)
             }
             Value::Dict(d) => {
-                d.0.append(&mut rhs.as_dict().unwrap().0)
+                d.append(&mut rhs.as_dict().unwrap())
             }
             Value::Null => {}
         }

@@ -1,26 +1,58 @@
-use std::collections::btree_map::IntoIter;
+use crate::value::Value;
+use json::parse;
+use serde::{Deserialize, Serialize};
+use std::collections::btree_map::{IntoIter, Keys, Values};
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::hash::Hash;
 
-use crate::value::Value;
-use json::parse;
-use serde::{Deserialize, Serialize};
-
 #[derive(Eq, Clone, Debug, Hash, PartialEq, Default, Serialize, Deserialize)]
-pub struct Dict(pub BTreeMap<String, Value>);
+pub struct Dict(BTreeMap<String, Value>);
+
 
 impl Dict {
     pub fn new(values: BTreeMap<String, Value>) -> Self{
         Dict(values)
     }
 
-    pub(crate) fn get(&self, key: &String) -> Option<&Value> {
+    pub(crate) fn get(&self, key: &str) -> Option<&Value> {
         self.0.get(key)
     }
 
     pub(crate) fn get_data(&self) -> Option<&Value> {
         self.0.get("$")
+    }
+
+    pub(crate) fn insert(&mut self, key: String, value: Value) {
+        self.0.insert(key, value);
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    pub(crate) fn append(&mut self, other: &mut Dict) {
+        self.0.append(&mut other.0);
+    }
+
+    pub(crate) fn keys(&self) -> Keys<String, Value> {
+        self.0.keys()
+    }
+
+    pub(crate) fn values(&self) -> Values<String, Value> {
+        self.0.values()
+    }
+
+    pub(crate) fn iter(&self) -> std::collections::btree_map::Iter<'_, String, Value> {
+        self.0.iter()
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub(crate) fn pop_first(&mut self) -> Option<(String, Value)> {
+        self.0.pop_first()
     }
 
     pub(crate) fn get_data_mut(&mut self) -> Option<&mut Value> {
@@ -41,6 +73,16 @@ impl Dict {
         Dict(map)
     }
 }
+
+impl IntoIterator for Dict {
+    type Item = (String, Value);
+    type IntoIter = IntoIter<String, Value>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
 
 impl Display for Dict {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -80,15 +122,6 @@ impl Dict {
             map.insert(key.into(), value.into());
         }
         Dict(map)
-    }
-}
-
-impl IntoIterator for Dict {
-    type Item = (String, Value);
-    type IntoIter = IntoIter<String, Value>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
     }
 }
 

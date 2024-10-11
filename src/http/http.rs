@@ -58,7 +58,7 @@ impl HttpSource {
             v => {
                 let mut map = BTreeMap::new();
                 map.insert(String::from("data"), v.into());
-                Dict(map)
+                Dict::new(map)
             }
         }
     }
@@ -67,7 +67,7 @@ impl HttpSource {
         debug!("New http message received: {:?}", payload);
 
         let mut dict = Self::transform_to_value(payload);
-        dict.0.insert(String::from("topic"), value::Value::text(topic.as_str()));
+        dict.insert(String::from("topic"), value::Value::text(topic.as_str()));
 
         let train = Train::new(-1, vec![value::Value::Dict(dict)]);
         for out in state.source.lock().unwrap().values() {
@@ -226,6 +226,6 @@ impl From<Map<String, Value>> for Dict {
         for (key, value) in value {
             map.insert(key, value.into());
         }
-        Dict(map)
+        Dict::new(map)
     }
 }

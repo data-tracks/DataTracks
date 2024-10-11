@@ -317,7 +317,7 @@ impl ValueHandler for IndexOp {
                 a.0.get(self.index).unwrap_or(&Value::null()).clone()
             }
             Dict(d) => {
-                d.0.get(&format!("${}", self.index)).unwrap_or(&Value::null()).clone()
+                d.get(&format!("${}", self.index)).unwrap_or(&Value::null()).clone()
             }
             Null => Value::null(),
             _ => panic!("Could not process {}", value)
@@ -391,7 +391,7 @@ impl NameOp {
 impl ValueHandler for NameOp {
     fn process(&self, value: &Value) -> Value {
         match value {
-            Dict(d) => d.0.get(&self.name).unwrap_or(&Value::null()).clone(),
+            Dict(d) => d.get(&self.name).unwrap_or(&Value::null()).clone(),
             Null => Value::null(),
             v => panic!("Could not process {} with key {}", v, self.name)
         }

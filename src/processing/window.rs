@@ -216,7 +216,7 @@ mod test {
                 assert_eq!(values.len(), t.values.clone().map_or(usize::MAX, |vec| vec.len()));
                 for (i, value) in t.values.take().unwrap().into_iter().enumerate() {
                     assert_eq!(value, values[i]);
-                    assert_ne!(Value::text(""), *value.as_dict().unwrap().0.get("$").unwrap())
+                    assert_ne!(Value::text(""), *value.as_dict().unwrap().get("$").unwrap())
                 }
             }
             Err(..) => assert!(false),

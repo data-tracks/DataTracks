@@ -146,7 +146,7 @@ impl From<PublishPacket> for Dict {
         let mut map = BTreeMap::new();
         map.insert(String::from("topic"), Value::text(&value.topic));
         map.insert(String::from("data"), transform_binary(value.payload));
-        Dict(map)
+        Dict::new(map)
     }
 }
 

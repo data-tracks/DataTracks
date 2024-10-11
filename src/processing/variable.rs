@@ -7,7 +7,7 @@ pub struct VariableIterator {
 
 }
 
-impl Iterator<Item=Value> for VariableIterator {
+impl Iterator for VariableIterator {
     type Item = Value;
 
     fn next(&mut self) -> Option<Self::Item> {

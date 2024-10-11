@@ -125,7 +125,6 @@ impl Plan {
             for (index, stop_number) in line.1.iter().enumerate() {
                 if index != 0 {
                     dump += match &self.stations[stop_number] {
-                        s if s.pull.contains(&last) => "-<",
                         s if s.block.contains(&last) => "-|",
                         _ => "--",
                     };

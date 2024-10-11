@@ -287,7 +287,7 @@ pub(crate) struct DictType {
 impl DictType {
     pub(crate) fn fits(&self, dict: &Value) -> bool {
         for (name, field) in self.fields.iter().by_ref() {
-            if let Some(value) = dict.as_dict().unwrap().0.get(name) {
+            if let Some(value) = dict.as_dict().unwrap().get(name) {
                 if !field.fits(value) {
                     return false
                 }

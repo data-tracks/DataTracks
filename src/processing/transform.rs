@@ -119,12 +119,30 @@ impl LanguageTransform {
     }
 }
 
-fn build_transformer(language: &Language, query: &str) -> Result<Box<dyn ValueIterator<Item=Value> + Send + 'static>, String> {
+fn build_transformer(language: &Language, query: &str) -> Result<BoxedIterator, String> {
     let algebra = match language {
         Language::Sql => language::sql::transform(query)?,
         Language::Mql => language::mql::transform(query)?
     };
-    algebra::build_iterator(algebra)
+
+    let transformer = algebra::build_iterator(algebra)?;
+    let transformer = FuncTransform::new_from_input(transformer, Arc::new(|stop, value| {
+        match value {
+            Value::Dict(mut d) => {
+                if d.len() != 1 {
+                    return Value::Dict(d);
+                }
+                let (key, value) = d.pop_first().unwrap();
+                // only if $1 or similar not $1
+                if !key.starts_with("$") && key.contains(".") && !(key.len() > 1) {
+                    return Value::Dict(d);
+                }
+                value
+            }
+            v => v
+        }
+    }));
+    Ok(Box::new(transformer))
 }
 
 
@@ -154,6 +172,10 @@ impl FuncTransform {
         let mut scan = Scan::new(0);
         let iterator = scan.derive_iterator();
         FuncTransform{ input: Box::new(iterator), func }
+    }
+
+    fn new_from_input(input: BoxedIterator, func: Arc<dyn Fn(i64, Value) -> Value + Send + Sync>) -> Self {
+        FuncTransform { input, func }
     }
 
     pub(crate) fn new_val(_stop: i64, func: fn(Value) -> Value) -> FuncTransform {
@@ -212,7 +234,7 @@ mod tests {
 
         station.set_transform(Func(FuncTransform::new_val(0, |x| {
             let mut dict = x.as_dict().unwrap();
-            dict.0.insert("$".into(), x.as_dict().unwrap().get_data().unwrap() + &Value::int(3));
+            dict.insert("$".into(), x.as_dict().unwrap().get_data().unwrap() + &Value::int(3));
             Value::Dict(dict)
         })));
 
@@ -245,7 +267,7 @@ mod tests {
 
         station.set_transform(Func(FuncTransform::new_val(0, |x| {
             let mut dict = x.as_dict().unwrap();
-            dict.0.insert("$".into(), x.as_dict().unwrap().get_data().unwrap() + &Value::int(3));
+            dict.insert("$".into(), x.as_dict().unwrap().get_data().unwrap() + &Value::int(3));
             Value::Dict(dict)
         })));
 
