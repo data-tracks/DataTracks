@@ -89,6 +89,26 @@ impl Algebra for Scan {
     }
 }
 
+#[derive(Clone)]
+pub struct VariableScan{
+    name: String
+}
+
+impl VariableScan{
+    pub fn new(name: String) -> VariableScan{
+        VariableScan{ name }
+    }
+}
+
+
+impl Algebra for VariableScan{
+    type Iterator = ();
+
+    fn derive_iterator(&mut self) -> Self::Iterator {
+        todo!()
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::algebra::algebra::Algebra;

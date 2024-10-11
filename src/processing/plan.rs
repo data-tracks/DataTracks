@@ -84,7 +84,7 @@ impl Plan {
     }
 
     pub(crate) fn dump(&self) -> String {
-        let mut dump = self.dumb_network();
+        let mut dump = self.dump_network();
 
         if !self.sources.is_empty() {
             dump += "\nIn\n";
@@ -110,7 +110,7 @@ impl Plan {
         dump
     }
 
-    fn dumb_network(&self) -> String {
+    fn dump_network(&self) -> String {
         let mut dump = "".to_string();
         let mut dumped_stations = vec![];
 

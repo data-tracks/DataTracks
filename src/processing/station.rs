@@ -23,7 +23,6 @@ pub(crate) struct Station {
     pub(crate) window: Window,
     pub(crate) transform: Option<Transform>,
     pub(crate) block: Vec<i64>,
-    pub(crate) pull: Vec<i64>,
     pub(crate) inputs: Vec<i64>,
     pub(crate) layout: Layout,
     control: (channel::Sender<Command>, Receiver<Command>),
@@ -49,7 +48,6 @@ impl Station {
             window: Window::default(),
             transform: None,
             block: vec![],
-            pull: vec![],
             inputs: vec![],
             layout: Layout::default(),
             control: (control.0.clone(), control.1.clone()),
@@ -144,9 +142,6 @@ impl Station {
                     if num.starts_with('|'){
                         station.add_block(last.unwrap_or(-1));
                         num.remove(0);
-                    } else if num.starts_with('<') {
-                        station.add_pull(last.unwrap_or(-1));
-                        num.remove(0);
                     }
                     station.set_stop(num.parse().unwrap())
                 },
@@ -226,10 +221,6 @@ impl Station {
 
     fn add_explicit_layout(&mut self, layout: Layout) {
         self.layout = layout;
-    }
-
-    fn add_pull(&mut self, last: i64) {
-        self.pull.push(last)
     }
 }
 
