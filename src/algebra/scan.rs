@@ -114,7 +114,7 @@ mod test {
 
         let mut train_2 = handler.drain_to_train(0);
 
-        assert_eq!(train_2.values.clone().unwrap(), Dict::transform(vec![3.into(), "test".into()]));
+        assert_eq!(train_2.values.clone().unwrap(), Dict::transform_with_stop(0, vec![3.into(), "test".into()]));
         assert_ne!(train_2.values.take().unwrap(), Dict::transform(vec![8.into(), "test".into()]));
     }
 }

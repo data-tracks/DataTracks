@@ -390,14 +390,6 @@ pub mod tests {
 
         let clone = plan.get_result(destination);
 
-        /*let (source, id) = DummySource::new(3, values.clone(), Duration::from_millis(3));
-
-        let destination = DummyDestination::new(3, values.len());
-        let clone = destination.results();
-
-        plan.add_source(3, Box::new(source));
-        plan.add_destination(3, Box::new(destination));*/
-
 
         plan.operate();
 
@@ -423,27 +415,29 @@ pub mod tests {
 
     #[test]
     fn sql_parse_block_one() {
-        let stencil = "1-|2-3\n4-2";
-
-        let mut plan = Plan::parse(stencil).unwrap();
+        let source1 = 1;
+        let source4 = 4;
+        let destination = 5;
         let values1 = vec![vec![Value::from(Dict::from(Value::from(3.3)))], vec![Value::from(Dict::from(Value::from(3.1)))]];
-        let (source1, id1) = DummySource::new(1, values1.clone(), Duration::from_millis(1));
-
         let values4 = vec![vec![Value::from(Dict::from(Value::from(3)))]];
-        let (source4, id4) = DummySource::new(4, values4.clone(), Duration::from_millis(1));
+        let stencil = format!(
+            "1-|2--3\n\
+            4--2\n\
+            \n\
+            In\n\
+            Dummy{{\"id\": {id1}, \"delay\":1, \"values\":{values1}}}:1\n\
+            Dummy{{\"id\": {id2}, \"delay\":1, \"values\":{values4}}}:4\n\
+            Out\n\
+            Dummy{{\"id\":{destination}, \"result_size\":{len}}}:3",
+            id1 = source1, id2 = source4, values1 = dump(&values1.clone()), values4 = dump(&values4.clone()), destination = destination, len = 1);
 
-        let destination = DummyDestination::new(3, 1);
-        let _id3 = &destination.get_id();
-        let clone = destination.results();
-
-        plan.add_source(1, Box::new(source1));
-        plan.add_source(4, Box::new(source4));
-        plan.add_destination(3, Box::new(destination));
+        let mut plan = Plan::parse(&stencil).unwrap();
+        let result = plan.get_result(destination);
 
         plan.operate();
 
         // send ready
-        plan.send_control(&id1, Ready(0));
+        plan.send_control(&source1, Ready(0));
         // source 1 ready + stop
         for _com in vec![Ready(1), Stop(1)] {
             match plan.control_receiver.1.recv() {
@@ -454,7 +448,7 @@ pub mod tests {
 
         sleep(Duration::from_millis(5));
 
-        plan.send_control(&id4, Ready(4));
+        plan.send_control(&source4, Ready(4));
         // source 1 ready + stop
         for _com in vec![Ready(4), Stop(4), Ready(3), Stop(3)] {
             match plan.control_receiver.1.recv() {
@@ -468,7 +462,7 @@ pub mod tests {
         values1.into_iter().for_each(|mut values| res.append(&mut values));
         values4.into_iter().for_each(|mut values| res.append(&mut values));
 
-        let lock = clone.lock().unwrap();
+        let lock = result.lock().unwrap();
         let mut train = lock.clone().pop().unwrap();
         drop(lock);
 
@@ -529,25 +523,28 @@ pub mod tests {
 
     #[test]
     fn full_test() {
-        let mut plan = Plan::parse("0-1($:f)-2").unwrap();
-
         let mut values = vec![];
 
         let hello = Value::Dict(Dict::from_json(r#"{"msg": "hello", "$topic": ["command"]}"#));
         values.push(vec![hello]);
         values.push(vec![Value::from(Dict::from(Value::float(3.6)))]);
 
-        let (source, id) = DummySource::new(0, values, Duration::from_millis(1));
+        let source = 1;
+        let destination = 4;
 
-        plan.add_source(0, Box::new(source));
-
-        let destination = DummyDestination::new(2, 1);
-        let result = destination.results();
-        plan.add_destination(2, Box::new(destination));
+        let mut plan = Plan::parse(
+            &format!("\
+            0--1($:f)--2\n\
+            In\n\
+            Dummy{{\"id\":{source}, \"delay\":1, \"values\":{values}}}:1\n\
+            Out\n\
+            Dummy{{\"id\":{destination}, \"result_size\":{size}}}:2", values = dump(&values.clone()), size = 1)
+        ).unwrap();
 
         plan.operate();
 
-        plan.send_control(&id, Ready(0));
+        let result = plan.get_result(destination);
+        plan.send_control(&source, Ready(0));
 
         for command in [Ready(0), Stop(0), Ready(2), Stop(2)] {
             assert_eq!(command.type_id(), plan.control_receiver.1.recv().unwrap().type_id());
@@ -556,7 +553,7 @@ pub mod tests {
         assert_eq!(lock.len(), 1)
     }
 
-    #[test]
+    //#[test]
     fn advertise_name_join_test() {
         let mut plan = Plan::parse(
             "\

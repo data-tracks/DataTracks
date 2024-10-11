@@ -419,8 +419,8 @@ impl PlanStage {
     pub(crate) const WINDOW_CLOSE: char = ']';
     pub(crate) const TRANSFORM_OPEN: char = '{';
     pub(crate) const TRANSFORM_CLOSE: char = '}';
-    pub(crate) const LAYOUT_OPEN: char = '<';
-    pub(crate) const LAYOUT_CLOSE: char = '>';
+    pub(crate) const LAYOUT_OPEN: char = '(';
+    pub(crate) const LAYOUT_CLOSE: char = ')';
 
     pub(crate) fn is_open(char: char) -> bool {
         matches!(char, PlanStage::LAYOUT_OPEN | PlanStage::TRANSFORM_OPEN | PlanStage::WINDOW_OPEN)
@@ -567,7 +567,6 @@ mod test {
         let stencils = vec![
             "1",
             "1--2",
-            "1-<2",
             "1-|2"
         ];
 

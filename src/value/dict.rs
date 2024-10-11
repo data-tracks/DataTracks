@@ -125,12 +125,20 @@ impl Dict {
     }
 }
 
-
+#[cfg(test)]
 impl Dict {
     pub(crate) fn transform(values: Vec<Value>) -> Vec<Value> {
         let mut dicts = vec![];
         for value in values {
             dicts.push(Value::Dict(value.into()));
+        }
+        dicts
+    }
+
+    pub(crate) fn transform_with_stop(stop: i32, values: Vec<Value>) -> Vec<Value> {
+        let mut dicts = vec![];
+        for value in values {
+            dicts.push(Value::dict_from_kv(&format!("${}", stop), Value::Dict(value.into())));
         }
         dicts
     }
