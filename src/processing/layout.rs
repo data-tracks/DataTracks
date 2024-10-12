@@ -91,7 +91,7 @@ fn parse_dict_fields(reader: &mut BufferedReader) -> DictType {
     reader.consume_if_next(PlanStage::TRANSFORM_CLOSE);
 
 
-    DictType{ fields: builder.build_fileds()}
+    DictType { fields: builder.build_fields() }
 }
 
 #[derive(Default)]
@@ -110,7 +110,7 @@ impl DictBuilder {
         self.key.clear()
     }
 
-    fn build_fileds(&mut self) -> HashMap<String, Field>{
+    fn build_fields(&mut self) -> HashMap<String, Field> {
         let fields = self.fields.clone();
         self.fields.clear();
         fields
@@ -281,10 +281,11 @@ impl ArrayType {
 
 #[derive(Debug, PartialEq, Clone, Default)]
 pub(crate) struct DictType {
-    fields: HashMap<String, Field> // "0"
+    fields: HashMap<String, Field>, // "name" -> Value
 }
 
 impl DictType {
+
     pub(crate) fn fits(&self, dict: &Value) -> bool {
         for (name, field) in self.fields.iter().by_ref() {
             if let Some(value) = dict.as_dict().unwrap().get(name) {
@@ -297,6 +298,12 @@ impl DictType {
         }
         true
     }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct ShadowKey {
+    name: String,
+    alternative: Option<String>,
 }
 
 #[cfg(test)]

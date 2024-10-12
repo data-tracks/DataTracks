@@ -57,7 +57,16 @@ impl ValueIterator for ScanIterator {
             if train.last == self.index {
                 train.values = Some(train.values.unwrap().into_iter().map(|d| {
                     // we add the index as key value
-                    Value::dict_from_kv(&format!("${}", self.index), d)
+                    //Value::dict_from_kv(&format!("${}", self.index), d)
+                    match d {
+                        Value::Dict(mut d) => {
+                            d.prefix_all(format!("${}.", self.index).as_str());
+                            Value::Dict(d)
+                        }
+                        v => {
+                            Value::dict_from_kv(&format!("${}", self.index), v)
+                        }
+                    }
                 }).collect());
                 self.trains.push(train);
             }
@@ -114,7 +123,7 @@ mod test {
 
         let mut train_2 = handler.drain_to_train(0);
 
-        assert_eq!(train_2.values.clone().unwrap(), Dict::transform_with_stop(0, vec![3.into(), "test".into()]));
+        assert_eq!(train_2.values.clone().unwrap(), Dict::transform(vec![3.into(), "test".into()]));
         assert_ne!(train_2.values.take().unwrap(), Dict::transform(vec![8.into(), "test".into()]));
     }
 }

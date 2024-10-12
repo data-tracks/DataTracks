@@ -275,7 +275,6 @@ pub mod dummy {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::processing::destination::Destination;
     use crate::processing::plan::Plan;
     use crate::processing::station::Command::{Ready, Stop};
     use crate::processing::station::Station;
@@ -376,7 +375,7 @@ pub mod tests {
 
     #[test]
     fn sql_parse_transform() {
-        let values = vec![dict_values(vec![3.into(), "test".into(), true.into(), Value::null()])];
+        let values = vec![vec![3.into(), "test".into(), true.into(), Value::null()]];
         let id = 3;
         let destination = 4;
         let stencil = format!("\

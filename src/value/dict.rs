@@ -7,56 +7,71 @@ use std::fmt::{Display, Formatter};
 use std::hash::Hash;
 
 #[derive(Eq, Clone, Debug, Hash, PartialEq, Default, Serialize, Deserialize)]
-pub struct Dict(BTreeMap<String, Value>);
+pub struct Dict {
+    values: BTreeMap<String, Value>,
+    alternative: BTreeMap<String, String>, // "alternative_name" -> Value
+}
 
 
 impl Dict {
     pub fn new(values: BTreeMap<String, Value>) -> Self{
-        Dict(values)
+        Dict { values, alternative: BTreeMap::new() }
+    }
+
+    pub fn prefix_all(&mut self, prefix: &str) {
+        self.values.iter().for_each(|(name, field)| {
+            self.alternative.insert(format!("{}{}", prefix, name), name.clone());
+        });
     }
 
     pub(crate) fn get(&self, key: &str) -> Option<&Value> {
-        self.0.get(key)
+        match self.values.get(key) {
+            None => match self.alternative.get(key) {
+                None => None,
+                Some(s) => self.values.get(s)
+            }
+            Some(s) => Some(s)
+        }
     }
 
     pub(crate) fn get_data(&self) -> Option<&Value> {
-        self.0.get("$")
+        self.values.get("$")
     }
 
     pub(crate) fn insert(&mut self, key: String, value: Value) {
-        self.0.insert(key, value);
+        self.values.insert(key, value);
     }
 
     pub(crate) fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.values.is_empty()
     }
 
     pub(crate) fn append(&mut self, other: &mut Dict) {
-        self.0.append(&mut other.0);
+        self.values.append(&mut other.values);
     }
 
     pub(crate) fn keys(&self) -> Keys<String, Value> {
-        self.0.keys()
+        self.values.keys()
     }
 
     pub(crate) fn values(&self) -> Values<String, Value> {
-        self.0.values()
+        self.values.values()
     }
 
     pub(crate) fn iter(&self) -> std::collections::btree_map::Iter<'_, String, Value> {
-        self.0.iter()
+        self.values.iter()
     }
 
     pub fn len(&self) -> usize {
-        self.0.len()
+        self.values.len()
     }
 
     pub(crate) fn pop_first(&mut self) -> Option<(String, Value)> {
-        self.0.pop_first()
+        self.values.pop_first()
     }
 
     pub(crate) fn get_data_mut(&mut self) -> Option<&mut Value> {
-        self.0.get_mut("$")
+        self.values.get_mut("$")
     }
 
     pub(crate) fn merge(&self, other: Dict) -> Dict {
@@ -67,10 +82,10 @@ impl Dict {
         for (key, value) in other.clone() {
             map.insert(key, value);
         }
-        if self.0.contains_key("$") && other.0.contains_key("$") {
+        if self.values.contains_key("$") && other.values.contains_key("$") {
             map.insert("$".into(), vec![self.get_data().unwrap().clone(), other.get_data().unwrap().clone()].into());
         }
-        Dict(map)
+        Dict { values: map, alternative: Default::default() }
     }
 }
 
@@ -79,14 +94,14 @@ impl IntoIterator for Dict {
     type IntoIter = IntoIter<String, Value>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
+        self.values.into_iter()
     }
 }
 
 
 impl Display for Dict {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{{{}}}", self.0.iter().map(|(k, v)| format!("{}: {}", k, v)).collect::<Vec<String>>().join(", "))
+        write!(f, "{{{}}}", self.values.iter().map(|(k, v)| format!("{}: {}", k, v)).collect::<Vec<String>>().join(", "))
     }
 }
 
@@ -95,7 +110,7 @@ impl From<Value> for Dict{
         let mut map = BTreeMap::new();
         match value {
             Value::Dict(d) => {
-                for (key, value) in d.0 {
+                for (key, value) in d.values {
                     map.insert(key, value);
                 }
             }
@@ -103,7 +118,7 @@ impl From<Value> for Dict{
                 map.insert("$".into(), i);
             }
         }
-        Dict(map)
+        Dict { values: map, alternative: BTreeMap::new() }
     }
 }
 
@@ -111,7 +126,7 @@ impl From<Vec<Value>> for Dict{
     fn from(value: Vec<Value>) -> Self {
         let mut map = BTreeMap::new();
         map.insert("$".into(), value.into());
-        Dict(map)
+        Dict { values: map, alternative: BTreeMap::new() }
     }
 }
 
@@ -121,7 +136,7 @@ impl Dict {
         for (key, value) in parse(value).unwrap().entries() {
             map.insert(key.into(), value.into());
         }
-        Dict(map)
+        Dict { values: map, alternative: BTreeMap::new() }
     }
 }
 
@@ -135,11 +150,11 @@ impl Dict {
         dicts
     }
 
-    pub(crate) fn transform_with_stop(stop: i32, values: Vec<Value>) -> Vec<Value> {
+    /*pub(crate) fn transform_with_stop(stop: i32, values: Vec<Value>) -> Vec<Value> {
         let mut dicts = vec![];
         for value in values {
             dicts.push(Value::dict_from_kv(&format!("${}", stop), Value::Dict(value.into())));
         }
         dicts
-    }
+    }*/
 }

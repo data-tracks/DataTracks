@@ -25,7 +25,9 @@ fn handle_select(query: SqlSelect) -> Result<AlgebraType, String> {
         let mut join = sources.remove(0);
         while !sources.is_empty() {
             let right = sources.remove(0);
-            join = Join(algebra::Join::new(join, right, |_v| Value::bool(true), |_v| Value::bool(true), |l, r| Value::array(vec![l, r])));
+            join = Join(algebra::Join::new(join, right, |_v| Value::bool(true), |_v| Value::bool(true), |l, r| {
+                Value::array(vec![l, r])
+            }));
         }
         join
     };

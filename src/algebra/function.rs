@@ -26,7 +26,7 @@ impl Operator {
     }
 
     pub fn name(name: &str) -> Operator {
-        Operator { op: Tuple(Name(NameOp { name: name.to_string() })), operands: vec![] }
+        Operator { op: Tuple(Name(NameOp::new(name.to_string()))), operands: vec![] }
     }
 
     // $0.1 -> 1
