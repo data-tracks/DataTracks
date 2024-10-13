@@ -413,7 +413,7 @@ impl ValueHandler for ContextOp {
                 }
             }
             Dict(d) => {
-                let map = BTreeMap::from_iter(d.iter().filter(|(k, v)| {
+                let map = BTreeMap::from_iter(d.iter().filter(|(_k, v)| {
                     match v {
                         Wagon(w) => w.origin == self.index,
                         _ => false

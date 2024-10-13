@@ -113,7 +113,7 @@ fn handle_field(column: SqlStatement) -> Result<Operator, String> {
             let mut name = names.remove(0);
 
 
-            let mut op = if name.starts_with("$") && name.len() > 1 {
+            let mut op = if name.starts_with('$') && name.len() > 1 {
                 name.remove(0);
                 let num = name.parse().unwrap();
                 Operator::context(num)

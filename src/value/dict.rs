@@ -4,9 +4,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::btree_map::{IntoIter, Keys, Values};
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
-use std::hash::Hash;
+use std::hash::{Hash, Hasher};
 
-#[derive(Eq, Clone, Debug, Hash, Default, Serialize, Deserialize)]
+#[derive(Eq, Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Dict {
     values: BTreeMap<String, Value>,
     alternative: BTreeMap<String, String>, // "alternative_name" -> Value
@@ -19,7 +19,7 @@ impl Dict {
     }
 
     pub fn prefix_all(&mut self, prefix: &str) {
-        self.values.iter().for_each(|(name, field)| {
+        self.values.iter().for_each(|(name, _field)| {
             self.alternative.insert(format!("{}{}", prefix, name), name.clone());
         });
     }
@@ -92,6 +92,12 @@ impl Dict {
 impl PartialEq for Dict {
     fn eq(&self, other: &Self) -> bool {
         self.values == other.values
+    }
+}
+
+impl Hash for Dict {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.values.hash(state);
     }
 }
 

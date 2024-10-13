@@ -16,7 +16,7 @@ impl Iterator for VariableIterator {
 }
 
 impl ValueIterator for VariableIterator {
-    fn load(&mut self, trains: Vec<Train>) {
+    fn load(&mut self, _trains: Vec<Train>) {
         // empty on purpose
     }
 

@@ -72,20 +72,9 @@ impl Value {
 
     pub(crate) fn dict_from_kv(key: &str, value: Value) -> Value {
         let mut map = BTreeMap::new();
-        match value {
-            /*Value::Dict(d) => {
-                d.into_iter().for_each(|(k,v)|{
-                    map.insert(format!("{}.{}", key, k),v); {  }
-                })
-            }*/
-            _ => {
-                map.insert(key.to_string(), value);
-            }
-        }
+        map.insert(key.to_string(), value);
 
         Value::Dict(Dict::new(map))
-
-
     }
 
     pub fn null() -> Value {

@@ -20,9 +20,7 @@ impl MqttDestination {
 
 impl Configurable for MqttDestination {
     fn get_options(&self) -> Map<String, Value> {
-        let map = Map::new();
-
-        map
+        Map::new()
     }
 
     fn get_name(&self) -> String {
@@ -31,11 +29,11 @@ impl Configurable for MqttDestination {
 }
 
 impl Destination for MqttDestination {
-    fn parse(stop: i64, options: Map<String, Value>) -> Result<Self, String> {
+    fn parse(_stop: i64, _options: Map<String, Value>) -> Result<Self, String> {
         todo!()
     }
 
-    fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command> {
+    fn operate(&mut self, _control: Arc<Sender<Command>>) -> Sender<Command> {
         todo!()
     }
 

@@ -98,20 +98,16 @@ impl Source for MqttSource {
                     }
                     _ => return Err(String::from("Could not create HttpSource."))
                 }
-            },
-            _ => return Err(String::from("Could not create HttpSource."))
-        };
-        let url = match configs.get("url") {
-            Some(url) => {
-                match url {
-                    ConfigModel::String(url) => {
-                        url.string.clone()
-                    }
-                    _ => return Err(String::from("Could not create HttpSource."))
-                }
             }
             _ => return Err(String::from("Could not create HttpSource."))
         };
+        let url = match configs.get("url") {
+            Some(ConfigModel::String(url)) => {
+                url.string.clone()
+            }
+            _ => return Err(String::from("Could not create HttpSource."))
+        };
+
         Ok(Box::new(MqttSource::new(stop_id, url, port)))
     }
 
