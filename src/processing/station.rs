@@ -226,7 +226,7 @@ impl Station {
 
 
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) enum Command {
+pub enum Command {
     Stop(i64),
     Ready(i64),
     Overflow(i64),
