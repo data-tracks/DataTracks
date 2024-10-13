@@ -124,25 +124,7 @@ fn build_transformer(language: &Language, query: &str) -> Result<BoxedIterator, 
         Language::Sql => language::sql::transform(query)?,
         Language::Mql => language::mql::transform(query)?
     };
-
-    let transformer = algebra::build_iterator(algebra)?;
-    let transformer = FuncTransform::new_from_input(transformer, Arc::new(|stop, value| {
-        match value {
-            Value::Dict(mut d) => {
-                if d.len() != 1 {
-                    return Value::Dict(d);
-                }
-                let (key, value) = d.pop_first().unwrap();
-                // only if $1 or similar not $1
-                if !key.starts_with("$") && key.contains(".") && !(key.len() > 1) {
-                    return Value::Dict(d);
-                }
-                value
-            }
-            v => v
-        }
-    }));
-    Ok(Box::new(transformer))
+    algebra::build_iterator(algebra)
 }
 
 
@@ -364,7 +346,7 @@ mod tests {
 
     #[test]
     fn sql_group_single() {
-        check_sql_implement("SELECT COUNT($0) FROM $0 GROUP BY $0",
+        check_sql_implement_unordered("SELECT $0 FROM $0 GROUP BY $0",
                             vec![Value::float(3.3), Value::float(3.3), Value::float(3.1)],
                             vec![Value::float(3.1), Value::float(3.3)]);
     }
@@ -392,6 +374,25 @@ mod tests {
                 t.load(input.into_iter().map(|v| Train::new(0, vec![v])).collect());
                 let result = t.drain_to_train(0);
                 assert_eq!(result.values.unwrap(), output);
+            }
+            Err(_) => panic!(),
+        }
+    }
+
+    fn check_sql_implement_unordered(query: &str, input: Vec<Value>, output: Vec<Value>) {
+        let transform = build_transformer(&Language::Sql, query);
+        match transform {
+            Ok(mut t) => {
+                t.load(input.into_iter().map(|v| Train::new(0, vec![v])).collect());
+                let result = t.drain_to_train(0);
+                let result = result.values.unwrap();
+                for result in &result {
+                    assert!(output.contains(result))
+                }
+                for output in &output {
+                    assert!(result.contains(output))
+                }
+                assert_eq!(output.len(), result.len());
             }
             Err(_) => panic!(),
         }

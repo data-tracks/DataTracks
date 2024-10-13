@@ -7,7 +7,8 @@ use crate::algebra::BoxedValueHandler;
 use crate::algebra::Op::{Agg, Tuple};
 use crate::algebra::TupleOp::{And, Combine, Index, Input, Or};
 use crate::value::Value;
-use crate::value::Value::{Array, Bool, Dict, Float, Int, Null, Text};
+use crate::value::Value::{Array, Bool, Dict, Float, Int, Null, Text, Wagon};
+use std::collections::BTreeMap;
 use std::str::FromStr;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -48,6 +49,7 @@ pub enum TupleOp {
     Name(NameOp),
     Index(IndexOp),
     Literal(LiteralOp),
+    Context(ContextOp)
 }
 
 
@@ -119,7 +121,8 @@ impl TupleOp {
                             Text(_) => Text(value.as_text().unwrap()),
                             Array(_) => Array(value.as_array().unwrap()),
                             Dict(_) => Dict(value.as_dict().unwrap()),
-                            Null => Value::null()
+                            Null => Value::null(),
+                            Value::Wagon(_) => panic!()
                         }
                     }, operands)
                 )
@@ -153,6 +156,9 @@ impl TupleOp {
             }
             TupleOp::Literal(lit) => {
                 lit.implement().unwrap()
+            }
+            TupleOp::Context(c) => {
+                c.implement().unwrap()
             }
         }
     }
@@ -218,6 +224,9 @@ impl TupleOp {
             }
             TupleOp::Literal(value) => {
                 value.literal.to_string()
+            }
+            TupleOp::Context(c) => {
+                format!("${}", c.index)
             }
         }
     }
@@ -365,6 +374,77 @@ impl Implementable<BoxedValueHandler> for LiteralOp {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct ContextOp {
+    index: usize,
+}
+
+impl ContextOp {
+    pub fn new(index: usize) -> Self {
+        ContextOp { index }
+    }
+}
+
+impl ValueHandler for ContextOp {
+    fn process(&self, value: &Value) -> Value {
+        match value {
+            Wagon(w) => {
+                if w.origin == self.index {
+                    *w.value.clone()
+                } else {
+                    panic!("Could not process {:?}", w)
+                }
+            },
+            Array(a) => {
+                let mut array = a.0.iter().filter(|v| {
+                    match v {
+                        Wagon(w) => w.origin == self.index,
+                        _ => false
+                    }
+                }).cloned().map(|w| {
+                    match w {
+                        Wagon(w) => w.unwrap(),
+                        _ => panic!()
+                    }
+                }).collect::<Vec<_>>();
+                if array.len() == 1 {
+                    array.pop().unwrap()
+                } else {
+                    Value::array(array)
+                }
+            }
+            Dict(d) => {
+                let map = BTreeMap::from_iter(d.iter().filter(|(k, v)| {
+                    match v {
+                        Wagon(w) => w.origin == self.index,
+                        _ => false
+                    }
+                }).map(|(k, v)| {
+                    match v {
+                        Wagon(w) => {
+                            (k.clone(), w.clone().unwrap())
+                        },
+                        _ => panic!()
+                    }
+                }));
+                Value::dict(map)
+            }
+            _ => panic!("Could not process {}", value)
+        }
+    }
+
+    fn clone(&self) -> BoxedValueHandler {
+        Box::new(ContextOp { index: self.index })
+    }
+}
+
+impl Implementable<BoxedValueHandler> for ContextOp {
+    fn implement(&self) -> Result<BoxedValueHandler, ()> {
+        Ok(ValueHandler::clone(self))
+    }
+}
+
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct InputOp {}
 
 impl ValueHandler for InputOp {
@@ -393,6 +473,7 @@ impl ValueHandler for NameOp {
         match value {
             Dict(d) => d.get(&self.name).unwrap_or(&Value::null()).clone(),
             Null => Value::null(),
+            Wagon(w) => self.process(w.value.as_ref()),
             v => panic!("Could not process {} with key {}", v, self.name)
         }
     }

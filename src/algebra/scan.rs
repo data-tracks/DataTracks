@@ -58,15 +58,19 @@ impl ValueIterator for ScanIterator {
                 train.values = Some(train.values.unwrap().into_iter().map(|d| {
                     // we add the index as key value
                     //Value::dict_from_kv(&format!("${}", self.index), d)
-                    match d {
-                        Value::Dict(mut d) => {
+                    let value = match d {
+                        /*Value::Dict(mut d) => {
                             d.prefix_all(format!("${}.", self.index).as_str());
                             Value::Dict(d)
+                        }*/
+                        Value::Wagon(w) => {
+                            w.unwrap()
                         }
-                        v => {
-                            Value::dict_from_kv(&format!("${}", self.index), v)
-                        }
-                    }
+                        v => v
+                    };
+
+                    Value::wagon(value, self.index as usize)
+
                 }).collect());
                 self.trains.push(train);
             }

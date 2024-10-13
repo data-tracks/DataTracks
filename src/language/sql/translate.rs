@@ -109,8 +109,25 @@ fn handle_field(column: SqlStatement) -> Result<Operator, String> {
             Ok(Operator::new(o.operator, operators))
         }
         SqlStatement::Identifier(i) => {
-            let names = i.names.clone();
-            Ok(Operator::name(&names.join(".")))
+            let mut names = i.names.clone();
+            let mut name = names.remove(0);
+
+
+            let mut op = if name.starts_with("$") && name.len() > 1 {
+                name.remove(0);
+                let num = name.parse().unwrap();
+                Operator::context(num)
+            } else {
+                Operator::name(&name, vec![])
+            };
+
+
+            for name in names {
+                op = Operator::name(&name, vec![op]);
+            }
+
+
+            Ok(op)
         }
         SqlStatement::Value(v) => {
             Ok(Operator::literal(v.value))

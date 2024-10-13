@@ -4,10 +4,12 @@ use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::ops::{Add, AddAssign, Div, Mul, Sub};
 
+use crate::processing;
 use crate::value::array::Array;
 use crate::value::dict::Dict;
 use crate::value::r#type::ValType;
 use crate::value::string::Text;
+use crate::value::Value::Wagon;
 use crate::value::{bool, Bool, Float, Int};
 use json::{parse, JsonValue};
 use serde::{Deserialize, Serialize};
@@ -22,6 +24,7 @@ pub enum Value {
     Array(Array),
     Dict(Dict),
     Null,
+    Wagon(processing::Wagon)
 }
 
 impl Value {
@@ -63,6 +66,10 @@ impl Value {
         Value::Dict(Dict::new(map))
     }
 
+    pub fn wagon(value: Value, origin: usize) -> Value {
+        Wagon(processing::Wagon::new(value, origin))
+    }
+
     pub(crate) fn dict_from_kv(key: &str, value: Value) -> Value {
         let mut map = BTreeMap::new();
         match value {
@@ -93,7 +100,8 @@ impl Value {
             Value::Text(_) => ValType::Text,
             Value::Array(_) => ValType::Array,
             Value::Dict(_) => ValType::Dict,
-            Value::Null => ValType::Null
+            Value::Null => ValType::Null,
+            Value::Wagon(w) => w.value.type_()
         }
     }
 
@@ -105,7 +113,8 @@ impl Value {
             Value::Text(t) => t.0.parse::<i64>().map(Int).map_err(|_| ()),
             Value::Array(_) => Err(()),
             Value::Dict(_) => Err(()),
-            Value::Null => Err(())
+            Value::Null => Err(()),
+            Value::Wagon(w) => w.value.as_int()
         }
     }
 
@@ -117,7 +126,8 @@ impl Value {
             Value::Text(t) => t.0.parse::<f64>().map(Float::new).map_err(|_| ()),
             Value::Array(_) => Err(()),
             Value::Dict(_) => Err(()),
-            Value::Null => Err(())
+            Value::Null => Err(()),
+            Value::Wagon(w) => w.value.as_float()
         }
     }
 
@@ -125,6 +135,7 @@ impl Value {
         match self {
             Value::Int(_) | Value::Float(_) | Value::Bool(_) | Value::Text(_) | Value::Array(_) | Value::Null => Err(()),
             Value::Dict(d) => Ok(d.clone()),
+            Value::Wagon(w) => w.value.as_dict()
         }
     }
 
@@ -132,6 +143,7 @@ impl Value {
         match self {
             Value::Int(_) | Value::Float(_) | Value::Bool(_) | Value::Text(_) | Value::Dict(_) | Value::Null => Err(()),
             Value::Array(a) => Ok(a.clone()),
+            Value::Wagon(w) => w.value.as_array()
         }
     }
     pub fn as_bool(&self) -> Result<Bool, ()> {
@@ -148,6 +160,7 @@ impl Value {
             Value::Array(a) => Ok(Bool(!a.0.is_empty())),
             Value::Dict(d) => Ok(Bool(!d.is_empty())),
             Value::Null => Ok(Bool(false)),
+            Value::Wagon(w) => w.value.as_bool()
         }
     }
 
@@ -159,7 +172,8 @@ impl Value {
             Value::Text(t) => Ok(t.clone()),
             Value::Array(a) => Ok(Text(format!("[{}]", a.0.iter().map(|v| v.as_text().unwrap().0).collect::<Vec<String>>().join(",")))),
             Value::Dict(d) => Ok(Text(format!("[{}]", d.iter().map(|(k, v)| format!("{}:{}", k, v.as_text().unwrap().0)).collect::<Vec<String>>().join(",")))),
-            Value::Null => Ok(Text("null".to_owned()))
+            Value::Null => Ok(Text("null".to_owned())),
+            Value::Wagon(w) => w.value.as_text()
         }
     }
 }
@@ -219,7 +233,7 @@ impl PartialEq for Value {
             (Value::Dict(d), _) => other.as_dict().map(|other| {
                 d.len() == other.len() && d.keys().eq(other.keys()) && d.values().eq(other.values())
             }).unwrap_or(false),
-
+            (Value::Wagon(w), o) => *o == *w.value,
             // Fallback: not equal if types don't match or other cases aren't handled
             (_, _) => false,
         }
@@ -256,6 +270,9 @@ impl Hash for Value {
             Value::Null => {
                 "null".hash(state);
             }
+            Value::Wagon(w) => {
+                w.value.hash(state)
+            }
         }
     }
 }
@@ -269,7 +286,8 @@ impl Display for Value {
             Value::Text(t) => t.fmt(f),
             Value::Array(a) => a.fmt(f),
             Value::Dict(d) => d.fmt(f),
-            Value::Null => write!(f, "null")
+            Value::Null => write!(f, "null"),
+            Value::Wagon(w) => w.value.fmt(f)
         }
     }
 }
@@ -344,24 +362,22 @@ impl Add for &Value {
     type Output = Value;
 
     fn add(self, rhs: Self) -> Self::Output {
-        match self {
-            Value::Int(a) => {
-                match rhs {
-                    Value::Int(b) => Value::Int(*a + *b),
-                    Value::Float(b) => Value::Float(*a + *b),
-                    i => panic!("Cannot add {}.", i)
-                }
+        match (self, rhs) {
+            // Case where both are integers
+            (Value::Int(a), Value::Int(b)) => Value::Int(*a + *b),
+
+            // Mixing Integer and Float, ensure the result is a Float
+            (Value::Int(a), Value::Float(b)) | (Value::Float(b), Value::Int(a)) => {
+                Value::Float(*a + *b)
             }
-            Value::Float(a) => {
-                match rhs {
-                    Value::Int(b) => Value::Float(*b + *a),
-                    Value::Float(b) => Value::Float(*b + *a),
-                    i => panic!("Cannot add {}.", i)
-                }
-            }
-            _ => {
-                panic!("Cannot add.")
-            }
+            (Value::Float(a), Value::Float(b)) => Value::Float(*a + *b),
+
+            // Handle Wagon custom addition
+            (Wagon(w), rhs) => &*w.value.clone() + rhs,
+            (lhs, Wagon(w)) => lhs + &*w.value.clone(),
+
+            // Panic on unsupported types
+            (lhs, rhs) => panic!("Cannot add {:?} with {:?}.", lhs, rhs),
         }
     }
 }
@@ -403,6 +419,7 @@ impl AddAssign for Value {
                 d.append(&mut rhs.as_dict().unwrap())
             }
             Value::Null => {}
+            Wagon(w) => w.value.add_assign(rhs),
         }
     }
 }
@@ -440,6 +457,7 @@ impl Div for &Value {
                 let _rhs = _rhs.as_float().unwrap();
                 Value::Float(*f / _rhs)
             }
+            Wagon(w) => w.value.div(_rhs),
             _ => panic!()
         }
     }

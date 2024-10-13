@@ -9,6 +9,7 @@ pub use filter::Filter;
 pub use function::Operator;
 pub use function::Replaceable;
 pub use join::Join;
+pub use operator::ContextOp;
 pub use operator::Op;
 pub use operator::TupleOp;
 pub use project::Project;

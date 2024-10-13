@@ -1,8 +1,8 @@
 use crate::algebra::algebra::BoxedValueLoader;
 use crate::algebra::operator::{AggOp, InputOp, LiteralOp, NameOp, Op};
-use crate::algebra::BoxedValueHandler;
 use crate::algebra::Op::Tuple;
-use crate::algebra::TupleOp::{Combine, Input, Literal, Name};
+use crate::algebra::TupleOp::{Combine, Context, Input, Literal, Name};
+use crate::algebra::{BoxedValueHandler, ContextOp};
 use crate::value::Value;
 
 pub trait Replaceable {
@@ -25,8 +25,12 @@ impl Operator {
         Operator { op, operands }
     }
 
-    pub fn name(name: &str) -> Operator {
-        Operator { op: Tuple(Name(NameOp::new(name.to_string()))), operands: vec![] }
+    pub fn name(name: &str, operands: Vec<Operator>) -> Operator {
+        Operator { op: Tuple(Name(NameOp::new(name.to_string()))), operands }
+    }
+
+    pub fn context(index: usize) -> Operator {
+        Operator { op: Tuple(Context(ContextOp::new(index))), operands: vec![] }
     }
 
     // $0.1 -> 1

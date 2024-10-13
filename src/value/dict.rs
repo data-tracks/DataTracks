@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::hash::Hash;
 
-#[derive(Eq, Clone, Debug, Hash, PartialEq, Default, Serialize, Deserialize)]
+#[derive(Eq, Clone, Debug, Hash, Default, Serialize, Deserialize)]
 pub struct Dict {
     values: BTreeMap<String, Value>,
     alternative: BTreeMap<String, String>, // "alternative_name" -> Value
@@ -89,6 +89,12 @@ impl Dict {
     }
 }
 
+impl PartialEq for Dict {
+    fn eq(&self, other: &Self) -> bool {
+        self.values == other.values
+    }
+}
+
 impl IntoIterator for Dict {
     type Item = (String, Value);
     type IntoIter = IntoIter<String, Value>;
@@ -149,12 +155,4 @@ impl Dict {
         }
         dicts
     }
-
-    /*pub(crate) fn transform_with_stop(stop: i32, values: Vec<Value>) -> Vec<Value> {
-        let mut dicts = vec![];
-        for value in values {
-            dicts.push(Value::dict_from_kv(&format!("${}", stop), Value::Dict(value.into())));
-        }
-        dicts
-    }*/
 }

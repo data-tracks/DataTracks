@@ -2,6 +2,7 @@ pub use crate::http::http::HttpSource;
 pub use debug::DebugDestination;
 pub use plan::Plan;
 pub use train::Train;
+pub use wagon::Wagon;
 
 pub(crate) mod station;
 mod window;
@@ -19,3 +20,4 @@ mod debug;
 mod depot;
 pub(crate) mod option;
 mod variable;
+mod wagon;
