@@ -101,7 +101,7 @@ impl Value {
             Value::Array(_) => ValType::Array,
             Value::Dict(_) => ValType::Dict,
             Value::Null => ValType::Null,
-            Value::Wagon(w) => w.value.type_()
+            Wagon(w) => w.value.type_()
         }
     }
 
@@ -114,7 +114,7 @@ impl Value {
             Value::Array(_) => Err(()),
             Value::Dict(_) => Err(()),
             Value::Null => Err(()),
-            Value::Wagon(w) => w.value.as_int()
+            Wagon(w) => w.value.as_int()
         }
     }
 
@@ -127,7 +127,7 @@ impl Value {
             Value::Array(_) => Err(()),
             Value::Dict(_) => Err(()),
             Value::Null => Err(()),
-            Value::Wagon(w) => w.value.as_float()
+            Wagon(w) => w.value.as_float()
         }
     }
 
@@ -135,7 +135,7 @@ impl Value {
         match self {
             Value::Int(_) | Value::Float(_) | Value::Bool(_) | Value::Text(_) | Value::Array(_) | Value::Null => Err(()),
             Value::Dict(d) => Ok(d.clone()),
-            Value::Wagon(w) => w.value.as_dict()
+            Wagon(w) => w.value.as_dict()
         }
     }
 
@@ -143,7 +143,7 @@ impl Value {
         match self {
             Value::Int(_) | Value::Float(_) | Value::Bool(_) | Value::Text(_) | Value::Dict(_) | Value::Null => Err(()),
             Value::Array(a) => Ok(a.clone()),
-            Value::Wagon(w) => w.value.as_array()
+            Wagon(w) => w.value.as_array()
         }
     }
     pub fn as_bool(&self) -> Result<Bool, ()> {
@@ -160,7 +160,7 @@ impl Value {
             Value::Array(a) => Ok(Bool(!a.0.is_empty())),
             Value::Dict(d) => Ok(Bool(!d.is_empty())),
             Value::Null => Ok(Bool(false)),
-            Value::Wagon(w) => w.value.as_bool()
+            Wagon(w) => w.value.as_bool()
         }
     }
 
@@ -173,7 +173,7 @@ impl Value {
             Value::Array(a) => Ok(Text(format!("[{}]", a.0.iter().map(|v| v.as_text().unwrap().0).collect::<Vec<String>>().join(",")))),
             Value::Dict(d) => Ok(Text(format!("[{}]", d.iter().map(|(k, v)| format!("{}:{}", k, v.as_text().unwrap().0)).collect::<Vec<String>>().join(",")))),
             Value::Null => Ok(Text("null".to_owned())),
-            Value::Wagon(w) => w.value.as_text()
+            Wagon(w) => w.value.as_text()
         }
     }
 }
@@ -212,6 +212,7 @@ impl PartialEq for Value {
 
         match (self, other) {
             (Value::Null, Value::Null) => true,
+            (Wagon(w), o) => *o == *w.value,
             (Value::Null, _) | (_, Value::Null) => false,
             (Value::Int(i), Value::Int(other_i)) => i.0 == other_i.0,
             (Value::Int(_), Value::Float(_)) => other == &Value::Float(self.as_float().unwrap()),
@@ -233,7 +234,6 @@ impl PartialEq for Value {
             (Value::Dict(d), _) => other.as_dict().map(|other| {
                 d.len() == other.len() && d.keys().eq(other.keys()) && d.values().eq(other.values())
             }).unwrap_or(false),
-            (Value::Wagon(w), o) => *o == *w.value,
             // Fallback: not equal if types don't match or other cases aren't handled
             (_, _) => false,
         }
@@ -270,7 +270,7 @@ impl Hash for Value {
             Value::Null => {
                 "null".hash(state);
             }
-            Value::Wagon(w) => {
+            Wagon(w) => {
                 w.value.hash(state)
             }
         }
@@ -287,7 +287,7 @@ impl Display for Value {
             Value::Array(a) => a.fmt(f),
             Value::Dict(d) => d.fmt(f),
             Value::Null => write!(f, "null"),
-            Value::Wagon(w) => w.value.fmt(f)
+            Wagon(w) => w.value.fmt(f)
         }
     }
 }
