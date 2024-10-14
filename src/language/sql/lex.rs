@@ -2,12 +2,13 @@ use std::str::FromStr;
 use std::{mem, vec};
 
 use crate::algebra::Op::Tuple;
-use crate::algebra::{Op, TupleOp};
+use crate::algebra::{Op, TupleOp, VariableOp};
 use crate::language::sql::buffer::BufferedLexer;
 use crate::language::sql::lex::Token::{As, Comma, From, GroupBy, Identifier, Limit, OrderBy, Select, Semi, Star, Text, Where};
-use crate::language::sql::statement::{SqlAlias, SqlIdentifier, SqlList, SqlOperator, SqlSelect, SqlStatement, SqlSymbol, SqlValue};
+use crate::language::sql::statement::{SqlAlias, SqlIdentifier, SqlList, SqlOperator, SqlSelect, SqlStatement, SqlSymbol, SqlValue, SqlVariable};
 use crate::value;
 use logos::{Lexer, Logos};
+use tracing_subscriber::fmt::format;
 
 #[derive(Logos, Debug, PartialEq, Clone)]
 #[logos(skip r"[ \t\n\f]+")] // Ignore this regex pattern between tokens
@@ -120,7 +121,7 @@ fn parse_expressions(lexer: &mut BufferedLexer, stops: &[Token]) -> Result<Vec<S
     let mut expressions = vec![];
     let mut stops = stops.to_owned();
     stops.push(Comma);
-    let expression = parse_expression(lexer, &stops);
+    let expression = parse_expression(lexer, &stops)?;
     expressions.push(expression);
 
     let tok = lexer.consume_buffer();
@@ -134,7 +135,7 @@ fn parse_expressions(lexer: &mut BufferedLexer, stops: &[Token]) -> Result<Vec<S
     Ok(expressions)
 }
 
-fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> SqlStatement {
+fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> Result<SqlStatement,String> {
     let mut expressions = vec![];
     let mut operators = vec![];
     let mut operator = None;
@@ -175,10 +176,16 @@ fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> SqlStateme
                     if let Ok(exprs) = exp {
                         expressions.push(SqlStatement::Operator(SqlOperator::new(op, exprs, true)))
                     } else {
-                        panic!("Unknown function arguments!")
+                        return Err("Unknown function arguments!".to_string())
                     }
-                } else {
-                    panic!("Unknown call operator!")
+                }else if func.starts_with('$') {
+                    // variable call
+                    let exps = parse_expressions(lexer, &stops)?;
+
+                    let name = func.trim_start_matches('$').to_owned();
+                    expressions.push(SqlStatement::Variable(SqlVariable::new(name, exps)))
+                }else {
+                    return Err("Unknown call operator!".to_string())
                 }
             }
 
@@ -192,7 +199,7 @@ fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> SqlStateme
                 } else if t == Token::Dot {
                     // nothing on purpose
                 } else {
-                    panic!("Invalid Token {:?}", t);
+                    return Err( format!("Invalid Token {:?}", t));
                 }
             }
         }
@@ -206,7 +213,7 @@ fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> SqlStateme
     }
 
     if let Some(Tuple(TupleOp::Multiplication)) = operator.take() {
-        return SqlStatement::Symbol(SqlSymbol::new("*"));
+        return Ok(SqlStatement::Symbol(SqlSymbol::new("*")));
     }
 
     let statement = match expressions.len() {
@@ -220,10 +227,10 @@ fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> SqlStateme
 
 
     if is_alias {
-        let alias = parse_expression(lexer, stops);
-        return SqlStatement::Alias(SqlAlias::new(statement, alias));
+        let alias = parse_expression(lexer, stops)?;
+        return Ok(SqlStatement::Alias(SqlAlias::new(statement, alias)));
     }
-    statement
+    Ok(statement)
 }
 
 fn parse_operator(tok: Token) -> Option<Op> {

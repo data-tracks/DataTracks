@@ -2,7 +2,6 @@ use crate::processing::destination::{parse_destination, Destination};
 use crate::processing::plan::Status::Stopped;
 use crate::processing::source::{parse_source, Source};
 use crate::processing::station::{Command, Station};
-use crate::processing::transform::Transform::Custom;
 use crate::processing::{transform, Train};
 use crate::ui::{ConfigContainer, ConfigModel, StringModel};
 use crate::util::GLOBAL_ID;
@@ -145,8 +144,14 @@ impl Plan {
         self.connect_stops().unwrap();
         self.connect_destinations().unwrap();
         self.connect_sources().unwrap();
+
         for station in &mut self.stations {
-            self.controls.entry(station.1.id).or_default().push(station.1.operate(Arc::clone(&self.control_receiver.0)));
+            station.1.enrich(&self.transforms)
+        }
+
+        for station in &mut self.stations {
+            let entry = self.controls.entry(station.1.id).or_default();
+            entry.push(station.1.operate(Arc::clone(&self.control_receiver.0)));
         }
 
         // wait for all stations to be ready

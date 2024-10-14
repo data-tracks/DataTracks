@@ -11,11 +11,13 @@ use crate::processing::station::{Command, Station};
 use crate::processing::train::MutWagonsFunc;
 use crate::processing::transform::{Taker, Transform};
 use crate::processing::window::Window;
-use crate::processing::Train;
+use crate::processing::{train, Plan, Train};
 use crate::util::{Rx, GLOBAL_ID};
 use crossbeam::channel;
 use crossbeam::channel::{unbounded, Receiver};
 use tracing::debug;
+
+const IDLE_TIMEOUT: Duration = Duration::from_nanos(10);
 
 pub(crate) struct Platform {
     id: i64,
@@ -36,7 +38,7 @@ impl Platform {
         let receiver = station.incoming.2.clone();
         let counter = station.incoming.1.clone();
         let sender = station.outgoing.clone();
-        let transform = station.transform.clone();
+        let mut transform = station.transform.clone();
         let window = station.window.clone();
         let stop = station.stop;
         let blocks = station.block.clone();
@@ -61,7 +63,7 @@ impl Platform {
     pub(crate) fn operate(&mut self, control: Arc<channel::Sender<Command>>) {
         let process = optimize(self.stop, self.transform.clone(), self.window.windowing(), self.sender.take().unwrap());
         let stop = self.stop;
-        let timeout = Duration::from_nanos(10);
+        let timeout = IDLE_TIMEOUT;
         let mut threshold = 2000;
         let mut too_high = false;
 

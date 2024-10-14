@@ -3,7 +3,7 @@ use crate::algebra::AlgebraType::{Aggregate, Filter, Join, Project, Scan};
 use crate::algebra::Op::Tuple;
 use crate::algebra::TupleOp::Input;
 use crate::algebra::{AlgebraType, Op, Operator, Replaceable};
-use crate::language::sql::statement::{SqlIdentifier, SqlSelect, SqlStatement};
+use crate::language::sql::statement::{SqlIdentifier, SqlSelect, SqlStatement, SqlVariable};
 use crate::value::Value;
 
 pub(crate) fn translate(query: SqlStatement) -> Result<AlgebraType, String> {
@@ -91,8 +91,13 @@ fn handle_select(query: SqlSelect) -> Result<AlgebraType, String> {
 fn handle_from(from: SqlStatement) -> Result<AlgebraType, String> {
     match from {
         SqlStatement::Identifier(i) => handle_table(i),
+        SqlStatement::Variable(v) => handle_variable(v),
         _ => Err("Could not translate FROM clause".to_string())
     }
+}
+
+fn handle_variable(variable: SqlVariable) -> Result<AlgebraType, String> {
+    todo!()
 }
 
 fn handle_field(column: SqlStatement) -> Result<Operator, String> {

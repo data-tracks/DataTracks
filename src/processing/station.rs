@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::thread;
@@ -13,6 +14,7 @@ use crate::util::{new_channel, Rx, Tx, GLOBAL_ID};
 use crossbeam::channel;
 use crossbeam::channel::{unbounded, Receiver};
 use tracing::info;
+use crate::processing::Plan;
 
 #[derive(Clone)]
 pub(crate) struct Station {
@@ -206,6 +208,10 @@ impl Station {
 
     pub(crate) fn get_in(&mut self) -> Tx<Train> {
         self.incoming.0.clone()
+    }
+
+    pub(crate) fn enrich(&mut self, transforms: &HashMap<String, Transform>) {
+
     }
 
     pub(crate) fn operate(&mut self, control: Arc<channel::Sender<Command>>) -> channel::Sender<Command> {
@@ -425,7 +431,7 @@ pub mod tests {
         use crate::processing::station::tests::Value;
         use crate::processing::station::Command::Ready;
         pub use crate::processing::tests::dict_values;
-        use crate::processing::Train;
+        use crate::processing::{Plan, Train};
         use rstest::rstest;
         use std::sync::Arc;
         use std::time::Instant;

@@ -4,7 +4,7 @@ use crate::algebra::AlgebraType;
 use crate::language::Language::{Mql, Sql};
 use crate::language::{mql, sql};
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Language {
     Sql,
     Mql,

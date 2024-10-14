@@ -284,6 +284,7 @@ pub mod tests {
     use crate::util::new_channel;
     use crate::value::{Dict, Value};
     use std::any::Any;
+    use std::cmp::PartialEq;
     use std::thread::sleep;
     use std::time::{Duration, SystemTime};
     use std::vec;
@@ -552,43 +553,41 @@ pub mod tests {
         assert_eq!(lock.len(), 1)
     }
 
-    //#[test]
-    fn advertise_name_join_test() {
+    #[test]
+    fn global_transformer_test() {
+        let mut values = vec![vec![Value::float(3.6), Value::float(4.6)]];
+        let res: Vec<Vec<Value>> = values.iter().cloned().map(|v| v.iter().cloned().map(|v| &v + &Value::int(1)).collect()).collect();
+        let source = 1;
+        let destination= 5;
+
         let mut plan = Plan::parse(
-            "\
-            0--1{sql|SELECT id, name FROM $company($0.name)}--2\n\
+            &format!("\
+            0--1{{sql|SELECT id, name FROM $example($0.name)}}--2\n\
             \n\
-            Sources\n\
-            MQTT{url:'127.0.0.1'}:0\n\
-            Outputs\n\
-            MQTT{url:'127.0.0.1'}:2\n\
-            Transformers\n\
-            $company: Postres{query:'SELECT id, name FROM company WHERE name = ?'}
-            "
+            In\n\
+            Dummy{{\"id\":{source}, \"delay\":1, \"values\":{values}}}:1\n\
+            Out\n\
+            Dummy{{\"id\":{destination}, \"result_size\":{size}}}:2\n\
+            Transformer\
+            $example:Dummy{{}}", source=source, values = dump(&values.clone()), size = 2, destination = destination)
         ).unwrap();
 
-        let mut values = vec![];
-
-        let hello = Value::Dict(Dict::from_json(r#"{company: "Surrer AG", "msg": "hello", "$topic": ["purchase"]}"#));
-        values.push(vec![hello]);
-        values.push(vec![Value::from(Dict::from(Value::float(3.6)))]);
-
-        let (source, id) = DummySource::new(0, values, Duration::from_millis(1));
-
-        plan.add_source(0, Box::new(source));
-
-        let destination = DummyDestination::new(2, 1);
-        let result = destination.results();
-        plan.add_destination(2, Box::new(destination));
-
         plan.operate();
+        // get result arc
+        let result = plan.get_result(destination);
 
-        plan.send_control(&id, Ready(0));
+        // start sources
+        plan.send_control(&source, Ready(0));
+        plan.send_control(&destination, Ready(0));
 
-        for command in [Ready(0), Stop(0), Ready(2), Stop(2)] {
-            assert_eq!(command.type_id(), plan.control_receiver.1.recv().unwrap().type_id());
-        }
         let lock = result.lock().unwrap();
-        assert_eq!(lock.len(), 1)
+        let mut train = lock.clone().pop().unwrap();
+        drop(lock);
+
+
+        assert_eq!(train.values.clone().unwrap().len(), res.len());
+        for (i, value) in train.values.take().unwrap().into_iter().enumerate() {
+            assert_eq!(res.get(0).unwrap().get(0).unwrap().clone(), value)
+        }
     }
 }

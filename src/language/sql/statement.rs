@@ -1,4 +1,4 @@
-use crate::algebra::Op;
+use crate::algebra::{BoxedIterator, Op};
 use crate::language::statement::Statement;
 use crate::value;
 use crate::value::Value;
@@ -14,6 +14,7 @@ pub(crate) enum SqlStatement {
     Value(SqlValue),
     Operator(SqlOperator),
     Alias(SqlAlias),
+    Variable(SqlVariable)
 }
 
 impl SqlStatement {
@@ -26,7 +27,26 @@ impl SqlStatement {
             SqlStatement::Value(s) => s.dump(quote),
             SqlStatement::Operator(s) => s.dump(quote),
             SqlStatement::Alias(s) => s.dump(quote),
+            SqlStatement::Variable(v) => v.dump(quote),
         }
+    }
+}
+
+#[derive(Debug)]
+pub struct SqlVariable {
+    inputs: Vec<SqlStatement>,
+    pub(crate) name: String,
+}
+
+impl SqlVariable {
+    pub(crate) fn new(name: String, inputs: Vec<SqlStatement>) -> Self {
+        SqlVariable{name, inputs}
+    }
+}
+
+impl Statement for SqlVariable {
+    fn dump(&self, quote: &str) -> String {
+        format!("{}${}{}", quote, self.name, quote)
     }
 }
 

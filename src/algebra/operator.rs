@@ -3,12 +3,14 @@ use crate::algebra::algebra::{BoxedValueLoader, ValueHandler};
 use crate::algebra::function::{Implementable, Operator};
 use crate::algebra::operator::AggOp::{Avg, Count, Sum};
 use crate::algebra::operator::TupleOp::{Divide, Equal, Minus, Multiplication, Not, Plus};
-use crate::algebra::BoxedValueHandler;
 use crate::algebra::Op::{Agg, Tuple};
 use crate::algebra::TupleOp::{And, Combine, Index, Input, Or};
+use crate::algebra::{BoxedIterator, BoxedValueHandler};
+use crate::processing::transform::Transform;
 use crate::value::Value;
 use crate::value::Value::{Array, Bool, Dict, Float, Int, Null, Text, Wagon};
 use std::collections::BTreeMap;
+use std::fmt::{Debug, Formatter};
 use std::str::FromStr;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -22,14 +24,14 @@ impl Op {
     pub(crate) fn dump(&self, as_call: bool) -> String {
         match self {
             Agg(a) => a.dump(as_call),
-            Tuple(t) => t.dump(as_call)
+            Tuple(t) => t.dump(as_call),
         }
     }
 
     pub(crate) fn implement(&self, operators: Vec<Operator>) -> BoxedValueHandler {
         match self {
             Agg(_) => panic!("Aggregations should have been replaced!"),
-            Tuple(t) => t.implement(operators)
+            Tuple(t) => t.implement(operators),
         }
     }
 }
@@ -49,7 +51,7 @@ pub enum TupleOp {
     Name(NameOp),
     Index(IndexOp),
     Literal(LiteralOp),
-    Context(ContextOp)
+    Context(ContextOp),
 }
 
 
@@ -255,7 +257,7 @@ impl Implementable<BoxedValueLoader> for AggOp {
         match self {
             Count => Ok(Box::new(CountOperator::new())),
             Sum => Ok(Box::new(SumOperator::new())),
-            AggOp::Avg => Ok(Box::new(AvgOperator::new())),
+            Avg => Ok(Box::new(AvgOperator::new())),
         }
     }
 }
@@ -372,6 +374,42 @@ impl Implementable<BoxedValueHandler> for LiteralOp {
         Ok(ValueHandler::clone(self))
     }
 }
+
+pub struct VariableOp {
+    name: String,
+    transform: Option<Transform>,
+    operator: Option<BoxedIterator>
+}
+
+impl Clone for VariableOp {
+    fn clone(&self) -> Self {
+        VariableOp{name: self.name.clone(), transform: None, operator: None}
+    }
+}
+
+impl Debug for VariableOp {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(format!("${}", self.name).as_str())
+    }
+}
+
+impl PartialEq for VariableOp {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
+
+impl VariableOp {
+    pub fn new(name: String) -> Self {
+        VariableOp { name, transform: None, operator: None }
+    }
+
+    pub fn set_transform(&mut self, transform: Transform) {
+        self.operator = Some(transform.optimize());
+        self.transform = Some(transform);
+    }
+}
+
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ContextOp {

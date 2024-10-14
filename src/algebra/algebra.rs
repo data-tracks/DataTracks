@@ -1,10 +1,12 @@
+use std::fmt::Debug;
+use tracing::debug;
 use crate::algebra::aggregate::{Aggregate, ValueLoader};
 use crate::algebra::filter::Filter;
 use crate::algebra::join::Join;
 use crate::algebra::project::Project;
 use crate::algebra::scan::Scan;
 use crate::algebra::union::Union;
-use crate::processing::Train;
+use crate::processing::{Plan, Train};
 use crate::value::Value;
 
 pub type BoxedIterator = Box<dyn ValueIterator<Item=Value> + Send + 'static>;
@@ -61,6 +63,11 @@ pub trait ValueHandler: Send {
 
 
 pub trait ValueIterator: Iterator<Item = Value> + Send + 'static {
+
+    fn enrich(&mut self, plan: &Plan) {
+        debug!("nothing here")
+    }
+
     fn load(&mut self, trains: Vec<Train>);
 
     fn drain(&mut self) -> Vec<Value>{

@@ -1,3 +1,4 @@
+use std::fmt::{Debug, Formatter};
 use crate::algebra::{Algebra, BoxedIterator, Scan, ValueIterator};
 use crate::language::Language;
 use crate::processing::option::Configurable;
@@ -7,15 +8,17 @@ use crate::value::Value;
 use crate::{algebra, language};
 use serde_json::Map;
 use std::sync::Arc;
+use log::error;
+use crate::processing::Plan;
 
 pub trait Taker: Send {
     fn take(&mut self, wagons: &mut Vec<Train>) -> Vec<Train>;
 }
 
+#[derive(Debug, PartialEq)]
 pub enum Transform {
     Func(FuncTransform),
     Lang(LanguageTransform),
-    Custom
 }
 
 impl Clone for Transform {
@@ -27,7 +30,6 @@ impl Clone for Transform {
             Lang(language) => {
                 Lang(language.clone())
             }
-            Transform::Custom => Transform::Custom
         }
     }
 }
@@ -42,6 +44,9 @@ impl Default for Transform {
 
 impl Transform {
     pub fn parse(stencil: &str) -> Result<Transform, String> {
+        if !stencil.contains('|') {
+            return parse_function(stencil)
+        }
         match stencil.split_once('|') {
             None => Err("Wrong transform format.".to_string()),
             Some((module, logic)) => match Language::try_from(module) {
@@ -51,11 +56,17 @@ impl Transform {
         }
     }
 
+    pub fn enrich(&mut self, plan: &Plan) {
+        match self {
+            Func(f) => f.enrich(plan),
+            Lang(l) => l.enrich(plan),
+        }
+    }
+
     pub fn dump(&self) -> String {
         match self {
             Func(f) => f.dump(),
             Lang(f) => f.dump(),
-            Transform::Custom => String::from("Custom")
         }
     }
 
@@ -63,7 +74,6 @@ impl Transform {
         match self {
             Func(_) => "Func".to_string(),
             Lang(_) => "Lang".to_string(),
-            Transform::Custom => "Custom".to_string()
         }
     }
 
@@ -71,8 +81,20 @@ impl Transform {
         match self {
             Func(f) => ValueIterator::clone(f),
             Lang(f) => f.func.clone(),
-            Transform::Custom => todo!()
         }
+    }
+}
+
+fn parse_function(stencil: &str) -> Result<Transform, String> {
+    let (name, options) = stencil.split_once('{').ok_or("Invalid transform format.".to_string())?;
+    let name = name.trim();
+    let (_options, _) = options.trim().rsplit_once('}').ok_or("Invalid transform format.".to_string())?;
+    match name.to_lowercase().as_str() {
+        #[cfg(test)]
+        "dummy" => Ok(Func(FuncTransform::new_boxed(|stop, value|{
+            &value + &Value::int(1)
+        }))),
+        _ => todo!()
     }
 }
 
@@ -85,7 +107,6 @@ impl Configurable for Transform {
             Lang(l) => {
                 l.language.to_string()
             }
-            Transform::Custom => String::from("Custom")
         }
     }
 
@@ -95,11 +116,31 @@ impl Configurable for Transform {
 }
 
 
+pub trait Transformer: Clone + Sized {
+
+    fn dump(&self) -> String;
+
+    fn parse(&self, stencil: &str) -> Result<Transform, String>;
+
+    fn get_name(&self) -> String;
+}
 
 pub struct LanguageTransform {
     pub(crate) language: Language,
     pub(crate) query: String,
     func: BoxedIterator,
+}
+
+impl Debug for LanguageTransform {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct(&format!("{}|{}", self.language, self.query)).finish()
+    }
+}
+
+impl PartialEq for LanguageTransform {
+    fn eq(&self, other: &Self) -> bool {
+        self.query == other.query && self.language == other.language
+    }
 }
 
 impl Clone for LanguageTransform {
@@ -112,6 +153,10 @@ impl LanguageTransform {
     fn parse(language: Language, query: &str) -> LanguageTransform {
         let func = build_transformer(&language, query).unwrap();
         LanguageTransform { language, query: query.to_string(), func }
+    }
+
+    fn enrich(&mut self, plan: &Plan) {
+
     }
 
     fn dump(&self) -> String {
@@ -127,11 +172,23 @@ fn build_transformer(language: &Language, query: &str) -> Result<BoxedIterator, 
     algebra::build_iterator(algebra)
 }
 
-
 pub struct FuncTransform {
     pub input: BoxedIterator,
     pub func: Arc<dyn Fn(i64, Value) -> Value + Send + Sync>,
 }
+
+impl Debug for FuncTransform {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Func".to_string().as_str())
+    }
+}
+
+impl PartialEq for FuncTransform {
+    fn eq(&self, other: &Self) -> bool {
+        todo!()
+    }
+}
+
 
 impl Clone for FuncTransform {
     fn clone(&self) -> Self {
@@ -164,6 +221,10 @@ impl FuncTransform {
         Self::new(Arc::new(move |_stop, value| {
             func(value)
         }))
+    }
+
+    fn enrich(&mut self, plan: &Plan) {
+        todo!()
     }
 
     fn dump(&self) -> String {
@@ -207,6 +268,7 @@ mod tests {
     use crossbeam::channel::unbounded;
     use std::sync::Arc;
     use std::vec;
+    use crate::processing::Plan;
 
     #[test]
     fn transform() {

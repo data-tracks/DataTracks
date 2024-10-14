@@ -186,7 +186,7 @@ mod test {
     use std::time::Duration;
 
     use crossbeam::channel::unbounded;
-
+    use crate::processing::Plan;
     use crate::processing::station::Command::Ready;
     use crate::processing::station::Station;
     use crate::processing::tests::dict_values;

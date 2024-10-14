@@ -14,6 +14,7 @@ pub use operator::Op;
 pub use operator::TupleOp;
 pub use project::Project;
 pub use scan::Scan;
+pub use operator::VariableOp;
 
 mod project;
 mod algebra;

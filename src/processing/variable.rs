@@ -1,5 +1,5 @@
 use crate::algebra::{BoxedIterator, ValueIterator};
-use crate::processing::Train;
+use crate::processing::{Plan, Train};
 use crate::value::Value;
 
 #[derive(Debug, Clone)]
@@ -16,6 +16,11 @@ impl Iterator for VariableIterator {
 }
 
 impl ValueIterator for VariableIterator {
+    fn enrich(&mut self, plan: &Plan) {
+        panic!()
+    }
+
+
     fn load(&mut self, _trains: Vec<Train>) {
         // empty on purpose
     }
