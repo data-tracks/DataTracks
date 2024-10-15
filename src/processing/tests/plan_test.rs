@@ -554,7 +554,7 @@ pub mod tests {
 
     #[test]
     fn global_transformer_test() {
-        let mut values = vec![vec![Value::float(3.6), Value::float(4.6)]];
+        let values = vec![vec![Value::float(3.6), Value::float(4.6)]];
         let res: Vec<Vec<Value>> = values.iter().cloned().map(|v| v.iter().cloned().map(|v| &v + &Value::int(1)).collect()).collect();
         let source = 1;
         let destination= 5;
@@ -566,7 +566,7 @@ pub mod tests {
 
     #[test]
     fn global_transformer_dict_test() {
-        let mut values = vec![vec![Value::dict_from_kv("age", Value::float(3.6)), Value::dict_from_kv("age", Value::float(4.6))]];
+        let values = vec![vec![Value::dict_from_kv("age", Value::float(3.6)), Value::dict_from_kv("age", Value::float(4.6))]];
         let res: Vec<Vec<Value>> = vec![vec![Value::float(4.6), Value::float(5.6)]];
         let source = 1;
         let destination = 5;
@@ -600,7 +600,7 @@ pub mod tests {
         plan.send_control(&destination, Ready(0));
 
         // wait for startup else whe risk grabbing the lock too early
-        for command in [Ready(0), Ready(0)] {
+        for _command in [Ready(0), Ready(0)] {
             plan.control_receiver.1.recv().unwrap();
         }
 

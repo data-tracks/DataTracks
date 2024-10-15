@@ -24,7 +24,7 @@ pub enum Value {
     Array(Array),
     Dict(Dict),
     Null,
-    Wagon(processing::Wagon)
+    Wagon(processing::Wagon),
 }
 
 impl Value {
@@ -53,13 +53,13 @@ impl Value {
         values.into_iter().for_each(|(k, v)| {
             match v {
                 Value::Dict(d) => {
-                    flatten(d, vec![k]).into_iter().for_each(|(k,v)| {
+                    flatten(d, vec![k]).into_iter().for_each(|(k, v)| {
                         map.insert(k, v);
                     });
-                },
+                }
                 _ => {
                     map.insert(k, v);
-                },
+                }
             };
         });
 
@@ -175,7 +175,7 @@ fn flatten(dict: Dict, prefix: Vec<String>) -> Vec<(String, Value)> {
                 let mut prefix = prefix.clone();
                 prefix.push(k);
                 values.append(&mut flatten(d, prefix))
-            },
+            }
             _ => values.push((k, v)),
         }
     });
@@ -203,14 +203,14 @@ impl PartialEq for Value {
             (Value::Null, Value::Null) => true,
             (Wagon(w), o) => *o == *w.value,
             (Value::Null, _) | (_, Value::Null) => false,
-            (Value::Int(_), Value::Float(_)) => other == &Value::Float(self.as_float().unwrap()),
-            (Value::Int(i), _) => i.0 == other.as_int().unwrap().0,
+            (Value::Int(_), Value::Float(_)) => self.as_float().map(|v| &Value::Float(v) == other).unwrap_or(false),
+            (Value::Int(i), _) => other.as_int().map(|v| i.0 == v.0).unwrap_or(false),
             (Value::Float(f), Value::Float(other_f)) => {
                 let a = f.normalize();
                 let b = other_f.normalize();
                 a.number == b.number && a.shift == b.shift
             }
-            (Value::Float(_), _) => self == &Value::Float(other.as_float().unwrap()),
+            (Value::Float(_), _) => other.as_float().map(|v| self == &Value::Float(v)).unwrap_or(false),
             (Value::Bool(b), _) => other.as_bool().map(|other| other.0 == b.0).unwrap_or(false),
 
             (Value::Text(t), _) => other.as_text().map(|other| other.0 == t.0).unwrap_or(false),
