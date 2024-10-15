@@ -1,13 +1,15 @@
-use std::fmt::Debug;
-use tracing::debug;
 use crate::algebra::aggregate::{Aggregate, ValueLoader};
 use crate::algebra::filter::Filter;
 use crate::algebra::join::Join;
 use crate::algebra::project::Project;
 use crate::algebra::scan::Scan;
 use crate::algebra::union::Union;
-use crate::processing::{Plan, Train};
+use crate::algebra::variable::VariableScan;
+use crate::processing::transform::Transform;
+use crate::processing::Train;
 use crate::value::Value;
+use std::collections::HashMap;
+use std::fmt::Debug;
 
 pub type BoxedIterator = Box<dyn ValueIterator<Item=Value> + Send + 'static>;
 
@@ -23,6 +25,7 @@ pub enum AlgebraType {
     Join(Join),
     Union(Union),
     Aggregate(Aggregate),
+    Variable(VariableScan),
 }
 
 impl Algebra for AlgebraType {
@@ -36,13 +39,15 @@ impl Algebra for AlgebraType {
             AlgebraType::Join(j) => Box::new(j.derive_iterator()),
             AlgebraType::Union(u) => Box::new(u.derive_iterator()),
             AlgebraType::Aggregate(a) => Box::new(a.derive_iterator()),
+            AlgebraType::Variable(s) => Box::new(s.derive_iterator())
         }
     }
 }
 
 pub trait Algebra: Clone {
-    type Iterator: Iterator<Item = Value> + Send + 'static;
+    type Iterator: Iterator<Item=Value> + Send + 'static;
     fn derive_iterator(&mut self) -> Self::Iterator;
+
 }
 
 pub fn build_iterator(mut algebra: AlgebraType) -> Result<BoxedIterator, String> {
@@ -62,15 +67,10 @@ pub trait ValueHandler: Send {
 }
 
 
-pub trait ValueIterator: Iterator<Item = Value> + Send + 'static {
-
-    fn enrich(&mut self, plan: &Plan) {
-        debug!("nothing here")
-    }
-
+pub trait ValueIterator: Iterator<Item=Value> + Send + 'static {
     fn load(&mut self, trains: Vec<Train>);
 
-    fn drain(&mut self) -> Vec<Value>{
+    fn drain(&mut self) -> Vec<Value> {
         self.into_iter().collect()
     }
 
@@ -79,5 +79,8 @@ pub trait ValueIterator: Iterator<Item = Value> + Send + 'static {
     }
 
     fn clone(&self) -> BoxedIterator;
+
+    fn enrich(&mut self, transforms: HashMap<String, Transform>) -> Option<BoxedIterator>;
+
 }
 

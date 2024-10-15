@@ -1,4 +1,4 @@
-use crate::algebra::{BoxedIterator, Op};
+use crate::algebra::Op;
 use crate::language::statement::Statement;
 use crate::value;
 use crate::value::Value;
@@ -34,7 +34,7 @@ impl SqlStatement {
 
 #[derive(Debug)]
 pub struct SqlVariable {
-    inputs: Vec<SqlStatement>,
+    pub inputs: Vec<SqlStatement>,
     pub(crate) name: String,
 }
 

@@ -5,12 +5,12 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 #[derive(Clone, Debug, Eq)]
 pub struct Wagon {
     topic: Vec<String>,
-    pub(crate) origin: usize,
+    pub(crate) origin: String,
     pub value: Box<Value>,
 }
 
 impl Wagon {
-    pub fn new(value: Value, origin: usize) -> Wagon {
+    pub fn new(value: Value, origin: String) -> Wagon {
         Wagon { value: Box::new(value), topic: Vec::new(), origin }
     }
 
@@ -39,6 +39,6 @@ impl<'de> Deserialize<'de> for Wagon {
     where
         D: Deserializer<'de>,
     {
-        Ok(Wagon::new(Value::deserialize(deserializer)?, 0))
+        Ok(Wagon::new(Value::deserialize(deserializer)?, "".to_string()))
     }
 }

@@ -284,7 +284,6 @@ pub mod tests {
     use crate::util::new_channel;
     use crate::value::{Dict, Value};
     use std::any::Any;
-    use std::cmp::PartialEq;
     use std::thread::sleep;
     use std::time::{Duration, SystemTime};
     use std::vec;
@@ -562,14 +561,14 @@ pub mod tests {
 
         let mut plan = Plan::parse(
             &format!("\
-            0--1{{sql|SELECT id, name FROM $example($0.name)}}--2\n\
+            0--1{{sql|SELECT * FROM $example($0)}}--2\n\
             \n\
             In\n\
             Dummy{{\"id\":{source}, \"delay\":1, \"values\":{values}}}:1\n\
             Out\n\
             Dummy{{\"id\":{destination}, \"result_size\":{size}}}:2\n\
-            Transformer\
-            $example:Dummy{{}}", source=source, values = dump(&values.clone()), size = 2, destination = destination)
+            Transform\n\
+            $example:Dummy{{}}", source = source, values = dump(&values.clone()), size = 1, destination = destination)
         ).unwrap();
 
         plan.operate();
@@ -584,10 +583,9 @@ pub mod tests {
         let mut train = lock.clone().pop().unwrap();
         drop(lock);
 
-
-        assert_eq!(train.values.clone().unwrap().len(), res.len());
+        assert_eq!(train.values.clone().unwrap().len(), res.get(0).unwrap().len());
         for (i, value) in train.values.take().unwrap().into_iter().enumerate() {
-            assert_eq!(res.get(0).unwrap().get(0).unwrap().clone(), value)
+            assert_eq!(res.get(0).unwrap().get(i).unwrap().clone(), value)
         }
     }
 }

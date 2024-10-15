@@ -1,8 +1,8 @@
 use crate::algebra;
-use crate::algebra::AlgebraType::{Aggregate, Filter, Join, Project, Scan};
+use crate::algebra::AlgebraType::{Aggregate, Filter, Join, Project, Scan, Variable};
 use crate::algebra::Op::Tuple;
 use crate::algebra::TupleOp::Input;
-use crate::algebra::{AlgebraType, Op, Operator, Replaceable};
+use crate::algebra::{AlgebraType, Op, Operator, Replaceable, VariableScan};
 use crate::language::sql::statement::{SqlIdentifier, SqlSelect, SqlStatement, SqlVariable};
 use crate::value::Value;
 
@@ -97,7 +97,9 @@ fn handle_from(from: SqlStatement) -> Result<AlgebraType, String> {
 }
 
 fn handle_variable(variable: SqlVariable) -> Result<AlgebraType, String> {
-    todo!()
+    let inputs = variable.inputs.into_iter().map(|i| Box::new(handle_from(i).unwrap())).collect();
+
+    Ok(Variable(VariableScan::new(variable.name, inputs)))
 }
 
 fn handle_field(column: SqlStatement) -> Result<Operator, String> {

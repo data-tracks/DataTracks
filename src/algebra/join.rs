@@ -1,7 +1,9 @@
 use crate::algebra::algebra::Algebra;
 use crate::algebra::{AlgebraType, BoxedIterator, ValueIterator};
+use crate::processing::transform::Transform;
 use crate::processing::Train;
 use crate::value::Value;
+use std::collections::HashMap;
 
 #[derive(Clone)]
 pub struct Join {
@@ -131,6 +133,19 @@ impl ValueIterator for JoinIterator {
 
     fn clone(&self) -> BoxedIterator {
         Box::new(JoinIterator::new(self.left_hash, self.right_hash, self.out, self.left.clone(), self.right.clone()))
+    }
+
+    fn enrich(&mut self, transforms: HashMap<String, Transform>) -> Option<BoxedIterator> {
+        let left = self.left.enrich(transforms.clone());
+        let right = self.right.enrich(transforms);
+
+        if let Some(left) = left {
+            self.left = left;
+        }
+        if let Some(right) = right {
+            self.right = right;
+        }
+        None
     }
 }
 

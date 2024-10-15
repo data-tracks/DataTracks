@@ -1,6 +1,8 @@
 use crate::algebra::{Algebra, AlgebraType, BoxedIterator, ValueIterator};
+use crate::processing::transform::Transform;
 use crate::processing::Train;
 use crate::value::Value;
+use std::collections::HashMap;
 
 #[derive(Clone)]
 pub struct Union {
@@ -62,5 +64,17 @@ impl ValueIterator for UnionIterator {
             inputs.push((*iter).clone());
         }
         Box::new(UnionIterator{distinct: self.distinct, inputs, index: 0 })
+    }
+
+    fn enrich(&mut self, transforms: HashMap<String, Transform>) -> Option<BoxedIterator> {
+        self.inputs = self.inputs.iter_mut().map(|i| {
+            let input = i.enrich(transforms.clone());
+            if let Some(input) = input {
+                input
+            } else {
+                (*i).clone()
+            }
+        }).collect();
+        None
     }
 }

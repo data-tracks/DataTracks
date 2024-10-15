@@ -1,8 +1,6 @@
 use std::fmt::Display;
 
-use crate::algebra::AlgebraType;
 use crate::language::Language::{Mql, Sql};
-use crate::language::{mql, sql};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Language {
@@ -15,13 +13,6 @@ impl Language {
         match self {
             Sql => "sql".to_string(),
             Mql => "mql".to_string()
-        }
-    }
-
-    fn parse(&self, query: &str) -> Result<AlgebraType, String> {
-        match self {
-            Sql => sql::transform(query),
-            Mql => mql::transform(query),
         }
     }
 }

@@ -14,7 +14,6 @@ use crate::util::{new_channel, Rx, Tx, GLOBAL_ID};
 use crossbeam::channel;
 use crossbeam::channel::{unbounded, Receiver};
 use tracing::info;
-use crate::processing::Plan;
 
 #[derive(Clone)]
 pub(crate) struct Station {
@@ -210,8 +209,12 @@ impl Station {
         self.incoming.0.clone()
     }
 
-    pub(crate) fn enrich(&mut self, transforms: &HashMap<String, Transform>) {
-
+    // we enrich the functions with context, like global transformers
+    pub(crate) fn enrich(&mut self, transforms: HashMap<String, Transform>) {
+        self.transform = self.transform.clone().map(|mut t| {
+            t.enrich(transforms);
+            t
+        });
     }
 
     pub(crate) fn operate(&mut self, control: Arc<channel::Sender<Command>>) -> channel::Sender<Command> {
@@ -431,7 +434,7 @@ pub mod tests {
         use crate::processing::station::tests::Value;
         use crate::processing::station::Command::Ready;
         pub use crate::processing::tests::dict_values;
-        use crate::processing::{Plan, Train};
+        use crate::processing::Train;
         use rstest::rstest;
         use std::sync::Arc;
         use std::time::Instant;

@@ -426,7 +426,7 @@ impl ValueHandler for ContextOp {
     fn process(&self, value: &Value) -> Value {
         match value {
             Wagon(w) => {
-                if w.origin == self.index {
+                if w.origin == self.index.to_string() {
                     *w.value.clone()
                 } else {
                     panic!("Could not process {:?}", w)
@@ -435,7 +435,7 @@ impl ValueHandler for ContextOp {
             Array(a) => {
                 let mut array = a.0.iter().filter(|v| {
                     match v {
-                        Wagon(w) => w.origin == self.index,
+                        Wagon(w) => w.origin == self.index.to_string(),
                         _ => false
                     }
                 }).cloned().map(|w| {
@@ -453,7 +453,7 @@ impl ValueHandler for ContextOp {
             Dict(d) => {
                 let map = BTreeMap::from_iter(d.iter().filter(|(_k, v)| {
                     match v {
-                        Wagon(w) => w.origin == self.index,
+                        Wagon(w) => w.origin == self.index.to_string(),
                         _ => false
                     }
                 }).map(|(k, v)| {

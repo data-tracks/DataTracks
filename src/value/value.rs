@@ -66,7 +66,7 @@ impl Value {
         Value::Dict(Dict::new(map))
     }
 
-    pub fn wagon(value: Value, origin: usize) -> Value {
+    pub fn wagon(value: Value, origin: String) -> Value {
         Wagon(processing::Wagon::new(value, origin))
     }
 
@@ -203,15 +203,14 @@ impl PartialEq for Value {
             (Value::Null, Value::Null) => true,
             (Wagon(w), o) => *o == *w.value,
             (Value::Null, _) | (_, Value::Null) => false,
-            (Value::Int(i), Value::Int(other_i)) => i.0 == other_i.0,
             (Value::Int(_), Value::Float(_)) => other == &Value::Float(self.as_float().unwrap()),
-            (Value::Float(_), Value::Int(_)) => self == &Value::Float(other.as_float().unwrap()),
+            (Value::Int(i), _) => i.0 == other.as_int().unwrap().0,
             (Value::Float(f), Value::Float(other_f)) => {
                 let a = f.normalize();
                 let b = other_f.normalize();
                 a.number == b.number && a.shift == b.shift
             }
-
+            (Value::Float(_), _) => self == &Value::Float(other.as_float().unwrap()),
             (Value::Bool(b), _) => other.as_bool().map(|other| other.0 == b.0).unwrap_or(false),
 
             (Value::Text(t), _) => other.as_text().map(|other| other.0 == t.0).unwrap_or(false),

@@ -2,6 +2,7 @@ use crate::algebra::algebra::BoxedValueLoader;
 use crate::algebra::function::Implementable;
 use crate::algebra::operator::AggOp;
 use crate::algebra::{Algebra, AlgebraType, BoxedIterator, BoxedValueHandler, Operator, ValueIterator};
+use crate::processing::transform::Transform;
 use crate::processing::Train;
 use crate::value::Value;
 use std::collections::hash_map::DefaultHasher;
@@ -128,6 +129,15 @@ impl ValueIterator for AggIterator {
 
     fn clone(&self) -> BoxedIterator {
         Box::new(AggIterator::new(self.input.clone(), self.aggregates.iter().map(|(a, o)| ((*a).clone(), (*o).clone())).collect(), self.hasher.clone()))
+    }
+
+    fn enrich(&mut self, transforms: HashMap<String, Transform>) -> Option<BoxedIterator> {
+        let input = self.input.enrich(transforms);
+
+        if let Some(input) = input {
+            self.input = input;
+        };
+        None
     }
 }
 

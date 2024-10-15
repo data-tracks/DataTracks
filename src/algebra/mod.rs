@@ -14,7 +14,7 @@ pub use operator::Op;
 pub use operator::TupleOp;
 pub use project::Project;
 pub use scan::Scan;
-pub use operator::VariableOp;
+pub use variable::VariableScan;
 
 mod project;
 mod algebra;
@@ -26,4 +26,5 @@ mod implement;
 mod function;
 mod union;
 mod aggregate;
+mod variable;
 

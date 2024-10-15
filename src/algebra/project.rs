@@ -2,8 +2,10 @@ use crate::algebra::algebra::{Algebra, ValueHandler};
 use crate::algebra::function::Operator;
 use crate::algebra::implement::implement;
 use crate::algebra::{AlgebraType, BoxedIterator, ValueIterator};
+use crate::processing::transform::Transform;
 use crate::processing::Train;
 use crate::value::Value;
+use std::collections::HashMap;
 
 #[derive(Clone)]
 pub struct Project {
@@ -41,6 +43,15 @@ impl ValueIterator for ProjectIterator {
 
     fn clone(&self) -> BoxedIterator {
         Box::new(ProjectIterator {input: self.input.clone(), project: self.project.clone()})
+    }
+
+    fn enrich(&mut self, transforms: HashMap<String, Transform>) -> Option<BoxedIterator> {
+        let input = self.input.enrich(transforms);
+
+        if let Some(input) = input {
+            self.input = input;
+        };
+        None
     }
 }
 

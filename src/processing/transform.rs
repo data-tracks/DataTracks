@@ -1,4 +1,3 @@
-use std::fmt::{Debug, Formatter};
 use crate::algebra::{Algebra, BoxedIterator, Scan, ValueIterator};
 use crate::language::Language;
 use crate::processing::option::Configurable;
@@ -7,9 +6,9 @@ use crate::processing::transform::Transform::{Func, Lang};
 use crate::value::Value;
 use crate::{algebra, language};
 use serde_json::Map;
+use std::collections::HashMap;
+use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
-use log::error;
-use crate::processing::Plan;
 
 pub trait Taker: Send {
     fn take(&mut self, wagons: &mut Vec<Train>) -> Vec<Train>;
@@ -39,6 +38,7 @@ impl Default for Transform {
     fn default() -> Self {
         Func(FuncTransform::default())
     }
+
 }
 
 
@@ -56,10 +56,14 @@ impl Transform {
         }
     }
 
-    pub fn enrich(&mut self, plan: &Plan) {
+    pub(crate) fn enrich(&mut self, transforms: HashMap<String, Transform>) {
         match self {
-            Func(f) => f.enrich(plan),
-            Lang(l) => l.enrich(plan),
+            Func(f) => {
+                f.enrich(transforms);
+            },
+            Lang(l) => {
+                l.enrich(transforms);
+            }
         }
     }
 
@@ -131,6 +135,7 @@ pub struct LanguageTransform {
     func: BoxedIterator,
 }
 
+
 impl Debug for LanguageTransform {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct(&format!("{}|{}", self.language, self.query)).finish()
@@ -155,8 +160,10 @@ impl LanguageTransform {
         LanguageTransform { language, query: query.to_string(), func }
     }
 
-    fn enrich(&mut self, plan: &Plan) {
-
+    pub(crate) fn enrich(&mut self, transforms: HashMap<String, Transform>) {
+        if let Some(func) = self.func.enrich(transforms) {
+            self.func = func;
+        }
     }
 
     fn dump(&self) -> String {
@@ -223,7 +230,7 @@ impl FuncTransform {
         }))
     }
 
-    fn enrich(&mut self, plan: &Plan) {
+    pub fn enrich(&self, transforms: HashMap<String, Transform>) -> Result<Transform, ()> {
         todo!()
     }
 
@@ -252,6 +259,10 @@ impl ValueIterator for FuncTransform {
     fn clone(&self) -> BoxedIterator {
         Box::new(FuncTransform { input: self.input.clone(), func: self.func.clone() })
     }
+
+    fn enrich(&mut self, transforms: HashMap<String, Transform>) -> Option<BoxedIterator> {
+        None
+    }
 }
 
 
@@ -268,7 +279,6 @@ mod tests {
     use crossbeam::channel::unbounded;
     use std::sync::Arc;
     use std::vec;
-    use crate::processing::Plan;
 
     #[test]
     fn transform() {

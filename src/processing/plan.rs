@@ -26,7 +26,7 @@ pub struct Plan {
     controls: HashMap<i64, Vec<Sender<Command>>>,
     pub(crate) control_receiver: (Arc<Sender<Command>>, channel::Receiver<Command>),
     pub(crate) status: Status,
-    transforms: HashMap<String, transform::Transform>,
+    pub transforms: HashMap<String, transform::Transform>,
 }
 
 #[cfg(test)]
@@ -145,13 +145,13 @@ impl Plan {
         self.connect_destinations().unwrap();
         self.connect_sources().unwrap();
 
-        for station in &mut self.stations {
-            station.1.enrich(&self.transforms)
+        for (_id, station) in &mut self.stations {
+            station.enrich(self.transforms.clone())
         }
 
-        for station in &mut self.stations {
-            let entry = self.controls.entry(station.1.id).or_default();
-            entry.push(station.1.operate(Arc::clone(&self.control_receiver.0)));
+        for (_id, station) in &mut self.stations {
+            let entry = self.controls.entry(station.id).or_default();
+            entry.push(station.operate(Arc::clone(&self.control_receiver.0)));
         }
 
         // wait for all stations to be ready
@@ -178,6 +178,8 @@ impl Plan {
         for source in self.sources.values_mut() {
             self.controls.entry(source.get_id()).or_default().push(source.operate(Arc::clone(&self.control_receiver.0)));
         }
+
+
         self.status = Status::Running;
     }
 
@@ -389,7 +391,7 @@ impl Plan {
         let (name, stencil) = stencil.split_once(':').ok_or("No name for transformer provided")?;
         let transform = transform::Transform::parse(stencil)?;
 
-        self.add_transform(name, transform);
+        self.add_transform(name.trim_start_matches('$'), transform);
         Ok(())
     }
 

@@ -2,13 +2,12 @@ use std::str::FromStr;
 use std::{mem, vec};
 
 use crate::algebra::Op::Tuple;
-use crate::algebra::{Op, TupleOp, VariableOp};
+use crate::algebra::{Op, TupleOp};
 use crate::language::sql::buffer::BufferedLexer;
 use crate::language::sql::lex::Token::{As, Comma, From, GroupBy, Identifier, Limit, OrderBy, Select, Semi, Star, Text, Where};
 use crate::language::sql::statement::{SqlAlias, SqlIdentifier, SqlList, SqlOperator, SqlSelect, SqlStatement, SqlSymbol, SqlValue, SqlVariable};
 use crate::value;
 use logos::{Lexer, Logos};
-use tracing_subscriber::fmt::format;
 
 #[derive(Logos, Debug, PartialEq, Clone)]
 #[logos(skip r"[ \t\n\f]+")] // Ignore this regex pattern between tokens
@@ -180,10 +179,10 @@ fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> Result<Sql
                     }
                 }else if func.starts_with('$') {
                     // variable call
-                    let exps = parse_expressions(lexer, &stops)?;
+                    let mut exps = parse_expressions(lexer, &stops)?;
 
                     let name = func.trim_start_matches('$').to_owned();
-                    expressions.push(SqlStatement::Variable(SqlVariable::new(name, exps)))
+                    expressions.push(SqlStatement::Variable(SqlVariable::new(name.trim_end_matches('(').to_string(), exps)))
                 }else {
                     return Err("Unknown call operator!".to_string())
                 }

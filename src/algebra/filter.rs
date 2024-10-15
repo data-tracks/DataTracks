@@ -1,8 +1,10 @@
 use crate::algebra::algebra::{Algebra, BoxedIterator, ValueIterator};
 use crate::algebra::implement::implement;
 use crate::algebra::{AlgebraType, BoxedValueHandler, Operator};
+use crate::processing::transform::Transform;
 use crate::processing::Train;
 use crate::value::Value;
+use std::collections::HashMap;
 
 
 #[derive(Clone)]
@@ -45,6 +47,15 @@ impl ValueIterator for FilterIterator {
 
     fn clone(&self) -> BoxedIterator {
         Box::new(FilterIterator {input: self.input.clone(), condition: self.condition.clone()})
+    }
+
+    fn enrich(&mut self, transforms: HashMap<String, Transform>) -> Option<BoxedIterator> {
+        let input = self.input.enrich(transforms);
+
+        if let Some(input) = input {
+            Some(Box::new(FilterIterator { input, condition: self.condition.clone() }));
+        };
+        None
     }
 }
 

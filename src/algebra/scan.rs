@@ -1,7 +1,9 @@
 use crate::algebra::algebra::{Algebra, RefHandler, ValueIterator};
 use crate::algebra::BoxedIterator;
+use crate::processing::transform::Transform;
 use crate::processing::Train;
 use crate::value::Value;
+use std::collections::HashMap;
 use std::vec;
 
 #[derive(Clone)]
@@ -56,20 +58,14 @@ impl ValueIterator for ScanIterator {
         for mut train in trains {
             if train.last == self.index {
                 train.values = Some(train.values.unwrap().into_iter().map(|d| {
-                    // we add the index as key value
-                    //Value::dict_from_kv(&format!("${}", self.index), d)
                     let value = match d {
-                        /*Value::Dict(mut d) => {
-                            d.prefix_all(format!("${}.", self.index).as_str());
-                            Value::Dict(d)
-                        }*/
                         Value::Wagon(w) => {
                             w.unwrap()
                         }
                         v => v
                     };
 
-                    Value::wagon(value, self.index as usize)
+                    Value::wagon(value, self.index.to_string())
 
                 }).collect());
                 self.trains.push(train);
@@ -79,6 +75,10 @@ impl ValueIterator for ScanIterator {
 
     fn clone(&self) -> BoxedIterator {
         Box::new(ScanIterator { index: self.index, values: vec![], trains: self.trains.clone() })
+    }
+
+    fn enrich(&mut self, transforms: HashMap<String, Transform>) -> Option<BoxedIterator> {
+        None
     }
 }
 
@@ -100,11 +100,6 @@ impl Algebra for Scan {
     fn derive_iterator(&mut self) -> Self::Iterator {
         ScanIterator { index: self.index, values: vec![], trains: vec![] }
     }
-}
-
-#[derive(Clone)]
-pub struct VariableScan{
-    name: String
 }
 
 
