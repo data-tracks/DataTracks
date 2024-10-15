@@ -15,8 +15,12 @@ impl HoMap {
 }
 
 impl Hash for HoMap {
-    fn hash<H: Hasher>(&self, _: &mut H) {
-        panic!()
+    fn hash<H: Hasher>(&self, hash: &mut H) {
+        hash.write_u64(self.0.len() as u64);
+        for (k, v) in self.0.iter() {
+            k.hash(hash);
+            v.hash(hash);
+        }
     }
 }
 

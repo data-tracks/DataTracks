@@ -571,13 +571,20 @@ pub mod tests {
             $example:Dummy{{}}", source = source, values = dump(&values.clone()), size = 1, destination = destination)
         ).unwrap();
 
-        plan.operate();
         // get result arc
         let result = plan.get_result(destination);
+
+        plan.operate();
+
 
         // start sources
         plan.send_control(&source, Ready(0));
         plan.send_control(&destination, Ready(0));
+
+        // wait for startup else whe risk grabbing the lock too early
+        for command in [Ready(0), Ready(0)] {
+            plan.control_receiver.1.recv().unwrap();
+        }
 
         let lock = result.lock().unwrap();
         let mut train = lock.clone().pop().unwrap();

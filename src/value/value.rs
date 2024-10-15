@@ -446,7 +446,7 @@ impl Div for &Value {
                 Value::Float(*f / _rhs)
             }
             Wagon(w) => w.value.div(_rhs),
-            _ => panic!()
+            _ => panic!("Cannot div value with {:?}.", self)
         }
     }
 }

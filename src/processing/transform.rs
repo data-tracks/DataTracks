@@ -435,7 +435,7 @@ mod tests {
                 let result = t.drain_to_train(0);
                 assert_eq!(result.values.unwrap(), output);
             }
-            Err(_) => panic!(),
+            Err(_) => panic!("Failed"),
         }
     }
 
@@ -447,7 +447,7 @@ mod tests {
                 let result = t.drain_to_train(0);
                 assert_eq!(result.values.unwrap(), output);
             }
-            Err(_) => panic!(),
+            Err(_) => panic!("Failed"),
         }
     }
 

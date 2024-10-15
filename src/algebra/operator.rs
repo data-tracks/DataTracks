@@ -124,7 +124,7 @@ impl TupleOp {
                             Array(_) => Array(value.as_array().unwrap()),
                             Dict(_) => Dict(value.as_dict().unwrap()),
                             Null => Value::null(),
-                            Value::Wagon(_) => panic!()
+                            Wagon(_) => panic!()
                         }
                     }, operands)
                 )
