@@ -8,11 +8,11 @@ use std::vec;
 #[derive(Clone)]
 pub struct VariableScan {
     name: String,
-    inputs: Vec<Box<AlgebraType>>,
+    inputs: Vec<AlgebraType>,
 }
 
 impl VariableScan {
-    pub(crate) fn new(name: String, inputs: Vec<Box<AlgebraType>>) -> Self {
+    pub(crate) fn new(name: String, inputs: Vec<AlgebraType>) -> Self {
         VariableScan { name, inputs }
     }
 }

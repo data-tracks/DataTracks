@@ -53,7 +53,7 @@ impl ValueIterator for FilterIterator {
         let input = self.input.enrich(transforms);
 
         if let Some(input) = input {
-            Some(Box::new(FilterIterator { input, condition: self.condition.clone() }));
+            self.input = Box::new(FilterIterator { input, condition: self.condition.clone() });
         };
         None
     }

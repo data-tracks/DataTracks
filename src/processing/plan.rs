@@ -145,11 +145,11 @@ impl Plan {
         self.connect_destinations().unwrap();
         self.connect_sources().unwrap();
 
-        for (_id, station) in &mut self.stations {
+        for station in self.stations.values_mut() {
             station.enrich(self.transforms.clone())
         }
 
-        for (_id, station) in &mut self.stations {
+        for station in self.stations.values_mut() {
             let entry = self.controls.entry(station.id).or_default();
             entry.push(station.operate(Arc::clone(&self.control_receiver.0)));
         }
@@ -542,9 +542,6 @@ impl From<transform::Transform> for ConfigContainer {
                 map.insert(String::from("language"), ConfigModel::String(StringModel::new(&l.language.to_string())));
                 map.insert(String::from("query"), ConfigModel::String(StringModel::new(&l.query.to_string())));
                 ConfigContainer::new(String::from("Transform"), map)
-            }
-            Custom => {
-                todo!()
             }
         }
     }

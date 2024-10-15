@@ -77,7 +77,7 @@ impl ValueIterator for ScanIterator {
         Box::new(ScanIterator { index: self.index, values: vec![], trains: self.trains.clone() })
     }
 
-    fn enrich(&mut self, transforms: HashMap<String, Transform>) -> Option<BoxedIterator> {
+    fn enrich(&mut self, _transforms: HashMap<String, Transform>) -> Option<BoxedIterator> {
         None
     }
 }

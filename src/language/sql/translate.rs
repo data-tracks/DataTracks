@@ -98,7 +98,7 @@ fn handle_from(from: SqlStatement) -> Result<AlgebraType, String> {
 }
 
 fn handle_variable(variable: SqlVariable) -> Result<AlgebraType, String> {
-    let inputs = variable.inputs.into_iter().map(|i| Box::new(handle_from(i).unwrap())).collect();
+    let inputs = variable.inputs.into_iter().map(|i| handle_from(i).unwrap()).collect();
 
     Ok(Variable(VariableScan::new(variable.name, inputs)))
 }

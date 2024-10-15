@@ -38,7 +38,7 @@ impl Platform {
         let receiver = station.incoming.2.clone();
         let counter = station.incoming.1.clone();
         let sender = station.outgoing.clone();
-        let mut transform = station.transform.clone();
+        let transform = station.transform.clone();
         let window = station.window.clone();
         let stop = station.stop;
         let blocks = station.block.clone();

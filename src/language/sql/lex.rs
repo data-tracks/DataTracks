@@ -179,7 +179,7 @@ fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> Result<Sql
                     }
                 }else if func.starts_with('$') {
                     // variable call
-                    let mut exps = parse_expressions(lexer, &stops)?;
+                    let exps = parse_expressions(lexer, &stops)?;
 
                     let name = func.trim_start_matches('$').to_owned();
                     expressions.push(SqlStatement::Variable(SqlVariable::new(name.trim_end_matches('(').to_string(), exps)))

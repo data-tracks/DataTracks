@@ -230,8 +230,11 @@ impl FuncTransform {
         }))
     }
 
-    pub fn enrich(&self, transforms: HashMap<String, Transform>) -> Result<Transform, ()> {
-        todo!()
+    pub fn enrich(&mut self, transforms: HashMap<String, Transform>) {
+        let input = self.input.enrich(transforms);
+        if let Some(input) = input {
+            self.input = input;
+        }
     }
 
     fn dump(&self) -> String {
@@ -261,6 +264,11 @@ impl ValueIterator for FuncTransform {
     }
 
     fn enrich(&mut self, transforms: HashMap<String, Transform>) -> Option<BoxedIterator> {
+        let func = self.input.enrich(transforms);
+
+        if let Some(func) = func {
+            self.input = func;
+        }
         None
     }
 }
