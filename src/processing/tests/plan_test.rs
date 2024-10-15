@@ -559,16 +559,34 @@ pub mod tests {
         let source = 1;
         let destination= 5;
 
+
+        test_single_in_out("1{sql|SELECT * FROM $example($0)}", values.clone(), res.clone(), source, destination);
+        test_single_in_out("1{sql|SELECT $example FROM $example($0)}", values, res, source, destination);
+    }
+
+    #[test]
+    fn global_transformer_dict_test() {
+        let mut values = vec![vec![Value::dict_from_kv("age", Value::float(3.6)), Value::dict_from_kv("age", Value::float(4.6))]];
+        let res: Vec<Vec<Value>> = vec![vec![Value::float(4.6), Value::float(5.6)]];
+        let source = 1;
+        let destination = 5;
+
+
+        test_single_in_out("1{sql|SELECT * FROM $example($0.age)}", values.clone(), res.clone(), source, destination);
+    }
+
+    fn test_single_in_out(query: &str, values: Vec<Vec<Value>>, res: Vec<Vec<Value>>, source: i64, destination: i64) {
         let mut plan = Plan::parse(
             &format!("\
-            0--1{{sql|SELECT * FROM $example($0)}}--2\n\
+            0--{query}--2\n\
             \n\
             In\n\
-            Dummy{{\"id\":{source}, \"delay\":1, \"values\":{values}}}:1\n\
+            Dummy{{\"id\":{source}, \"delay\":1, \"values\":{values}}}:0\n\
             Out\n\
             Dummy{{\"id\":{destination}, \"result_size\":{size}}}:2\n\
             Transform\n\
-            $example:Dummy{{}}", source = source, values = dump(&values.clone()), size = 1, destination = destination)
+            $example:Dummy{{}}", query = query,
+                     source = source, values = dump(&values.clone()), size = 1, destination = destination)
         ).unwrap();
 
         // get result arc

@@ -29,8 +29,8 @@ impl Operator {
         Operator { op: Tuple(Name(NameOp::new(name.to_string()))), operands }
     }
 
-    pub fn context(index: usize) -> Operator {
-        Operator { op: Tuple(Context(ContextOp::new(index))), operands: vec![] }
+    pub fn context(name: String) -> Operator {
+        Operator { op: Tuple(Context(ContextOp::new(name))), operands: vec![] }
     }
 
     // $0.1 -> 1

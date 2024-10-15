@@ -9,7 +9,6 @@ use crate::processing::transform::Transform;
 use crate::processing::Train;
 use crate::value::Value;
 use std::collections::HashMap;
-use std::fmt::Debug;
 
 pub type BoxedIterator = Box<dyn ValueIterator<Item=Value> + Send + 'static>;
 

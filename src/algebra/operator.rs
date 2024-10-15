@@ -228,7 +228,7 @@ impl TupleOp {
                 value.literal.to_string()
             }
             TupleOp::Context(c) => {
-                format!("${}", c.index)
+                format!("${}", c.name)
             }
         }
     }
@@ -413,12 +413,12 @@ impl VariableOp {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ContextOp {
-    index: usize,
+    name: String,
 }
 
 impl ContextOp {
-    pub fn new(index: usize) -> Self {
-        ContextOp { index }
+    pub fn new(name: String) -> Self {
+        ContextOp { name }
     }
 }
 
@@ -426,7 +426,7 @@ impl ValueHandler for ContextOp {
     fn process(&self, value: &Value) -> Value {
         match value {
             Wagon(w) => {
-                if w.origin == self.index.to_string() {
+                if w.origin == self.name {
                     *w.value.clone()
                 } else {
                     panic!("Could not process {:?}", w)
@@ -435,7 +435,7 @@ impl ValueHandler for ContextOp {
             Array(a) => {
                 let mut array = a.0.iter().filter(|v| {
                     match v {
-                        Wagon(w) => w.origin == self.index.to_string(),
+                        Wagon(w) => w.origin == self.name,
                         _ => false
                     }
                 }).cloned().map(|w| {
@@ -453,7 +453,7 @@ impl ValueHandler for ContextOp {
             Dict(d) => {
                 let map = BTreeMap::from_iter(d.iter().filter(|(_k, v)| {
                     match v {
-                        Wagon(w) => w.origin == self.index.to_string(),
+                        Wagon(w) => w.origin == self.name,
                         _ => false
                     }
                 }).map(|(k, v)| {
@@ -471,7 +471,7 @@ impl ValueHandler for ContextOp {
     }
 
     fn clone(&self) -> BoxedValueHandler {
-        Box::new(ContextOp { index: self.index })
+        Box::new(ContextOp { name: self.name.clone() })
     }
 }
 

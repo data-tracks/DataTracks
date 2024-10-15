@@ -185,8 +185,6 @@ mod test {
     use std::thread::sleep;
     use std::time::Duration;
 
-    use crossbeam::channel::unbounded;
-    use crate::processing::Plan;
     use crate::processing::station::Command::Ready;
     use crate::processing::station::Station;
     use crate::processing::tests::dict_values;
@@ -194,6 +192,7 @@ mod test {
     use crate::processing::window::{BackWindow, Window};
     use crate::util::{new_channel, TimeUnit};
     use crate::value::Value;
+    use crossbeam::channel::unbounded;
 
     #[test]
     fn default_behavior() {

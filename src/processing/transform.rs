@@ -95,7 +95,7 @@ fn parse_function(stencil: &str) -> Result<Transform, String> {
     let (_options, _) = options.trim().rsplit_once('}').ok_or("Invalid transform format.".to_string())?;
     match name.to_lowercase().as_str() {
         #[cfg(test)]
-        "dummy" => Ok(Func(FuncTransform::new_boxed(|stop, value|{
+        "dummy" => Ok(Func(FuncTransform::new_boxed(|_stop, value| {
             &value + &Value::int(1)
         }))),
         _ => todo!()
@@ -191,7 +191,7 @@ impl Debug for FuncTransform {
 }
 
 impl PartialEq for FuncTransform {
-    fn eq(&self, other: &Self) -> bool {
+    fn eq(&self, _other: &Self) -> bool {
         todo!()
     }
 }

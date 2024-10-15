@@ -3,6 +3,7 @@ use crate::algebra::AlgebraType::{Aggregate, Filter, Join, Project, Scan, Variab
 use crate::algebra::Op::Tuple;
 use crate::algebra::TupleOp::Input;
 use crate::algebra::{AlgebraType, Op, Operator, Replaceable, VariableScan};
+use crate::language::sql::statement::SqlStatement::Identifier;
 use crate::language::sql::statement::{SqlIdentifier, SqlSelect, SqlStatement, SqlVariable};
 use crate::value::Value;
 
@@ -144,12 +145,20 @@ fn handle_field(column: SqlStatement) -> Result<Operator, String> {
 }
 
 fn handle_table(identifier: SqlIdentifier) -> Result<AlgebraType, String> {
-    let scan = match identifier.names[0].as_str() {
+    let mut names = identifier.names.clone();
+    let scan = match names.remove(0) {
         s if s.starts_with('$') => s.strip_prefix('$')
             .ok_or("Prefix not found".to_string())
             .and_then(|rest| rest.parse::<i64>().map_err(|_| "Could not parse number".to_string()))
             .map(|num| Scan(algebra::Scan::new(num)))?,
         _ => Err("Could not translate table".to_string())?
     };
-    Ok(scan)
+    if !names.is_empty() {
+        let field = handle_field(Identifier(identifier))?;
+        Ok(Project(algebra::Project::new(scan, field)))
+    } else {
+        Ok(scan)
+    }
+
+
 }

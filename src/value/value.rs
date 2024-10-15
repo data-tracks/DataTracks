@@ -222,8 +222,6 @@ impl PartialEq for Value {
             (Value::Dict(d), _) => other.as_dict().map(|other| {
                 d.len() == other.len() && d.keys().eq(other.keys()) && d.values().eq(other.values())
             }).unwrap_or(false),
-            // Fallback: not equal if types don't match or other cases aren't handled
-            (_, _) => false,
         }
     }
 }
