@@ -86,6 +86,9 @@ impl Station {
             match char {
                 '"' => {
                     is_text = !is_text;
+                    if current_stage == Some(PlanStage::Transform) {
+                        temp.push('"');
+                    }
                 }
                 PlanStage::WINDOW_OPEN | PlanStage::TRANSFORM_OPEN | PlanStage::LAYOUT_OPEN => {
                     if current_stage.is_some() {

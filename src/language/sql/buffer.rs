@@ -9,6 +9,7 @@ pub struct BufferedLexer<'source> {
 }
 
 impl<'source> BufferedLexer<'source> {
+    // pops and returns the oldest token, which was stored on the buffer
     pub(crate) fn consume_buffer(&mut self) -> Result<Token, String> {
         match self.buffer.pop() {
             None => Err("Not enough tokens".to_string()),
@@ -20,6 +21,9 @@ impl<'source> BufferedLexer<'source> {
     }
 
     pub fn next(&mut self) -> Result<Token, String> {
+        if !self.buffer.is_empty() {
+            return self.consume_buffer()
+        }
         match self.lexer.next() {
             None => Err("No more values".to_string()),
             Some(res) => match res {
@@ -33,18 +37,12 @@ impl<'source> BufferedLexer<'source> {
     }
 
     pub fn next_buf(&mut self) -> Result<Token, String> {
-        match self.lexer.next() {
-            None => Err("No more values".to_string()),
-            Some(res) => match res {
-                Ok(tok) => {
-                    self.buffer.push(tok.clone());
-                    Ok(tok)
-                }
-                Err(e) => {
-                    self.error = Some(e);
-                    Err("Error while tokenizing query".to_string())
-                }
-            }
+        let tok = self.next();
+        if let Ok(tok) = tok {
+            self.buffer.push(tok.clone());
+            Ok(tok)
+        } else {
+            tok
         }
     }
 

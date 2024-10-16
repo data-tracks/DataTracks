@@ -14,7 +14,7 @@ use logos::{Lexer, Logos};
 pub(crate) enum Token {
     #[regex(r"[a-zA-Z_$][a-zA-Z_$0-9]*\(", | lex | lex.slice().to_owned())]
     Function(String),
-    #[regex(r#""[^"\\]*""#, | lex | trim_quotes(lex.slice()))]
+    #[regex(r#""[^"]*""#, | lex | trim_quotes(lex.slice()))]
     Text(String),
     #[token("false", | _ | false)]
     #[token("true", | _ | true)]
@@ -85,7 +85,7 @@ pub(crate) enum Token {
 }
 
 pub fn parse(query: &str) -> Result<SqlStatement, String> {
-    let mut lexer = crate_lexer(query);
+    let mut lexer = create_lexer(query);
     parse_query(&mut lexer)
 }
 
@@ -101,6 +101,7 @@ fn parse_query<'source>(lexer: &'source mut Lexer<'source, Token>) -> Result<Sql
 
 fn parse_select(lexer: &mut BufferedLexer) -> Result<SqlStatement, String> {
     let fields = parse_expressions(lexer, &[From])?;
+    lexer.consume_buffer()?; // remove from
     let froms = parse_expressions(lexer, &[Semi, Where, GroupBy, Limit, OrderBy])?;
 
     let mut last_end = lexer.consume_buffer();
@@ -138,7 +139,7 @@ fn parse_expressions(lexer: &mut BufferedLexer, stops: &[Token]) -> Result<Vec<S
     Ok(expressions)
 }
 
-fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> Result<SqlStatement,String> {
+fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> Result<SqlStatement, String> {
     let mut expressions = vec![];
     let mut operators = vec![];
     let mut operator = None;
@@ -179,15 +180,15 @@ fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> Result<Sql
                     if let Ok(exprs) = exp {
                         expressions.push(SqlStatement::Operator(SqlOperator::new(op, exprs, true)))
                     } else {
-                        return Err("Unknown function arguments!".to_string())
+                        return Err("Unknown function arguments!".to_string());
                     }
-                }else if func.starts_with('$') {
+                } else if func.starts_with('$') {
                     // variable call
                     let exps = parse_expressions(lexer, &stops)?;
 
                     let name = func.trim_start_matches('$').to_owned();
                     expressions.push(SqlStatement::Variable(SqlVariable::new(name.trim_end_matches('(').to_string(), exps)))
-                }else {
+                } else {
                     return Err("Unknown call operator!".to_string())
                 }
             }
@@ -199,13 +200,13 @@ fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> Result<Sql
                         operators.push(exp);
                     }
                     delay = true;
-                }else if t == Token::SqBracketOpen {
-                    let doc = parse_doc(t.clone())?;
-                    operators.push(doc);
+                } else if t == Token::SqBracketOpen {
+                    let doc = parse_doc(lexer)?;
+                    expressions.push(doc); // full expression
                 } else if t == Token::Dot {
                     // nothing on purpose
                 } else {
-                    return Err( format!("Invalid Token {:?}", t));
+                    return Err(format!("Invalid Token {:?}", t));
                 }
             }
         }
@@ -239,8 +240,20 @@ fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> Result<Sql
     Ok(statement)
 }
 
-fn parse_doc(tok: Token) -> Result<SqlStatement, String> {
-    todo!()
+fn parse_doc(lexer: &mut BufferedLexer) -> Result<SqlStatement, String> {
+    let mut pairs = vec![];
+    let mut stop = lexer.next_buf()?;
+    while stop != Token::SqBracketClose {
+        let key = parse_expression(lexer, &vec![Token::Colon])?;
+        lexer.consume_buffer()?;
+        let value = parse_expression(lexer, &vec![Token::SqBracketClose, Comma])?;
+
+        pairs.push(SqlStatement::Operator(SqlOperator::new(Tuple(TupleOp::Combine), vec![key, value], false)));
+        stop = lexer.next_buf()?;
+    };
+    lexer.consume_buffer()?;
+
+    Ok(SqlStatement::Operator(SqlOperator::new(Tuple(TupleOp::Doc), pairs, false)))
 }
 
 fn parse_operator(tok: Token) -> Option<Op> {
@@ -258,7 +271,7 @@ fn parse_operator(tok: Token) -> Option<Op> {
 }
 
 
-fn crate_lexer(query: &str) -> Lexer<Token> {
+fn create_lexer(query: &str) -> Lexer<Token> {
     Token::lexer(query)
 }
 
@@ -273,7 +286,28 @@ fn trim_quotes(value: &str) -> String {
 
 #[cfg(test)]
 mod test {
-    use crate::language::sql::lex::parse;
+    use crate::language::sql::lex::{create_lexer, parse, Token};
+
+    #[test]
+    fn text_identifier() {
+        let mut lexer = create_lexer(r#"test"#);
+        let value = lexer.next().unwrap();
+        assert_eq!(value.unwrap(), Token::Identifier(String::from("test")));
+    }
+
+    #[test]
+    fn text_text() {
+        let mut lexer = create_lexer(r#""test""#);
+        let value = lexer.next().unwrap();
+        assert_eq!(value.unwrap(), Token::Text(String::from("test")));
+    }
+
+    #[test]
+    fn text_text_escape() {
+        let mut lexer = create_lexer("\"test\"");
+        let value = lexer.next().unwrap();
+        assert_eq!(value.unwrap(), Token::Text(String::from("test")));
+    }
 
     #[test]
     fn test_star() {

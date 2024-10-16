@@ -150,7 +150,7 @@ pub(crate) struct SqlSelect {
 
 #[derive(Debug)]
 pub(crate) struct SqlList {
-    list: Vec<SqlStatement>,
+    pub list: Vec<SqlStatement>,
 }
 
 impl SqlList {

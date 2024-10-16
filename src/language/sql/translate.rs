@@ -116,7 +116,7 @@ fn handle_field(column: SqlStatement) -> Result<Operator, String> {
             let operators = o.operands.into_iter().map(|op| handle_field(op).unwrap()).collect();
             Ok(Operator::new(o.operator, operators))
         }
-        SqlStatement::Identifier(i) => {
+        Identifier(i) => {
             let mut names = i.names.clone();
             let mut name = names.remove(0);
 
@@ -137,6 +137,10 @@ fn handle_field(column: SqlStatement) -> Result<Operator, String> {
 
             Ok(op)
         }
+        SqlStatement::List(l) => {
+            let operators = l.list.into_iter().map(|op| handle_field(op).unwrap()).collect();
+            Ok(Operator::new(Op::combine(), operators))
+        },
         SqlStatement::Value(v) => {
             Ok(Operator::literal(v.value))
         }

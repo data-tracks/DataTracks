@@ -47,6 +47,7 @@ pub enum TupleOp {
     Equal,
     And,
     Or,
+    Doc,
     Input(InputOp),
     Name(NameOp),
     Index(IndexOp),
@@ -162,6 +163,18 @@ impl TupleOp {
             TupleOp::Context(c) => {
                 c.implement().unwrap()
             }
+            TupleOp::Doc => {
+                Box::new(
+                    TupleFunction::new(move |value| {
+                        let mut map = BTreeMap::new();
+                        value.iter().for_each(|k| {
+                            let pair = k.as_array().unwrap();
+                            map.insert(pair.0[0].as_text().unwrap().0, pair.0[1].clone());
+                        });
+                        Value::dict(map)
+                    }, operands)
+                )
+            }
         }
     }
 
@@ -230,6 +243,9 @@ impl TupleOp {
             TupleOp::Context(c) => {
                 format!("${}", c.name)
             }
+            TupleOp::Doc => {
+                "".to_string()
+            }
         }
     }
 }
@@ -247,7 +263,7 @@ impl AggOp {
         match self {
             Count => "COUNT".to_string(),
             Sum => "SUM".to_string(),
-            AggOp::Avg => "AVG".to_string()
+            Avg => "AVG".to_string()
         }
     }
 }
