@@ -575,6 +575,17 @@ pub mod tests {
         test_single_in_out("1{sql|SELECT * FROM $example($0.age)}", values.clone(), res.clone(), source, destination);
     }
 
+    #[test]
+    fn dict_test() {
+        let values = vec![vec![Value::float(3.6), Value::float(4.6)]];
+        let res: Vec<Vec<Value>> = vec![vec![Value::dict_from_kv("key", Value::float(3.6)), Value::dict_from_kv("key", Value::float(4.6))]];
+        let source = 1;
+        let destination = 5;
+
+
+        test_single_in_out("1{sql|SELECT {'key':*} FROM $0}", values.clone(), res.clone(), source, destination);
+    }
+
     fn test_single_in_out(query: &str, values: Vec<Vec<Value>>, res: Vec<Vec<Value>>, source: i64, destination: i64) {
         let mut plan = Plan::parse(
             &format!("\

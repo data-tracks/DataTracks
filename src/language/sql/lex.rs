@@ -55,6 +55,10 @@ pub(crate) enum Token {
     BracketOpen,
     #[token(")")]
     BracketClose,
+    #[token("{")]
+    SqBracketOpen,
+    #[token("}")]
+    SqBracketClose,
     #[token("=")]
     Eq,
     #[token("NOT", ignore(case))]
@@ -195,6 +199,9 @@ fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> Result<Sql
                         operators.push(exp);
                     }
                     delay = true;
+                }else if t == Token::SqBracketOpen {
+                    let doc = parse_doc(t.clone())?;
+                    operators.push(doc);
                 } else if t == Token::Dot {
                     // nothing on purpose
                 } else {
@@ -230,6 +237,10 @@ fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> Result<Sql
         return Ok(SqlStatement::Alias(SqlAlias::new(statement, alias)));
     }
     Ok(statement)
+}
+
+fn parse_doc(tok: Token) -> Result<SqlStatement, String> {
+    todo!()
 }
 
 fn parse_operator(tok: Token) -> Option<Op> {
