@@ -56,8 +56,12 @@ pub(crate) enum Token {
     #[token(")")]
     BracketClose,
     #[token("{")]
-    SqBracketOpen,
+    CuBracketOpen,
     #[token("}")]
+    CuBracketClose,
+    #[token("[")]
+    SqBracketOpen,
+    #[token("]")]
     SqBracketClose,
     #[token("=")]
     Eq,
@@ -207,9 +211,14 @@ fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> Result<Sql
                         operators.push(exp);
                     }
                     delay = true;
-                } else if t == Token::SqBracketOpen {
+                } else if t == Token::CuBracketOpen {
                     let doc = parse_doc(lexer)?;
                     expressions.push(doc); // full expression
+                } else if t == Token::SqBracketOpen {
+                    let stops = vec![Token::SqBracketClose];
+                    let array = parse_expressions(lexer, &stops)?;
+                    lexer.consume_buffer()?;
+                    expressions.push(SqlStatement::Operator(SqlOperator::new(Op::combine(), array, false)));
                 } else if t == Token::Dot {
                     // nothing on purpose
                 } else {
@@ -250,14 +259,14 @@ fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> Result<Sql
 fn parse_doc(lexer: &mut BufferedLexer) -> Result<SqlStatement, String> {
     let mut pairs = vec![];
     let mut stop = lexer.next_buf()?;
-    while stop != Token::SqBracketClose {
+    while stop != Token::CuBracketClose {
         if stop == Comma {
             lexer.consume_buffer()?;
         }
 
         let key = parse_expression(lexer, &vec![Token::Colon])?;
         lexer.consume_buffer()?;
-        let value = parse_expression(lexer, &vec![Token::SqBracketClose, Comma])?;
+        let value = parse_expression(lexer, &vec![Token::CuBracketClose, Comma])?;
 
         pairs.push(SqlStatement::Operator(SqlOperator::new(Tuple(TupleOp::Combine), vec![key, value], false)));
         stop = lexer.next_buf()?;

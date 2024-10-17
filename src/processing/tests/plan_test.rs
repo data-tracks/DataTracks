@@ -587,6 +587,28 @@ pub mod tests {
     }
 
     #[test]
+    fn array_single_test() {
+        let values = vec![vec![Value::float(4.6)]];
+        let res: Vec<Vec<Value>> = vec![vec![Value::array(vec![Value::float(4.6)])]];
+        let source = 1;
+        let destination = 5;
+
+
+        test_single_in_out("1{sql|SELECT [$0] FROM $0}", values.clone(), res.clone(), source, destination);
+    }
+
+    #[test]
+    fn array_multiple_test() {
+        let values = vec![vec![Value::float(4.6)]];
+        let res: Vec<Vec<Value>> = vec![vec![Value::array(vec![Value::float(4.6), Value::float(4.6)])]];
+        let source = 1;
+        let destination = 5;
+
+
+        test_single_in_out("1{sql|SELECT [$0,$0] FROM $0}", values.clone(), res.clone(), source, destination);
+    }
+
+    #[test]
     fn dict_multi_key_test() {
         let values = vec![vec![Value::float(3.6), Value::float(4.6)]];
         let res: Vec<Vec<Value>> = vec![vec![
