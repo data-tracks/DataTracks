@@ -586,6 +586,19 @@ pub mod tests {
         test_single_in_out("1{sql|SELECT {\"key\": $0} FROM $0}", values.clone(), res.clone(), source, destination);
     }
 
+    #[test]
+    fn dict_multi_key_test() {
+        let values = vec![vec![Value::float(3.6), Value::float(4.6)]];
+        let res: Vec<Vec<Value>> = vec![vec![
+            Value::dict_from_pairs(vec![("key", Value::float(3.6)), ("key2", Value::float(3.6))]),
+            Value::dict_from_pairs(vec![("key", Value::float(4.6)), ("key2", Value::float(4.6))])]];
+        let source = 1;
+        let destination = 5;
+
+
+        test_single_in_out("1{sql|SELECT {\"key\": $0, \"key2\": $0 } FROM $0}", values.clone(), res.clone(), source, destination);
+    }
+
     fn test_single_in_out(query: &str, values: Vec<Vec<Value>>, res: Vec<Vec<Value>>, source: i64, destination: i64) {
         let mut plan = Plan::parse(
             &format!("\

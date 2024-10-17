@@ -4,7 +4,7 @@ use std::{mem, vec};
 use crate::algebra::Op::Tuple;
 use crate::algebra::{Op, TupleOp};
 use crate::language::sql::buffer::BufferedLexer;
-use crate::language::sql::lex::Token::{As, Comma, From, GroupBy, Identifier, Limit, OrderBy, Select, Semi, Star, Text, Where};
+use crate::language::sql::lex::Token::{As, BracketClose, Comma, From, GroupBy, Identifier, Limit, OrderBy, Select, Semi, Star, Text, Where};
 use crate::language::sql::statement::{SqlAlias, SqlIdentifier, SqlList, SqlOperator, SqlSelect, SqlStatement, SqlSymbol, SqlValue, SqlVariable};
 use crate::value;
 use logos::{Lexer, Logos};
@@ -191,6 +191,13 @@ fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> Result<Sql
                 } else {
                     return Err("Unknown call operator!".to_string())
                 }
+                // empty used stops
+                let last = lexer.consume_buffer();
+                if let Ok(last) = last {
+                    if last != BracketClose {
+                        lexer.buffer(last);
+                    }
+                }
             }
 
             t => {
@@ -244,6 +251,10 @@ fn parse_doc(lexer: &mut BufferedLexer) -> Result<SqlStatement, String> {
     let mut pairs = vec![];
     let mut stop = lexer.next_buf()?;
     while stop != Token::SqBracketClose {
+        if stop == Comma {
+            lexer.consume_buffer()?;
+        }
+
         let key = parse_expression(lexer, &vec![Token::Colon])?;
         lexer.consume_buffer()?;
         let value = parse_expression(lexer, &vec![Token::SqBracketClose, Comma])?;

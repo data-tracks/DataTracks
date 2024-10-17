@@ -71,9 +71,14 @@ impl Value {
     }
 
     pub(crate) fn dict_from_kv(key: &str, value: Value) -> Value {
-        let mut map = BTreeMap::new();
-        map.insert(key.to_string(), value);
+        Self::dict_from_pairs(vec![(key, value)])
+    }
 
+    pub fn dict_from_pairs(pairs: Vec<(&str, Value)>) -> Value {
+        let mut map = BTreeMap::new();
+        pairs.into_iter().for_each(|(k, v)| {
+            map.insert(k.to_string(), v);
+        });
         Value::Dict(Dict::new(map))
     }
 
