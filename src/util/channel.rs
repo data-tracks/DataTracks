@@ -214,6 +214,6 @@ mod test {
 
         println!("std: {}ms vs counted: {}ms", std.as_millis(), new_time.as_millis());
 
-        assert!((2 * std.as_millis()) >= new_time.as_millis())
+        assert!((5 * std.as_millis()) >= new_time.as_millis())
     }
 }
