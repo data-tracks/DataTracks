@@ -18,6 +18,7 @@ mod algebra;
 mod management;
 mod http;
 mod mqtt;
+mod analyse;
 
 fn main() {
     setup_logging();

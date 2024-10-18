@@ -17,6 +17,18 @@ DataTracks is a streaming engine, which simplifies the setup up and management o
 DataTracks is a prototype engine, which provides simple creation and management of complex data streaming workloads for
 various degrees of structured and unstructured data.
 
+## Getting Started
+
+A simple plan which restructures an input MQTT stream and sends it forward might look like this:
+```
+1--2{sql|SELECT {time: $1.timestamp, id: $1.id} FROM $1}--3
+
+In
+MQTT{...}:1
+
+Out
+MQTT{...}:3
+```
 
 ## License
 

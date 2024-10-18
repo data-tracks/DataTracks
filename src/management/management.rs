@@ -42,7 +42,7 @@ impl Manager {
 
 fn add_default(storage: Arc<Mutex<Storage>>) {
     thread::spawn(move || {
-        let mut plan = Plan::parse("1-2{sql|SELECT $1 FROM $1}-3").unwrap();
+        let mut plan = Plan::parse("1--2{sql|SELECT $1 FROM $1}--3").unwrap();
 
         plan.add_source(1, Box::new(HttpSource::new(1, String::from("127.0.0.1"), 5555)));
         plan.add_source(2, Box::new(MqttSource::new(2, String::from("127.0.0.1"), 6666)));
