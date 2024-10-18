@@ -347,6 +347,7 @@ impl ValueHandler for IndexOp {
                 d.get(&format!("${}", self.index)).unwrap_or(&Value::null()).clone()
             }
             Null => Value::null(),
+            Wagon(w) => self.process(&w.value),
             _ => panic!("Could not process {}", value)
         }
     }

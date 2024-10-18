@@ -88,18 +88,6 @@ pub async fn startup(storage: Arc<Mutex<Storage>>) {
     debug!("Finished serving.")
 }
 
-async fn fallback_handler() -> impl IntoResponse {
-    let index_path = ASSETS_DIR.get_file("index.html");
-    match ASSETS_DIR.get_file("index.html") {
-        Some(file) => Html(file.contents_utf8().unwrap()).into_response(),
-        None => {
-            debug!("Could not open file.");
-            warn!("Failed to read {:?}: {:?}", index_path.clone(), "index.html");
-            (StatusCode::INTERNAL_SERVER_ERROR, "500 Internal Server Error").into_response()
-        }
-    }
-}
-
 async fn get_plans(State(state): State<WebState>) -> impl IntoResponse {
     let plans = state.storage.lock().unwrap().plans.lock().unwrap().values().map(|plan| serde_json::to_value(plan).unwrap()).collect::<Value>();
     let msg = json!( {"plans": &plans});

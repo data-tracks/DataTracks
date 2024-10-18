@@ -46,6 +46,9 @@ rstest = "0.22.0"
 inherits = "release"
 lto = "thin"
 
+[profile.test]
+opt-level = 3
+
 [profile.release]
 opt-level = 3    # Maximum optimization level
 lto = true       # Enable Link Time Optimization
