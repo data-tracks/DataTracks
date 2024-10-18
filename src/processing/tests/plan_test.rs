@@ -445,7 +445,7 @@ pub mod tests {
             }
         }
 
-        sleep(Duration::from_millis(5));
+        sleep(Duration::from_millis(10));
 
         plan.send_control(&source4, Ready(4));
         // source 1 ready + stop
