@@ -92,7 +92,7 @@ pub mod dummy {
         }
 
         fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command> {
-            let stop = self.stop;
+            let id = self.id;
 
             let delay = self.delay;
             let initial_delay = self.initial_delay;
@@ -101,7 +101,7 @@ pub mod dummy {
             let (tx, rx) = unbounded();
 
             let _handle = spawn(move || {
-                control.send(Ready(stop)).unwrap();
+                control.send(Ready(id)).unwrap();
 
                 // wait for ready from callee
                 match rx.recv() {
@@ -122,7 +122,7 @@ pub mod dummy {
                     }
                     sleep(delay);
                 }
-                control.send(Stop(stop)).unwrap();
+                control.send(Stop(id)).unwrap();
             });
             tx
         }
@@ -209,14 +209,14 @@ pub mod dummy {
         }
 
         fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command> {
-            let stop = self.stop;
+            let id = self.id;
             let local = self.results();
             let receiver = self.receiver.take().unwrap();
             let result_amount = self.result_size as usize;
             let (tx, rx) = unbounded();
 
             spawn(move || {
-                control.send(Ready(stop)).unwrap();
+                control.send(Ready(id)).unwrap();
                 let mut shared = local.lock().unwrap();
                 loop {
                     match rx.try_recv() {
@@ -237,7 +237,7 @@ pub mod dummy {
                     }
                 }
                 drop(shared);
-                control.send(Stop(stop))
+                control.send(Stop(id))
             });
             tx
         }
@@ -668,8 +668,8 @@ pub mod tests {
         plan.send_control(&destination, Ready(0));
 
         // wait for startup else whe risk grabbing the lock too early
-        for _command in [Ready(0), Ready(0)] {
-            plan.control_receiver.1.recv().unwrap();
+        for _command in 0..4 {
+            assert!(vec![Ready(source), Ready(destination), Stop(source), Stop(destination)].contains(&plan.control_receiver.1.recv().unwrap()));
         }
 
         let lock = result.lock().unwrap();
