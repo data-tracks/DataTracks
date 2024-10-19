@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::process::id;
 
 #[derive(Default)]
 pub struct Summery{
@@ -71,7 +70,7 @@ impl Summery{
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub enum Status {
     #[default]
     OK,

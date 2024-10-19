@@ -21,9 +21,22 @@ impl<'plan> Analyser<'plan> {
         //stations
         self.plan.stations.values().for_each(|s| {
             if !self.plan.lines.iter().any(|(_num, l)| l.contains(&s.id)) && !self.plan.stations_to_in_outs.contains_key(&s.id){
-                todo!();
                 summery.add_stop_status(s.id, Status::WARNING(Islands, format!("Station {} is not connected to anything.", s.id)));
             }
+        });
+
+        self.plan.lines.values().for_each(|s| {
+            if s.is_empty() {
+                return
+            }
+            let start = s.clone().remove(0);
+            // 1--2 -> 1 & 2
+            self.check_in_and_out(&mut summery, start.clone(), String::from(format!("Station {} is not connected to an in or output.", start.clone())));
+            let end = s.clone().pop().unwrap();
+            if end == start {
+                return
+            }
+            self.check_in_and_out(&mut summery, end.clone(), String::from(format!("Station {} is not connected to an in or output.", end)));
         });
 
         self.plan.sources.values().for_each(|s| {
@@ -40,6 +53,12 @@ impl<'plan> Analyser<'plan> {
 
         Ok(summery)
     }
+
+    fn check_in_and_out(&self, mut summery: &mut Summery, station: i64, error: String) {
+        if (!self.plan.stations_to_in_outs.contains_key(&station) || self.plan.stations_to_in_outs.get(&station).unwrap().is_empty()) && !self.plan.lines.any(|s| s.contains(&station)) {
+            summery.add_stop_status(station, Status::WARNING(Islands, error));
+        }
+    }
 }
 
 pub fn analyse(plan: &Plan) -> Result<Summery, String> {
@@ -55,7 +74,7 @@ mod tests {
 
     #[test]
     fn test_islands(){
-        let plan = Plan::parse("In\nDummy{}").unwrap();
+        let plan = Plan::parse("1").unwrap();
         let analyse = analyse(&plan);
         assert!(analyse.is_ok());
         let analyse = analyse.unwrap();
@@ -67,7 +86,7 @@ mod tests {
             Status::WARNING(st, _) => {
                 assert_eq!(StatusTypes::Islands, st);
             }
-            _ => panic!("Wrong type of status")
+            s => panic!("Wrong type of status: {:?}", s)
         }
     }
 }
