@@ -4,6 +4,7 @@ pub use plan::Plan;
 pub use train::Train;
 pub use wagon::Wagon;
 
+pub use layout::Layout;
 pub(crate) mod station;
 mod window;
 pub mod transform;

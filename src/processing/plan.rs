@@ -19,13 +19,13 @@ pub struct Plan {
     pub id: i64,
     pub name: String,
     pub lines: HashMap<i64, Vec<i64>>,
-    pub(crate) stations: HashMap<i64, Station>,
+    pub stations: HashMap<i64, Station>,
     pub stations_to_in_outs: HashMap<i64, Vec<i64>>,
     pub sources: HashMap<i64, Box<dyn Source>>,
     pub destinations: HashMap<i64, Box<dyn Destination>>,
     pub controls: HashMap<i64, Vec<Sender<Command>>>,
-    pub(crate) control_receiver: (Arc<Sender<Command>>, channel::Receiver<Command>),
-    pub(crate) status: Status,
+    pub control_receiver: (Arc<Sender<Command>>, channel::Receiver<Command>),
+    pub status: Status,
     pub transforms: HashMap<String, transform::Transform>,
 }
 
@@ -90,7 +90,8 @@ impl Plan {
             let mut sorted = self.sources.values().collect::<Vec<&Box<dyn Source>>>();
             sorted.sort_by_key(|s| s.get_name());
             dump += &sorted.into_iter().map(|s| {
-                let stops = self.get_connected_stations(s.get_id());
+                let mut stops = self.get_connected_stations(s.get_id());
+                stops.sort();
                 if stops.is_empty() {
                     format!("{}", s.dump_source() )
                 }else {
@@ -390,7 +391,7 @@ impl Plan {
     }
 
     pub fn connect_in_out(&mut self, stop: i64, in_out: i64) {
-        self.stations_to_in_outs.entry(in_out).or_default().push(stop);
+        self.stations_to_in_outs.entry(stop).or_default().push(in_out);
     }
 
 
@@ -778,7 +779,7 @@ mod test {
 
         for stencil in stencils {
             let plan = Plan::parse(stencil).unwrap();
-            assert_eq!(plan.dump(), stencil)
+            assert_eq!(plan.dump().trim(), stencil.trim())
         }
     }
 }

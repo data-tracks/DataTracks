@@ -16,16 +16,16 @@ use crossbeam::channel::{unbounded, Receiver};
 use tracing::info;
 
 #[derive(Clone)]
-pub(crate) struct Station {
-    pub(crate) id: i64,
+pub struct Station {
+    pub id: i64,
     pub stop: i64,
-    pub(crate) incoming: (Tx<Train>, Arc<AtomicU64>, Rx<Train>),
-    pub(crate) outgoing: Sender,
-    pub(crate) window: Window,
-    pub(crate) transform: Option<Transform>,
-    pub(crate) block: Vec<i64>,
-    pub(crate) inputs: Vec<i64>,
-    pub(crate) layout: Layout,
+    pub incoming: (Tx<Train>, Arc<AtomicU64>, Rx<Train>),
+    pub outgoing: Sender,
+    pub window: Window,
+    pub transform: Option<Transform>,
+    pub block: Vec<i64>,
+    pub inputs: Vec<i64>,
+    pub layout: Layout,
     control: (channel::Sender<Command>, Receiver<Command>),
 }
 
@@ -342,25 +342,15 @@ pub mod tests {
     }
 
     #[test]
-    fn sql_parse_different_outs() {
-        /*let stencil = "1-3{sql|Select $1.0 From $1}";
-        let stencil = "1-3{sql|Select $1.name From $1}";
-
-        let plan = Plan::parse(stencil);
-
-        let station = plan.stations.get(&3).unwrap();*/
-    }
-
-    #[test]
     fn sql_parse_layout() {
         let stencils = vec![
             "1()",// no fixed
-            "1($1:f)", // fixed unnamed
-            "1(temperature:f)", // fixed float
-            "1(name:t)", // fixed text
-            "1(temp:f, age: i)", // fixed multiple
-            "1(address:d(number: i))", // fixed nested document
-            "1(locations:a()i())", // fixed array
+            "1(f)", // fixed unnamed
+            "1({temperature:f})", // fixed float
+            "1({name:t})", // fixed text
+            "1({temp:f, age: i})", // fixed multiple
+            "1({address:{number: i}})", // fixed nested document
+            "1({locations:[i]})", // fixed array
         ];
 
         for stencil in stencils {

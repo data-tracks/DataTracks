@@ -8,8 +8,8 @@ use crate::value;
 use crate::value::{ValType, Value};
 
 #[derive(Default, Clone)]
-pub(crate) struct Layout {
-    type_: DictType
+pub struct Layout {
+    type_: Field
 }
 
 impl Layout{
