@@ -20,7 +20,6 @@ pub mod dummy {
 
     pub struct DummySource {
         id: i64,
-        stop: i64,
         values: Option<Vec<Vec<Value>>>,
         delay: Duration,
         initial_delay: Duration,
@@ -28,13 +27,13 @@ pub mod dummy {
     }
 
     impl DummySource {
-        pub(crate) fn new(stop: i64, values: Vec<Vec<Value>>, delay: Duration) -> (Self, i64) {
-            Self::new_with_delay(stop, values, Duration::from_millis(0), delay)
+        pub(crate) fn new(values: Vec<Vec<Value>>, delay: Duration) -> (Self, i64) {
+            Self::new_with_delay(values, Duration::from_millis(0), delay)
         }
 
-        pub(crate) fn new_with_delay(stop: i64, values: Vec<Vec<Value>>, initial_delay: Duration, delay: Duration) -> (Self, i64) {
+        pub(crate) fn new_with_delay(values: Vec<Vec<Value>>, initial_delay: Duration, delay: Duration) -> (Self, i64) {
             let id = GLOBAL_ID.new_id();
-            (DummySource { id, stop, values: Some(values), initial_delay, delay, senders: Some(vec![]) }, id)
+            (DummySource { id, values: Some(values), initial_delay, delay, senders: Some(vec![]) }, id)
         }
     }
 
@@ -55,7 +54,7 @@ pub mod dummy {
     }
 
     impl Source for DummySource {
-        fn parse(stop: i64, options: Map<String, serde_json::Value>) -> Result<Self, String> {
+        fn parse(options: Map<String, serde_json::Value>) -> Result<Self, String> {
             let delay = Duration::from_millis(options.get("delay").unwrap().as_u64().unwrap());
 
             let values = options.get("values").cloned().unwrap_or_else(|| serde_json::Value::Object(serde_json::Map::new()));
@@ -77,9 +76,9 @@ pub mod dummy {
             let mut source = if options.contains_key("initial_delay") {
                 let initial_delay = Duration::from_millis(options.get("initial_delay").unwrap().as_u64().unwrap());
 
-                DummySource::new_with_delay(stop, values, initial_delay, delay).0
+                DummySource::new_with_delay(values, initial_delay, delay).0
             } else {
-                DummySource::new(stop, values, delay).0
+                DummySource::new(values, delay).0
             };
 
             match options.get("id") {
@@ -132,10 +131,6 @@ pub mod dummy {
             self.senders.as_mut().unwrap_or(&mut vec![]).push(out)
         }
 
-        fn get_stop(&self) -> i64 {
-            self.stop
-        }
-
         fn get_id(&self) -> i64 {
             self.id
         }
@@ -144,7 +139,7 @@ pub mod dummy {
             SourceModel { type_name: String::from("Dummy"), id: self.id.to_string(), configs: HashMap::new() }
         }
 
-        fn from(_stop_id: i64, _configs: HashMap<String, ConfigModel>) -> Result<Box<dyn Source>, String>
+        fn from(_configs: HashMap<String, ConfigModel>) -> Result<Box<dyn Source>, String>
         where
             Self: Sized,
         {
@@ -158,7 +153,6 @@ pub mod dummy {
 
     pub struct DummyDestination {
         id: i64,
-        stop: i64,
         result_size: usize,
         pub(crate) results: Arc<Mutex<Vec<Train>>>,
         receiver: Option<Rx<Train>>,
@@ -166,11 +160,10 @@ pub mod dummy {
     }
 
     impl DummyDestination {
-        pub(crate) fn new(stop: i64, result_size: usize) -> Self {
+        pub(crate) fn new(result_size: usize) -> Self {
             let (tx, _num, rx) = new_channel();
             DummyDestination {
                 id: GLOBAL_ID.new_id(),
-                stop,
                 result_size,
                 results: Arc::new(Mutex::new(vec![])),
                 receiver: Some(rx),
@@ -196,10 +189,10 @@ pub mod dummy {
     }
 
     impl Destination for DummyDestination {
-        fn parse(stop: i64, options: Map<String, serde_json::Value>) -> Result<Self, String> {
+        fn parse(options: Map<String, serde_json::Value>) -> Result<Self, String> {
             let result_size = options.get("result_size").unwrap().as_u64().unwrap() as usize;
 
-            let mut destination = DummyDestination::new(stop, result_size);
+            let mut destination = DummyDestination::new(result_size);
 
             if let Some(id) = options.get("id") {
                 destination.id = id.as_i64().unwrap();
@@ -246,10 +239,6 @@ pub mod dummy {
             self.sender.clone()
         }
 
-        fn get_stop(&self) -> i64 {
-            self.stop
-        }
-
         fn get_id(&self) -> i64 {
             self.id
         }
@@ -287,6 +276,7 @@ pub mod tests {
     use std::thread::sleep;
     use std::time::{Duration, SystemTime};
     use std::vec;
+    use crate::processing::destination::Destination;
 
     pub fn dict_values(values: Vec<Value>) -> Vec<Value> {
         let mut dicts = vec![];
@@ -492,14 +482,17 @@ pub mod tests {
 
         let mut plan = Plan::new(0);
 
-        let (source, id) = DummySource::new(0, values, Duration::from_nanos(3));
+        let (source, id) = DummySource::new(values, Duration::from_nanos(3));
 
         plan.build(0, station);
 
-        plan.add_source(0, Box::new(source));
+        plan.add_source(Box::new(source));
+        plan.connect_in_out(0, id);
 
-        let destination = DummyDestination::new(0, length);
-        plan.add_destination(0, Box::new(destination));
+        let destination = DummyDestination::new(length);
+        let dest_id = destination.get_id();
+        plan.add_destination(Box::new(destination));
+        plan.connect_in_out(0, dest_id);
 
         plan.operate();
         let now = SystemTime::now();

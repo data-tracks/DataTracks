@@ -20,28 +20,28 @@ impl Summery{
 
     pub(crate) fn get_warnings(&self) -> Vec<Status> {
         let mut warnings = Vec::new();
-        if !self.is_ok(){
+        if !self.status.is_ok(){
             warnings.push(self.status.clone());
         }
         self.ins.iter().for_each(|(_, ins)|{
-           if ins.is_ok() {
+           if !ins.is_ok() {
                warnings.push(ins.clone());
            }
         });
 
         self.outs.iter().for_each(|(_, outs)|{
-            if outs.is_ok() {
+            if !outs.is_ok() {
                 warnings.push(outs.clone());
             }
         });
 
         self.stops.values().for_each(|stop|{
-            if stop.is_ok() {
+            if !stop.is_ok() {
                 warnings.push(stop.clone());
             }
         });
 
-        self.complex.iter().for_each(|(status, lines)| {
+        self.complex.iter().for_each(|(status, _lines)| {
             if !status.is_ok(){
                 warnings.push(status.clone());
             }
@@ -70,7 +70,7 @@ impl Summery{
     }
 }
 
-#[derive(Default, Clone, Debug)]
+#[derive(Default, Clone, Debug, PartialEq)]
 pub enum Status {
     #[default]
     OK,

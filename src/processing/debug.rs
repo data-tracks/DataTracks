@@ -15,15 +15,14 @@ use tracing::{debug, error};
 
 pub struct DebugDestination {
     id: i64,
-    stop: i64,
     receiver: Option<Rx<Train>>,
     sender: Tx<Train>,
 }
 
 impl DebugDestination {
-    pub fn new(stop: i64) -> Self {
+    pub fn new() -> Self {
         let (tx, _num, rx) = new_channel();
-        DebugDestination { id: GLOBAL_ID.new_id(), stop, receiver: Some(rx), sender: tx }
+        DebugDestination { id: GLOBAL_ID.new_id(), receiver: Some(rx), sender: tx }
     }
 }
 
@@ -38,11 +37,11 @@ impl Configurable for DebugDestination {
 }
 
 impl Destination for DebugDestination {
-    fn parse(stop: i64, _options: Map<String, Value>) -> Result<Self, String>
+    fn parse(_options: Map<String, Value>) -> Result<Self, String>
     where
         Self: Sized,
     {
-        Ok(DebugDestination::new(stop))
+        Ok(DebugDestination::new())
     }
 
     fn operate(&mut self, _control: Arc<Sender<Command>>) -> Sender<Command> {
@@ -82,9 +81,6 @@ impl Destination for DebugDestination {
         self.sender.clone()
     }
 
-    fn get_stop(&self) -> i64 {
-        self.stop
-    }
 
     fn get_id(&self) -> i64 {
         self.id

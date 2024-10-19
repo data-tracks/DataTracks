@@ -26,16 +26,19 @@ impl Storage {
 
     pub fn add_source(&mut self, plan_id: i64, stop_id: i64, source: Box<dyn Source>) {
         let mut plans = self.plans.lock().unwrap();
+        let id = source.get_id();
         if let Some(p) = plans.get_mut(&plan_id) {
-            p.add_source(stop_id, source)
+            p.add_source(source);
+            p.connect_in_out(stop_id, id);
         }
     }
 
     pub fn add_destination(&mut self, plan_id: i64, stop_id: i64, destination: Box<dyn Destination>) {
         let mut plans = self.plans.lock().unwrap();
-
+        let id = destination.get_id();
         if let Some(p) = plans.get_mut(&plan_id) {
-            p.add_destination(stop_id, destination)
+            p.add_destination(destination);
+            p.connect_in_out(stop_id, id);
         }
     }
 

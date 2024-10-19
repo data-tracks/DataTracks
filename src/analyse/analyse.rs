@@ -19,12 +19,6 @@ impl<'plan> Analyser<'plan> {
         // cyclic
         // islands?
         //stations
-        self.plan.stations.values().for_each(|s| {
-            if !self.plan.lines.iter().any(|(_num, l)| l.contains(&s.id)) && !self.plan.stations_to_in_outs.contains_key(&s.id){
-                summery.add_stop_status(s.id, Status::WARNING(Islands, format!("Station {} is not connected to anything.", s.id)));
-            }
-        });
-
         self.plan.lines.values().for_each(|s| {
             if s.is_empty() {
                 return
@@ -54,8 +48,22 @@ impl<'plan> Analyser<'plan> {
         Ok(summery)
     }
 
-    fn check_in_and_out(&self, mut summery: &mut Summery, station: i64, error: String) {
-        if (!self.plan.stations_to_in_outs.contains_key(&station) || self.plan.stations_to_in_outs.get(&station).unwrap().is_empty()) && !self.plan.lines.any(|s| s.contains(&station)) {
+    fn check_in_and_out(&self, summery: &mut Summery, station: i64, error: String) {
+        let between_stops = self.plan.lines.values().cloned().flat_map(|mut stops| {
+            if stops.is_empty() {
+                vec![]
+            }else {
+                stops.pop();
+                if stops.is_empty() {
+                    vec![]
+                }else{
+                    stops.remove(0);
+                    stops
+                }
+            }
+        }).collect::<Vec<i64>>();
+
+        if (!self.plan.stations_to_in_outs.contains_key(&station) || self.plan.stations_to_in_outs.get(&station).unwrap().is_empty()) && !between_stops.contains(&station) {
             summery.add_stop_status(station, Status::WARNING(Islands, error));
         }
     }
@@ -76,7 +84,6 @@ mod tests {
     fn test_islands(){
         let plan = Plan::parse("1").unwrap();
         let analyse = analyse(&plan);
-        assert!(analyse.is_ok());
         let analyse = analyse.unwrap();
         assert!(!analyse.is_ok());
         let warnings = analyse.get_warnings();

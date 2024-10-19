@@ -10,7 +10,7 @@ use crate::ui::ConfigModel;
 use axum::body::Body;
 use axum::extract::{Path, State};
 use axum::http::{header, Response, StatusCode};
-use axum::response::{Html, IntoResponse};
+use axum::response::{IntoResponse};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use include_dir::{include_dir, Dir};
@@ -19,7 +19,7 @@ use serde_json::{json, Value};
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
 use tower_http::cors::CorsLayer;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 // Embed the entire directory
 static ASSETS_DIR: Dir<'_> = include_dir!("ui/dist");
@@ -162,10 +162,10 @@ async fn create_in_outs(State(state): State<WebState>, Json(payload): Json<Creat
 fn create_source(state: &WebState, payload: CreateInOutsPayload) -> Result<(), String> {
     let source = match payload.type_name.to_lowercase().as_str() {
         "mqtt" => {
-            <MqttSource as Source>::from(payload.stop_id, payload.configs)
+            <MqttSource as Source>::from(payload.configs)
         }
         "http" => {
-            <HttpSource as Source>::from(payload.stop_id, payload.configs)
+            <HttpSource as Source>::from(payload.configs)
         }
         _ => {
             return Err("Unknown source".to_string());

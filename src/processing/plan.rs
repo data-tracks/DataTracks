@@ -89,14 +89,30 @@ impl Plan {
             dump += "\nIn\n";
             let mut sorted = self.sources.values().collect::<Vec<&Box<dyn Source>>>();
             sorted.sort_by_key(|s| s.get_name());
-            dump += &sorted.into_iter().map(|s| s.dump_source()).collect::<Vec<_>>().join("\n")
+            dump += &sorted.into_iter().map(|s| {
+                let stops = self.get_connected_stations(s.get_id());
+                if stops.is_empty() {
+                    format!("{}", s.dump_source() )
+                }else {
+                    format!("{}:{}", s.dump_source(), stops.iter().map(|s|s.to_string()).collect::<Vec<String>>().join(",") )
+                }
+
+            }).collect::<Vec<_>>().join("\n")
         }
 
         if !self.destinations.is_empty() {
             dump += "\nOut\n";
             let mut sorted = self.destinations.values().collect::<Vec<&Box<dyn Destination>>>();
             sorted.sort_by_key(|s| s.get_name());
-            dump += &sorted.into_iter().map(|s| s.dump_destination()).collect::<Vec<_>>().join("\n")
+            dump += &sorted.into_iter().map(|s| {
+
+                let stops = self.get_connected_stations(s.get_id());
+                if stops.is_empty() {
+                    format!("{}", s.dump_destination() )
+                }else {
+                    format!("{}:{}", s.dump_destination(), stops.iter().map(|s|s.to_string()).collect::<Vec<String>>().join(",") )
+                }
+            }).collect::<Vec<_>>().join("\n")
         }
 
         if !self.transforms.is_empty() {
@@ -325,65 +341,100 @@ impl Plan {
     }
 
     fn connect_destinations(&mut self) -> Result<(), String> {
+        let mut map = HashMap::new();
+        self.destinations.iter().for_each(|destination| {
+            map.insert(destination.1.get_id(), self.get_connected_stations(destination.1.get_id()));
+        });
+
         for destination in self.destinations.values_mut() {
-            let tx = destination.get_in();
-            let target = destination.get_stop();
-            if let Some(station) = self.stations.get_mut(&target) {
-                station.add_out(-1, tx)?;
-            } else {
-                Err(String::from("Could not find target station"))?;
+            let targets = map.get(&destination.get_id()).unwrap();
+            for target in targets {
+                if let Some(station) = self.stations.get_mut(&target) {
+                    station.add_out(-1, destination.get_in())?;
+                } else {
+                    Err(String::from("Could not find target station"))?;
+                }
             }
+
         }
         Ok(())
     }
     fn connect_sources(&mut self) -> Result<(), String> {
+        let mut map = HashMap::new();
+        self.sources.iter().for_each(|source| {
+            map.insert(source.1.get_id(), self.get_connected_stations(source.1.get_id()));
+        });
+
         for source in self.sources.values_mut() {
-            let target = source.get_stop();
-            if let Some(station) = self.stations.get_mut(&target) {
-                let tx = station.get_in();
-                source.add_out(station.stop, tx)
+            let targets = map.get(&source.get_id()).unwrap();
+            for target in targets {
+                if let Some(station) = self.stations.get_mut(&target) {
+                    let tx = station.get_in();
+                    source.add_out(station.stop, tx)
+                }
             }
+
         }
         Ok(())
     }
 
-    pub(crate) fn add_source(&mut self, stop: i64, source: Box<dyn Source>) {
-        assert_eq!(stop, source.get_stop());
-        let id = source.get_id();
-        self.sources.insert(id, source);
-        self.stations_to_in_outs.entry(id).or_default().push(stop);
+    fn get_connected_stations(&self, in_out: i64) -> Vec<i64> {
+        let targets = self.stations_to_in_outs.iter().flat_map(|(stop, in_outs)| {
+            if in_outs.contains(&in_out) {
+                vec![*stop]
+            } else {
+                vec![]
+            }
+        }).collect::<Vec<i64>>();
+        targets
     }
 
-    pub(crate) fn add_destination(&mut self, stop: i64, destination: Box<dyn Destination>) {
-        assert_eq!(stop, destination.get_stop());
+    pub fn connect_in_out(&mut self, stop: i64, in_out: i64) {
+        self.stations_to_in_outs.entry(in_out).or_default().push(stop);
+    }
+
+
+    pub(crate) fn add_source(&mut self, source: Box<dyn Source>) {
+        let id = source.get_id();
+        self.sources.insert(id, source);
+    }
+
+    pub(crate) fn add_destination(&mut self, destination: Box<dyn Destination>) {
         let id = destination.get_id();
         self.destinations.insert(id, destination);
-        self.stations_to_in_outs.entry(id).or_default().push(stop);
     }
 
     fn parse_in(&mut self, stencil: &str) -> Result<(), String> {
-        let (stop, type_, options) = Self::split_name_options(stencil)?;
+        let (stops, type_, options) = Self::split_name_options(stencil)?;
 
-        let source = parse_source(type_, options, stop)?;
-        self.add_source(stop, source);
+        let source = parse_source(type_, options)?;
+        let id = source.get_id();
+        self.add_source(source);
+        for stop in stops {
+            self.connect_in_out(stop, id);
+        }
+
         Ok(())
     }
 
-    fn split_name_options(stencil: &str) -> Result<(i64, &str, Map<String, Value>), String> {
-        let (stencil, stop) = stencil.rsplit_once("}:").unwrap();
-        let stop = stop.parse::<i64>().unwrap();
+    fn split_name_options(stencil: &str) -> Result<(Vec<i64>, &str, Map<String, Value>), String> {
+        let (stencil, stops) = stencil.rsplit_once("}:").unwrap();
+        let stops = stops.split(',').map(|num| num.parse::<i64>()).collect::<Result<Vec<_>, _>>().map_err(|err| err.to_string())?;
 
         let (type_, template) = stencil.split_once('{').ok_or(format!("Invalid template: {}", stencil))?;
         let json = format!("{{ {} }}", template.trim());
         let options = serde_json::from_str::<Value>(&json).unwrap().as_object().ok_or(format!("Invalid options: {}", template))?.clone();
-        Ok((stop, type_, options))
+        Ok((stops, type_, options))
     }
 
     fn parse_out(&mut self, stencil: &str) -> Result<(), String> {
-        let (stop, type_, options) = Self::split_name_options(stencil)?;
+        let (stops, type_, options) = Self::split_name_options(stencil)?;
 
-        let out = parse_destination(type_, options, stop)?;
-        self.add_destination(stop, out);
+        let out = parse_destination(type_, options)?;
+        let id = out.get_id();
+        self.add_destination(out);
+        stops.iter().for_each(|s| self.connect_in_out(*s, id));
+
         Ok(())
     }
 
@@ -706,6 +757,22 @@ mod test {
             1--2\n\
             Out\n\
             Dummy{\"result_size\":0}:1\
+            "
+        ];
+
+        for stencil in stencils {
+            let plan = Plan::parse(stencil).unwrap();
+            assert_eq!(plan.dump(), stencil)
+        }
+    }
+
+    #[test]
+    fn stencil_multiple_sources() {
+        let stencils = vec![
+            "\
+            1--2\n\
+            In\n\
+            Mqtt{\"port\":8080,\"url\":\"127.0.0.1\"}:1,2\n\
             "
         ];
 

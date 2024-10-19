@@ -13,18 +13,18 @@ use crate::util::Tx;
 use crossbeam::channel::Sender;
 use serde_json::{Map, Value};
 
-pub fn parse_source(type_: &str, options: Map<String, Value>, stop: i64) -> Result<Box<dyn Source>, String> {
+pub fn parse_source(type_: &str, options: Map<String, Value>) -> Result<Box<dyn Source>, String> {
     let source: Box<dyn Source> = match type_.to_ascii_lowercase().as_str() {
-        "mqtt" => Box::new(MqttSource::parse(stop, options)?),
+        "mqtt" => Box::new(MqttSource::parse(options)?),
         #[cfg(test)]
-        "dummy" => Box::new(DummySource::parse(stop, options)?),
+        "dummy" => Box::new(DummySource::parse(options)?),
         _ => Err(format!("Invalid type: {}", type_))?,
     };
     Ok(source)
 }
 
 pub trait Source: Send + Sync + Configurable {
-    fn parse(stop: i64, options: Map<String, Value>) -> Result<Self, String>
+    fn parse(options: Map<String, Value>) -> Result<Self, String>
     where
         Self: Sized;
 
@@ -32,17 +32,15 @@ pub trait Source: Send + Sync + Configurable {
 
     fn add_out(&mut self, id: i64, out: Tx<Train>);
 
-    fn get_stop(&self) -> i64;
-
     fn get_id(&self) -> i64;
 
     fn dump_source(&self) -> String {
-        format!("{}:{}", Configurable::dump(self), self.get_stop())
+        format!("{}", Configurable::dump(self))
     }
 
     fn serialize(&self) -> SourceModel;
 
-    fn from(stop_id: i64, configs: HashMap<String, ConfigModel>) -> Result<Box<dyn Source>, String>
+    fn from(configs: HashMap<String, ConfigModel>) -> Result<Box<dyn Source>, String>
     where
         Self: Sized;
 

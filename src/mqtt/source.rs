@@ -21,14 +21,13 @@ pub struct MqttSource {
     id: i64,
     url: String,
     port: u16,
-    stop: i64,
     outs: HashMap<i64, Tx<Train>>,
 }
 
 
 impl MqttSource {
-    pub fn new(stop: i64, url: String, port: u16) -> Self {
-        MqttSource { port, stop, url, id: GLOBAL_ID.new_id(), outs: HashMap::new() }
+    pub fn new(url: String, port: u16) -> Self {
+        MqttSource { port, url, id: GLOBAL_ID.new_id(), outs: HashMap::new() }
     }
 }
 
@@ -46,10 +45,10 @@ impl Configurable for MqttSource {
 }
 
 impl Source for MqttSource {
-    fn parse(stop: i64, options: Map<String, serde_json::Value>) -> Result<Self, String> {
+    fn parse(options: Map<String, serde_json::Value>) -> Result<Self, String> {
         let port = options.get("port").unwrap().as_u64().unwrap_or(9999);
         let url = options.get("url").unwrap().as_str().unwrap().parse().unwrap();
-        Ok(MqttSource::new(stop, url, port as u16))
+        Ok(MqttSource::new(url, port as u16))
     }
 
     fn operate(&mut self, _control: Arc<Sender<Command>>) -> Sender<Command> {
@@ -74,10 +73,6 @@ impl Source for MqttSource {
         self.outs.insert(id, out);
     }
 
-    fn get_stop(&self) -> i64 {
-        self.stop
-    }
-
     fn get_id(&self) -> i64 {
         self.id
     }
@@ -86,7 +81,7 @@ impl Source for MqttSource {
         SourceModel { type_name: String::from("Mqtt"), id: self.id.to_string(), configs: HashMap::new() }
     }
 
-    fn from(stop_id: i64, configs: HashMap<String, ConfigModel>) -> Result<Box<dyn Source>, String> {
+    fn from( configs: HashMap<String, ConfigModel>) -> Result<Box<dyn Source>, String> {
         let port = match configs.get("port") {
             Some(port) => {
                 match port {
@@ -108,7 +103,7 @@ impl Source for MqttSource {
             _ => return Err(String::from("Could not create HttpSource."))
         };
 
-        Ok(Box::new(MqttSource::new(stop_id, url, port)))
+        Ok(Box::new(MqttSource::new(url, port)))
     }
 
     fn serialize_default() -> Result<SourceModel, ()> {

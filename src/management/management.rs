@@ -5,6 +5,7 @@ use crate::ui::start_web;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use tracing::info;
+use crate::processing::source::Source;
 
 pub struct Manager {
     storage: Arc<Mutex<Storage>>,
@@ -44,9 +45,20 @@ fn add_default(storage: Arc<Mutex<Storage>>) {
     thread::spawn(move || {
         let mut plan = Plan::parse("1--2{sql|SELECT $1 FROM $1}--3").unwrap();
 
-        plan.add_source(1, Box::new(HttpSource::new(1, String::from("127.0.0.1"), 5555)));
-        plan.add_source(2, Box::new(MqttSource::new(2, String::from("127.0.0.1"), 6666)));
-        plan.add_destination(3, Box::new(DebugDestination::new(3)));
+        let source = Box::new(HttpSource::new(String::from("127.0.0.1"), 5555));
+        let source_id = source.get_id();
+        plan.add_source(source);
+        plan.connect_in_out(1, source_id);
+
+        let source = Box::new(MqttSource::new(String::from("127.0.0.1"), 6666));
+        let destination_id = source.get_id();
+        plan.add_source(source);
+        plan.connect_in_out(2, destination_id);
+
+        let destination = Box::new(DebugDestination::new());
+        plan.add_destination(destination);
+        plan.connect_in_out(3, destination_id);
+
         let id = plan.id;
         plan.set_name("Default".to_string());
         let mut lock = storage.lock().unwrap();

@@ -27,14 +27,13 @@ use tracing::{debug, info};
 pub struct HttpSource {
     id: i64,
     url: String,
-    stop: i64,
     port: u16,
     outs: HashMap<i64, Tx<Train>>,
 }
 
 impl HttpSource {
-    pub(crate) fn new(stop: i64, url: String, port: u16) -> Self {
-        HttpSource { id: GLOBAL_ID.new_id(), stop, url, port, outs: Default::default() }
+    pub(crate) fn new(url: String, port: u16) -> Self {
+        HttpSource { id: GLOBAL_ID.new_id(), url, port, outs: Default::default() }
     }
 
 
@@ -110,11 +109,11 @@ impl Configurable for HttpSource {
 }
 
 impl Source for HttpSource {
-    fn parse(stop: i64, options: Map<String, Value>) -> Result<Self, String>
+    fn parse(options: Map<String, Value>) -> Result<Self, String>
     where
         Self: Sized,
     {
-        Ok(HttpSource::new(stop, String::from(options.get("url").unwrap().as_str().unwrap()), options.get("port").unwrap().as_u64().unwrap() as u16))
+        Ok(HttpSource::new(String::from(options.get("url").unwrap().as_str().unwrap()), options.get("port").unwrap().as_u64().unwrap() as u16))
     }
 
     fn operate(&mut self, _control: Arc<Sender<Command>>) -> Sender<Command> {
@@ -135,10 +134,6 @@ impl Source for HttpSource {
         self.outs.insert(id, out);
     }
 
-    fn get_stop(&self) -> i64 {
-        self.stop
-    }
-
     fn get_id(&self) -> i64 {
         self.id
     }
@@ -148,7 +143,7 @@ impl Source for HttpSource {
         SourceModel { type_name: String::from("Http"), id: self.id.to_string(), configs: HashMap::new() }
     }
 
-    fn from(stop_id: i64, configs: HashMap<String, ConfigModel>) -> Result<Box<dyn Source>, String> {
+    fn from( configs: HashMap<String, ConfigModel>) -> Result<Box<dyn Source>, String> {
         let port = match configs.get("port") {
             Some(port) => {
                 match port {
@@ -169,7 +164,7 @@ impl Source for HttpSource {
             },
             _ => return Err(String::from("Could not create HttpSource."))
         };
-        Ok(Box::new(HttpSource::new(stop_id, url, port)))
+        Ok(Box::new(HttpSource::new(url, port)))
     }
 
     fn serialize_default() -> Result<SourceModel, ()> {

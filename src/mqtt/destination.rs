@@ -29,7 +29,7 @@ impl Configurable for MqttDestination {
 }
 
 impl Destination for MqttDestination {
-    fn parse(_stop: i64, _options: Map<String, Value>) -> Result<Self, String> {
+    fn parse(_options: Map<String, Value>) -> Result<Self, String> {
         todo!()
     }
 
@@ -38,10 +38,6 @@ impl Destination for MqttDestination {
     }
 
     fn get_in(&self) -> Tx<Train> {
-        todo!()
-    }
-
-    fn get_stop(&self) -> i64 {
         todo!()
     }
 
