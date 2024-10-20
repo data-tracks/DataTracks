@@ -7,21 +7,20 @@ use crate::util::BufferedReader;
 use crate::value;
 use crate::value::{ValType, Value};
 
+const ARRAY_OPEN: char = '[';
+const DICT_OPEN: char = '{';
+
+
 #[derive(Default, Clone)]
 pub struct Layout {
-    type_: Field
+    field: Field
 }
 
 impl Layout{
 
-    fn get_default(&self) -> Field{
-        let default = Field::default();
-        self.type_.fields.get("$").cloned().unwrap_or(default)
-    }
-
     pub(crate) fn fits(&self, train: &Train) -> bool {
         train.values.as_ref().map_or(false, |v| {
-            v.iter().all(|value| self.type_.fits(value))
+            v.iter().all(|value| self.field.fits(value))
         })
     }
 }
@@ -52,14 +51,34 @@ impl Default for Field {
 }
 
 impl Field {
-    pub(crate) fn parse(stencil: String) -> Layout {
-        let mut reader = BufferedReader::new(stencil);
+    pub(crate) fn parse(stencil: &str) -> Layout {
+        let mut reader = BufferedReader::new(stencil.clone().to_string());
 
-        Layout{ type_: parse_dict_fields(&mut reader)}
+        Layout { field: parse(&mut reader) }
     }
 
     pub(crate) fn fits(&self, value: &Value) -> bool {
         self.type_.fits(value)
+    }
+}
+
+fn parse(reader: &mut BufferedReader) -> Field {
+    reader.consume_spaces();
+
+    if let Some(char) = reader.next() {
+        match char {
+            DICT_OPEN => {
+                parse_dict(reader)
+            }
+            ARRAY_OPEN => {
+                parse_array(reader)
+            }
+            c => {
+                parse_type(reader, c)
+            }
+        }
+    } else {
+        Field::default()
     }
 }
 
@@ -313,51 +332,47 @@ mod test {
 
     #[test]
     fn scalar(){
-        let stencil = "$:f";
-        let field = Field::parse(stencil.to_string());
-        assert_eq!(field.get_default().type_, Float)
+        let stencil = "f";
+        let field = Field::parse(stencil);
+        assert_eq!(field.field.type_, Float)
     }
 
     #[test]
     fn scalar_nullable(){
-        let stencil = "$:f?";
-        let field = Field::parse(stencil.to_string());
-        assert_eq!(field.get_default().type_, Float);
-        assert!(field.get_default().nullable);
+        let stencil = "f?";
+        let field = Field::parse(stencil);
+        assert_eq!(field.field.type_, Float);
+        assert!(field.field.nullable);
     }
 
     #[test]
     fn scalar_optional(){
-        let stencil = "$:f'?";
-        let field = Field::parse(stencil.to_string());
-        assert_eq!(field.get_default().type_, Float);
-        assert!(field.get_default().nullable);
-        assert!(field.get_default().optional);
+        let stencil = "f'?";
+        let field = Field::parse(stencil);
+        assert_eq!(field.field.type_, Float);
+        assert!(field.field.nullable);
+        assert!(field.field.optional);
     }
 
     #[test]
     fn array(){
-        let stencils = vec!["$:a()f", "$:af"];
-        for stencil in stencils {
-            let field = Field::parse(stencil.to_string());
-            match field.get_default().clone().type_ {
-                Array(array) => {
-                    assert_eq!(array.fields.type_, Float);
-                    assert_eq!(array.length, None);
-                }
-                _ => panic!("Wrong output format")
+        let field = Field::parse("[]");
+        match field.field.clone().type_ {
+            Array(array) => {
+                assert_eq!(array.fields.type_, Float);
+                assert_eq!(array.length, None);
             }
+            _ => panic!("Wrong output format")
         }
     }
 
     #[test]
     fn array_length(){
-        let stencil = "$:a(length: 3)f";
-        let field = Field::parse(stencil.to_string());
-        match field.get_default().clone().type_ {
+        let stencil = "[]";
+        let field = Field::parse(stencil);
+        match field.field.clone().type_ {
             Array(array) => {
-                assert_eq!(array.fields.type_, Float);
-                assert_eq!(array.length.unwrap(), 3);
+
             }
             _ => panic!("Wrong output format")
         }
@@ -365,10 +380,10 @@ mod test {
 
     #[test]
     fn dict(){
-        let stencils = vec!["$: d{address: d{num:i, street:t}, age: i}"];
+        let stencils = vec!["{address: {num:i, street:t}, age: i}"];
         for stencil in stencils {
-            let field = Field::parse(stencil.to_string());
-            match field.get_default().clone().type_ {
+            let field = Field::parse(stencil);
+            match field.field.clone().type_ {
                 Dict(d) => {
                     assert!(d.fields.contains_key("address"));
                     assert_eq!(d.fields.get("address").cloned().map(|e|e.name).unwrap().unwrap(), "address");
