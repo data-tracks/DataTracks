@@ -165,6 +165,10 @@ impl Station {
         })
     }
 
+    pub(crate) fn derive_layout(&self) -> Layout {
+        self.layout.clone()
+    }
+
     pub(crate) fn close(&mut self) {
         self.control.0.send(Command::Stop(0)).expect("TODO: panic message");
     }
@@ -212,16 +216,8 @@ impl Station {
         self.incoming.0.clone()
     }
 
-    // we enrich the functions with context, like global transformers
-    pub(crate) fn enrich(&mut self, transforms: HashMap<String, Transform>) {
-        self.transform = self.transform.clone().map(|mut t| {
-            t.enrich(transforms);
-            t
-        });
-    }
-
-    pub(crate) fn operate(&mut self, control: Arc<channel::Sender<Command>>) -> channel::Sender<Command> {
-        let (mut platform, sender) = Platform::new(self);
+    pub(crate) fn operate(&mut self, control: Arc<channel::Sender<Command>>, transforms: HashMap<String, Transform>) -> channel::Sender<Command> {
+        let (mut platform, sender) = Platform::new(self, transforms);
         let stop = self.stop;
 
         thread::spawn(move || {
@@ -249,6 +245,7 @@ pub enum Command {
 
 #[cfg(test)]
 pub mod tests {
+    use std::collections::HashMap;
     use std::sync::Arc;
     use std::thread::sleep;
     use std::time::Duration;
@@ -279,7 +276,7 @@ pub mod tests {
         let (tx, _num, rx) = new_channel();
 
         station.add_out(0, tx).unwrap();
-        station.operate(Arc::new(control.0));
+        station.operate(Arc::new(control.0), HashMap::new());
         station.send(Train::new(0, values.clone())).unwrap();
 
         let res = rx.recv();
@@ -313,8 +310,8 @@ pub mod tests {
         let tx = second.get_in();
         first.add_out(1, tx).unwrap();
 
-        first.operate(Arc::clone(&control));
-        second.operate(Arc::clone(&control));
+        first.operate(Arc::clone(&control), HashMap::new());
+        second.operate(Arc::clone(&control), HashMap::new());
 
         input.send(Train::new(0, values.clone())).unwrap();
 
@@ -365,7 +362,7 @@ pub mod tests {
     fn too_high() {
         let (mut station, train_sender, _rx, c_rx, a_tx) = create_test_station(10);
 
-        let sender = station.operate(Arc::clone(&a_tx));
+        let sender = station.operate(Arc::clone(&a_tx), HashMap::new());
         sender.send(Threshold(3)).unwrap();
 
         for _ in 0..1_000 {
@@ -382,9 +379,9 @@ pub mod tests {
     fn too_high_two() {
         let (mut station, train_sender, _rx, c_rx, a_tx) = create_test_station(100);
 
-        let sender = station.operate(Arc::clone(&a_tx));
+        let sender = station.operate(Arc::clone(&a_tx), HashMap::new());
         sender.send(Threshold(3)).unwrap();
-        station.operate(Arc::clone(&a_tx));
+        station.operate(Arc::clone(&a_tx), HashMap::new());
 
         for _ in 0..1_000 {
             train_sender.send(Train::new(0, dict_values(vec![Value::int(3)]))).unwrap();
@@ -399,12 +396,12 @@ pub mod tests {
     #[test]
     fn remove_during_op() {
         let (mut station, train_sender, rx, c_rx, a_tx) = create_test_station(10);
-        let _sender = station.operate(Arc::clone(&a_tx));
+        let _sender = station.operate(Arc::clone(&a_tx), HashMap::new());
 
         for _ in 0..500 {
             train_sender.send(Train::new(0, dict_values(vec![Value::int(3)]))).unwrap();
         }
-        station.operate(Arc::clone(&a_tx));
+        station.operate(Arc::clone(&a_tx), HashMap::new());
         for _ in 0..500 {
             train_sender.send(Train::new(0, dict_values(vec![Value::int(3)]))).unwrap();
         }
@@ -429,6 +426,7 @@ pub mod tests {
         pub use crate::processing::tests::dict_values;
         use crate::processing::Train;
         use rstest::rstest;
+        use std::collections::HashMap;
         use std::sync::Arc;
         use std::time::Instant;
 
@@ -443,7 +441,7 @@ pub mod tests {
         pub fn minimal_overhead( #[case] name: &str, #[case] values: Vec<Value>) {
             let (mut station, train_sender, rx, c_rx, a_tx) = create_test_station(0);
 
-            let _sender = station.operate(Arc::clone(&a_tx));
+            let _sender = station.operate(Arc::clone(&a_tx), HashMap::new());
 
             let mut trains = vec![];
 

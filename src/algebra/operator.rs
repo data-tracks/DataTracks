@@ -9,7 +9,7 @@ use crate::algebra::{BoxedIterator, BoxedValueHandler};
 use crate::processing::transform::Transform;
 use crate::value::Value;
 use crate::value::Value::{Array, Bool, Dict, Float, Int, Null, Text, Wagon};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt::{Debug, Formatter};
 use std::str::FromStr;
 
@@ -422,7 +422,7 @@ impl VariableOp {
     }
 
     pub fn set_transform(&mut self, transform: Transform) {
-        self.operator = Some(transform.optimize());
+        self.operator = Some(transform.optimize(HashMap::new()));
         self.transform = Some(transform);
     }
 }

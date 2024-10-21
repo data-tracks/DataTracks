@@ -1,8 +1,9 @@
-use crate::algebra::{Algebra, BoxedIterator, Scan, ValueIterator};
+use crate::algebra::{Algebra, AlgebraType, BoxedIterator, Scan, ValueIterator};
 use crate::language::Language;
 use crate::processing::option::Configurable;
 use crate::processing::train::Train;
 use crate::processing::transform::Transform::{Func, Lang};
+use crate::processing::Layout;
 use crate::value::Value;
 use crate::{algebra, language};
 use serde_json::Map;
@@ -56,14 +57,17 @@ impl Transform {
         }
     }
 
-    pub(crate) fn enrich(&mut self, transforms: HashMap<String, Transform>) {
+    pub fn derive_input_layout(&self) -> Layout {
         match self {
-            Func(f) => {
-                f.enrich(transforms);
-            },
-            Lang(l) => {
-                l.enrich(transforms);
-            }
+            Func(f) => f.derive_input_layout(),
+            Lang(l) => l.derive_input_layout()
+        }
+    }
+
+    pub fn derive_output_layout(&self) -> Layout {
+        match self {
+            Func(f) => f.derive_output_layout(),
+            Lang(l) => l.derive_output_layout()
         }
     }
 
@@ -81,10 +85,18 @@ impl Transform {
         }
     }
 
-    pub fn optimize(&self) -> Box<dyn ValueIterator<Item=Value> + Send> {
+    pub fn optimize(&self, transforms: HashMap<String, Transform>) -> Box<dyn ValueIterator<Item=Value> + Send> {
         match self {
             Func(f) => ValueIterator::clone(f),
-            Lang(f) => f.func.clone(),
+            Lang(f) => {
+                let mut initial = algebra::build_iterator(f.algebra.clone()).unwrap();
+                let iter = initial.enrich(transforms);
+                if iter.is_some() {
+                    iter.unwrap()
+                } else {
+                    initial
+                }
+            },
         }
     }
 }
@@ -132,9 +144,8 @@ pub trait Transformer: Clone + Sized {
 pub struct LanguageTransform {
     pub(crate) language: Language,
     pub(crate) query: String,
-    func: BoxedIterator,
+    algebra: AlgebraType,
 }
-
 
 impl Debug for LanguageTransform {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -150,20 +161,22 @@ impl PartialEq for LanguageTransform {
 
 impl Clone for LanguageTransform {
     fn clone(&self) -> Self {
-        LanguageTransform { language: self.language.clone(), query: self.query.clone(), func: self.func.clone() }
+        LanguageTransform { language: self.language.clone(), query: self.query.clone(), algebra: self.algebra.clone() }
     }
 }
 
 impl LanguageTransform {
     fn parse(language: Language, query: &str) -> LanguageTransform {
-        let func = build_transformer(&language, query).unwrap();
-        LanguageTransform { language, query: query.to_string(), func }
+        let algebra = build_algebra(&language, query).unwrap();
+        LanguageTransform { language, query: query.to_string(), algebra }
     }
 
-    pub(crate) fn enrich(&mut self, transforms: HashMap<String, Transform>) {
-        if let Some(func) = self.func.enrich(transforms) {
-            self.func = func;
-        }
+    pub(crate) fn derive_input_layout(&self) -> Layout {
+        todo!()
+    }
+
+    pub(crate) fn derive_output_layout(&self) -> Layout {
+        todo!()
     }
 
     fn dump(&self) -> String {
@@ -171,18 +184,20 @@ impl LanguageTransform {
     }
 }
 
-fn build_transformer(language: &Language, query: &str) -> Result<BoxedIterator, String> {
-    let algebra = match language {
-        Language::Sql => language::sql::transform(query)?,
-        Language::Mql => language::mql::transform(query)?
-    };
-    algebra::build_iterator(algebra)
+fn build_algebra(language: &Language, query: &str) -> Result<AlgebraType, String> {
+    match language {
+        Language::Sql => language::sql::transform(query),
+        Language::Mql => language::mql::transform(query)
+    }
 }
 
 pub struct FuncTransform {
     pub input: BoxedIterator,
     pub func: Arc<dyn Fn(i64, Value) -> Value + Send + Sync>,
+    pub in_layout: Layout,
+    pub out_layout: Layout,
 }
+
 
 impl Debug for FuncTransform {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -199,7 +214,7 @@ impl PartialEq for FuncTransform {
 
 impl Clone for FuncTransform {
     fn clone(&self) -> Self {
-        FuncTransform { input: self.input.clone(), func: self.func.clone() }
+        FuncTransform { input: self.input.clone(), func: self.func.clone(), in_layout: self.in_layout.clone(), out_layout: self.out_layout.clone() }
     }
 }
 
@@ -215,13 +230,17 @@ impl FuncTransform {
     }
 
     pub(crate) fn new(func: Arc<(dyn Fn(i64, Value) -> Value + Send + Sync)>) -> Self {
+        Self::new_with_layout(func, Layout::default(), Layout::default())
+    }
+
+    pub(crate) fn new_with_layout(func: Arc<(dyn Fn(i64, Value) -> Value + Send + Sync)>, in_layout: Layout, out_layout: Layout) -> Self {
         let mut scan = Scan::new(0);
         let iterator = scan.derive_iterator();
-        FuncTransform{ input: Box::new(iterator), func }
+        FuncTransform { input: Box::new(iterator), func, in_layout, out_layout }
     }
 
     fn new_from_input(input: BoxedIterator, func: Arc<dyn Fn(i64, Value) -> Value + Send + Sync>) -> Self {
-        FuncTransform { input, func }
+        FuncTransform { input, func, in_layout: Layout::default(), out_layout: Layout::default() }
     }
 
     pub(crate) fn new_val(_stop: i64, func: fn(Value) -> Value) -> FuncTransform {
@@ -230,11 +249,12 @@ impl FuncTransform {
         }))
     }
 
-    pub fn enrich(&mut self, transforms: HashMap<String, Transform>) {
-        let input = self.input.enrich(transforms);
-        if let Some(input) = input {
-            self.input = input;
-        }
+    pub(crate) fn derive_input_layout(&self) -> Layout {
+        self.in_layout.clone()
+    }
+
+    pub(crate) fn derive_output_layout(&self) -> Layout {
+        self.out_layout.clone()
     }
 
     fn dump(&self) -> String {
@@ -260,7 +280,7 @@ impl ValueIterator for FuncTransform {
     }
 
     fn clone(&self) -> BoxedIterator {
-        Box::new(FuncTransform { input: self.input.clone(), func: self.func.clone() })
+        Box::new(FuncTransform { input: self.input.clone(), func: self.func.clone(), in_layout: self.in_layout.clone(), out_layout: self.out_layout.clone() })
     }
 
     fn enrich(&mut self, transforms: HashMap<String, Transform>) -> Option<BoxedIterator> {
@@ -276,15 +296,17 @@ impl ValueIterator for FuncTransform {
 
 #[cfg(test)]
 mod tests {
+    use crate::algebra::build_iterator;
     use crate::language::Language;
     use crate::processing::station::Station;
     use crate::processing::tests::dict_values;
     use crate::processing::train::Train;
     use crate::processing::transform::Transform::Func;
-    use crate::processing::transform::{build_transformer, FuncTransform};
+    use crate::processing::transform::{build_algebra, FuncTransform};
     use crate::util::new_channel;
     use crate::value::{Dict, Value};
     use crossbeam::channel::unbounded;
+    use std::collections::HashMap;
     use std::sync::Arc;
     use std::vec;
 
@@ -305,7 +327,7 @@ mod tests {
         let (tx, _num, rx) = new_channel();
 
         station.add_out(0, tx).unwrap();
-        station.operate(Arc::new(control.0));
+        station.operate(Arc::new(control.0), HashMap::new());
         station.send(Train::new(0, values.clone())).unwrap();
 
         let res = rx.recv();
@@ -338,7 +360,7 @@ mod tests {
         let (tx, _num, rx) = new_channel();
 
         station.add_out(0, tx).unwrap();
-        station.operate(Arc::new(control.0));
+        station.operate(Arc::new(control.0), HashMap::new());
         station.send(Train::new(0, values.clone())).unwrap();
 
         let res = rx.recv();
@@ -432,7 +454,8 @@ mod tests {
     }
 
     fn check_sql_implement_join(query: &str, inputs: Vec<Vec<Value>>, output: Vec<Value>) {
-        let transform = build_transformer(&Language::Sql, query);
+        let transform = build_algebra(&Language::Sql, query);
+        let transform = build_iterator(transform.unwrap());
 
         match transform {
             Ok(mut t) => {
@@ -448,7 +471,8 @@ mod tests {
     }
 
     fn check_sql_implement(query: &str, input: Vec<Value>, output: Vec<Value>) {
-        let transform = build_transformer(&Language::Sql, query);
+        let transform = build_algebra(&Language::Sql, query);
+        let transform = build_iterator(transform.unwrap());
         match transform {
             Ok(mut t) => {
                 t.load(input.into_iter().map(|v| Train::new(0, vec![v])).collect());
@@ -460,7 +484,9 @@ mod tests {
     }
 
     fn check_sql_implement_unordered(query: &str, input: Vec<Value>, output: Vec<Value>) {
-        let transform = build_transformer(&Language::Sql, query);
+        let transform = build_algebra(&Language::Sql, query);
+        let transform = build_iterator(transform.unwrap());
+
         match transform {
             Ok(mut t) => {
                 t.load(input.into_iter().map(|v| Train::new(0, vec![v])).collect());

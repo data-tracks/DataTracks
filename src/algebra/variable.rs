@@ -54,7 +54,7 @@ impl ValueIterator for BareVariableIterator {
     fn enrich(&mut self, transforms: HashMap<String, Transform>) -> Option<BoxedIterator> {
         let transform = transforms.get(&self.name).unwrap();
         let name = self.name.clone();
-        Some(Box::new(VariableIterator::new(name, self.inputs.iter().map(|v| (*v).clone()).collect(), transform.optimize())))
+        Some(Box::new(VariableIterator::new(name, self.inputs.iter().map(|v| (*v).clone()).collect(), transform.optimize(transforms.clone()))))
     }
 }
 

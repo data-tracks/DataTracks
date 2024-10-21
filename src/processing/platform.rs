@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::thread;
@@ -31,10 +32,11 @@ pub(crate) struct Platform {
     blocks: Vec<i64>,
     inputs: Vec<i64>,
     incoming: Arc<AtomicU64>,
+    transforms: HashMap<String, Transform>,
 }
 
 impl Platform {
-    pub(crate) fn new(station: &mut Station) -> (Self, channel::Sender<Command>) {
+    pub(crate) fn new(station: &mut Station, transforms: HashMap<String, Transform>) -> (Self, channel::Sender<Command>) {
         let receiver = station.incoming.2.clone();
         let counter = station.incoming.1.clone();
         let sender = station.outgoing.clone();
@@ -58,10 +60,11 @@ impl Platform {
             blocks,
             inputs,
             incoming: counter,
+            transforms,
         }, control.0)
     }
     pub(crate) fn operate(&mut self, control: Arc<channel::Sender<Command>>) {
-        let process = optimize(self.stop, self.transform.clone(), self.window.windowing(), self.sender.take().unwrap());
+        let process = optimize(self.stop, self.transform.clone(), self.window.windowing(), self.sender.take().unwrap(), self.transforms.clone());
         let stop = self.stop;
         let timeout = IDLE_TIMEOUT;
         let mut threshold = 2000;
@@ -110,9 +113,9 @@ impl Platform {
     }
 }
 
-fn optimize(stop: i64, transform: Option<Transform>, mut window: Box<dyn Taker>, sender: Sender) -> MutWagonsFunc {
+fn optimize(stop: i64, transform: Option<Transform>, mut window: Box<dyn Taker>, sender: Sender, transforms: HashMap<String, Transform>) -> MutWagonsFunc {
     if let Some(transform) = transform {
-        let mut enumerator = transform.optimize();
+        let mut enumerator = transform.optimize(transforms);
         Box::new(move |train| {
             let windowed = window.take(train);
             enumerator.load(windowed);

@@ -163,12 +163,8 @@ impl Plan {
         self.connect_sources().unwrap();
 
         for station in self.stations.values_mut() {
-            station.enrich(self.transforms.clone())
-        }
-
-        for station in self.stations.values_mut() {
             let entry = self.controls.entry(station.id).or_default();
-            entry.push(station.operate(Arc::clone(&self.control_receiver.0)));
+            entry.push(station.operate(Arc::clone(&self.control_receiver.0), self.transforms.clone()));
         }
 
         // wait for all stations to be ready
@@ -202,7 +198,7 @@ impl Plan {
 
     pub(crate) fn clone_platform(&mut self, num: i64) {
         let station = self.stations.get_mut(&num).unwrap();
-        self.controls.entry(num).or_default().push(station.operate(Arc::clone(&self.control_receiver.0)))
+        self.controls.entry(num).or_default().push(station.operate(Arc::clone(&self.control_receiver.0), self.transforms.clone()))
     }
 
     fn connect_stops(&mut self) -> Result<(), String> {

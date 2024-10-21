@@ -181,6 +181,7 @@ fn parse_time(time_str: &str) -> Result<NaiveTime, chrono::ParseError> {
 
 #[cfg(test)]
 mod test {
+    use std::collections::HashMap;
     use std::sync::Arc;
     use std::thread::sleep;
     use std::time::Duration;
@@ -206,7 +207,7 @@ mod test {
 
 
         station.add_out(0, tx).unwrap();
-        station.operate(Arc::new(control.0));
+        station.operate(Arc::new(control.0), HashMap::new());
         station.send(Train::new(0, values.clone())).unwrap();
 
         let res = rx.recv();
@@ -237,7 +238,7 @@ mod test {
 
 
         station.add_out(0, tx).unwrap();
-        station.operate(Arc::new(control.0));
+        station.operate(Arc::new(control.0), HashMap::new());
         // wait for read
         assert_eq!(Ready(0), control.1.recv().unwrap());
 
