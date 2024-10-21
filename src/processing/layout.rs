@@ -1,5 +1,6 @@
 use std::collections::HashMap;
-
+use std::ops::Add;
+use crate::algebra::Op;
 use crate::processing::layout::OutputType::{Any, Array, Boolean, Dict, Float, Integer, Text};
 use crate::processing::plan::PlanStage;
 use crate::processing::Train;
@@ -8,7 +9,9 @@ use crate::value;
 use crate::value::{ValType, Value};
 
 const ARRAY_OPEN: char = '[';
+const ARRAY_CLOSE: char = ']';
 const DICT_OPEN: char = '{';
+const DICT_CLOSE: char = '}';
 
 
 #[derive(Default, Clone)]
@@ -31,8 +34,6 @@ pub(crate) struct Field {
     explicit: bool,
     nullable: bool,
     optional: bool,
-    name: Option<String>,
-    position: Option<i32>,
     type_: OutputType
 }
 
@@ -43,8 +44,6 @@ impl Default for Field {
             explicit: false,
             nullable: false,
             optional: false,
-            name: None,
-            position: None,
             type_: Any,
         }
     }
@@ -68,13 +67,13 @@ fn parse(reader: &mut BufferedReader) -> Field {
     if let Some(char) = reader.next() {
         match char {
             DICT_OPEN => {
-                parse_dict(reader)
+                parse_dict(reader).0
             }
             ARRAY_OPEN => {
-                parse_array(reader)
+                parse_array(reader).0
             }
             c => {
-                parse_type(reader, c)
+                parse_type(reader, c).0
             }
         }
     } else {
@@ -85,29 +84,30 @@ fn parse(reader: &mut BufferedReader) -> Field {
 fn parse_dict_fields(reader: &mut BufferedReader) -> DictType {
     let mut builder = DictBuilder::default();
 
-    reader.consume_if_next(PlanStage::TRANSFORM_OPEN);
+    reader.consume_if_next(DICT_OPEN);
 
     while let Some(char) = reader.next(){
         match char {
             ':' => {
                 reader.consume_spaces();
                 let type_char = reader.next().unwrap();
-                let mut layout = parse_type(reader, type_char);
-                // set also name to value
-                layout.name = Some(builder.key.clone());
+                let (layout, length) = parse_type(reader, type_char);
+                if length.is_some() {
+                    panic!("Dictionary already contains type");
+                }
                 builder.push_value(layout);
             }
             ',' => {
                 reader.consume_spaces();
             }
-            PlanStage::TRANSFORM_CLOSE => {
+            DICT_CLOSE => {
                 break
             }
             c => builder.push_key(c)
         }
     }
 
-    reader.consume_if_next(PlanStage::TRANSFORM_CLOSE);
+    reader.consume_if_next(DICT_CLOSE);
 
 
     DictType { fields: builder.build_fields() }
@@ -136,70 +136,103 @@ impl DictBuilder {
     }
 }
 
-fn parse_type(reader: &mut BufferedReader, c: char) -> Field {
+fn parse_type(reader: &mut BufferedReader, c: char) -> (Field, Option<i32>) {
     match c {
-        'i' => parse_field(Integer, reader).0,
-        'f' => parse_field(Float, reader).0,
-        't' => parse_field(Text, reader).0,
-        'b' => parse_field(Boolean, reader).0,
-        'a' => parse_array(reader),
-        'd' => parse_dict(reader),
-        _ => panic!("Unknown output prefix")
+        'i' => parse_field(Integer, reader),
+        'f' => parse_field(Float, reader),
+        't' => parse_field(Text, reader),
+        'b' => parse_field(Boolean, reader),
+        ARRAY_OPEN => parse_array(reader),
+        DICT_OPEN => parse_dict(reader),
+        prefix => panic!("Unknown output prefix: {}", prefix )
     }
 }
 
-fn parse_dict(reader: &mut BufferedReader) -> Field {
-    let (mut field, _values) = parse_field(Any, reader);
+fn parse_dict(reader: &mut BufferedReader) -> (Field, Option<i32>) {
+    let (mut field, length) = parse_field(Any, reader);
     reader.consume_spaces();
 
     field.type_ = Dict(Box::new(parse_dict_fields(reader)));
-    field
+    (field, length)
 
 }
 
-fn parse_array(reader: &mut BufferedReader) -> Field {
-    let (mut field, values) = parse_field(Any, reader);
-    let length = values.get("length").map(|p|p.parse::<i32>().unwrap());
-    let char_type = reader.next().unwrap();
-    let fields = parse_type(reader, char_type);
-    field.type_ = Array(Box::new(ArrayType { fields, length }));
-    field
+fn parse_array(reader: &mut BufferedReader) -> (Field, Option<i32>) {
+    reader.consume_if_next(ARRAY_OPEN);
+    reader.consume_spaces();
+    let fields = if let Some(char) = reader.peek_next() {
+        match char {
+            ARRAY_CLOSE => {
+                (Field::default(), None)
+            }
+            c => {
+                parse_type(reader, c)
+            }
+        }
+    }else {
+        (Field::default(), None)
+    };
+
+    reader.consume_if_next(ARRAY_CLOSE);
+
+    let (mut field, length) = parse_field(Any, reader);
+
+    field.type_ = Array(Box::new(ArrayType { fields: fields.0, length: fields.1 }));
+
+    (field, length)
 }
 
-fn parse_field(type_: OutputType, reader: &mut BufferedReader) -> (Field, HashMap<String, String>) {
-    let mut temp = String::default();
+fn parse_field(type_: OutputType, reader: &mut BufferedReader) -> (Field, Option<i32>) { // field : length
     let mut nullable = false;
     let mut optional = false;
+
+    reader.consume_if_next(PlanStage::LAYOUT_OPEN);
+
+    let mut length = None;
 
     while let Some(char) = reader.peek_next() {
         match char {
             ' ' => {
                 reader.next();
             },
-            '?' => nullable = true,
-            '\'' => optional = true,
-            '(' => {
-                temp.push_str(&(reader.consume_until(PlanStage::LAYOUT_CLOSE).as_str().to_owned() + &PlanStage::LAYOUT_CLOSE.to_string()));
-                break;
+            '?' => {
+                nullable = true;
+                reader.next();
             },
-            _ => break
+            '\'' => {
+                optional = true;
+                reader.next();
+            },
+            ':' => {
+                let mut num = String::new();
+                while let Some(char) = reader.peek_next() {
+                    if let Some(_) = char.to_digit(10 ) {
+                        num.push(char);
+                        reader.next();
+                    }else {
+                        if !num.is_empty() {
+                            length = Some(num.parse::<i32>().unwrap());
+                        }
+                        break;
+                    }
+                }
+            }
+            _ => {
+                break;
+            }
         };
         reader.next();
     }
 
-    let value = parse_json(temp);
-    let name = value.get("name").map(|n|n.to_string());
-    let position = value.get("position").map(|p|p.parse::<i32>().unwrap());
 
+    reader.consume_if_next(PlanStage::LAYOUT_CLOSE);
 
     (Field {
         explicit: true,
         nullable,
         optional,
-        name,
-        position,
         type_,
-    }, value)
+    },length)
 }
 
 fn parse_json(mut string: String) -> HashMap<String, String> {
@@ -293,7 +326,8 @@ pub(crate) struct ArrayType{
 
 impl ArrayType {
     pub(crate) fn fits(&self, array: &value::Array) -> bool {
-        array.0.iter().all(|a| self.fields.fits(a))
+        todo!();
+        //array.0.iter().all(|a| self.fields.fits(a))
     }
 }
 
@@ -346,7 +380,7 @@ mod test {
     }
 
     #[test]
-    fn scalar_optional(){
+    fn scalar_optional_nullable(){
         let stencil = "f'?";
         let field = Field::parse(stencil);
         assert_eq!(field.field.type_, Float);
@@ -356,7 +390,7 @@ mod test {
 
     #[test]
     fn array(){
-        let field = Field::parse("[]");
+        let field = Field::parse("[f]");
         match field.field.clone().type_ {
             Array(array) => {
                 assert_eq!(array.fields.type_, Float);
@@ -367,15 +401,29 @@ mod test {
     }
 
     #[test]
-    fn array_length(){
-        let stencil = "[]";
+    fn array_nullable(){
+        let stencil = "[f]?";
         let field = Field::parse(stencil);
         match field.field.clone().type_ {
             Array(array) => {
-
+                assert_eq!(array.fields.type_, Float);
             }
             _ => panic!("Wrong output format")
         }
+        assert!(field.field.nullable);
+    }
+
+    #[test]
+    fn array_length(){
+        let stencil = "[f:3]";
+        let field = Field::parse(stencil);
+        match field.field.clone().type_ {
+            Array(array) => {
+                assert_eq!(array.fields.type_, Float);
+            }
+            _ => panic!("Wrong output format")
+        }
+        assert!(field.field.nullable);
     }
 
     #[test]
