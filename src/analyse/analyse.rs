@@ -35,13 +35,13 @@ impl<'plan> Analyser<'plan> {
 
         self.plan.sources.values().for_each(|s| {
             if !self.plan.stations_to_in_outs.iter().any(|(_, in_outs)|{ in_outs.contains(&s.get_id()) }){
-                summery.add_in_status(s.get_id(), Status::WARNING(Islands, format!("Source {} is not connected to anything.", s.get_id())));
+                summery.add_in_status(s.get_id(), Status::Warning(Islands, format!("Source {} is not connected to anything.", s.get_id())));
             }
         });
 
         self.plan.destinations.values().for_each(|s| {
             if !self.plan.stations_to_in_outs.iter().any(|(_, in_outs)|{ in_outs.contains(&s.get_id()) }){
-                summery.add_out_status(s.get_id(), Status::WARNING(Islands, format!("Destination {} is not connected to anything.", s.get_id())));
+                summery.add_out_status(s.get_id(), Status::Warning(Islands, format!("Destination {} is not connected to anything.", s.get_id())));
             }
         });
 
@@ -64,7 +64,7 @@ impl<'plan> Analyser<'plan> {
         }).collect::<Vec<i64>>();
 
         if (!self.plan.stations_to_in_outs.contains_key(&station) || self.plan.stations_to_in_outs.get(&station).unwrap().is_empty()) && !between_stops.contains(&station) {
-            summery.add_stop_status(station, Status::WARNING(Islands, error));
+            summery.add_stop_status(station, Status::Warning(Islands, error));
         }
     }
 }
@@ -90,7 +90,7 @@ mod tests {
 
         assert_eq!(warnings.len(), 1);
         match warnings[0].clone() {
-            Status::WARNING(st, _) => {
+            Status::Warning(st, _) => {
                 assert_eq!(StatusTypes::Islands, st);
             }
             s => panic!("Wrong type of status: {:?}", s)

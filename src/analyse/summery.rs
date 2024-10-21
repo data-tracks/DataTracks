@@ -73,16 +73,16 @@ impl Summery{
 #[derive(Default, Clone, Debug, PartialEq)]
 pub enum Status {
     #[default]
-    OK,
-    WARNING(StatusTypes, String),
-    ERROR(StatusTypes, String),
+    Ok,
+    Warning(StatusTypes, String),
+    Error(StatusTypes, String),
 }
 
 impl Status {
     fn is_ok(&self) -> bool {
         match self {
-            Status::OK => true,
-            Status::WARNING(_,_) | Status::ERROR(_,_) => false
+            Status::Ok => true,
+            Status::Warning(_, _) | Status::Error(_, _) => false
         }
     }
 }

@@ -264,6 +264,7 @@ pub mod dummy {
 
 #[cfg(test)]
 pub mod tests {
+    use crate::processing::destination::Destination;
     use crate::processing::plan::Plan;
     use crate::processing::station::Command::{Ready, Stop};
     use crate::processing::station::Station;
@@ -276,7 +277,6 @@ pub mod tests {
     use std::thread::sleep;
     use std::time::{Duration, SystemTime};
     use std::vec;
-    use crate::processing::destination::Destination;
 
     pub fn dict_values(values: Vec<Value>) -> Vec<Value> {
         let mut dicts = vec![];
@@ -519,14 +519,14 @@ pub mod tests {
 
         let hello = Value::Dict(Dict::from_json(r#"{"msg": "hello", "$topic": ["command"]}"#));
         values.push(vec![hello]);
-        values.push(vec![Value::from(Dict::from(Value::float(3.6)))]);
+        values.push(vec![Value::from(Value::float(3.6))]);
 
         let source = 1;
         let destination = 4;
 
         let mut plan = Plan::parse(
             &format!("\
-            0--1($:f)--2\n\
+            0--1(f)--2\n\
             In\n\
             Dummy{{\"id\":{source}, \"delay\":1, \"values\":{values}}}:1\n\
             Out\n\
