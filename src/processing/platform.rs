@@ -101,7 +101,7 @@ impl Platform {
             match self.receiver.try_recv() {
                 Ok(train) => {
                     debug!("{:?}", train);
-                    if self.layout.fits(&train) {
+                    if self.layout.fits_train(&train) {
                         block.next(train); // window takes precedence to
                     }
                 }

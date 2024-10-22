@@ -1,6 +1,6 @@
 use crate::algebra::{Algebra, AlgebraType, BoxedIterator, ValueIterator};
 use crate::processing::transform::Transform;
-use crate::processing::Train;
+use crate::processing::{Layout, Train};
 use crate::value::Value;
 use std::collections::HashMap;
 
@@ -26,6 +26,14 @@ impl Algebra for Union {
         }else {
             panic!("Cannot derive empty union iterator");
         }
+    }
+
+    fn derive_input_layout(&self) -> Layout {
+        todo!()
+    }
+
+    fn derive_output_layout(&self) -> Layout {
+        todo!()
     }
 }
 

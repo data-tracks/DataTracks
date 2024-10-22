@@ -1,7 +1,7 @@
 use crate::algebra::algebra::{Algebra, RefHandler, ValueIterator};
 use crate::algebra::BoxedIterator;
 use crate::processing::transform::Transform;
-use crate::processing::Train;
+use crate::processing::{Layout, Train};
 use crate::value::Value;
 use std::collections::HashMap;
 use std::vec;
@@ -99,6 +99,14 @@ impl Algebra for Scan {
 
     fn derive_iterator(&mut self) -> Self::Iterator {
         ScanIterator { index: self.index, values: vec![], trains: vec![] }
+    }
+
+    fn derive_input_layout(&self) -> Layout {
+        Layout::default()
+    }
+
+    fn derive_output_layout(&self) -> Layout {
+       Layout::default()
     }
 }
 

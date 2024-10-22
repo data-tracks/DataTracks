@@ -3,7 +3,7 @@ use crate::algebra::function::Operator;
 use crate::algebra::implement::implement;
 use crate::algebra::{AlgebraType, BoxedIterator, ValueIterator};
 use crate::processing::transform::Transform;
-use crate::processing::Train;
+use crate::processing::{Layout, Train};
 use crate::value::Value;
 use std::collections::HashMap;
 
@@ -62,5 +62,13 @@ impl Algebra for Project {
         let project = implement(&self.project);
         let input = self.input.derive_iterator();
         ProjectIterator { input, project }
+    }
+
+    fn derive_input_layout(&self) -> Layout {
+        self.project.derive_input_layout()
+    }
+
+    fn derive_output_layout(&self) -> Layout {
+        self.project.derive_output_layout()
     }
 }

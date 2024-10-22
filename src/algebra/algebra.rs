@@ -6,7 +6,7 @@ use crate::algebra::scan::Scan;
 use crate::algebra::union::Union;
 use crate::algebra::variable::VariableScan;
 use crate::processing::transform::Transform;
-use crate::processing::Train;
+use crate::processing::{Layout, Train};
 use crate::value::Value;
 use std::collections::HashMap;
 
@@ -27,6 +27,7 @@ pub enum AlgebraType {
     Variable(VariableScan),
 }
 
+
 impl Algebra for AlgebraType {
     type Iterator = BoxedIterator;
 
@@ -41,11 +42,39 @@ impl Algebra for AlgebraType {
             AlgebraType::Variable(s) => Box::new(s.derive_iterator())
         }
     }
+
+    fn derive_input_layout(&self) -> Layout {
+        match self {
+            AlgebraType::Scan(s) => s.derive_input_layout(),
+            AlgebraType::Project(p) => p.derive_input_layout(),
+            AlgebraType::Filter(f) => f.derive_input_layout(),
+            AlgebraType::Join(j) => j.derive_input_layout(),
+            AlgebraType::Union(u) => u.derive_input_layout(),
+            AlgebraType::Aggregate(a) => a.derive_input_layout(),
+            AlgebraType::Variable(v) => v.derive_input_layout()
+        }
+    }
+
+    fn derive_output_layout(&self) -> Layout {
+        match self {
+            AlgebraType::Scan(s) => s.derive_output_layout(),
+            AlgebraType::Project(p) => p.derive_output_layout(),
+            AlgebraType::Filter(f) => f.derive_output_layout(),
+            AlgebraType::Join(j) => j.derive_output_layout(),
+            AlgebraType::Union(u) => u.derive_output_layout(),
+            AlgebraType::Aggregate(a) => a.derive_output_layout(),
+            AlgebraType::Variable(v) => v.derive_output_layout()
+        }
+    }
 }
 
 pub trait Algebra: Clone {
     type Iterator: Iterator<Item=Value> + Send + 'static;
     fn derive_iterator(&mut self) -> Self::Iterator;
+
+    fn derive_input_layout(&self) -> Layout;
+
+    fn derive_output_layout(&self) -> Layout;
 
 }
 

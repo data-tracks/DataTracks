@@ -172,11 +172,11 @@ impl LanguageTransform {
     }
 
     pub(crate) fn derive_input_layout(&self) -> Layout {
-        todo!()
+        self.algebra.derive_input_layout()
     }
 
     pub(crate) fn derive_output_layout(&self) -> Layout {
-        todo!()
+        self.algebra.derive_output_layout()
     }
 
     fn dump(&self) -> String {

@@ -1,7 +1,7 @@
 use crate::algebra::algebra::Algebra;
 use crate::algebra::{AlgebraType, BoxedIterator, ValueIterator};
 use crate::processing::transform::Transform;
-use crate::processing::Train;
+use crate::processing::{Layout, Train};
 use crate::value::Value;
 use std::collections::HashMap;
 
@@ -160,6 +160,14 @@ impl Algebra for Join {
         let left = self.left.derive_iterator();
         let right = self.right.derive_iterator();
         JoinIterator::new(left_hash, right_hash, out, left, right)
+    }
+
+    fn derive_input_layout(&self) -> Layout {
+        todo!()
+    }
+
+    fn derive_output_layout(&self) -> Layout {
+        todo!()
     }
 }
 

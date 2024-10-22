@@ -1,6 +1,6 @@
 use crate::algebra::{Algebra, AlgebraType, BoxedIterator, ValueIterator};
 use crate::processing::transform::Transform;
-use crate::processing::Train;
+use crate::processing::{Layout, Train};
 use crate::value::Value;
 use std::collections::HashMap;
 use std::vec;
@@ -21,6 +21,14 @@ impl Algebra for VariableScan {
     type Iterator = BareVariableIterator;
     fn derive_iterator(&mut self) -> Self::Iterator {
         BareVariableIterator::new(self.name.clone(), self.inputs.iter_mut().map(|i| i.derive_iterator()).collect())
+    }
+
+    fn derive_input_layout(&self) -> Layout {
+        todo!()
+    }
+
+    fn derive_output_layout(&self) -> Layout {
+        todo!()
     }
 }
 

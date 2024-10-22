@@ -4,7 +4,7 @@ use crate::processing::train::Train;
 use crate::util::Tx;
 
 #[derive(Clone, Default)]
-pub(crate) struct Sender {
+pub struct Sender {
     outs: HashMap<i64, Tx<Train>>,
 }
 

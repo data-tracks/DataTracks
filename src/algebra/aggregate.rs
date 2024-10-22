@@ -3,7 +3,7 @@ use crate::algebra::function::Implementable;
 use crate::algebra::operator::AggOp;
 use crate::algebra::{Algebra, AlgebraType, BoxedIterator, BoxedValueHandler, Operator, ValueIterator};
 use crate::processing::transform::Transform;
-use crate::processing::Train;
+use crate::processing::{Layout, Train};
 use crate::value::Value;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
@@ -45,6 +45,14 @@ impl Algebra for Aggregate {
         let group = self.group.implement().unwrap();
         let aggregates = self.aggregates.iter().map(|(a, o)| (a.implement().unwrap(), o.implement().unwrap())).collect();
         AggIterator::new(iter, aggregates, group)
+    }
+
+    fn derive_input_layout(&self) -> Layout {
+        todo!()
+    }
+
+    fn derive_output_layout(&self) -> Layout {
+        todo!()
     }
 }
 

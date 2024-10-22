@@ -1,10 +1,13 @@
 pub use crate::http::http::HttpSource;
 pub use debug::DebugDestination;
+pub use layout::DictType;
+pub use layout::Layout;
+pub use layout::ArrayType;
+pub use layout::OutputType;
 pub use plan::Plan;
 pub use train::Train;
 pub use wagon::Wagon;
 
-pub use layout::Layout;
 pub(crate) mod station;
 mod window;
 pub mod transform;

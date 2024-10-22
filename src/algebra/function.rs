@@ -3,6 +3,7 @@ use crate::algebra::operator::{AggOp, InputOp, LiteralOp, NameOp, Op};
 use crate::algebra::Op::Tuple;
 use crate::algebra::TupleOp::{Combine, Context, Input, Literal, Name};
 use crate::algebra::{BoxedValueHandler, ContextOp};
+use crate::processing::Layout;
 use crate::value::Value;
 
 pub trait Replaceable {
@@ -18,8 +19,6 @@ pub struct Operator {
     pub op: Op,
     pub operands: Vec<Operator>,
 }
-
-
 impl Operator {
     pub fn new(op: Op, operands: Vec<Operator>) -> Operator {
         Operator { op, operands }
@@ -48,6 +47,14 @@ impl Operator {
 
     pub(crate) fn combine(values: Vec<Operator>) -> Self {
         Operator { op: Tuple(Combine), operands: values }
+    }
+
+    pub(crate) fn derive_input_layout(&self) -> Layout {
+        self.op.derive_input_layout(self.operands.iter().cloned().map(|o| o.derive_input_layout()).collect())
+    }
+
+    pub(crate) fn derive_output_layout(&self) -> Layout {
+        self.op.derive_output_layout(self.operands.iter().cloned().map(|o| o.derive_output_layout()).collect())
     }
 }
 

@@ -3,7 +3,7 @@ use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::thread;
 
-use crate::processing::layout::{Field, Layout};
+use crate::processing::layout::{Layout};
 use crate::processing::plan::PlanStage;
 use crate::processing::platform::Platform;
 use crate::processing::sender::Sender;
@@ -139,7 +139,7 @@ impl Station {
             match stage.0 {
                 PlanStage::Window => station.set_window(Window::parse(stage.1)),
                 PlanStage::Transform => station.set_transform(Transform::parse(&stage.1).unwrap()),
-                PlanStage::Layout => station.add_explicit_layout(Field::parse(&stage.1)),
+                PlanStage::Layout => station.add_explicit_layout(Layout::parse(&stage.1)),
                 PlanStage::Num => {
                     let mut num = stage.1;
                     // test for blocks
@@ -381,6 +381,7 @@ pub mod tests {
 
         let sender = station.operate(Arc::clone(&a_tx), HashMap::new());
         sender.send(Threshold(3)).unwrap();
+        // second platform
         station.operate(Arc::clone(&a_tx), HashMap::new());
 
         for _ in 0..1_000 {

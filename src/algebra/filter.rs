@@ -2,7 +2,7 @@ use crate::algebra::algebra::{Algebra, BoxedIterator, ValueIterator};
 use crate::algebra::implement::implement;
 use crate::algebra::{AlgebraType, BoxedValueHandler, Operator};
 use crate::processing::transform::Transform;
-use crate::processing::Train;
+use crate::processing::{Layout, Train};
 use crate::value::Value;
 use std::collections::HashMap;
 
@@ -67,5 +67,13 @@ impl Algebra for Filter {
         let condition = implement(&self.condition);
         let input = self.input.derive_iterator();
         FilterIterator { input, condition }
+    }
+
+    fn derive_input_layout(&self) -> Layout {
+        todo!()
+    }
+
+    fn derive_output_layout(&self) -> Layout {
+        todo!()
     }
 }
