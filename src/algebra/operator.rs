@@ -2,7 +2,7 @@ use crate::algebra::aggregate::{AvgOperator, CountOperator, SumOperator};
 use crate::algebra::algebra::{BoxedValueLoader, ValueHandler};
 use crate::algebra::function::{Implementable, Operator};
 use crate::algebra::operator::AggOp::{Avg, Count, Sum};
-use crate::algebra::operator::TupleOp::{Divide, Equal, Minus, Multiplication, Not, Plus};
+use crate::algebra::operator::TupleOp::{Division, Equal, Minus, Multiplication, Not, Plus};
 use crate::algebra::Op::{Agg, Tuple};
 use crate::algebra::TupleOp::{And, Combine, Index, Input, Or};
 use crate::algebra::{BoxedIterator, BoxedValueHandler};
@@ -55,7 +55,7 @@ pub enum TupleOp {
     Plus,
     Minus,
     Multiplication,
-    Divide,
+    Division,
     Combine,
     Not,
     Equal,
@@ -102,7 +102,7 @@ impl TupleOp {
                     }, operands)
                 )
             }
-            Divide => {
+            Division => {
                 Box::new(
                     TupleFunction::new(move |value| {
                         let a = value.get(0).unwrap();
@@ -194,15 +194,15 @@ impl TupleOp {
 
     pub(crate) fn derive_input_layout(&self, operands: Vec<Layout>) -> Layout {
         match self {
-            Plus | Minus | Multiplication | Divide | Equal => {
-                let left = operands.get(0).unwrap();
-                let right = operands.get(1).unwrap();
-                left.merge(right)
+            Plus | Minus | Multiplication | Division | Equal => {
+                let left = operands.get(0).cloned().unwrap_or(Layout::default());
+                let _right = operands.get(1).cloned().unwrap_or(Layout::default());
+                left
             }
-            Not => {
-                operands.get(0).unwrap().clone()
+            Not | And | Or  =>{
+                Layout::new(OutputType::Boolean)
             }
-            And | Or | Combine => {
+            Combine => {
                 operands.iter().fold(Layout::default(), |a, b | a.merge(b))
             }
             TupleOp::Doc => {
@@ -234,32 +234,16 @@ impl TupleOp {
 
     pub(crate) fn derive_output_layout(&self, operands: Vec<Layout>) -> Layout {
         match self {
-            Plus => {
-                todo!()
-            }
-            Minus => {
-                todo!()
-            }
-            Multiplication => {
-                todo!()
-            }
-            Divide => {
-                todo!()
+            Plus | Minus | Multiplication | Division => {
+                let left = operands.get(0).cloned().unwrap_or(Layout::default());
+                let _right = operands.get(1).cloned().unwrap_or(Layout::default());
+                left
             }
             Combine => {
                 todo!()
             }
-            Not => {
-                operands.get(0).unwrap().clone()
-            }
-            Equal => {
-                todo!()
-            }
-            And => {
-                todo!()
-            }
-            Or => {
-                todo!()
+            Not | Equal | And | Or => {
+                Layout::new(OutputType::Boolean)
             }
             TupleOp::Doc => {
                 todo!()
@@ -327,7 +311,7 @@ impl TupleOp {
                     String::from("*")
                 }
             }
-            Divide => {
+            Division => {
                 if as_call {
                     String::from("DIVIDE")
                 } else {
@@ -448,7 +432,7 @@ impl FromStr for Op {
             "+" | "add" | "plus" => Ok(Tuple(Plus)),
             "-" | "minus" => Ok(Tuple(Minus)),
             "*" | "multiply" => Ok(Tuple(Multiplication)),
-            "/" | "divide" => Ok(Tuple(Divide)),
+            "/" | "divide" => Ok(Tuple(Division)),
             "count" => Ok(Agg(Count)),
             "sum" => Ok(Agg(Sum)),
             "avg" => Ok(Agg(Avg)),
@@ -715,7 +699,7 @@ impl Op {
         Tuple(Multiplication)
     }
     pub fn divide() -> Op {
-        Tuple(Divide)
+        Tuple(Division)
     }
 
     pub fn equal() -> Op {
@@ -750,12 +734,13 @@ impl Op {
 #[cfg(test)]
 mod tests {
     use crate::algebra::operator::{IndexOp, LiteralOp, NameOp};
-    use crate::algebra::TupleOp::{Index, Literal, Name};
+    use crate::algebra::TupleOp::{And, Division, Equal, Index, Input, Literal, Minus, Multiplication, Name, Not, Or, Plus};
+    use crate::processing::OutputType::{Array, Dict};
     use crate::processing::{ArrayType, DictType, Layout, OutputType};
     use crate::value::Value;
     use std::collections::HashMap;
-    use log::debug;
-    use crate::processing::OutputType::{Array, Dict};
+    use tracing_subscriber::fmt::writer::EitherWriter::A;
+    use crate::algebra::Op::Tuple;
 
     #[test]
     fn test_layout_literal() {
@@ -794,6 +779,26 @@ mod tests {
         map.insert(String::from("test"), Layout::new(OutputType::Float));
         let dict = Layout::new(Dict(Box::new(DictType::new(map))));
         assert_eq!(op.derive_output_layout(vec![dict]), Layout::new(OutputType::Float));
+    }
+
+    #[test]
+    fn test_layout_binary_op() {
+        let ops = vec![Tuple(Multiplication), Tuple(Division), Tuple(Minus), Tuple(Plus)];
+        for op in ops {
+            assert_eq!(op.derive_input_layout(vec![]), Layout::default());
+            assert_eq!(op.derive_output_layout(vec![Layout::new(OutputType::Integer), Layout::new(OutputType::Integer)]), Layout::new(OutputType::Integer));
+        }
+         let op = Tuple(Plus);
+        assert_eq!(op.derive_output_layout(vec![Layout::new(OutputType::Text), Layout::new(OutputType::Integer)]), Layout::new(OutputType::Text));
+    }
+
+    #[test]
+    fn test_layout_boolean_op() {
+        let ops = vec![Tuple(Or), Tuple(And), Tuple(Not), Tuple(Equal)];
+        for op in ops {
+            assert_eq!(op.derive_input_layout(vec![Layout::new(OutputType::Boolean)]), Layout::new(OutputType::Boolean));
+            assert_eq!(op.derive_output_layout(vec![]), Layout::new(OutputType::Boolean));
+        }
     }
 }
 
