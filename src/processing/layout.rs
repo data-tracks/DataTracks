@@ -5,7 +5,6 @@ use crate::util::BufferedReader;
 use crate::value;
 use crate::value::{ValType, Value};
 use std::collections::HashMap;
-use crate::processing::OutputType::Or;
 
 const ARRAY_OPEN: char = '[';
 const ARRAY_CLOSE: char = ']';
@@ -49,6 +48,10 @@ impl Layout {
         })
     }
 
+    pub(crate) fn accepts(&self, other: Layout) -> bool {
+        todo!()
+    }
+
     pub(crate) fn merge(&self, other: &Layout) -> Result<Layout, String> {
         let mut layout = self.clone();
         if other.explicit && self.explicit != other.explicit {
@@ -65,8 +68,12 @@ impl Layout {
                 let mut dict = HashMap::new();
                 this.fields.iter().for_each(|(k,v)| {dict.insert(k.clone(), v.clone());});
                 other.fields.iter().for_each(|(k,v)| {dict.insert(k.clone(), v.clone());});
+                layout.type_ = Dict(Box::new(DictType::new(dict)))
             }
-            (this, other) => {
+            (this, Any) | (Any, this) => {
+                layout.type_ = this.clone();
+            }
+            (_this, _other) => {
                 todo!()
                 //layout.type_ = Or(vec![this.clone(), other.clone()]);
             }

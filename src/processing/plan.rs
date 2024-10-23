@@ -446,6 +446,22 @@ impl Plan {
     fn add_transform(&mut self, name: &str, transform: transform::Transform) {
         self.transforms.insert(name.to_string(), transform);
     }
+
+    fn layouts_match(&self) -> Result<(), String> {
+        for (line, stops) in self.lines {
+            let mut layout = None;
+            for stop_num in stops {
+                let station = self.stations.get(&stop_num).ok_or(format!("Could not find stop number {} for line {}", stop_num, line))?;
+                if let Some(layout) = layout {
+                    if !station.derive_input_layout().accepts(layout) {
+                        return Err(format!("On line {} station {} does not match to the input", line, stop_num));
+                    }
+                }
+                layout = Some(station.derive_output_layout());
+            }
+        }
+        Ok(())
+    }
 }
 
 enum Stencil {

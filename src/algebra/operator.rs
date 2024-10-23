@@ -240,7 +240,10 @@ impl TupleOp {
                 left
             }
             Combine => {
-                todo!()
+                let mut layout = Layout::default();
+                let fields = operands.iter().fold(Layout::default(), |a, b| a.merge(b).unwrap());
+                layout.type_ = OutputType::Array(Box::new(ArrayType::new(fields, Some(operands.len() as i32))));
+                layout
             }
             Not | Equal | And | Or => {
                 Layout::new(OutputType::Boolean)
@@ -249,7 +252,7 @@ impl TupleOp {
                 todo!()
             }
             Input(i) => {
-                todo!()
+                Layout::default()
             }
             TupleOp::Name(n) => {
                 let layout = operands.get(0).unwrap();
@@ -735,13 +738,13 @@ impl Op {
 mod tests {
     use crate::algebra::operator::{IndexOp, LiteralOp, NameOp};
     use crate::algebra::Op::Tuple;
+    use crate::algebra::Operator;
     use crate::algebra::TupleOp::{And, Division, Equal, Index, Literal, Minus, Multiplication, Name, Not, Or, Plus};
     use crate::processing::OutputType::{Array, Dict};
     use crate::processing::{ArrayType, DictType, Layout, OutputType};
     use crate::value::Value;
     use std::collections::HashMap;
     use std::vec;
-    use crate::algebra::{Op, Operator};
 
     #[test]
     fn test_layout_literal() {
@@ -814,9 +817,8 @@ mod tests {
 
         assert_eq!(op.derive_input_layout(), layout);
 
-        let layout = Layout::default();
         let array = Layout::new(Array(Box::new(ArrayType::new(Layout::default(), Some(2)))));
-        assert_eq!(op.derive_output_layout(), layout);
+        assert_eq!(op.derive_output_layout(), array);
 
     }
 }

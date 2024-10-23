@@ -3,7 +3,7 @@ use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::thread;
 
-use crate::processing::layout::{Layout};
+use crate::processing::layout::Layout;
 use crate::processing::plan::PlanStage;
 use crate::processing::platform::Platform;
 use crate::processing::sender::Sender;
@@ -165,8 +165,20 @@ impl Station {
         })
     }
 
-    pub(crate) fn derive_layout(&self) -> Layout {
-        self.layout.clone()
+    pub fn derive_output_layout(&self) -> Layout {
+        if let Some(transform) = self.transform.clone() {
+            transform.derive_output_layout()
+        } else {
+            Layout::default()
+        }
+    }
+
+    pub fn derive_input_layout(&self) -> Layout {
+        if let Some(transform) = self.transform.clone() {
+            transform.derive_input_layout()
+        } else {
+            Layout::default()
+        }
     }
 
     pub(crate) fn close(&mut self) {
