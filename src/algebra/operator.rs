@@ -203,13 +203,13 @@ impl TupleOp {
                 Layout::new(OutputType::Boolean)
             }
             Combine => {
-                operands.iter().fold(Layout::default(), |a, b | a.merge(b))
+                operands.iter().fold( Layout::default(),|a, b | a.clone().merge(b).unwrap())
             }
             TupleOp::Doc => {
                 todo!()
             }
             Input(i) => {
-                todo!()
+                Layout::default()
             }
             TupleOp::Name(n) => {
                 let mut map = HashMap::new();
@@ -734,13 +734,14 @@ impl Op {
 #[cfg(test)]
 mod tests {
     use crate::algebra::operator::{IndexOp, LiteralOp, NameOp};
-    use crate::algebra::TupleOp::{And, Division, Equal, Index, Input, Literal, Minus, Multiplication, Name, Not, Or, Plus};
+    use crate::algebra::Op::Tuple;
+    use crate::algebra::TupleOp::{And, Division, Equal, Index, Literal, Minus, Multiplication, Name, Not, Or, Plus};
     use crate::processing::OutputType::{Array, Dict};
     use crate::processing::{ArrayType, DictType, Layout, OutputType};
     use crate::value::Value;
     use std::collections::HashMap;
-    use tracing_subscriber::fmt::writer::EitherWriter::A;
-    use crate::algebra::Op::Tuple;
+    use std::vec;
+    use crate::algebra::{Op, Operator};
 
     #[test]
     fn test_layout_literal() {
@@ -799,6 +800,24 @@ mod tests {
             assert_eq!(op.derive_input_layout(vec![Layout::new(OutputType::Boolean)]), Layout::new(OutputType::Boolean));
             assert_eq!(op.derive_output_layout(vec![]), Layout::new(OutputType::Boolean));
         }
+    }
+
+    #[test]
+    fn test_layout_or() {
+        let op = Operator::combine(vec![Operator::name("key1", vec![Operator::input()]), Operator::name("key2", vec![Operator::input()])]);
+
+        let mut layout = Layout::default();
+        let mut map = HashMap::new();
+        map.insert(String::from("key1"), Layout::default());
+        map.insert(String::from("key2"), Layout::default());
+        layout.type_ = Dict(Box::new(DictType::new(map)));
+
+        assert_eq!(op.derive_input_layout(), layout);
+
+        let layout = Layout::default();
+        let array = Layout::new(Array(Box::new(ArrayType::new(Layout::default(), Some(2)))));
+        assert_eq!(op.derive_output_layout(), layout);
+
     }
 }
 
