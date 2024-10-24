@@ -48,8 +48,16 @@ impl Layout {
         })
     }
 
-    pub(crate) fn accepts(&self, other: Layout) -> bool {
-        todo!()
+    pub(crate) fn accepts(&self, other: &Layout) -> bool {
+        if !self.nullable && other.nullable {
+            return false;
+        }
+        if !self.optional && other.optional {
+            return false;
+        }
+
+        self.type_.accepts(&other.type_)
+
     }
 
     pub(crate) fn merge(&self, other: &Layout) -> Result<Layout, String> {
@@ -294,6 +302,7 @@ pub enum OutputType {
     Or(Vec<OutputType>),
 }
 
+
 impl OutputType {
     pub(crate) fn fits(&self, value: &Value) -> bool {
         match self {
@@ -316,6 +325,55 @@ impl OutputType {
             }
             t => {
                 value.type_() == t.value_type()
+            }
+        }
+    }
+
+    pub(crate) fn accepts(&self, other: &OutputType) -> bool {
+        match self {
+            Integer | Float | Text | Boolean => {
+                match other {
+                    Integer | Float | Text | Boolean => true,
+                    Any | Array(_) | Dict(_) => false,
+                    OutputType::And(a) => a.iter().all(|v| self.accepts(v)),
+                    OutputType::Or(o) => o.iter().any(|v| self.accepts(v))
+                }
+            }
+            Any => {
+                true
+            }
+            Array(a) => {
+                match other {
+                    Array(other) => a.fields.accepts(&other.fields),
+                    OutputType::And(a) => a.iter().all(|v| self.accepts(v)),
+                    OutputType::Or(o) => o.iter().any(|v| self.accepts(v)),
+                    _ => false
+                }
+            }
+            Dict(d) => {
+                match other {
+                    Dict(other) => {
+                        for (key, value) in d.fields {
+                            if let Some(other) = other.fields.get(&key) {
+                                if !value.accepts(other) {
+                                    return false;
+                                }
+                            } else {
+                                return false
+                            }
+                        }
+                        true
+                    }
+                    OutputType::And(a) => a.iter().all(|v| self.accepts(v)),
+                    OutputType::Or(o) => o.iter().any(|v| self.accepts(v)),
+                    _ => false
+                }
+            }
+            OutputType::And(a) => {
+                a.iter().all(|v| v.accepts(other))
+            }
+            OutputType::Or(o) => {
+                o.iter().any(|v| v.accepts(other))
             }
         }
     }
