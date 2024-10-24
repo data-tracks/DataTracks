@@ -13,6 +13,8 @@ use crate::value::Value::{Array, Bool, Dict, Float, Int, Null, Text, Wagon};
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::{Debug, Formatter};
 use std::str::FromStr;
+use std::vec;
+use tower_http::follow_redirect::policy::PolicyExt;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Op {
@@ -208,7 +210,7 @@ impl TupleOp {
             TupleOp::Doc => {
                 todo!()
             }
-            Input(i) => {
+            Input(_) => {
                 Layout::default()
             }
             TupleOp::Name(n) => {
@@ -251,7 +253,7 @@ impl TupleOp {
             TupleOp::Doc => {
                 todo!()
             }
-            Input(i) => {
+            Input(_) => {
                 Layout::default()
             }
             TupleOp::Name(n) => {
@@ -380,11 +382,19 @@ impl AggOp {
     }
 
     pub(crate) fn derive_input_layout(&self, operands: Vec<Layout>) -> Layout {
-        todo!()
+        match self {
+            Count => Layout::default(),
+            Sum => Layout::new(OutputType::Or(vec![OutputType::Integer, OutputType::Float, OutputType::Boolean, OutputType::Text])),
+            Avg => Layout::new(OutputType::Or(vec![OutputType::Integer, OutputType::Float, OutputType::Boolean, OutputType::Text])),
+        }
     }
 
     pub(crate) fn derive_output_layout(&self, operands: Vec<Layout>) -> Layout {
-        todo!()
+        match self {
+            Count => Layout::new(OutputType::Integer),
+            Sum => Layout::new(OutputType::Float),
+            Avg => Layout::new(OutputType::Float),
+        }
     }
 }
 

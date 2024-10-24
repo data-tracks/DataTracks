@@ -353,8 +353,8 @@ impl OutputType {
             Dict(d) => {
                 match other {
                     Dict(other) => {
-                        for (key, value) in d.fields {
-                            if let Some(other) = other.fields.get(&key) {
+                        for (key, value) in &d.fields {
+                            if let Some(other) = other.fields.get(key) {
                                 if !value.accepts(other) {
                                     return false;
                                 }

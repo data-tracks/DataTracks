@@ -447,17 +447,25 @@ impl Plan {
         self.transforms.insert(name.to_string(), transform);
     }
 
+    fn get_station(&self, stop_num: &i64) -> Result<&Station, String> {
+        self.stations.get(&stop_num).ok_or_else(|| format!("Station {} not found", stop_num))
+    }
+
     fn layouts_match(&self) -> Result<(), String> {
-        for (line, stops) in self.lines {
-            let mut layout = None;
+        for (line, stops) in &self.lines {
+            if stops.is_empty() {
+                continue;
+            }
+            let mut iter = stops.iter();
+            let mut layout = self.get_station(iter.next().unwrap())?.derive_output_layout();
             for stop_num in stops {
-                let station = self.stations.get(&stop_num).ok_or(format!("Could not find stop number {} for line {}", stop_num, line))?;
-                if let Some(layout) = layout {
-                    if !station.derive_input_layout().accepts(layout) {
-                        return Err(format!("On line {} station {} does not match to the input", line, stop_num));
-                    }
+                let station = self.get_station(stop_num)?;
+
+                if !station.derive_input_layout().accepts(&layout) {
+                    return Err(format!("On line {} station {} does not accept the previous input", line, stop_num));
                 }
-                layout = Some(station.derive_output_layout());
+
+                layout = station.derive_output_layout();
             }
         }
         Ok(())
