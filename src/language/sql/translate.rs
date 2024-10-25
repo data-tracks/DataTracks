@@ -137,7 +137,7 @@ fn handle_field(column: SqlStatement) -> Result<Operator, String> {
 
             for name in names {
                 if let Ok(num) = name.parse() {
-                    op = Operator::index(num);
+                    op = Operator::index(num, vec![op]);
                     continue;
                 }
 

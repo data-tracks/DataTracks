@@ -452,23 +452,64 @@ impl Plan {
     }
 
     pub fn layouts_match(&self) -> Result<(), String> {
-        for (line, stops) in &self.lines {
-            if stops.is_empty() {
-                continue;
-            }
-            let mut iter = stops.iter();
-            let mut layout = self.get_station(iter.next().unwrap())?.derive_output_layout();
-            for stop_num in stops {
-                let station = self.get_station(stop_num)?;
+        let mut layouts = HashMap::new(); // track all known station outputs
 
-                if !station.derive_input_layout().accepts(&layout) {
-                    return Err(format!("On line {} station {} does not accept the previous input", line, stop_num));
+        while self.stations.len() != layouts.len() { // we should collect all layouts in the end
+            for (line, stops) in &self.lines {
+                if stops.is_empty() {
+                    continue;
                 }
+                let mut iter = stops.iter();
+                let station_num = *iter.next().unwrap();
+                let mut layout = self.get_station(&station_num)?.derive_output_layout(HashMap::new());
+                layouts.insert(station_num, layout.clone());
 
-                layout = station.derive_output_layout();
+                for stop_num in stops {
+                    if layouts.contains_key(stop_num) {
+                        continue;
+                    }
+                    let station = self.get_station(stop_num)?;
+
+                    let stations = self.get_previous_stations(stop_num);
+                    if !stations.keys().into_iter().all(|num| layouts.contains_key(num)) {
+                        // let's try later
+                        continue
+                    }
+                    let mut inputs = HashMap::new();
+                    stations.into_iter().for_each(|(num, station)| {
+                        inputs.insert(num.to_string(), layouts.get(&num).unwrap());
+                    });
+
+                    if !station.derive_input_layout().accepts(&layout) {
+                        return Err(format!("On line {} station {} does not accept the previous input", line, stop_num));
+                    }
+                    let current = station.derive_output_layout(inputs);
+
+                    layouts.insert(*stop_num, current.clone());
+                    layout = current;
+                }
             }
         }
+
         Ok(())
+    }
+
+    fn get_previous_stations(&self, station: &i64) -> HashMap<i64, &Station> {
+        let mut befores = HashMap::new();
+        for (_, mut stations) in &self.lines {
+            if stations.is_empty() {
+                continue;
+            }
+            let mut iter = stations.iter();
+            let mut previous = iter.next().unwrap();
+            for station_num in iter {
+                if station_num == station {
+                    befores.insert(*previous, self.get_station(previous).unwrap());
+                }
+                previous = station_num;
+            }
+        }
+        befores
     }
 }
 

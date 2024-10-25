@@ -68,7 +68,7 @@ impl Algebra for Project {
         self.project.derive_input_layout()
     }
 
-    fn derive_output_layout(&self) -> Layout {
-        self.project.derive_output_layout()
+    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {
+        self.project.derive_output_layout(inputs)
     }
 }

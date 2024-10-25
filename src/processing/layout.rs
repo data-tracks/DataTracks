@@ -12,18 +12,16 @@ const DICT_OPEN: char = '{';
 const DICT_CLOSE: char = '}';
 
 
-
 #[derive(PartialEq, Debug, Clone)]
 pub struct Layout {
     pub explicit: bool,
     pub nullable: bool,
     pub optional: bool,
-    pub type_: OutputType
+    pub type_: OutputType,
 }
 
 
 impl Default for Layout {
-
     fn default() -> Self {
         Layout {
             explicit: false,
@@ -35,7 +33,6 @@ impl Default for Layout {
 }
 
 impl Layout {
-
     pub fn new(type_: OutputType) -> Layout {
         let mut field = Layout::default();
         field.type_ = type_;
@@ -57,7 +54,6 @@ impl Layout {
         }
 
         self.type_.accepts(&other.type_)
-
     }
 
     pub(crate) fn merge(&self, other: &Layout) -> Result<Layout, String> {
@@ -67,15 +63,15 @@ impl Layout {
         }
 
         if other.nullable && self.nullable != other.nullable {
-            return Err("Mismatch between nullable and not".to_owned())
+            return Err("Mismatch between nullable and not".to_owned());
         }
 
 
         match (&self.type_, &other.type_) {
             (Dict(this), Dict(other)) => {
                 let mut dict = HashMap::new();
-                this.fields.iter().for_each(|(k,v)| {dict.insert(k.clone(), v.clone());});
-                other.fields.iter().for_each(|(k,v)| {dict.insert(k.clone(), v.clone());});
+                this.fields.iter().for_each(|(k, v)| { dict.insert(k.clone(), v.clone()); });
+                other.fields.iter().for_each(|(k, v)| { dict.insert(k.clone(), v.clone()); });
                 layout.type_ = Dict(Box::new(DictType::new(dict)))
             }
             (this, Any) | (Any, this) => {
@@ -126,7 +122,7 @@ fn parse_dict_fields(reader: &mut BufferedReader) -> DictType {
 
     reader.consume_if_next(DICT_OPEN);
 
-    while let Some(char) = reader.next(){
+    while let Some(char) = reader.next() {
         match char {
             ':' => {
                 reader.consume_spaces();
@@ -154,13 +150,13 @@ fn parse_dict_fields(reader: &mut BufferedReader) -> DictType {
 }
 
 #[derive(Default)]
-pub struct DictBuilder{
+pub struct DictBuilder {
     fields: HashMap<String, Layout>,
     key: String,
 }
 
 impl DictBuilder {
-    pub fn push_key(&mut self, char:char){
+    pub fn push_key(&mut self, char: char) {
         self.key.push(char)
     }
 
@@ -184,7 +180,7 @@ fn parse_type(reader: &mut BufferedReader, c: char) -> (Layout, Option<i32>) {
         'b' => parse_field(Boolean, reader),
         ARRAY_OPEN => parse_array(reader),
         DICT_OPEN => parse_dict(reader),
-        prefix => panic!("Unknown output prefix: {}", prefix )
+        prefix => panic!("Unknown output prefix: {}", prefix)
     }
 }
 
@@ -194,7 +190,6 @@ fn parse_dict(reader: &mut BufferedReader) -> (Layout, Option<i32>) {
 
     field.type_ = Dict(Box::new(parse_dict_fields(reader)));
     (field, length)
-
 }
 
 fn parse_array(reader: &mut BufferedReader) -> (Layout, Option<i32>) {
@@ -210,7 +205,7 @@ fn parse_array(reader: &mut BufferedReader) -> (Layout, Option<i32>) {
                 parse_type(reader, c)
             }
         }
-    }else {
+    } else {
         (Layout::default(), None)
     };
 
@@ -233,17 +228,16 @@ fn parse_field(type_: OutputType, reader: &mut BufferedReader) -> (Layout, Optio
 
     while let Some(char) = reader.peek_next() {
         match char {
-            ' ' => {
-            },
+            ' ' => {}
             '?' => nullable = true,
             '\'' => optional = true,
             ':' => {
                 let mut num = String::new();
                 while let Some(char) = reader.peek_next() {
-                    if let Some(_) = char.to_digit(10 ) {
+                    if let Some(_) = char.to_digit(10) {
                         num.push(char);
                         reader.next();
-                    }else {
+                    } else {
                         if !num.is_empty() {
                             length = Some(num.parse::<i32>().unwrap());
                         }
@@ -272,13 +266,13 @@ fn parse_field(type_: OutputType, reader: &mut BufferedReader) -> (Layout, Optio
 fn parse_json(mut string: String) -> HashMap<String, String> {
     let mut map = HashMap::new();
     if string.trim().is_empty() {
-        return map
+        return map;
     }
     string.pop();
     string.remove(0);
     string = string.trim().into();
     if string.is_empty() {
-        return map
+        return map;
     }
 
     string.split(',').for_each(|pair| {
@@ -290,7 +284,7 @@ fn parse_json(mut string: String) -> HashMap<String, String> {
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum OutputType {
-  // single value
+    // single value
     Integer,
     Float,
     Text,
@@ -344,7 +338,18 @@ impl OutputType {
             }
             Array(a) => {
                 match other {
-                    Array(other) => a.fields.accepts(&other.fields),
+                    Array(other) => {
+                        if !a.fields.accepts(&other.fields) {
+                            return false;
+                        }
+                        if a.length.is_some() && other.length.is_none() {
+                            return false;
+                        }
+                        if a.length.is_none() && other.length.is_none() {
+                            return true;
+                        }
+                        a.length.unwrap() <= other.length.unwrap()
+                    },
                     OutputType::And(a) => a.iter().all(|v| self.accepts(v)),
                     OutputType::Or(o) => o.iter().any(|v| self.accepts(v)),
                     _ => false
@@ -359,7 +364,7 @@ impl OutputType {
                                     return false;
                                 }
                             } else {
-                                return false
+                                return false;
                             }
                         }
                         true
@@ -416,20 +421,20 @@ impl From<&Value> for OutputType {
             Value::Array(a) => {
                 let output = if a.0.is_empty() {
                     Any
-                }else {
+                } else {
                     OutputType::from(&a.0.first().unwrap().clone())
                 };
                 let mut layout = Layout::default();
                 layout.type_ = output;
 
-                Array(Box::new(ArrayType{ fields: layout, length: None}))
-            },
+                Array(Box::new(ArrayType { fields: layout, length: None }))
+            }
             Value::Dict(d) => {
                 let mut fields = HashMap::new();
-                d.iter().for_each(|(k,v)|{
+                d.iter().for_each(|(k, v)| {
                     fields.insert(k.clone(), Layout::new(OutputType::from(v)));
                 });
-                Dict(Box::new(DictType{fields}))
+                Dict(Box::new(DictType { fields }))
             }
             Value::Null => {
                 Any
@@ -441,13 +446,12 @@ impl From<&Value> for OutputType {
 
 
 #[derive(PartialEq, Debug, Clone)]
-pub struct ArrayType{
+pub struct ArrayType {
     pub fields: Layout,
-    pub length: Option<i32>
+    pub length: Option<i32>,
 }
 
 impl ArrayType {
-
     pub fn new(fields: Layout, length: Option<i32>) -> Self {
         Self { fields, length }
     }
@@ -463,19 +467,18 @@ pub struct DictType {
 }
 
 impl DictType {
-
     pub fn new(fields: HashMap<String, Layout>) -> Self {
-        DictType{fields}
+        DictType { fields }
     }
 
     pub(crate) fn fits(&self, dict: &Value) -> bool {
         for (name, field) in self.fields.iter().by_ref() {
             if let Some(value) = dict.as_dict().unwrap().get(name) {
                 if !field.fits(value) {
-                    return false
+                    return false;
                 }
             } else {
-                return false
+                return false;
             }
         }
         true
@@ -493,16 +496,17 @@ mod test {
     use crate::processing::layout::Layout;
     use crate::processing::layout::OutputType::{Array, Dict, Float, Integer, Text};
     use crate::processing::{ArrayType, Plan};
+    use std::collections::HashMap;
 
     #[test]
-    fn scalar(){
+    fn scalar() {
         let stencil = "f";
         let field = Layout::parse(stencil);
         assert_eq!(field.type_, Float)
     }
 
     #[test]
-    fn scalar_nullable(){
+    fn scalar_nullable() {
         let stencil = "f?";
         let field = Layout::parse(stencil);
         assert_eq!(field.type_, Float);
@@ -510,7 +514,7 @@ mod test {
     }
 
     #[test]
-    fn scalar_optional_nullable(){
+    fn scalar_optional_nullable() {
         let stencil = "f'?";
         let field = Layout::parse(stencil);
         assert_eq!(field.type_, Float);
@@ -519,7 +523,7 @@ mod test {
     }
 
     #[test]
-    fn array(){
+    fn array() {
         let field = Layout::parse("[f]");
         match field.clone().type_ {
             Array(array) => {
@@ -531,7 +535,7 @@ mod test {
     }
 
     #[test]
-    fn array_nullable(){
+    fn array_nullable() {
         let stencil = "[f]?";
         let field = Layout::parse(stencil);
         match field.clone().type_ {
@@ -544,7 +548,7 @@ mod test {
     }
 
     #[test]
-    fn array_length(){
+    fn array_length() {
         let stencil = "[f:3]";
         let field = Layout::parse(stencil);
         match field.clone().type_ {
@@ -556,14 +560,14 @@ mod test {
     }
 
     #[test]
-    fn dict(){
+    fn dict() {
         let stencils = vec!["{address: {num:i, street:t}, age: i}"];
         for stencil in stencils {
             let field = Layout::parse(stencil);
             match field.clone().type_ {
                 Dict(d) => {
                     assert!(d.fields.contains_key("address"));
-                    match d.fields.get("address").cloned().unwrap().type_{
+                    match d.fields.get("address").cloned().unwrap().type_ {
                         Dict(dict) => {
                             assert_eq!(dict.fields.get("num").unwrap().type_, Integer);
                             assert_eq!(dict.fields.get("street").unwrap().type_, Text);
@@ -571,17 +575,15 @@ mod test {
                         _ => panic!("Wrong output dict")
                     }
                     assert!(d.fields.contains_key("age"));
-                    assert_eq!(d.fields.get("age").cloned().map(|e|e.type_).unwrap(), Integer);
+                    assert_eq!(d.fields.get("age").cloned().map(|e| e.type_).unwrap(), Integer);
                 }
                 _ => panic!("Wrong output format")
-
             }
         }
-
     }
 
     #[test]
-    fn test_two_stations_any_match(){
+    fn test_two_stations_any_match() {
         let stencil = "1--2{sql|SELECT * FROM $1}"; // station 2 can accept anything
         let plan = Plan::parse(stencil).unwrap();
 
@@ -589,32 +591,52 @@ mod test {
 
         let station_1 = plan.stations.get(&1).unwrap();
         assert_eq!(station_1.derive_input_layout(), Layout::default());
-        assert_eq!(station_1.derive_output_layout(), Layout::default());
+        assert_eq!(station_1.derive_output_layout(HashMap::new()), Layout::default());
 
         let station_2 = plan.stations.get(&2).unwrap();
         assert_eq!(station_2.derive_input_layout(), Layout::default());
-        assert_eq!(station_2.derive_output_layout(), Layout::default());
+        assert_eq!(station_2.derive_output_layout(single_key("1", &Layout::default())), Layout::default());
     }
 
 
     #[test]
-    fn test_station_literal_number(){
+    fn test_station_literal_number() {
         let stencil = "1{sql|SELECT 1}";
         let plan = Plan::parse(stencil).unwrap();
 
         let station_1 = plan.stations.get(&1).unwrap();
         assert_eq!(station_1.derive_input_layout(), Layout::default());
-        assert_eq!(station_1.derive_output_layout(), Layout::new(Integer));
+        assert_eq!(station_1.derive_output_layout(HashMap::new()), Layout::new(Integer));
     }
 
     #[test]
-    fn test_station_literal_array(){
+    fn test_station_literal_array() {
         let stencil = "1{sql|SELECT ['test']}";
         let plan = Plan::parse(stencil).unwrap();
 
         let station_1 = plan.stations.get(&1).unwrap();
         assert_eq!(station_1.derive_input_layout(), Layout::default());
-        assert_eq!(station_1.derive_output_layout(), Layout::new(Array(Box::new(ArrayType::new(Layout::new(Text), Some(1))))));
+        assert_eq!(station_1.derive_output_layout(HashMap::new()), Layout::new(Array(Box::new(ArrayType::new(Layout::new(Text), Some(1))))));
     }
 
+    #[test]
+    fn test_two_stations_match() {
+        let stencil = "1{sql|SELECT ['test']}--2{sql|SELECT $1.0 FROM $1}";
+        let plan = Plan::parse(stencil).unwrap();
+
+        assert!(plan.layouts_match().is_ok());
+    }
+
+    #[test]
+    fn test_two_stations_no_match_lenght() {
+        let stencil = "1{sql|SELECT ['test']}--2{sql|SELECT $1.1 FROM $1}";
+        let plan = Plan::parse(stencil).unwrap();
+
+        assert!(plan.layouts_match().is_err());
+    }
+
+
+    fn single_key<'a>(key: &str, value: &'a Layout) -> HashMap<String, &'a Layout> {
+        HashMap::from([(key.to_string(), value)])
+    }
 }

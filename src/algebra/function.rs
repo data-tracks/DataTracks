@@ -5,6 +5,7 @@ use crate::algebra::TupleOp::{Combine, Context, Input, Literal, Name};
 use crate::algebra::{BoxedValueHandler, ContextOp};
 use crate::processing::Layout;
 use crate::value::Value;
+use std::collections::HashMap;
 
 pub trait Replaceable {
     fn replace(&mut self, replace: fn(&mut Operator) -> Vec<(AggOp, Vec<Operator>)>) -> Vec<(AggOp, Vec<Operator>)>;
@@ -33,8 +34,8 @@ impl Operator {
     }
 
     // $0.1 -> 1
-    pub fn index(index: usize) -> Self {
-        Operator { op: Op::index(index), operands: vec![] }
+    pub fn index(index: usize, operands: Vec<Operator>) -> Self {
+        Operator { op: Op::index(index), operands }
     }
     // $0 -> 0
     pub fn input() -> Self {
@@ -53,8 +54,8 @@ impl Operator {
         self.op.derive_input_layout(self.operands.iter().cloned().map(|o| o.derive_input_layout()).collect())
     }
 
-    pub(crate) fn derive_output_layout(&self) -> Layout {
-        self.op.derive_output_layout(self.operands.iter().cloned().map(|o| o.derive_output_layout()).collect())
+    pub(crate) fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {
+        self.op.derive_output_layout(self.operands.iter().cloned().map(|o| o.derive_output_layout(inputs.clone())).collect(), inputs)
     }
 }
 

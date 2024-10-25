@@ -1,8 +1,8 @@
-use std::collections::HashMap;
 use crate::algebra::{Algebra, BoxedIterator, ValueIterator};
-use crate::processing::{Layout, OutputType, Train};
 use crate::processing::transform::Transform;
+use crate::processing::{Layout, OutputType, Train};
 use crate::value::Value;
+use std::collections::HashMap;
 
 #[derive(Clone)]
 pub struct Dual {}
@@ -25,7 +25,7 @@ impl Algebra for Dual {
         Layout::default()
     }
 
-    fn derive_output_layout(&self) -> Layout {
+    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {
         Layout::new(OutputType::Integer)
     }
 }

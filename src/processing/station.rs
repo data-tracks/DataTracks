@@ -165,11 +165,11 @@ impl Station {
         })
     }
 
-    pub fn derive_output_layout(&self) -> Layout {
+    pub fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {
         if let Some(transform) = self.transform.clone() {
-            transform.derive_output_layout()
+            transform.derive_output_layout(inputs)
         } else {
-            Layout::default()
+            inputs.values().into_iter().next().cloned().cloned().unwrap_or(Layout::default())
         }
     }
 

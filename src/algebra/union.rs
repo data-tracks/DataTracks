@@ -32,7 +32,7 @@ impl Algebra for Union {
         todo!()
     }
 
-    fn derive_output_layout(&self) -> Layout {
+    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {
         todo!()
     }
 }

@@ -73,7 +73,7 @@ impl Algebra for Filter {
         todo!()
     }
 
-    fn derive_output_layout(&self) -> Layout {
-        todo!()
+    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {
+        self.input.derive_output_layout(inputs)
     }
 }

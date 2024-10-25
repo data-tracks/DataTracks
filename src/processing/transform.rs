@@ -64,10 +64,10 @@ impl Transform {
         }
     }
 
-    pub fn derive_output_layout(&self) -> Layout {
+    pub fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {
         match self {
             Func(f) => f.derive_output_layout(),
-            Lang(l) => l.derive_output_layout()
+            Lang(l) => l.derive_output_layout(inputs)
         }
     }
 
@@ -175,8 +175,8 @@ impl LanguageTransform {
         self.algebra.derive_input_layout()
     }
 
-    pub(crate) fn derive_output_layout(&self) -> Layout {
-        self.algebra.derive_output_layout()
+    pub(crate) fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {
+        self.algebra.derive_output_layout(inputs)
     }
 
     fn dump(&self) -> String {

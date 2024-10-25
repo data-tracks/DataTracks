@@ -1,4 +1,5 @@
 use crate::algebra::aggregate::{Aggregate, ValueLoader};
+use crate::algebra::dual::Dual;
 use crate::algebra::filter::Filter;
 use crate::algebra::join::Join;
 use crate::algebra::project::Project;
@@ -9,7 +10,6 @@ use crate::processing::transform::Transform;
 use crate::processing::{Layout, Train};
 use crate::value::Value;
 use std::collections::HashMap;
-use crate::algebra::dual::Dual;
 
 pub type BoxedIterator = Box<dyn ValueIterator<Item=Value> + Send + 'static>;
 
@@ -59,16 +59,16 @@ impl Algebra for AlgebraType {
         }
     }
 
-    fn derive_output_layout(&self) -> Layout {
+    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {
         match self {
-            AlgebraType::Scan(s) => s.derive_output_layout(),
-            AlgebraType::Project(p) => p.derive_output_layout(),
-            AlgebraType::Filter(f) => f.derive_output_layout(),
-            AlgebraType::Join(j) => j.derive_output_layout(),
-            AlgebraType::Union(u) => u.derive_output_layout(),
-            AlgebraType::Aggregate(a) => a.derive_output_layout(),
-            AlgebraType::Variable(v) => v.derive_output_layout(),
-            AlgebraType::Dual(d) => d.derive_output_layout()
+            AlgebraType::Scan(s) => s.derive_output_layout(inputs),
+            AlgebraType::Project(p) => p.derive_output_layout(inputs),
+            AlgebraType::Filter(f) => f.derive_output_layout(inputs),
+            AlgebraType::Join(j) => j.derive_output_layout(inputs),
+            AlgebraType::Union(u) => u.derive_output_layout(inputs),
+            AlgebraType::Aggregate(a) => a.derive_output_layout(inputs),
+            AlgebraType::Variable(v) => v.derive_output_layout(inputs),
+            AlgebraType::Dual(d) => d.derive_output_layout(inputs)
         }
     }
 }
@@ -79,7 +79,7 @@ pub trait Algebra: Clone {
 
     fn derive_input_layout(&self) -> Layout;
 
-    fn derive_output_layout(&self) -> Layout;
+    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout;
 
 }
 

@@ -43,10 +43,10 @@ impl Op {
         }
     }
 
-    pub(crate) fn derive_output_layout(&self, operands: Vec<Layout>) -> Layout {
+    pub(crate) fn derive_output_layout(&self, operands: Vec<Layout>, inputs: HashMap<String, &Layout>) -> Layout {
         match self {
-            Agg(a) => a.derive_output_layout(operands),
-            Tuple(t) => t.derive_output_layout(operands),
+            Agg(a) => a.derive_output_layout(operands, inputs),
+            Tuple(t) => t.derive_output_layout(operands, inputs),
         }
     }
 }
@@ -233,7 +233,7 @@ impl TupleOp {
         }
     }
 
-    pub(crate) fn derive_output_layout(&self, operands: Vec<Layout>) -> Layout {
+    pub(crate) fn derive_output_layout(&self, operands: Vec<Layout>, inputs: HashMap<String, &Layout>) -> Layout {
         match self {
             Plus | Minus | Multiplication | Division => {
                 let left = operands.get(0).cloned().unwrap_or(Layout::default());
@@ -286,7 +286,7 @@ impl TupleOp {
                 layout
             }
             TupleOp::Context(c) => {
-                todo!()
+                (*inputs.get(&c.name).unwrap()).clone()
             }
         }
     }
@@ -380,7 +380,7 @@ impl AggOp {
         }
     }
 
-    pub(crate) fn derive_input_layout(&self, operands: Vec<Layout>) -> Layout {
+    pub(crate) fn derive_input_layout(&self, _operands: Vec<Layout>) -> Layout {
         match self {
             Count => Layout::default(),
             Sum => Layout::new(OutputType::Or(vec![OutputType::Integer, OutputType::Float, OutputType::Boolean, OutputType::Text])),
@@ -388,7 +388,7 @@ impl AggOp {
         }
     }
 
-    pub(crate) fn derive_output_layout(&self, operands: Vec<Layout>) -> Layout {
+    pub(crate) fn derive_output_layout(&self, _operands: Vec<Layout>, _inputs: HashMap<String, &Layout>) -> Layout {
         match self {
             Count => Layout::new(OutputType::Integer),
             Sum => Layout::new(OutputType::Float),
@@ -759,13 +759,13 @@ mod tests {
     fn test_layout_literal() {
         let op = Literal(LiteralOp::new(Value::text("test")));
 
-        assert_eq!(op.derive_output_layout(vec![]), Layout::new(OutputType::Text));
+        assert_eq!(op.derive_output_layout(vec![], HashMap::new()), Layout::new(OutputType::Text));
         assert_eq!(op.derive_input_layout(vec![]), Layout::default());
 
         let op = Literal(LiteralOp::new(Value::dict_from_pairs(vec![("test", Value::text("test"))])));
         let mut dict = HashMap::new();
         dict.insert("test".to_string(), Layout::new(OutputType::Text));
-        assert_eq!(op.derive_output_layout(vec![]), Layout::new(Dict(Box::new(DictType::new(dict)))));
+        assert_eq!(op.derive_output_layout(vec![], HashMap::new()), Layout::new(Dict(Box::new(DictType::new(dict)))));
 
     }
 
@@ -776,7 +776,7 @@ mod tests {
         layout.type_ = Array(Box::new(ArrayType::new(Layout::default(), Some(4))));
         assert_eq!(op.derive_input_layout(vec![]), layout);
         let array = Layout::new(Array(Box::new(ArrayType::new(Layout::new(OutputType::Integer), Some(4)))));
-        assert_eq!(op.derive_output_layout(vec![array]), Layout::new(OutputType::Integer));
+        assert_eq!(op.derive_output_layout(vec![array], HashMap::new()), Layout::new(OutputType::Integer));
     }
 
     #[test]
@@ -791,7 +791,7 @@ mod tests {
         let mut map  = HashMap::new();
         map.insert(String::from("test"), Layout::new(OutputType::Float));
         let dict = Layout::new(Dict(Box::new(DictType::new(map))));
-        assert_eq!(op.derive_output_layout(vec![dict]), Layout::new(OutputType::Float));
+        assert_eq!(op.derive_output_layout(vec![dict], HashMap::new()), Layout::new(OutputType::Float));
     }
 
     #[test]
@@ -799,10 +799,10 @@ mod tests {
         let ops = vec![Tuple(Multiplication), Tuple(Division), Tuple(Minus), Tuple(Plus)];
         for op in ops {
             assert_eq!(op.derive_input_layout(vec![]), Layout::default());
-            assert_eq!(op.derive_output_layout(vec![Layout::new(OutputType::Integer), Layout::new(OutputType::Integer)]), Layout::new(OutputType::Integer));
+            assert_eq!(op.derive_output_layout(vec![Layout::new(OutputType::Integer), Layout::new(OutputType::Integer)], HashMap::default()), Layout::new(OutputType::Integer));
         }
          let op = Tuple(Plus);
-        assert_eq!(op.derive_output_layout(vec![Layout::new(OutputType::Text), Layout::new(OutputType::Integer)]), Layout::new(OutputType::Text));
+        assert_eq!(op.derive_output_layout(vec![Layout::new(OutputType::Text), Layout::new(OutputType::Integer)], HashMap::default()), Layout::new(OutputType::Text));
     }
 
     #[test]
@@ -810,7 +810,7 @@ mod tests {
         let ops = vec![Tuple(Or), Tuple(And), Tuple(Not), Tuple(Equal)];
         for op in ops {
             assert_eq!(op.derive_input_layout(vec![Layout::new(OutputType::Boolean)]), Layout::new(OutputType::Boolean));
-            assert_eq!(op.derive_output_layout(vec![]), Layout::new(OutputType::Boolean));
+            assert_eq!(op.derive_output_layout(vec![], HashMap::default()), Layout::new(OutputType::Boolean));
         }
     }
 
@@ -827,7 +827,7 @@ mod tests {
         assert_eq!(op.derive_input_layout(), layout);
 
         let array = Layout::new(Array(Box::new(ArrayType::new(Layout::default(), Some(2)))));
-        assert_eq!(op.derive_output_layout(), array);
+        assert_eq!(op.derive_output_layout(HashMap::new()), array);
 
     }
 }

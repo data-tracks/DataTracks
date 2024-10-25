@@ -105,8 +105,8 @@ impl Algebra for Scan {
         Layout::default()
     }
 
-    fn derive_output_layout(&self) -> Layout {
-       Layout::default()
+    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {
+        inputs.get(self.index.to_string().as_str()).cloned().unwrap().clone()
     }
 }
 
