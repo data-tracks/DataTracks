@@ -1,6 +1,5 @@
 use crate::algebra::Op;
 use crate::language::statement::Statement;
-use crate::value;
 use crate::value::Value;
 
 pub trait Sql: Statement {}
@@ -128,15 +127,30 @@ pub struct SqlValue {
 
 
 impl SqlValue {
-    pub fn new(value: value::Value) -> Self {
+    pub fn new(value: Value) -> Self {
         SqlValue { value }
+    }
+
+    fn dump_value(value: &Value, quote: &str) -> String {
+        match value {
+            Value::Text(t) => {
+                format!("{}{}{}", quote, t, quote)
+            }
+            Value::Wagon(w) => {
+                let value = w.clone().unwrap();
+                Self::dump_value(&value, quote)
+            },
+            v => format!("{}", v)
+        }
+
     }
 }
 
 impl Statement for SqlValue {
     fn dump(&self, _quote: &str) -> String {
-        format!("{}", self.value)
+        SqlValue::dump_value(&self.value, "'")
     }
+
 }
 
 #[derive(Debug)]

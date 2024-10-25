@@ -14,16 +14,16 @@ use logos::{Lexer, Logos};
 pub(crate) enum Token {
     #[regex(r"[a-zA-Z_$][a-zA-Z_$0-9]*\(", | lex | lex.slice().to_owned())]
     Function(String),
-    #[regex(r#""[^"]*""#, | lex | trim_quotes(lex.slice()))]
+    #[regex(r#"'[^']*'"#, | lex | trim_quotes(lex.slice()))]
     Text(String),
     #[token("false", | _ | false)]
     #[token("true", | _ | true)]
     Bool(bool),
-    #[regex(r"-?(?:0|[1-9]\d*)?", | lex | lex.slice().parse::<i64> ().unwrap())]
+    #[regex(r"-?(0|[1-9]\d*)", | lex | lex.slice().parse::<i64> ().unwrap(), priority = 3)]
     Number(i64),
     #[regex(
-        r"-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?", | lex | lex.slice().parse::<f64> ().unwrap()
-    )]
+        r"-?(0|[1-9]\d*)?(\.\d+)?([eE][+-]?\d+)?(?:f)?", | lex | lex.slice().trim_end_matches('f').parse::<f64> ().unwrap()
+    )]// matches 1.0 .1 1f 1.5e10
     Float(f64),
     #[regex("SELECT", ignore(case))]
     Select,
@@ -84,7 +84,7 @@ pub(crate) enum Token {
     Divide,
     #[token("COUNT")]
     Count,
-    #[regex(r"[']?[a-zA-Z_$][a-zA-Z_$0-9.]*[']?", | lex | lex.slice().to_owned())]
+    #[regex(r#"["]?[a-zA-Z_$][a-zA-Z_$0-9.]*["]?"#, | lex | lex.slice().to_owned())]
     Identifier(String),
 }
 
@@ -105,7 +105,16 @@ fn parse_query<'source>(lexer: &'source mut Lexer<'source, Token>) -> Result<Sql
 
 fn parse_select(lexer: &mut BufferedLexer) -> Result<SqlStatement, String> {
     let fields = parse_expressions(lexer, &[From])?;
-    lexer.consume_buffer()?; // remove from
+    if let Ok(token) = lexer.consume_buffer() {
+        // remove from
+        if token != Token::From {
+            lexer.buffer(token);
+        }
+    }else {
+        // is empty e.g. SELECT [literal]
+        return Ok(SqlStatement::Select(SqlSelect::new(fields, vec![], vec![], vec![])))
+    }
+
     let froms = parse_expressions(lexer, &[Semi, Where, GroupBy, Limit, OrderBy])?;
 
     let mut last_end = lexer.consume_buffer();
@@ -309,25 +318,73 @@ mod test {
     use crate::language::sql::lex::{create_lexer, parse, Token};
 
     #[test]
-    fn text_identifier() {
+    fn test_literal_number() {
+        let query = &"SELECT 1".to_string();
+        test_query_diff(query, query);
+    }
+
+    #[test]
+    fn test_literal_no_from() {
+        let query = &format!("SELECT {}", quote_literal("test"));
+        test_query_diff(query, query);
+    }
+
+    #[test]
+    fn test_number() {
+        let mut lexer = create_lexer("1");
+        let value = lexer.next().unwrap();
+        assert_eq!(value.unwrap(), Token::Number(1));
+    }
+
+    #[test]
+    fn test_float() {
+        let mut lexer = create_lexer("1.1");
+        let value = lexer.next().unwrap();
+        assert_eq!(value.unwrap(), Token::Float(1.1));
+    }
+
+    #[test]
+    fn test_float_no_zero() {
+        let mut lexer = create_lexer(".1");
+        let value = lexer.next().unwrap();
+        assert_eq!(value.unwrap(), Token::Float(0.1));
+    }
+
+    #[test]
+    fn test_float_force() {
+        let mut lexer = create_lexer("1f");
+        let value = lexer.next().unwrap();
+        assert_eq!(value.unwrap(), Token::Float(1.0));
+    }
+
+    #[test]
+    fn test_float_scientific() {
+        let mut lexer = create_lexer("1e-10");
+        let value = lexer.next().unwrap();
+        assert_eq!(value.unwrap(), Token::Float(1e-10));
+    }
+
+    #[test]
+    fn test_identifier() {
         let mut lexer = create_lexer(r#"test"#);
         let value = lexer.next().unwrap();
         assert_eq!(value.unwrap(), Token::Identifier(String::from("test")));
     }
 
     #[test]
-    fn text_text() {
-        let mut lexer = create_lexer(r#""test""#);
+    fn test_identifier_without_quotes() {
+        let mut lexer = create_lexer("test");
+        let value = lexer.next().unwrap();
+        assert_eq!(value.unwrap(), Token::Identifier(String::from("test")));
+    }
+
+    #[test]
+    fn test_text() {
+        let mut lexer = create_lexer(r#"'test'"#);
         let value = lexer.next().unwrap();
         assert_eq!(value.unwrap(), Token::Text(String::from("test")));
     }
 
-    #[test]
-    fn text_text_escape() {
-        let mut lexer = create_lexer("\"test\"");
-        let value = lexer.next().unwrap();
-        assert_eq!(value.unwrap(), Token::Text(String::from("test")));
-    }
 
     #[test]
     fn test_star() {
@@ -337,111 +394,111 @@ mod test {
 
     #[test]
     fn test_single() {
-        let query = &select(&quote("name"), "$0", None, None);
+        let query = &select(&quote_identifier("name"), "$0", None, None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_list() {
-        let query = &select(&format!("{}, {}", quote("name"), quote("age")), "$0", None, None);
+        let query = &select(&format!("{}, {}", quote_identifier("name"), quote_identifier("age")), "$0", None, None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_as() {
-        let query = &select(&format!("{} AS {}, {}", quote("name"), quote("n"), quote("age")), "$0", None, None);
+        let query = &select(&format!("{} AS {}, {}", quote_identifier("name"), quote_identifier("n"), quote_identifier("age")), "$0", None, None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_implicit_join() {
-        let query = &select(&format!("{} AS {}, {}", quote("name"), quote("n"), quote("age")), "$0, $1", None, None);
+        let query = &select(&format!("{} AS {}, {}", quote_identifier("name"), quote_identifier("n"), quote_identifier("age")), "$0, $1", None, None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_as_quote() {
-        let query = &select(&format!("{} AS {}, {}", quote("name"), quote("n"), quote("age")), "$0", None, None);
+        let query = &select(&format!("{} AS {}, {}", quote_identifier("name"), quote_identifier("n"), quote_identifier("age")), "$0", None, None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_calculators_add() {
-        let query = &select(&format!("{} + 1, {}", quote("name"), quote("age")), "$0", None, None);
+        let query = &select(&format!("{} + 1, {}", quote_identifier("name"), quote_identifier("age")), "$0", None, None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_calculators_add_no_space() {
-        let query = &select(&format!("{}+1, {}", quote("name"), quote("age")), "$0", None, None);
-        let res = &select(&format!("{} + 1, {}", quote("name"), quote("age")), "$0", None, None);
+        let query = &select(&format!("{}+1, {}", quote_identifier("name"), quote_identifier("age")), "$0", None, None);
+        let res = &select(&format!("{} + 1, {}", quote_identifier("name"), quote_identifier("age")), "$0", None, None);
         test_query_diff(query, res);
     }
 
     #[test]
     fn test_calculators_sub() {
-        let query = &select(&format!("{} - 1, {}", quote("name"), quote("age")), "$0", None, None);
+        let query = &select(&format!("{} - 1, {}", quote_identifier("name"), quote_identifier("age")), "$0", None, None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_calculators_multi() {
-        let query = &select(&format!("{} * 1, {}", quote("name"), quote("age")), "$0", None, None);
+        let query = &select(&format!("{} * 1, {}", quote_identifier("name"), quote_identifier("age")), "$0", None, None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_calculators_div() {
-        let query = &select(&format!("{} / 1, {}", quote("name"), quote("age")), "$0", None, None);
+        let query = &select(&format!("{} / 1, {}", quote_identifier("name"), quote_identifier("age")), "$0", None, None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_calculators_add_nested() {
-        let query = &select(&format!("{} + 1 + 1, {}", quote("name"), quote("age")), "$0", None, None);
+        let query = &select(&format!("{} + 1 + 1, {}", quote_identifier("name"), quote_identifier("age")), "$0", None, None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_calculators_add_nested_mixed() {
-        let query = &select(&format!("{} / 1 + 3, {}", quote("name"), quote("age")), "$0", None, None);
+        let query = &select(&format!("{} / 1 + 3, {}", quote_identifier("name"), quote_identifier("age")), "$0", None, None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_calculators_function_call() {
-        let query = &select(&format!("ADD({}, {})", quote("name"), quote("age")), "$0", None, None);
+        let query = &select(&format!("ADD({}, {})", quote_identifier("name"), quote_identifier("age")), "$0", None, None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_calculators_function_call_nested() {
-        let query = &select(&format!("ADD({}, ADD({}, {}))", quote("name"), quote("age"), quote("age2")), "$0", None, None);
+        let query = &select(&format!("ADD({}, ADD({}, {}))", quote_identifier("name"), quote_identifier("age"), quote_identifier("age2")), "$0", None, None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_filter() {
-        let query = &select(&format!("{}", quote("name")), "$0", Some(&format!("{} = 3", quote("$0"))), None);
+        let query = &select(&format!("{}", quote_identifier("name")), "$0", Some(&format!("{} = 3", quote_identifier("$0"))), None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_and_filter() {
-        let query = &select(&format!("{}", quote("name")), "$0", Some(&format!("{} = 3 and {} = 'test'", quote("$0"), quote("name"))), None);
-        let res = &select(&format!("{}", quote("name")), "$0", Some(&format!("{} = 3 AND {} = 'test'", quote("$0"), quote("name"))), None);
+        let query = &select(&format!("{}", quote_identifier("name")), "$0", Some(&format!("{} = 3 and {} = 'test'", quote_identifier("$0"), quote_identifier("name"))), None);
+        let res = &select(&format!("{}", quote_identifier("name")), "$0", Some(&format!("{} = 3 AND {} = 'test'", quote_identifier("$0"), quote_identifier("name"))), None);
         test_query_diff(query, res);
     }
 
     #[test]
     fn test_or_filter() {
-        let query = &select(&format!("{}", quote("name")), "$0", Some(&format!("{} = 3 OR {} = 'test'", quote("$0"), quote("name"))), None);
+        let query = &select(&format!("{}", quote_identifier("name")), "$0", Some(&format!("{} = 3 OR {} = 'test'", quote_identifier("$0"), quote_identifier("name"))), None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_aggregate_count_single() {
-        let query = &select(&format!("COUNT({})", quote("name")), "$0", None, None);
+        let query = &select(&format!("COUNT({})", quote_identifier("name")), "$0", None, None);
         test_query_diff(query, query);
     }
 
@@ -456,7 +513,11 @@ mod test {
         select
     }
 
-    fn quote(key: &str) -> String {
+    fn quote_identifier(key: &str) -> String {
+        format!("\"{}\"", key)
+    }
+
+    fn quote_literal(key: &str) -> String {
         format!("'{}'", key)
     }
 

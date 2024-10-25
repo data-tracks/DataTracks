@@ -9,6 +9,7 @@ use crate::processing::transform::Transform;
 use crate::processing::{Layout, Train};
 use crate::value::Value;
 use std::collections::HashMap;
+use crate::algebra::dual::Dual;
 
 pub type BoxedIterator = Box<dyn ValueIterator<Item=Value> + Send + 'static>;
 
@@ -18,6 +19,7 @@ pub type BoxedValueLoader = Box<dyn ValueLoader + Send + 'static>;
 
 #[derive(Clone)]
 pub enum AlgebraType {
+    Dual(Dual),
     Scan(Scan),
     Project(Project),
     Filter(Filter),
@@ -39,7 +41,8 @@ impl Algebra for AlgebraType {
             AlgebraType::Join(j) => Box::new(j.derive_iterator()),
             AlgebraType::Union(u) => Box::new(u.derive_iterator()),
             AlgebraType::Aggregate(a) => Box::new(a.derive_iterator()),
-            AlgebraType::Variable(s) => Box::new(s.derive_iterator())
+            AlgebraType::Variable(s) => Box::new(s.derive_iterator()),
+            AlgebraType::Dual(d) => Box::new(d.derive_iterator())
         }
     }
 
@@ -51,7 +54,8 @@ impl Algebra for AlgebraType {
             AlgebraType::Join(j) => j.derive_input_layout(),
             AlgebraType::Union(u) => u.derive_input_layout(),
             AlgebraType::Aggregate(a) => a.derive_input_layout(),
-            AlgebraType::Variable(v) => v.derive_input_layout()
+            AlgebraType::Variable(v) => v.derive_input_layout(),
+            AlgebraType::Dual(d) => d.derive_input_layout()
         }
     }
 
@@ -63,7 +67,8 @@ impl Algebra for AlgebraType {
             AlgebraType::Join(j) => j.derive_output_layout(),
             AlgebraType::Union(u) => u.derive_output_layout(),
             AlgebraType::Aggregate(a) => a.derive_output_layout(),
-            AlgebraType::Variable(v) => v.derive_output_layout()
+            AlgebraType::Variable(v) => v.derive_output_layout(),
+            AlgebraType::Dual(d) => d.derive_output_layout()
         }
     }
 }

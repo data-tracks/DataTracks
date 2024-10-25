@@ -451,7 +451,7 @@ impl Plan {
         self.stations.get(&stop_num).ok_or_else(|| format!("Station {} not found", stop_num))
     }
 
-    fn layouts_match(&self) -> Result<(), String> {
+    pub fn layouts_match(&self) -> Result<(), String> {
         for (line, stops) in &self.lines {
             if stops.is_empty() {
                 continue;

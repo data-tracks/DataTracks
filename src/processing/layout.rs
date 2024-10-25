@@ -492,6 +492,7 @@ pub struct ShadowKey {
 mod test {
     use crate::processing::layout::Layout;
     use crate::processing::layout::OutputType::{Array, Dict, Float, Integer, Text};
+    use crate::processing::{ArrayType, Plan};
 
     #[test]
     fn scalar(){
@@ -577,6 +578,43 @@ mod test {
             }
         }
 
+    }
+
+    #[test]
+    fn test_two_stations_any_match(){
+        let stencil = "1--2{sql|SELECT * FROM $1}"; // station 2 can accept anything
+        let plan = Plan::parse(stencil).unwrap();
+
+        assert!(plan.layouts_match().is_ok());
+
+        let station_1 = plan.stations.get(&1).unwrap();
+        assert_eq!(station_1.derive_input_layout(), Layout::default());
+        assert_eq!(station_1.derive_output_layout(), Layout::default());
+
+        let station_2 = plan.stations.get(&2).unwrap();
+        assert_eq!(station_2.derive_input_layout(), Layout::default());
+        assert_eq!(station_2.derive_output_layout(), Layout::default());
+    }
+
+
+    #[test]
+    fn test_station_literal_number(){
+        let stencil = "1{sql|SELECT 1}";
+        let plan = Plan::parse(stencil).unwrap();
+
+        let station_1 = plan.stations.get(&1).unwrap();
+        assert_eq!(station_1.derive_input_layout(), Layout::default());
+        assert_eq!(station_1.derive_output_layout(), Layout::new(Integer));
+    }
+
+    #[test]
+    fn test_station_literal_array(){
+        let stencil = "1{sql|SELECT ['test']}";
+        let plan = Plan::parse(stencil).unwrap();
+
+        let station_1 = plan.stations.get(&1).unwrap();
+        assert_eq!(station_1.derive_input_layout(), Layout::default());
+        assert_eq!(station_1.derive_output_layout(), Layout::new(Array(Box::new(ArrayType::new(Layout::new(Text), Some(1))))));
     }
 
 }

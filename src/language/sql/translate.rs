@@ -1,5 +1,5 @@
 use crate::algebra;
-use crate::algebra::AlgebraType::{Aggregate, Filter, Join, Project, Scan, Variable};
+use crate::algebra::AlgebraType::{Aggregate, Dual, Filter, Join, Project, Scan, Variable};
 use crate::algebra::Op::Tuple;
 use crate::algebra::TupleOp::Input;
 use crate::algebra::{AlgebraType, Op, Operator, Replaceable, VariableScan};
@@ -23,14 +23,19 @@ fn handle_select(query: SqlSelect) -> Result<AlgebraType, String> {
 
 
     let node = {
-        let mut join = sources.remove(0);
-        while !sources.is_empty() {
-            let right = sources.remove(0);
-            join = Join(algebra::Join::new(join, right, |_v| Value::bool(true), |_v| Value::bool(true), |l, r| {
-                Value::array(vec![l, r])
-            }));
+        if sources.is_empty() {
+            Dual(algebra::Dual::new())
+        }else {
+            let mut join = sources.remove(0);
+            while !sources.is_empty() {
+                let right = sources.remove(0);
+                join = Join(algebra::Join::new(join, right, |_v| Value::bool(true), |_v| Value::bool(true), |l, r| {
+                    Value::array(vec![l, r])
+                }));
+            }
+            join
         }
-        join
+
     };
 
     let mut node = match filters.len() {
@@ -60,7 +65,7 @@ fn handle_select(query: SqlSelect) -> Result<AlgebraType, String> {
         }
     };
 
-    let aggs = function.replace(|o| {
+    let aggregations = function.replace(|o| {
         // we replace the operator
         match &o.op {
             Op::Agg(a) => {
@@ -75,14 +80,14 @@ fn handle_select(query: SqlSelect) -> Result<AlgebraType, String> {
         }
     });
 
-    if !aggs.is_empty() || !groups.is_empty() {
+    if !aggregations.is_empty() || !groups.is_empty() {
         let group = match groups.len() {
             1 => Some(groups.pop().unwrap()),
             0 => None,
             _ => Some(Operator::combine(groups))
         };
 
-        node = Aggregate(algebra::Aggregate::new(Box::new(node), aggs, group));
+        node = Aggregate(algebra::Aggregate::new(Box::new(node), aggregations, group));
         return Ok(node);
     }
 
@@ -91,7 +96,7 @@ fn handle_select(query: SqlSelect) -> Result<AlgebraType, String> {
 
 fn handle_from(from: SqlStatement) -> Result<AlgebraType, String> {
     match from {
-        SqlStatement::Identifier(i) => handle_table(i),
+        Identifier(i) => handle_table(i),
         SqlStatement::Variable(v) => handle_variable(v),
         _ => Err("Could not translate FROM clause".to_string())
     }

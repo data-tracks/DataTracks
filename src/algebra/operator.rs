@@ -14,7 +14,6 @@ use std::collections::{BTreeMap, HashMap};
 use std::fmt::{Debug, Formatter};
 use std::str::FromStr;
 use std::vec;
-use tower_http::follow_redirect::policy::PolicyExt;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Op {

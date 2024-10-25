@@ -6,6 +6,7 @@ pub use algebra::BoxedIterator;
 pub use algebra::BoxedValueHandler;
 pub use algebra::ValueIterator;
 pub use filter::Filter;
+pub use dual::Dual;
 pub use function::Operator;
 pub use function::Replaceable;
 pub use join::Join;
@@ -27,4 +28,5 @@ mod function;
 mod union;
 mod aggregate;
 mod variable;
+mod dual;
 
