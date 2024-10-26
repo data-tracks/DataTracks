@@ -277,7 +277,13 @@ fn parse_doc(lexer: &mut BufferedLexer) -> Result<SqlStatement, String> {
         lexer.consume_buffer()?;
         let value = parse_expression(lexer, &vec![Token::CuBracketClose, Comma])?;
 
-        pairs.push(SqlStatement::Operator(SqlOperator::new(Tuple(TupleOp::Combine), vec![key, value], false)));
+        let name = if let Some(name) = key.as_literal() {
+            name.as_text().map(|t| Some(t.0)).unwrap_or(None)
+        } else {
+            None
+        };
+
+        pairs.push(SqlStatement::Operator(SqlOperator::new(Tuple(TupleOp::KeyValue(name)), vec![key, value], false)));
         stop = lexer.next_buf()?;
     };
     lexer.consume_buffer()?;

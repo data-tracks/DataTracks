@@ -16,6 +16,7 @@ pub(crate) enum SqlStatement {
     Variable(SqlVariable)
 }
 
+
 impl SqlStatement {
     pub(crate) fn dump(&self, quote: &str) -> String {
         match self {
@@ -27,6 +28,15 @@ impl SqlStatement {
             SqlStatement::Operator(s) => s.dump(quote),
             SqlStatement::Alias(s) => s.dump(quote),
             SqlStatement::Variable(v) => v.dump(quote),
+        }
+    }
+
+    pub(crate) fn as_literal(&self) -> Option<Value> {
+        match self {
+            SqlStatement::Value(v) => {
+                Some(v.value.clone())
+            }
+            _ => None,
         }
     }
 }

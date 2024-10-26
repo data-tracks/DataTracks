@@ -68,6 +68,7 @@ pub enum TupleOp {
     Index(IndexOp),
     Literal(LiteralOp),
     Context(ContextOp),
+    KeyValue(Option<String>),
 }
 
 
@@ -121,7 +122,7 @@ impl TupleOp {
                     }, operands)
                 )
             }
-            Combine => {
+            Combine | TupleOp::KeyValue(_) => {
                 Box::new(
                     TupleFunction::new(move |value| {
                         Value::array(value.iter().map(|v| (*v).clone()).collect())
@@ -206,15 +207,20 @@ impl TupleOp {
             Combine => {
                 operands.iter().fold( Layout::default(),|a, b | a.clone().merge(b).unwrap())
             }
+            TupleOp::KeyValue(_) => {
+                let first = operands.get(0).cloned().unwrap_or(Layout::default());
+                let second = operands.get(1).cloned().unwrap_or(Layout::default());
+                first.merge(&second).unwrap()
+            }
             TupleOp::Doc => {
-                todo!()
+                operands.iter().fold(Layout::default(), |a, b| a.clone().merge(b).unwrap())
             }
             Input(_) => {
                 Layout::default()
             }
             TupleOp::Name(n) => {
                 let mut map = HashMap::new();
-                map.insert(n.name.clone(), Layout::default());
+                map.insert(Some(n.name.clone()), Layout::default());
                 let dict = OutputType::Dict(Box::new(DictType::new(map)));
                 let layout = Layout::new(dict);
                 layout
@@ -246,11 +252,17 @@ impl TupleOp {
                 layout.type_ = OutputType::Array(Box::new(ArrayType::new(fields, Some(operands.len() as i32))));
                 layout
             }
+            TupleOp::KeyValue(name) => {
+                let _key = operands.get(0).cloned().unwrap_or(Layout::default());
+                let value = operands.get(1).cloned().unwrap_or(Layout::default());
+                let map = HashMap::from([(name.clone(), value.clone())]);
+                Layout::new(OutputType::Dict(Box::new(DictType::new(map))))
+            }
             Not | Equal | And | Or => {
                 Layout::new(OutputType::Boolean)
             }
             TupleOp::Doc => {
-                todo!()
+                operands.into_iter().fold(Layout::new(OutputType::Dict(Box::new(DictType::new(HashMap::new())))), |a, b| a.merge(&b).unwrap())
             }
             Input(_) => {
                 Layout::default()
@@ -259,7 +271,7 @@ impl TupleOp {
                 let layout = operands.get(0).unwrap();
                 match layout.type_.clone() {
                     OutputType::Dict(d) => {
-                        d.fields.get(&n.name).cloned().unwrap_or(Layout::default())
+                        d.fields.get(&Some(n.name.clone())).cloned().unwrap_or(Layout::default())
                     }
                     _ => Layout::default()
                 }
@@ -322,7 +334,7 @@ impl TupleOp {
                     String::from("/")
                 }
             }
-            Combine => {
+            Combine | TupleOp::KeyValue(_) => {
                 String::from("")
             }
             Not => {
@@ -764,7 +776,7 @@ mod tests {
 
         let op = Literal(LiteralOp::new(Value::dict_from_pairs(vec![("test", Value::text("test"))])));
         let mut dict = HashMap::new();
-        dict.insert("test".to_string(), Layout::new(OutputType::Text));
+        dict.insert(Some("test".to_string()), Layout::new(OutputType::Text));
         assert_eq!(op.derive_output_layout(vec![], HashMap::new()), Layout::new(Dict(Box::new(DictType::new(dict)))));
 
     }
@@ -784,12 +796,12 @@ mod tests {
         let op = Name(NameOp::new(String::from("test")));
         let mut layout = Layout::default();
         let mut map = HashMap::new();
-        map.insert(String::from("test"), Layout::default());
+        map.insert(Some("test".to_string()), Layout::default());
         layout.type_ = Dict(Box::new(DictType::new(map)));
 
         assert_eq!(op.derive_input_layout(vec![]), layout);
         let mut map  = HashMap::new();
-        map.insert(String::from("test"), Layout::new(OutputType::Float));
+        map.insert(Some("test".to_string()), Layout::new(OutputType::Float));
         let dict = Layout::new(Dict(Box::new(DictType::new(map))));
         assert_eq!(op.derive_output_layout(vec![dict], HashMap::new()), Layout::new(OutputType::Float));
     }
@@ -820,8 +832,8 @@ mod tests {
 
         let mut layout = Layout::default();
         let mut map = HashMap::new();
-        map.insert(String::from("key1"), Layout::default());
-        map.insert(String::from("key2"), Layout::default());
+        map.insert(Some("key1".to_string()), Layout::default());
+        map.insert(Some("key2".to_string()), Layout::default());
         layout.type_ = Dict(Box::new(DictType::new(map)));
 
         assert_eq!(op.derive_input_layout(), layout);
