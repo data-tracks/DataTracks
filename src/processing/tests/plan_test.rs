@@ -576,7 +576,7 @@ pub mod tests {
         let destination = 5;
 
 
-        test_single_in_out("1{sql|SELECT {\"key\": $0} FROM $0}", values.clone(), res.clone(), source, destination);
+        test_single_in_out("1{sql|SELECT {'key': $0} FROM $0}", values.clone(), res.clone(), source, destination);
     }
 
     #[test]
@@ -633,7 +633,7 @@ pub mod tests {
         let destination = 5;
 
 
-        test_single_in_out("1{sql|SELECT {\"key\": $0, \"key2\": $0 } FROM $0}", values.clone(), res.clone(), source, destination);
+        test_single_in_out("1{sql|SELECT {'key': $0, 'key2': $0 } FROM $0}", values.clone(), res.clone(), source, destination);
     }
 
     fn test_single_in_out(query: &str, values: Vec<Vec<Value>>, res: Vec<Vec<Value>>, source: i64, destination: i64) {
