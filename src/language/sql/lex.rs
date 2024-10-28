@@ -508,6 +508,7 @@ mod test {
         test_query_diff(query, query);
     }
 
+
     fn select(selects: &str, from: &str, wheres: Option<&str>, group_by: Option<&str>) -> String {
         let mut select = format!("SELECT {} FROM {}", selects, from);
         if let Some(wheres) = wheres {

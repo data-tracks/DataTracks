@@ -2,39 +2,94 @@ use crate::processing::destination::Destination;
 use crate::processing::option::Configurable;
 use crate::processing::plan::DestinationModel;
 use crate::processing::station::Command;
+use crate::processing::station::Command::{Ready, Stop};
 use crate::processing::Train;
-use crate::util::Tx;
-use crossbeam::channel::Sender;
+use crate::util::{new_channel, Rx, Tx, GLOBAL_ID};
+use crossbeam::channel::{unbounded, Sender};
+use rumqttc::{Client, MqttOptions, QoS};
 use serde_json::{Map, Value};
+use std::net::TcpListener;
 use std::sync::Arc;
+use std::thread;
+use std::thread::{sleep, spawn};
+use std::time::Duration;
+use tokio::runtime::Runtime;
+use tracing::{debug, warn};
 
 pub struct MqttDestination {
+    id: i64,
     port: u16,
+    url: String,
+    receiver: Option<Rx<Train>>,
+    sender: Tx<Train>,
 }
 
 impl MqttDestination {
-    pub fn new(port: u16) -> Self {
-        MqttDestination { port }
+    pub fn new(url: String, port: u16) -> Self {
+        let (tx, _num, rx) = new_channel();
+        let id = GLOBAL_ID.new_id();
+        MqttDestination { id, port, url, receiver: Some(rx), sender: tx }
     }
 }
 
 impl Configurable for MqttDestination {
-    fn get_options(&self) -> Map<String, Value> {
-        Map::new()
-    }
-
     fn get_name(&self) -> String {
         String::from("Mqtt")
+    }
+
+    fn get_options(&self) -> Map<String, Value> {
+        Map::new()
     }
 }
 
 impl Destination for MqttDestination {
     fn parse(_options: Map<String, Value>) -> Result<Self, String> {
-        todo!()
+        let port = if let Some(port) = _options.get("port") {
+            port.as_i64().unwrap() as u16
+        } else {
+            return Err(String::from("Port not specified"));
+        };
+
+        let url = if let Some(url) = _options.get("url") {
+            url.as_str().unwrap().to_string()
+        } else {
+            return Err(String::from("MqttDestination URL is required"));
+        };
+
+        Ok(Self::new(url, port))
     }
 
-    fn operate(&mut self, _control: Arc<Sender<Command>>) -> Sender<Command> {
-        todo!()
+    fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command> {
+        let rt = Runtime::new().unwrap();
+        debug!("starting mqtt destination...");
+
+        let id = self.id;
+        let receiver = self.receiver.take().unwrap();
+        let (tx, rx) = unbounded();
+        let url = self.url.clone();
+        let port = self.port;
+
+        spawn(move || {
+            let options = MqttOptions::new("id", url, port);
+            let (mut client, mut _connection) = Client::new(options, 10);
+            control.send(Ready(id)).unwrap();
+            loop {
+                match rx.try_recv() {
+                    Ok(command) => match command {
+                        Stop(_) => break,
+                        _ => {}
+                    },
+                    _ => {}
+                }
+                match receiver.try_recv() {
+                    Ok(train) => {
+                        client.publish("datatracks", QoS::AtLeastOnce, false, train.into()).map_err(|e| e.to_string()).unwrap();
+                    }
+                    _ => sleep(Duration::from_nanos(100))
+                }
+            }
+        });
+        tx
     }
 
     fn get_in(&self) -> Tx<Train> {

@@ -205,7 +205,7 @@ pub mod dummy {
             let id = self.id;
             let local = self.results();
             let receiver = self.receiver.take().unwrap();
-            let result_amount = self.result_size as usize;
+            let result_amount = self.result_size;
             let (tx, rx) = unbounded();
 
             spawn(move || {
