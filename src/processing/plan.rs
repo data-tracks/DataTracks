@@ -347,7 +347,7 @@ impl Plan {
             let targets = map.get(&destination.get_id()).unwrap();
             for target in targets {
                 if let Some(station) = self.stations.get_mut(target) {
-                    station.add_out(-1, destination.get_in())?;
+                    station.add_out(-destination.get_id(), destination.get_in())?; // maybe change negative approach
                 } else {
                     Err(String::from("Could not find target station"))?;
                 }

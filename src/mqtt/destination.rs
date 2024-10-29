@@ -1,3 +1,4 @@
+use crate::mqtt::broker;
 use crate::processing::destination::Destination;
 use crate::processing::option::Configurable;
 use crate::processing::plan::DestinationModel;
@@ -6,11 +7,13 @@ use crate::processing::station::Command::{Ready, Stop};
 use crate::processing::Train;
 use crate::util::{new_channel, Rx, Tx, GLOBAL_ID};
 use crossbeam::channel::{unbounded, Sender};
+use log::warn;
 use rumqttc::{Client, MqttOptions, QoS};
 use serde_json::{Map, Value};
 use std::sync::Arc;
 use std::thread::{sleep, spawn};
 use std::time::Duration;
+use tokio::runtime::Runtime;
 use tracing::debug;
 
 pub struct MqttDestination {
@@ -57,6 +60,7 @@ impl Destination for MqttDestination {
     }
 
     fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command> {
+        let runtime = Runtime::new().unwrap();
         debug!("starting mqtt destination...");
 
         let id = self.id;
@@ -65,27 +69,42 @@ impl Destination for MqttDestination {
         let url = self.url.clone();
         let port = self.port;
 
+        let (mut broker, mut link_tx, _link_rx) = broker::create_broker(port, url.clone(), id);
+
         spawn(move || {
-            let options = MqttOptions::new("id", url, port);
-            let (client, _connection) = Client::new(options, 10);
-            control.send(Ready(id)).unwrap();
-            loop {
-                if let Ok(command) = rx.try_recv() {
-                    match command {
-                        Stop(_) => break,
-                        _ => {}
-                    }
-                }
-                match receiver.try_recv() {
-                    Ok(train) => {
-                        if let Some(packet) = train.values {
-                            let payload = serde_json::to_string(&packet).unwrap();
-                            client.publish("datatracks", QoS::AtLeastOnce, false, payload).map_err(|e| e.to_string()).unwrap();
+            runtime.block_on(async move {
+
+                // Start the broker asynchronously
+                tokio::spawn(async move {
+                    broker.start().expect("Broker failed to start");
+                });
+
+                warn!("Embedded MQTT broker for sending is running...");
+                control.send(Ready(id)).unwrap();
+
+                link_tx.subscribe("#").unwrap(); // all topics
+
+                control.send(Ready(id)).unwrap();
+                loop {
+                    if let Ok(command) = rx.try_recv() {
+                        match command {
+                            Stop(_) => break,
+                            _ => {}
                         }
                     }
-                    _ => sleep(Duration::from_nanos(100))
+                    match receiver.try_recv() {
+                        Ok(train) => {
+                            warn!("Sending {:?}", train);
+                            if let Some(packet) = train.values {
+                                let payload = serde_json::to_string(&packet).unwrap();
+                                link_tx.publish("test/topic2", payload).map_err(|e| e.to_string()).unwrap();
+                            }
+                        }
+                        _ => tokio::time::sleep(Duration::from_nanos(100)).await
+                    }
                 }
-            }
+            });
+
         });
         tx
     }

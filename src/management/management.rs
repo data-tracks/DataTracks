@@ -1,11 +1,12 @@
 use crate::management::storage::Storage;
-use crate::mqtt::MqttSource;
+use crate::mqtt::{MqttDestination, MqttSource};
+use crate::processing::destination::Destination;
+use crate::processing::source::Source;
 use crate::processing::{DebugDestination, HttpSource, Plan};
 use crate::ui::start_web;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use tracing::info;
-use crate::processing::source::Source;
 
 pub struct Manager {
     storage: Arc<Mutex<Storage>>,
@@ -51,11 +52,17 @@ fn add_default(storage: Arc<Mutex<Storage>>) {
         plan.connect_in_out(1, source_id);
 
         let source = Box::new(MqttSource::new(String::from("127.0.0.1"), 6666));
-        let destination_id = source.get_id();
+        let source_id = source.get_id();
         plan.add_source(source);
-        plan.connect_in_out(2, destination_id);
+        plan.connect_in_out(1, source_id);
 
         let destination = Box::new(DebugDestination::new());
+        let destination_id = destination.get_id();
+        plan.add_destination(destination);
+        plan.connect_in_out(3, destination_id);
+
+        let destination = Box::new(MqttDestination::new(String::from("127.0.0.1"), 8888));
+        let destination_id = destination.get_id();
         plan.add_destination(destination);
         plan.connect_in_out(3, destination_id);
 

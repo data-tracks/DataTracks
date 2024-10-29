@@ -1,3 +1,4 @@
+use crate::mqtt::broker;
 use crate::processing::option::Configurable;
 use crate::processing::plan::SourceModel;
 use crate::processing::source::Source;
@@ -9,6 +10,7 @@ use crate::util::{Tx, GLOBAL_ID};
 use crate::value::{Dict, Value};
 use crossbeam::channel::{unbounded, Sender};
 use rumqttc::{Event, Incoming};
+use rumqttd::local::{LinkRx, LinkTx};
 use rumqttd::protocol::Publish;
 use rumqttd::{Broker, Config, ConnectionSettings, Notification, RouterConfig, ServerSettings};
 use serde_json::Map;
@@ -16,7 +18,8 @@ use std::collections::{BTreeMap, HashMap};
 use std::net::{SocketAddr, SocketAddrV4};
 use std::str;
 use std::sync::Arc;
-use std::thread::spawn;
+use std::thread::{sleep, spawn};
+use std::time::{Duration, Instant};
 use tokio::runtime::Runtime;
 use tracing::{debug, warn};
 
@@ -28,12 +31,6 @@ pub struct MqttSource {
 }
 
 
-impl MqttSource {
-    pub fn new(url: String, port: u16) -> Self {
-        MqttSource { port, url, id: GLOBAL_ID.new_id(), outs: HashMap::new() }
-    }
-}
-
 impl Configurable for MqttSource {
     fn get_name(&self) -> String {
         String::from("Mqtt")
@@ -44,6 +41,12 @@ impl Configurable for MqttSource {
         options.insert("url".to_string(), serde_json::Value::String(self.url.clone()));
         options.insert("port".to_string(), serde_json::Value::Number(self.port.into()));
         options
+    }
+}
+
+impl MqttSource {
+    pub fn new(url: String, port: u16) -> Self {
+        MqttSource { port, url, id: GLOBAL_ID.new_id(), outs: HashMap::new() }
     }
 }
 
@@ -64,38 +67,9 @@ impl Source for MqttSource {
         let url = self.url.clone();
         let id = self.id;
 
+
         spawn(move || {
-            let mut config = Config::default();
-
-            config.router = RouterConfig {
-                max_connections: 100,
-                max_outgoing_packet_count: 100,
-                max_segment_size: 100000000,
-                max_segment_count: 100000,
-                ..Default::default()
-            };
-
-            config.v4 = Some(
-                HashMap::from([
-                    (id.to_string(), ServerSettings {
-                        name: id.to_string(),
-                        listen: SocketAddr::V4(SocketAddrV4::new(url.parse().unwrap(), port)),
-                        tls: None,
-                        next_connection_delay_ms: 0,
-                        connections: ConnectionSettings {
-                            connection_timeout_ms: 10000,
-                            max_payload_size: 10000000,
-                            max_inflight_count: 1000,
-                            auth: None,
-                            external_auth: None,
-                            dynamic_filters: false,
-                        },
-                    })
-                ])
-            );
-            // Create the broker with the configuration
-            let mut broker = Broker::new(config);
-            let (mut link_tx, mut link_rx) = broker.link("link").unwrap();
+            let (mut broker, mut link_tx, mut link_rx) = broker::create_broker(port, url, id);
 
             runtime.block_on(async move {
 
@@ -116,30 +90,25 @@ impl Source for MqttSource {
                             _ => {}
                         }
                     }
-
-                    let notification = match link_rx.recv().unwrap() {
-                        Some(v) => v,
-                        None => continue,
-                    };
-
-                    //error!("message: {:?}", notification);
-                    match notification {
-                        Notification::Forward(f) => {
-                            let mut dict = BTreeMap::new();
-                            dict.insert("$data".to_string(), Value::text(str::from_utf8(&f.publish.payload).unwrap()));
-                            dict.insert("$topic".to_string(), Value::text(str::from_utf8(&f.publish.topic).unwrap()));
-                            send_message(Value::dict(dict).as_dict().unwrap(), &outs)
+                    if let Some(notification) = link_rx.recv().unwrap() {
+                        match notification {
+                            Notification::Forward(f) => {
+                                let mut dict = BTreeMap::new();
+                                dict.insert("$data".to_string(), Value::text(str::from_utf8(&f.publish.payload).unwrap()));
+                                dict.insert("$topic".to_string(), Value::text(str::from_utf8(&f.publish.topic).unwrap()));
+                                send_message(Value::dict(dict).as_dict().unwrap(), &outs)
+                            }
+                            msg => {
+                                warn!("Received unexpected message: {:?}", msg);
+                            }
                         }
-                        _msg => {
-                            //warn!("Received unexpected message: {:?}", msg);
-                        }
+                    } else {
+                        tokio::time::sleep(Duration::from_nanos(100)).await;
                     }
                 }
-
                 warn!("MQTT broker has been stopped.");
             });
         });
-
         tx
     }
 
