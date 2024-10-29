@@ -169,7 +169,7 @@ impl Station {
         if let Some(transform) = self.transform.clone() {
             transform.derive_output_layout(inputs)
         } else {
-            inputs.values().into_iter().next().cloned().cloned().unwrap_or(Layout::default())
+            inputs.values().next().cloned().cloned().unwrap_or(Layout::default())
         }
     }
 

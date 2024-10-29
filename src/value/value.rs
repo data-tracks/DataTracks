@@ -425,9 +425,7 @@ impl Sub for &Value {
     type Output = Value;
 
     fn sub(self, _rhs: Self) -> Self::Output {
-        match self {
-            _ => todo!()
-        }
+        todo!()
     }
 }
 
@@ -435,9 +433,7 @@ impl Mul for &Value {
     type Output = Value;
 
     fn mul(self, _rhs: Self) -> Self::Output {
-        match self {
-            _ => todo!()
-        }
+        todo!()
     }
 }
 

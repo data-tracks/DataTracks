@@ -2,7 +2,7 @@ use crate::processing::destination::{parse_destination, Destination};
 use crate::processing::plan::Status::Stopped;
 use crate::processing::source::{parse_source, Source};
 use crate::processing::station::{Command, Station};
-use crate::processing::transform;
+use crate::processing::{transform, Train};
 use crate::ui::{ConfigContainer, ConfigModel, StringModel};
 use crate::util::GLOBAL_ID;
 use core::default::Default;
@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize, Serializer};
 use serde_json::{Map, Value};
 use std::cmp::PartialEq;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 pub struct Plan {
     pub id: i64,
@@ -93,7 +93,7 @@ impl Plan {
                 let mut stops = self.get_connected_stations(s.get_id());
                 stops.sort();
                 if stops.is_empty() {
-                    format!("{}", s.dump_source() )
+                    s.dump_source().to_string()
                 }else {
                     format!("{}:{}", s.dump_source(), stops.iter().map(|s|s.to_string()).collect::<Vec<String>>().join(",") )
                 }
@@ -109,7 +109,7 @@ impl Plan {
 
                 let stops = self.get_connected_stations(s.get_id());
                 if stops.is_empty() {
-                    format!("{}", s.dump_destination() )
+                    s.dump_destination().to_string()
                 }else {
                     format!("{}:{}", s.dump_destination(), stops.iter().map(|s|s.to_string()).collect::<Vec<String>>().join(",") )
                 }
@@ -346,7 +346,7 @@ impl Plan {
         for destination in self.destinations.values_mut() {
             let targets = map.get(&destination.get_id()).unwrap();
             for target in targets {
-                if let Some(station) = self.stations.get_mut(&target) {
+                if let Some(station) = self.stations.get_mut(target) {
                     station.add_out(-1, destination.get_in())?;
                 } else {
                     Err(String::from("Could not find target station"))?;
@@ -365,7 +365,7 @@ impl Plan {
         for source in self.sources.values_mut() {
             let targets = map.get(&source.get_id()).unwrap();
             for target in targets {
-                if let Some(station) = self.stations.get_mut(&target) {
+                if let Some(station) = self.stations.get_mut(target) {
                     let tx = station.get_in();
                     source.add_out(station.stop, tx)
                 }
@@ -448,7 +448,7 @@ impl Plan {
     }
 
     fn get_station(&self, stop_num: &i64) -> Result<&Station, String> {
-        self.stations.get(&stop_num).ok_or_else(|| format!("Station {} not found", stop_num))
+        self.stations.get(stop_num).ok_or_else(|| format!("Station {} not found", stop_num))
     }
 
     pub fn layouts_match(&self) -> Result<(), String> {
@@ -471,12 +471,12 @@ impl Plan {
                     let station = self.get_station(stop_num)?;
 
                     let stations = self.get_previous_stations(stop_num);
-                    if !stations.keys().into_iter().all(|num| layouts.contains_key(num)) {
+                    if !stations.keys().all(|num| layouts.contains_key(num)) {
                         // let's try later
                         continue
                     }
                     let mut inputs = HashMap::new();
-                    stations.into_iter().for_each(|(num, station)| {
+                    stations.into_iter().for_each(|(num, _station)| {
                         inputs.insert(num.to_string(), layouts.get(&num).unwrap());
                     });
 
@@ -496,7 +496,7 @@ impl Plan {
 
     fn get_previous_stations(&self, station: &i64) -> HashMap<i64, &Station> {
         let mut befores = HashMap::new();
-        for (_, mut stations) in &self.lines {
+        for (_, stations) in &self.lines {
             if stations.is_empty() {
                 continue;
             }

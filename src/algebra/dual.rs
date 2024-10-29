@@ -25,7 +25,7 @@ impl Algebra for Dual {
         Layout::default()
     }
 
-    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {
+    fn derive_output_layout(&self, _inputs: HashMap<String, &Layout>) -> Layout {
         Layout::new(OutputType::Integer)
     }
 }

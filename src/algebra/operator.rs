@@ -222,13 +222,13 @@ impl TupleOp {
                 let mut map = HashMap::new();
                 map.insert(Some(n.name.clone()), Layout::default());
                 let dict = OutputType::Dict(Box::new(DictType::new(map)));
-                let layout = Layout::new(dict);
-                layout
+
+                Layout::new(dict)
             }
             Index(i) => {
                 let array = ArrayType::new(Layout::default(), Some((i.index + 1) as i32));
-                let layout = Layout::new(OutputType::Array(Box::new(array)));
-                layout
+
+                Layout::new(OutputType::Array(Box::new(array)))
             }
             TupleOp::Literal(_) => {
                 Layout::default()

@@ -35,7 +35,7 @@ pub trait Source: Send + Sync + Configurable {
     fn get_id(&self) -> i64;
 
     fn dump_source(&self) -> String {
-        format!("{}", Configurable::dump(self))
+        Configurable::dump(self).to_string()
     }
 
     fn serialize(&self) -> SourceModel;

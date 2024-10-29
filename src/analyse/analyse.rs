@@ -25,12 +25,12 @@ impl<'plan> Analyser<'plan> {
             }
             let start = s.clone().remove(0);
             // 1--2 -> 1 & 2
-            self.check_in_and_out(&mut summery, start.clone(), String::from(format!("Station {} is not connected to an in or output.", start.clone())));
+            self.check_in_and_out(&mut summery, start, format!("Station {} is not connected to an in or output.", start.clone()));
             let end = s.clone().pop().unwrap();
             if end == start {
                 return
             }
-            self.check_in_and_out(&mut summery, end.clone(), String::from(format!("Station {} is not connected to an in or output.", end)));
+            self.check_in_and_out(&mut summery, end, format!("Station {} is not connected to an in or output.", end));
         });
 
         self.plan.sources.values().for_each(|s| {

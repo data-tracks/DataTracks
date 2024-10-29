@@ -256,7 +256,7 @@ fn parse_field(type_: OutputType, reader: &mut BufferedReader) -> (Layout, Optio
             ':' => {
                 let mut num = String::new();
                 while let Some(char) = reader.peek_next() {
-                    if let Some(_) = char.to_digit(10) {
+                    if char.is_digit(10) {
                         num.push(char);
                         reader.next();
                     } else {

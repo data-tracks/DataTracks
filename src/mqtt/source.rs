@@ -8,21 +8,17 @@ use crate::ui::{ConfigModel, StringModel};
 use crate::util::{Tx, GLOBAL_ID};
 use crate::value::{Dict, Value};
 use crossbeam::channel::{unbounded, Sender};
-use log::error;
-use rumqttc::{Client, Event, Incoming, MqttOptions};
+use rumqttc::{Event, Incoming};
 use rumqttd::protocol::Publish;
-use rumqttd::Meter::Router;
-use rumqttd::{BridgeConfig, Broker, Config, ConnectionSettings, Notification, RouterConfig, ServerSettings};
+use rumqttd::{Broker, Config, ConnectionSettings, Notification, RouterConfig, ServerSettings};
 use serde_json::Map;
 use std::collections::{BTreeMap, HashMap};
-use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
+use std::net::{SocketAddr, SocketAddrV4};
+use std::str;
 use std::sync::Arc;
-use std::thread::{sleep, spawn};
-use std::time::Duration;
-use std::{str, thread};
+use std::thread::spawn;
 use tokio::runtime::Runtime;
 use tracing::{debug, warn};
-use tracing_subscriber::fmt::format;
 
 pub struct MqttSource {
     id: i64,
@@ -110,17 +106,15 @@ impl Source for MqttSource {
 
                 warn!("Embedded MQTT broker is running...");
                 control.send(Ready(id)).unwrap();
-                warn!("started");
 
                 link_tx.subscribe("#").unwrap(); // all topics
 
                 loop {
-                    match rx.try_recv() {
-                        Ok(command) => match command {
+                    if let Ok(command) = rx.try_recv() {
+                        match command {
                             Stop(_) => break,
                             _ => {}
-                        },
-                        _ => {}
+                        }
                     }
 
                     let notification = match link_rx.recv().unwrap() {
@@ -128,7 +122,7 @@ impl Source for MqttSource {
                         None => continue,
                     };
 
-                    error!("message: {:?}", notification);
+                    //error!("message: {:?}", notification);
                     match notification {
                         Notification::Forward(f) => {
                             let mut dict = BTreeMap::new();
@@ -136,8 +130,8 @@ impl Source for MqttSource {
                             dict.insert("$topic".to_string(), Value::text(str::from_utf8(&f.publish.topic).unwrap()));
                             send_message(Value::dict(dict).as_dict().unwrap(), &outs)
                         }
-                        msg => {
-                            warn!("Received unexpected message: {:?}", msg);
+                        _msg => {
+                            //warn!("Received unexpected message: {:?}", msg);
                         }
                     }
                 }
@@ -225,7 +219,7 @@ impl TryFrom<Event> for Dict {
                 match i {
                     Incoming::Publish(p) => {
                         let mut map = BTreeMap::new();
-                        map.insert("$data".to_string(), Value::text(str::from_utf8(&p.payload).map_err(|e| e.to_string())?.into()));
+                        map.insert("$data".to_string(), Value::text(str::from_utf8(&p.payload).map_err(|e| e.to_string())?));
                         map.insert("$topic".to_string(), Value::text(&p.topic));
                         Ok(Value::dict(map).as_dict().unwrap())
                     }

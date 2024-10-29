@@ -67,15 +67,14 @@ impl Destination for MqttDestination {
 
         spawn(move || {
             let options = MqttOptions::new("id", url, port);
-            let (mut client, _connection) = Client::new(options, 10);
+            let (client, _connection) = Client::new(options, 10);
             control.send(Ready(id)).unwrap();
             loop {
-                match rx.try_recv() {
-                    Ok(command) => match command {
+                if let Ok(command) = rx.try_recv() {
+                    match command {
                         Stop(_) => break,
                         _ => {}
-                    },
-                    _ => {}
+                    }
                 }
                 match receiver.try_recv() {
                     Ok(train) => {

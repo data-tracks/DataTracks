@@ -166,7 +166,7 @@ impl Algebra for Join {
         todo!()
     }
 
-    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {
+    fn derive_output_layout(&self, _inputs: HashMap<String, &Layout>) -> Layout {
         todo!()
     }
 }
