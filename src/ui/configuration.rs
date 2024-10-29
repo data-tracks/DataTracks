@@ -26,12 +26,12 @@ impl Display for ConfigModel {
 }
 
 impl ConfigModel {
-    pub fn as_str(&self) -> &str {
+    pub fn as_str(&self) -> String {
         match self {
-            ConfigModel::String(string) => string.string.as_str(),
-            ConfigModel::Number(num) => num.number.to_string().as_str(),
-            ConfigModel::List(list) => list.list.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(",").as_str(),
-            ConfigModel::Boolean(b) => b.boolean.to_string().as_str(),
+            ConfigModel::String(string) => string.string.clone(),
+            ConfigModel::Number(num) => num.number.to_string(),
+            ConfigModel::List(list) => list.list.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(","),
+            ConfigModel::Boolean(b) => b.boolean.to_string(),
         }
     }
 

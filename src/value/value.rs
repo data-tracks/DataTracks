@@ -302,6 +302,12 @@ impl From<&str> for Value {
     }
 }
 
+impl From<String> for Value {
+    fn from(value: String) -> Self {
+        Value::text(&value)
+    }
+}
+
 impl From<bool> for Value {
     fn from(value: bool) -> Self {
         Value::bool(value)

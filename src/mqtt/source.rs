@@ -2,24 +2,27 @@ use crate::processing::option::Configurable;
 use crate::processing::plan::SourceModel;
 use crate::processing::source::Source;
 use crate::processing::station::Command;
-use crate::processing::station::Command::Ready;
-use crate::processing::{OutputType, Train};
+use crate::processing::station::Command::{Ready, Stop};
+use crate::processing::Train;
 use crate::ui::{ConfigModel, StringModel};
 use crate::util::{Tx, GLOBAL_ID};
 use crate::value::{Dict, Value};
 use crossbeam::channel::{unbounded, Sender};
-use mqtt_packet_3_5::{MqttPacket, PacketDecoder, PublishPacket};
-use rumqttc::{Client, Event, MqttOptions, Outgoing, Packet};
+use log::error;
+use rumqttc::{Client, Event, Incoming, MqttOptions};
+use rumqttd::protocol::Publish;
+use rumqttd::Meter::Router;
+use rumqttd::{BridgeConfig, Broker, Config, ConnectionSettings, Notification, RouterConfig, ServerSettings};
 use serde_json::Map;
 use std::collections::{BTreeMap, HashMap};
-use std::io::Write;
-use std::net::{TcpListener, TcpStream};
+use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::sync::Arc;
-use std::thread;
-use std::thread::sleep;
+use std::thread::{sleep, spawn};
 use std::time::Duration;
+use std::{str, thread};
 use tokio::runtime::Runtime;
 use tracing::{debug, warn};
+use tracing_subscriber::fmt::format;
 
 pub struct MqttSource {
     id: i64,
@@ -56,6 +59,7 @@ impl Source for MqttSource {
     }
 
     fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command> {
+        let runtime = Runtime::new().unwrap();
         debug!("starting mqtt source...");
 
         let (tx, rx) = unbounded();
@@ -64,30 +68,84 @@ impl Source for MqttSource {
         let url = self.url.clone();
         let id = self.id;
 
-        thread::spawn(move || {
-            let options = MqttOptions::new("id", url, port);
-            let (_client, mut connection) = Client::new(options, 10);
-            control.send(Ready(id)).unwrap();
-            loop {
-                if let Ok(command) = rx.try_recv() {
-                    match command {
-                        Command::Stop(_) => {
-                            break
-                        }
+        spawn(move || {
+            let mut config = Config::default();
+
+            config.router = RouterConfig {
+                max_connections: 100,
+                max_outgoing_packet_count: 100,
+                max_segment_size: 100000000,
+                max_segment_count: 100000,
+                ..Default::default()
+            };
+
+            config.v4 = Some(
+                HashMap::from([
+                    (id.to_string(), ServerSettings {
+                        name: id.to_string(),
+                        listen: SocketAddr::V4(SocketAddrV4::new(url.parse().unwrap(), port)),
+                        tls: None,
+                        next_connection_delay_ms: 0,
+                        connections: ConnectionSettings {
+                            connection_timeout_ms: 10000,
+                            max_payload_size: 10000000,
+                            max_inflight_count: 1000,
+                            auth: None,
+                            external_auth: None,
+                            dynamic_filters: false,
+                        },
+                    })
+                ])
+            );
+            // Create the broker with the configuration
+            let mut broker = Broker::new(config);
+            let (mut link_tx, mut link_rx) = broker.link("link").unwrap();
+
+            runtime.block_on(async move {
+
+                // Start the broker asynchronously
+                tokio::spawn(async move {
+                    broker.start().expect("Broker failed to start");
+                });
+
+                warn!("Embedded MQTT broker is running...");
+                control.send(Ready(id)).unwrap();
+                warn!("started");
+
+                link_tx.subscribe("#").unwrap(); // all topics
+
+                loop {
+                    match rx.try_recv() {
+                        Ok(command) => match command {
+                            Stop(_) => break,
+                            _ => {}
+                        },
                         _ => {}
                     }
-                }
-                if let Ok(message) = connection.try_recv() {
-                    if let Ok(message) = message {
-                        send_message(message.into(), &outs)
+
+                    let notification = match link_rx.recv().unwrap() {
+                        Some(v) => v,
+                        None => continue,
+                    };
+
+                    error!("message: {:?}", notification);
+                    match notification {
+                        Notification::Forward(f) => {
+                            let mut dict = BTreeMap::new();
+                            dict.insert("$data".to_string(), Value::text(str::from_utf8(&f.publish.payload).unwrap()));
+                            dict.insert("$topic".to_string(), Value::text(str::from_utf8(&f.publish.topic).unwrap()));
+                            send_message(Value::dict(dict).as_dict().unwrap(), &outs)
+                        }
+                        msg => {
+                            warn!("Received unexpected message: {:?}", msg);
+                        }
                     }
-                } else {
-                    sleep(Duration::from_nanos(10))
                 }
-            }
 
-
+                warn!("MQTT broker has been stopped.");
+            });
         });
+
         tx
     }
 
@@ -103,7 +161,7 @@ impl Source for MqttSource {
         SourceModel { type_name: String::from("Mqtt"), id: self.id.to_string(), configs: HashMap::new() }
     }
 
-    fn from( configs: HashMap<String, ConfigModel>) -> Result<Box<dyn Source>, String> {
+    fn from(configs: HashMap<String, ConfigModel>) -> Result<Box<dyn Source>, String> {
         let port = if let Some(port) = configs.get("port") {
             port.as_int()?
         } else {
@@ -132,22 +190,54 @@ pub fn send_message(dict: Dict, outs: &HashMap<i64, Tx<Train>>) {
     }
 }
 
-impl From<Event> for Dict {
-    fn from(value: Event) -> Self {
+impl TryFrom<Notification> for Dict {
+    type Error = String;
+
+    fn try_from(value: Notification) -> Result<Self, Self::Error> {
+        match value {
+            Notification::Forward(f) => {
+                f.publish.try_into()
+            }
+            _ => Err(format!("Unexpected notification {:?}", value))?
+        }
+    }
+}
+
+impl TryFrom<Publish> for Dict {
+    type Error = String;
+
+    fn try_from(publish: Publish) -> Result<Self, Self::Error> {
+        let mut dict = BTreeMap::new();
+        let value = str::from_utf8(&publish.payload).map_err(|e| e.to_string())?.into();
+        let topic = str::from_utf8(&publish.topic).map_err(|e| e.to_string())?.into();
+        dict.insert("$data".to_string(), value);
+        dict.insert("$topic".to_string(), topic);
+        Ok(Value::dict(dict).into())
+    }
+}
+
+impl TryFrom<Event> for Dict {
+    type Error = String;
+
+    fn try_from(value: Event) -> Result<Self, Self::Error> {
         match value {
             Event::Incoming(i) => {
-                i.into()
+                match i {
+                    Incoming::Publish(p) => {
+                        let mut map = BTreeMap::new();
+                        map.insert("$data".to_string(), Value::text(str::from_utf8(&p.payload).map_err(|e| e.to_string())?.into()));
+                        map.insert("$topic".to_string(), Value::text(&p.topic));
+                        Ok(Value::dict(map).as_dict().unwrap())
+                    }
+                    _ => Err(format!("Unexpected Incoming publish {:?}", i))?
+                }
             }
-            Event::Outgoing(o) => {
-                o.into()
+            Event::Outgoing(_) => {
+                Err(String::from("Unexpected Outgoing publish"))
             }
         }
     }
 }
 
-impl From<Packet> for Dict {
-    fn from(value: Outgoing) -> Self {
-        value.
-    }
-}
+
 

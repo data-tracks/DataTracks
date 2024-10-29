@@ -2,7 +2,7 @@ use crate::processing::destination::{parse_destination, Destination};
 use crate::processing::plan::Status::Stopped;
 use crate::processing::source::{parse_source, Source};
 use crate::processing::station::{Command, Station};
-use crate::processing::{transform, Train};
+use crate::processing::transform;
 use crate::ui::{ConfigContainer, ConfigModel, StringModel};
 use crate::util::GLOBAL_ID;
 use core::default::Default;
@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize, Serializer};
 use serde_json::{Map, Value};
 use std::cmp::PartialEq;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 pub struct Plan {
     pub id: i64,

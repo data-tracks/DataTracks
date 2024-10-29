@@ -8,13 +8,10 @@ use crate::util::{new_channel, Rx, Tx, GLOBAL_ID};
 use crossbeam::channel::{unbounded, Sender};
 use rumqttc::{Client, MqttOptions, QoS};
 use serde_json::{Map, Value};
-use std::net::TcpListener;
 use std::sync::Arc;
-use std::thread;
 use std::thread::{sleep, spawn};
 use std::time::Duration;
-use tokio::runtime::Runtime;
-use tracing::{debug, warn};
+use tracing::debug;
 
 pub struct MqttDestination {
     id: i64,
@@ -60,7 +57,6 @@ impl Destination for MqttDestination {
     }
 
     fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command> {
-        let rt = Runtime::new().unwrap();
         debug!("starting mqtt destination...");
 
         let id = self.id;
@@ -71,7 +67,7 @@ impl Destination for MqttDestination {
 
         spawn(move || {
             let options = MqttOptions::new("id", url, port);
-            let (mut client, mut _connection) = Client::new(options, 10);
+            let (mut client, _connection) = Client::new(options, 10);
             control.send(Ready(id)).unwrap();
             loop {
                 match rx.try_recv() {
@@ -83,7 +79,10 @@ impl Destination for MqttDestination {
                 }
                 match receiver.try_recv() {
                     Ok(train) => {
-                        client.publish("datatracks", QoS::AtLeastOnce, false, train.into()).map_err(|e| e.to_string()).unwrap();
+                        if let Some(packet) = train.values {
+                            let payload = serde_json::to_string(&packet).unwrap();
+                            client.publish("datatracks", QoS::AtLeastOnce, false, payload).map_err(|e| e.to_string()).unwrap();
+                        }
                     }
                     _ => sleep(Duration::from_nanos(100))
                 }
@@ -93,11 +92,11 @@ impl Destination for MqttDestination {
     }
 
     fn get_in(&self) -> Tx<Train> {
-        todo!()
+        self.sender.clone()
     }
 
     fn get_id(&self) -> i64 {
-        todo!()
+        self.id
     }
 
     fn serialize(&self) -> DestinationModel {
