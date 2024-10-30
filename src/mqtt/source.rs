@@ -27,7 +27,7 @@ pub struct MqttSource {
     id: i64,
     url: String,
     port: u16,
-    outs: HashMap<i64, Tx<Train>>,
+    outs: Vec<Tx<Train>>,
 }
 
 
@@ -46,7 +46,7 @@ impl Configurable for MqttSource {
 
 impl MqttSource {
     pub fn new(url: String, port: u16) -> Self {
-        MqttSource { port, url, id: GLOBAL_ID.new_id(), outs: HashMap::new() }
+        MqttSource { port, url, id: GLOBAL_ID.new_id(), outs: Vec::new() }
     }
 }
 
@@ -112,8 +112,8 @@ impl Source for MqttSource {
         tx
     }
 
-    fn add_out(&mut self, id: i64, out: Tx<Train>) {
-        self.outs.insert(id, out);
+    fn get_outs(&mut self) -> &mut Vec<Tx<Train>> {
+        &mut self.outs
     }
 
     fn get_id(&self) -> i64 {
@@ -146,9 +146,9 @@ impl Source for MqttSource {
     }
 }
 
-pub fn send_message(dict: Dict, outs: &HashMap<i64, Tx<Train>>) {
+pub fn send_message(dict: Dict, outs: &Vec<Tx<Train>>) {
     let train = Train::new(-1, vec![Value::Dict(dict)]);
-    for tx in outs.values() {
+    for tx in outs {
         tx.send(train.clone()).unwrap();
     }
 }

@@ -28,7 +28,7 @@ pub struct HttpSource {
     id: i64,
     url: String,
     port: u16,
-    outs: HashMap<i64, Tx<Train>>,
+    outs: Vec<Tx<Train>>,
 }
 
 impl HttpSource {
@@ -43,7 +43,7 @@ impl HttpSource {
         let value = Self::transform_to_value(payload);
         let train = Train::new(-1, vec![value::Value::Dict(value)]);
 
-        for out in state.source.lock().unwrap().values() {
+        for out in state.source.lock().unwrap().iter() {
             out.send(train.clone()).unwrap();
         }
 
@@ -69,9 +69,10 @@ impl HttpSource {
         dict.insert(String::from("topic"), value::Value::text(topic.as_str()));
 
         let train = Train::new(-1, vec![value::Value::Dict(dict)]);
-        for out in state.source.lock().unwrap().values() {
+        for out in state.source.lock().unwrap().iter() {
             out.send(train.clone()).unwrap();
         }
+
 
         // Return a response
         (StatusCode::OK, "Done".to_string())
@@ -130,8 +131,8 @@ impl Source for HttpSource {
         tx
     }
 
-    fn add_out(&mut self, id: i64, out: Tx<Train>) {
-        self.outs.insert(id, out);
+    fn get_outs(&mut self) -> &mut Vec<Tx<Train>> {
+        &mut self.outs
     }
 
     fn get_id(&self) -> i64 {
@@ -174,7 +175,7 @@ impl Source for HttpSource {
 
 #[derive(Clone)]
 struct SourceState {
-    pub source: Arc<Mutex<HashMap<i64, Tx<Train>>>>,
+    pub source: Arc<Mutex<Vec<Tx<Train>>>>,
 }
 
 impl From<Value> for value::Value {

@@ -19,6 +19,7 @@ mod management;
 mod http;
 mod mqtt;
 mod analyse;
+mod sql;
 
 fn main() {
     setup_logging();

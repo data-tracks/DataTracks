@@ -20,7 +20,7 @@ pub struct MqttDestination {
     id: i64,
     port: u16,
     url: String,
-    receiver: Option<Rx<Train>>,
+    receiver: Rx<Train>,
     sender: Tx<Train>,
 }
 
@@ -28,7 +28,7 @@ impl MqttDestination {
     pub fn new(url: String, port: u16) -> Self {
         let (tx, _num, rx) = new_channel();
         let id = GLOBAL_ID.new_id();
-        MqttDestination { id, port, url, receiver: Some(rx), sender: tx }
+        MqttDestination { id, port, url, receiver: rx, sender: tx }
     }
 }
 
@@ -64,7 +64,7 @@ impl Destination for MqttDestination {
         debug!("starting mqtt destination...");
 
         let id = self.id;
-        let receiver = self.receiver.take().unwrap();
+        let receiver = self.receiver.clone();
         let (tx, rx) = unbounded();
         let url = self.url.clone();
         let port = self.port;

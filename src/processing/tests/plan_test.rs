@@ -23,7 +23,7 @@ pub mod dummy {
         values: Option<Vec<Vec<Value>>>,
         delay: Duration,
         initial_delay: Duration,
-        senders: Option<Vec<Tx<Train>>>,
+        senders: Vec<Tx<Train>>,
     }
 
     impl DummySource {
@@ -33,7 +33,7 @@ pub mod dummy {
 
         pub(crate) fn new_with_delay(values: Vec<Vec<Value>>, initial_delay: Duration, delay: Duration) -> (Self, i64) {
             let id = GLOBAL_ID.new_id();
-            (DummySource { id, values: Some(values), initial_delay, delay, senders: Some(vec![]) }, id)
+            (DummySource { id, values: Some(values), initial_delay, delay, senders: vec![] }, id)
         }
     }
 
@@ -96,7 +96,7 @@ pub mod dummy {
             let delay = self.delay;
             let initial_delay = self.initial_delay;
             let values = self.values.take().unwrap();
-            let senders = self.senders.take().unwrap();
+            let senders = self.senders.clone();
             let (tx, rx) = unbounded();
 
             let _handle = spawn(move || {
@@ -126,9 +126,8 @@ pub mod dummy {
             tx
         }
 
-
-        fn add_out(&mut self, _id: i64, out: Tx<Train>) {
-            self.senders.as_mut().unwrap_or(&mut vec![]).push(out)
+        fn get_outs(&mut self) -> &mut Vec<Tx<Train>> {
+            &mut self.senders
         }
 
         fn get_id(&self) -> i64 {

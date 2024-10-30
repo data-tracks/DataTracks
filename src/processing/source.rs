@@ -30,7 +30,11 @@ pub trait Source: Send + Sync + Configurable {
 
     fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command>;
 
-    fn add_out(&mut self, id: i64, out: Tx<Train>);
+    fn add_out(&mut self, out: Tx<Train>) {
+        self.get_outs().push(out);
+    }
+
+    fn get_outs(&mut self) -> &mut Vec<Tx<Train>>;
 
     fn get_id(&self) -> i64;
 

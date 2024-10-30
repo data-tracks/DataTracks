@@ -367,7 +367,7 @@ impl Plan {
             for target in targets {
                 if let Some(station) = self.stations.get_mut(target) {
                     let tx = station.get_in();
-                    source.add_out(station.stop, tx)
+                    source.add_out(tx)
                 }
             }
 
