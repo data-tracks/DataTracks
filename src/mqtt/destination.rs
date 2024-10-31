@@ -5,12 +5,14 @@ use crate::processing::plan::DestinationModel;
 use crate::processing::station::Command;
 use crate::processing::station::Command::{Ready, Stop};
 use crate::processing::Train;
+use crate::ui::{ConfigModel, NumberModel, StringModel};
 use crate::util::{new_channel, Rx, Tx, GLOBAL_ID};
 use crossbeam::channel::{unbounded, Sender};
 use log::warn;
 use serde_json::{Map, Value};
+use std::collections::HashMap;
 use std::sync::Arc;
-use std::thread::{spawn};
+use std::thread::spawn;
 use std::time::Duration;
 use tokio::runtime::Runtime;
 use tracing::debug;
@@ -37,7 +39,10 @@ impl Configurable for MqttDestination {
     }
 
     fn get_options(&self) -> Map<String, Value> {
-        Map::new()
+        let mut options = Map::new();
+        options.insert(String::from("url"), Value::String(self.url.clone()));
+        options.insert(String::from("port"), Value::Number(self.port.into()));
+        options
     }
 }
 
@@ -117,13 +122,16 @@ impl Destination for MqttDestination {
     }
 
     fn serialize(&self) -> DestinationModel {
-        todo!()
+        let mut configs = HashMap::new();
+        configs.insert("url".to_string(), ConfigModel::String(StringModel::new(&self.url)));
+        configs.insert("port".to_string(), ConfigModel::Number(NumberModel::new(self.port as i64)));
+        DestinationModel { type_name: self.get_name(), id: self.id.to_string(), configs }
     }
 
     fn serialize_default() -> Option<DestinationModel>
     where
         Self: Sized,
     {
-        todo!()
+        None
     }
 }

@@ -86,6 +86,12 @@ pub struct NumberModel {
     pub number: i64,
 }
 
+impl NumberModel {
+    pub(crate) fn new(number: i64) -> NumberModel {
+        NumberModel { base_config: BaseConfig::default(), number }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ListModel {
     addable: bool,

@@ -39,7 +39,8 @@ impl Aggregate {
 
 impl Layoutable for Aggregate {
     fn derive_input_layout(&self) -> Layout {
-        todo!()
+        let ags = self.aggregates.iter().map(|(op, ops)| ops.derive_input_layout().merge(&op.derive_input_layout(vec![])).unwrap()).fold(Layout::default(), |a, b| a.merge(&b).unwrap());
+        self.group.derive_input_layout().merge(&ags).unwrap()
     }
 
     fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {

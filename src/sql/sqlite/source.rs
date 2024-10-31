@@ -9,13 +9,11 @@ use crossbeam::channel::Sender;
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::sync::Arc;
-use crate::algebra::AlgebraType;
 
 pub struct LiteSource {
     id: i64,
     outs: Vec<Tx<Train>>,
     query: String,
-    algebra: AlgebraType
 }
 
 impl LiteSource {}

@@ -5,13 +5,12 @@ use crate::algebra::operator::AggOp::{Avg, Count, Sum};
 use crate::algebra::operator::TupleOp::{Division, Equal, Minus, Multiplication, Not, Plus};
 use crate::algebra::Op::{Agg, Tuple};
 use crate::algebra::TupleOp::{And, Combine, Index, Input, Or};
-use crate::algebra::{BoxedIterator, BoxedValueHandler};
-use crate::processing::transform::Transform;
+use crate::algebra::BoxedValueHandler;
 use crate::processing::{ArrayType, DictType, Layout, OutputType};
 use crate::value::Value;
 use crate::value::Value::{Array, Bool, Dict, Float, Int, Null, Text, Wagon};
 use std::collections::{BTreeMap, HashMap};
-use std::fmt::{Debug, Formatter};
+use std::fmt::Debug;
 use std::str::FromStr;
 use std::vec;
 
@@ -533,42 +532,6 @@ impl Implementable<BoxedValueHandler> for LiteralOp {
     }
 }
 
-pub struct VariableOp {
-    name: String,
-    transform: Option<Transform>,
-    operator: Option<BoxedIterator>
-}
-
-impl Clone for VariableOp {
-    fn clone(&self) -> Self {
-        VariableOp{name: self.name.clone(), transform: None, operator: None}
-    }
-}
-
-impl Debug for VariableOp {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str(format!("${}", self.name).as_str())
-    }
-}
-
-impl PartialEq for VariableOp {
-    fn eq(&self, other: &Self) -> bool {
-        self.name == other.name
-    }
-}
-
-impl VariableOp {
-    pub fn new(name: String) -> Self {
-        VariableOp { name, transform: None, operator: None }
-    }
-
-    pub fn set_transform(&mut self, transform: Transform) {
-        self.operator = Some(transform.optimize(HashMap::new()));
-        self.transform = Some(transform);
-    }
-}
-
-
 #[derive(Clone, Debug, PartialEq)]
 pub struct ContextOp {
     name: String,
@@ -761,12 +724,12 @@ mod tests {
     use crate::algebra::Op::Tuple;
     use crate::algebra::Operator;
     use crate::algebra::TupleOp::{And, Division, Equal, Index, Literal, Minus, Multiplication, Name, Not, Or, Plus};
+    use crate::analyse::Layoutable;
     use crate::processing::OutputType::{Array, Dict};
     use crate::processing::{ArrayType, DictType, Layout, OutputType};
     use crate::value::Value;
     use std::collections::HashMap;
     use std::vec;
-    use crate::analyse::Layoutable;
 
     #[test]
     fn test_layout_literal() {
