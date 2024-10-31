@@ -2,7 +2,7 @@ use crate::algebra::{Algebra, AlgebraType, BoxedIterator, Scan, ValueIterator};
 use crate::language::Language;
 use crate::processing::option::Configurable;
 use crate::processing::train::Train;
-use crate::processing::transform::Transform::{Func, Lang};
+use crate::processing::transform::Transform::{Custom, Func, Lang};
 use crate::processing::Layout;
 use crate::value::Value;
 use crate::{algebra, language};
@@ -19,6 +19,7 @@ pub trait Taker: Send {
 pub enum Transform {
     Func(FuncTransform),
     Lang(LanguageTransform),
+    Custom(CustomTransform),
 }
 
 impl Clone for Transform {
@@ -29,6 +30,9 @@ impl Clone for Transform {
             }
             Lang(language) => {
                 Lang(language.clone())
+            }
+            Custom(transformer) => {
+                Custom(transformer.clone())
             }
         }
     }
@@ -60,14 +64,16 @@ impl Transform {
     pub fn derive_input_layout(&self) -> Layout {
         match self {
             Func(f) => f.derive_input_layout(),
-            Lang(l) => l.derive_input_layout()
+            Lang(l) => l.derive_input_layout(),
+            Custom(t) => t.derive_input_layout()
         }
     }
 
     pub fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {
         match self {
             Func(f) => f.derive_output_layout(),
-            Lang(l) => l.derive_output_layout(inputs)
+            Lang(l) => l.derive_output_layout(inputs),
+            Custom(c) => c.derive_output_layout(inputs)
         }
     }
 
@@ -75,6 +81,7 @@ impl Transform {
         match self {
             Func(f) => f.dump(),
             Lang(f) => f.dump(),
+            Custom(c) => c.dump()
         }
     }
 
@@ -82,6 +89,7 @@ impl Transform {
         match self {
             Func(_) => "Func".to_string(),
             Lang(_) => "Lang".to_string(),
+            Custom(c) => c.get_name()
         }
     }
 
@@ -97,6 +105,7 @@ impl Transform {
                     initial
                 }
             },
+            Custom(c) => c.optimize(transforms)
         }
     }
 }
@@ -123,6 +132,7 @@ impl Configurable for Transform {
             Lang(l) => {
                 l.language.to_string()
             }
+            Custom(c) => c.get_name()
         }
     }
 
@@ -292,6 +302,27 @@ impl ValueIterator for FuncTransform {
         None
     }
 }
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CustomTransform{
+
+}
+
+impl Transformer for CustomTransform {
+    fn dump(&self) -> String {
+        todo!()
+    }
+
+    fn parse(&self, stencil: &str) -> Result<Transform, String> {
+        todo!()
+    }
+
+    fn get_name(&self) -> String {
+        todo!()
+    }
+}
+
+
 
 
 #[cfg(test)]

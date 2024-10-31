@@ -10,6 +10,7 @@ use crate::processing::transform::Transform;
 use crate::processing::{Layout, Train};
 use crate::value::Value;
 use std::collections::HashMap;
+use crate::analyse::Layoutable;
 
 pub type BoxedIterator = Box<dyn ValueIterator<Item=Value> + Send + 'static>;
 
@@ -73,13 +74,9 @@ impl Algebra for AlgebraType {
     }
 }
 
-pub trait Algebra: Clone {
+pub trait Algebra: Clone + Layoutable {
     type Iterator: Iterator<Item=Value> + Send + 'static;
     fn derive_iterator(&mut self) -> Self::Iterator;
-
-    fn derive_input_layout(&self) -> Layout;
-
-    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout;
 
 }
 

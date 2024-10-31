@@ -4,6 +4,7 @@ use crate::processing::{Layout, Train};
 use crate::value::Value;
 use std::collections::HashMap;
 use std::vec;
+use crate::analyse::Layoutable;
 
 #[derive(Clone)]
 pub struct VariableScan {
@@ -17,19 +18,22 @@ impl VariableScan {
     }
 }
 
+impl Layoutable for VariableScan {
+    fn derive_input_layout(&self) -> std::alloc::Layout {
+        todo!()
+    }
+
+    fn derive_output_layout(&self, inputs: HashMap<String, &std::alloc::Layout>) -> std::alloc::Layout {
+        todo!()
+    }
+}
+
 impl Algebra for VariableScan {
     type Iterator = BareVariableIterator;
     fn derive_iterator(&mut self) -> Self::Iterator {
         BareVariableIterator::new(self.name.clone(), self.inputs.iter_mut().map(|i| i.derive_iterator()).collect())
     }
 
-    fn derive_input_layout(&self) -> Layout {
-        todo!()
-    }
-
-    fn derive_output_layout(&self, _inputs: HashMap<String, &Layout>) -> Layout {
-        todo!()
-    }
 }
 
 pub struct BareVariableIterator {

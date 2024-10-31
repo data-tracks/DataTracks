@@ -7,11 +7,14 @@ use crate::util::{new_channel, Rx, Tx, GLOBAL_ID};
 use crossbeam::channel::Sender;
 use serde_json::{Map, Value};
 use std::sync::Arc;
+use crate::algebra::AlgebraType;
 
 pub struct LiteDestination {
     id: i64,
     receiver: Rx<Train>,
     sender: Tx<Train>,
+    query: String,
+    algebra: AlgebraType
 }
 
 impl LiteDestination {

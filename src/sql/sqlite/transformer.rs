@@ -1,6 +1,11 @@
+use crate::algebra::AlgebraType;
 use crate::processing::transform::{Transform, Transformer};
 
-pub struct LiteTransformer {}
+pub struct LiteTransformer {
+    id: i64,
+    query: String,
+    algebra: AlgebraType
+}
 
 impl Clone for LiteTransformer {
     fn clone(&self) -> Self {

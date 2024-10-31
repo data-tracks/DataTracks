@@ -417,7 +417,11 @@ pub mod tests {
             Dummy{{\"id\": {id2}, \"delay\":1, \"values\":{values4}}}:4\n\
             Out\n\
             Dummy{{\"id\":{destination}, \"result_size\":{len}}}:3",
-            id1 = source1, id2 = source4, values1 = dump(&values1.clone()), values4 = dump(&values4.clone()), destination = destination, len = 1);
+            id1 = source1,
+            id2 = source4,
+            values1 = dump(&values1.clone()),
+            values4 = dump(&values4.clone()),
+            destination = destination, len = 1);
 
         let mut plan = Plan::parse(&stencil).unwrap();
         let result = plan.get_result(destination);
@@ -529,7 +533,9 @@ pub mod tests {
             In\n\
             Dummy{{\"id\":{source}, \"delay\":1, \"values\":{values}}}:1\n\
             Out\n\
-            Dummy{{\"id\":{destination}, \"result_size\":{size}}}:2", values = dump(&values.clone()), size = 1)
+            Dummy{{\"id\":{destination}, \"result_size\":{size}}}:2",
+                     values = dump(&values.clone()),
+                     size = 1)
         ).unwrap();
 
         plan.operate();
@@ -645,15 +651,18 @@ pub mod tests {
             Out\n\
             Dummy{{\"id\":{destination}, \"result_size\":{size}}}:2\n\
             Transform\n\
-            $example:Dummy{{}}", query = query,
-                     source = source, values = dump(&values.clone()), size = 1, destination = destination)
+            $example:Dummy{{}}",
+                     query = query,
+                     source = source,
+                     values = dump(&values.clone()),
+                     size = 1,
+                     destination = destination)
         ).unwrap();
 
         // get result arc
         let result = plan.get_result(destination);
 
         plan.operate();
-
 
         // start sources
         plan.send_control(&source, Ready(0));

@@ -10,7 +10,6 @@ use crate::util::{Tx, GLOBAL_ID};
 use crate::value::{Dict, Value};
 use crossbeam::channel::{unbounded, Sender};
 use rumqttc::{Event, Incoming};
-use rumqttd::local::{LinkRx, LinkTx};
 use rumqttd::protocol::Publish;
 use rumqttd::{Broker, Config, ConnectionSettings, Notification, RouterConfig, ServerSettings};
 use serde_json::Map;
