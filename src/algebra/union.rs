@@ -3,6 +3,7 @@ use crate::processing::transform::Transform;
 use crate::processing::{Layout, Train};
 use crate::value::Value;
 use std::collections::HashMap;
+use crate::analyse::Layoutable;
 
 #[derive(Clone)]
 pub struct Union {
@@ -13,6 +14,16 @@ pub struct Union {
 impl Union {
     pub fn new(inputs: Vec<AlgebraType>) -> Self {
         Self { inputs, distinct: true }
+    }
+}
+
+impl Layoutable for Union {
+    fn derive_input_layout(&self) -> Layout {
+        todo!()
+    }
+
+    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {
+        todo!()
     }
 }
 
@@ -28,13 +39,6 @@ impl Algebra for Union {
         }
     }
 
-    fn derive_input_layout(&self) -> Layout {
-        todo!()
-    }
-
-    fn derive_output_layout(&self, _inputs: HashMap<String, &Layout>) -> Layout {
-        todo!()
-    }
 }
 
 pub struct UnionIterator {

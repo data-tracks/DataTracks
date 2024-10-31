@@ -6,6 +6,7 @@ use crate::processing::transform::Transform;
 use crate::processing::{Layout, Train};
 use crate::value::Value;
 use std::collections::HashMap;
+use crate::analyse::Layoutable;
 
 #[derive(Clone)]
 pub struct Project {
@@ -55,6 +56,16 @@ impl ValueIterator for ProjectIterator {
     }
 }
 
+impl Layoutable for Project {
+    fn derive_input_layout(&self) -> Layout {
+        self.project.derive_input_layout()
+    }
+
+    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {
+        self.project.derive_output_layout(inputs)
+    }
+}
+
 impl Algebra for Project {
     type Iterator = ProjectIterator;
 
@@ -62,13 +73,5 @@ impl Algebra for Project {
         let project = implement(&self.project);
         let input = self.input.derive_iterator();
         ProjectIterator { input, project }
-    }
-
-    fn derive_input_layout(&self) -> Layout {
-        self.project.derive_input_layout()
-    }
-
-    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {
-        self.project.derive_output_layout(inputs)
     }
 }

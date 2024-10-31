@@ -1,5 +1,6 @@
-use std::alloc::Layout;
+
 use std::collections::HashMap;
+use crate::processing::Layout;
 
 pub trait Layoutable {
     fn derive_input_layout(&self) -> Layout;

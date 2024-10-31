@@ -766,6 +766,7 @@ mod tests {
     use crate::value::Value;
     use std::collections::HashMap;
     use std::vec;
+    use crate::analyse::Layoutable;
 
     #[test]
     fn test_layout_literal() {

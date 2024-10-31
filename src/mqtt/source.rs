@@ -11,14 +11,13 @@ use crate::value::{Dict, Value};
 use crossbeam::channel::{unbounded, Sender};
 use rumqttc::{Event, Incoming};
 use rumqttd::protocol::Publish;
-use rumqttd::{Broker, Config, ConnectionSettings, Notification, RouterConfig, ServerSettings};
+use rumqttd::{Notification};
 use serde_json::Map;
 use std::collections::{BTreeMap, HashMap};
-use std::net::{SocketAddr, SocketAddrV4};
 use std::str;
 use std::sync::Arc;
-use std::thread::{sleep, spawn};
-use std::time::{Duration, Instant};
+use std::thread::{spawn};
+use std::time::{Duration};
 use tokio::runtime::Runtime;
 use tracing::{debug, warn};
 

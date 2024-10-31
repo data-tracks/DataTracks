@@ -30,23 +30,7 @@ pub enum AlgebraType {
     Variable(VariableScan),
 }
 
-
-impl Algebra for AlgebraType {
-    type Iterator = BoxedIterator;
-
-    fn derive_iterator(&mut self) -> Self::Iterator {
-        match self {
-            AlgebraType::Scan(s) => Box::new(s.derive_iterator()),
-            AlgebraType::Project(p) => Box::new(p.derive_iterator()),
-            AlgebraType::Filter(f) => Box::new(f.derive_iterator()),
-            AlgebraType::Join(j) => Box::new(j.derive_iterator()),
-            AlgebraType::Union(u) => Box::new(u.derive_iterator()),
-            AlgebraType::Aggregate(a) => Box::new(a.derive_iterator()),
-            AlgebraType::Variable(s) => Box::new(s.derive_iterator()),
-            AlgebraType::Dual(d) => Box::new(d.derive_iterator())
-        }
-    }
-
+impl Layoutable for AlgebraType {
     fn derive_input_layout(&self) -> Layout {
         match self {
             AlgebraType::Scan(s) => s.derive_input_layout(),
@@ -72,6 +56,25 @@ impl Algebra for AlgebraType {
             AlgebraType::Dual(d) => d.derive_output_layout(inputs)
         }
     }
+}
+
+impl Algebra for AlgebraType {
+    type Iterator = BoxedIterator;
+
+    fn derive_iterator(&mut self) -> Self::Iterator {
+        match self {
+            AlgebraType::Scan(s) => Box::new(s.derive_iterator()),
+            AlgebraType::Project(p) => Box::new(p.derive_iterator()),
+            AlgebraType::Filter(f) => Box::new(f.derive_iterator()),
+            AlgebraType::Join(j) => Box::new(j.derive_iterator()),
+            AlgebraType::Union(u) => Box::new(u.derive_iterator()),
+            AlgebraType::Aggregate(a) => Box::new(a.derive_iterator()),
+            AlgebraType::Variable(s) => Box::new(s.derive_iterator()),
+            AlgebraType::Dual(d) => Box::new(d.derive_iterator())
+        }
+    }
+
+
 }
 
 pub trait Algebra: Clone + Layoutable {

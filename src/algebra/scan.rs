@@ -5,6 +5,7 @@ use crate::processing::{Layout, Train};
 use crate::value::Value;
 use std::collections::HashMap;
 use std::vec;
+use crate::analyse::Layoutable;
 
 #[derive(Clone)]
 pub struct Scan {
@@ -94,13 +95,7 @@ impl RefHandler for ScanIterator {
     }
 }
 
-impl Algebra for Scan {
-    type Iterator = ScanIterator;
-
-    fn derive_iterator(&mut self) -> Self::Iterator {
-        ScanIterator { index: self.index, values: vec![], trains: vec![] }
-    }
-
+impl Layoutable for Scan {
     fn derive_input_layout(&self) -> Layout {
         Layout::default()
     }
@@ -108,6 +103,15 @@ impl Algebra for Scan {
     fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {
         inputs.get(self.index.to_string().as_str()).cloned().unwrap().clone()
     }
+}
+
+impl Algebra for Scan {
+    type Iterator = ScanIterator;
+
+    fn derive_iterator(&mut self) -> Self::Iterator {
+        ScanIterator { index: self.index, values: vec![], trains: vec![] }
+    }
+
 }
 
 

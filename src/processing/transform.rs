@@ -10,6 +10,7 @@ use serde_json::Map;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
+use crate::analyse::Layoutable;
 
 pub trait Taker: Send {
     fn take(&mut self, wagons: &mut Vec<Train>) -> Vec<Train>;
@@ -54,8 +55,8 @@ impl Transform {
         }
         match stencil.split_once('|') {
             None => Err("Wrong transform format.".to_string()),
-            Some((module, logic)) => match Language::try_from(module) {
-                Ok(lang) => Ok(Lang(LanguageTransform::parse(lang, logic))),
+            Some((module, query)) => match Language::try_from(module) {
+                Ok(lang) => Ok(Lang(LanguageTransform::parse(lang, query))),
                 Err(_) => Err("Wrong transform format.".to_string())
             },
         }
@@ -194,7 +195,7 @@ impl LanguageTransform {
     }
 }
 
-fn build_algebra(language: &Language, query: &str) -> Result<AlgebraType, String> {
+pub fn build_algebra(language: &Language, query: &str) -> Result<AlgebraType, String> {
     match language {
         Language::Sql => language::sql::transform(query),
         Language::Mql => language::mql::transform(query)
@@ -306,6 +307,23 @@ impl ValueIterator for FuncTransform {
 #[derive(Clone, Debug, PartialEq)]
 pub struct CustomTransform{
 
+}
+
+impl CustomTransform {
+
+    fn optimize(&self, transforms: HashMap<String, Transform>) -> Box<dyn ValueIterator<Item=Value> + Send>{
+        todo!()
+    }
+}
+
+impl Layoutable for CustomTransform {
+    fn derive_input_layout(&self) -> Layout {
+        todo!()
+    }
+
+    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {
+        todo!()
+    }
 }
 
 impl Transformer for CustomTransform {

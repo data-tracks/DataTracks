@@ -2,6 +2,7 @@ use crate::algebra::algebra::BoxedValueLoader;
 use crate::algebra::function::Implementable;
 use crate::algebra::operator::AggOp;
 use crate::algebra::{Algebra, AlgebraType, BoxedIterator, BoxedValueHandler, Operator, ValueIterator};
+use crate::analyse::Layoutable;
 use crate::processing::transform::Transform;
 use crate::processing::{Layout, Train};
 use crate::value::Value;
@@ -36,6 +37,15 @@ impl Aggregate {
     }
 }
 
+impl Layoutable for Aggregate {
+    fn derive_input_layout(&self) -> Layout {
+        todo!()
+    }
+
+    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {
+        todo!()
+    }
+}
 
 impl Algebra for Aggregate {
     type Iterator = AggIterator;
@@ -45,14 +55,6 @@ impl Algebra for Aggregate {
         let group = self.group.implement().unwrap();
         let aggregates = self.aggregates.iter().map(|(a, o)| (a.implement().unwrap(), o.implement().unwrap())).collect();
         AggIterator::new(iter, aggregates, group)
-    }
-
-    fn derive_input_layout(&self) -> Layout {
-        todo!()
-    }
-
-    fn derive_output_layout(&self, _inputs: HashMap<String, &Layout>) -> Layout {
-        todo!()
     }
 }
 

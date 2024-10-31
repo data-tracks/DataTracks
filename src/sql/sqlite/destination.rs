@@ -1,13 +1,15 @@
+use crate::algebra::AlgebraType;
+use crate::language::Language::Sql;
 use crate::processing::destination::Destination;
 use crate::processing::option::Configurable;
 use crate::processing::plan::DestinationModel;
 use crate::processing::station::Command;
+use crate::processing::transform::build_algebra;
 use crate::processing::Train;
 use crate::util::{new_channel, Rx, Tx, GLOBAL_ID};
 use crossbeam::channel::Sender;
 use serde_json::{Map, Value};
 use std::sync::Arc;
-use crate::algebra::AlgebraType;
 
 pub struct LiteDestination {
     id: i64,
@@ -18,9 +20,10 @@ pub struct LiteDestination {
 }
 
 impl LiteDestination {
-    pub fn new() -> LiteDestination {
+    pub fn new(query: String) -> LiteDestination {
+        let algebra = build_algebra(&Sql, &query).unwrap();
         let (tx, _num, rx) = new_channel();
-        LiteDestination { id: GLOBAL_ID.new_id(), receiver: rx, sender: tx }
+        LiteDestination { id: GLOBAL_ID.new_id(), receiver: rx, sender: tx, query, algebra}
     }
 }
 

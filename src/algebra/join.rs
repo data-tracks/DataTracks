@@ -4,6 +4,7 @@ use crate::processing::transform::Transform;
 use crate::processing::{Layout, Train};
 use crate::value::Value;
 use std::collections::HashMap;
+use crate::analyse::Layoutable;
 
 #[derive(Clone)]
 pub struct Join {
@@ -149,6 +150,16 @@ impl ValueIterator for JoinIterator {
     }
 }
 
+impl Layoutable for Join {
+    fn derive_input_layout(&self) -> Layout {
+        todo!()
+    }
+
+    fn derive_output_layout(&self, _inputs: HashMap<String, &Layout>) -> Layout {
+        todo!()
+    }
+}
+
 impl Algebra for Join {
     type Iterator = JoinIterator;
 
@@ -162,13 +173,6 @@ impl Algebra for Join {
         JoinIterator::new(left_hash, right_hash, out, left, right)
     }
 
-    fn derive_input_layout(&self) -> Layout {
-        todo!()
-    }
-
-    fn derive_output_layout(&self, _inputs: HashMap<String, &Layout>) -> Layout {
-        todo!()
-    }
 }
 
 #[cfg(test)]

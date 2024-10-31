@@ -1,2 +1,2 @@
-#[cfg(tests)]
+#[cfg(test)]
 pub mod tests {}

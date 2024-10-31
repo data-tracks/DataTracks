@@ -656,6 +656,7 @@ impl From<transform::Transform> for ConfigContainer {
                 map.insert(String::from("query"), ConfigModel::String(StringModel::new(&l.query.to_string())));
                 ConfigContainer::new(String::from("Transform"), map)
             }
+            transform::Transform::Custom(_) => todo!()
         }
     }
 }

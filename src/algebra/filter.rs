@@ -5,7 +5,7 @@ use crate::processing::transform::Transform;
 use crate::processing::{Layout, Train};
 use crate::value::Value;
 use std::collections::HashMap;
-
+use crate::analyse::Layoutable;
 
 #[derive(Clone)]
 pub struct Filter {
@@ -59,6 +59,15 @@ impl ValueIterator for FilterIterator {
     }
 }
 
+impl Layoutable for Filter {
+    fn derive_input_layout(&self) -> Layout {
+        todo!()
+    }
+
+    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {
+        self.input.derive_output_layout(inputs)
+    }
+}
 
 impl Algebra for Filter {
     type Iterator = FilterIterator;
@@ -69,11 +78,4 @@ impl Algebra for Filter {
         FilterIterator { input, condition }
     }
 
-    fn derive_input_layout(&self) -> Layout {
-        todo!()
-    }
-
-    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {
-        self.input.derive_output_layout(inputs)
-    }
 }

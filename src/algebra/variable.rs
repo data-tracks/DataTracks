@@ -19,11 +19,11 @@ impl VariableScan {
 }
 
 impl Layoutable for VariableScan {
-    fn derive_input_layout(&self) -> std::alloc::Layout {
+    fn derive_input_layout(&self) -> Layout {
         todo!()
     }
 
-    fn derive_output_layout(&self, inputs: HashMap<String, &std::alloc::Layout>) -> std::alloc::Layout {
+    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {
         todo!()
     }
 }
