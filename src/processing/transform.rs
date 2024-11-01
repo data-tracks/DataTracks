@@ -1,4 +1,5 @@
 use crate::algebra::{Algebra, AlgebraType, BoxedIterator, Scan, ValueIterator};
+use crate::analyse::Layoutable;
 use crate::language::Language;
 use crate::processing::option::Configurable;
 use crate::processing::train::Train;
@@ -10,7 +11,6 @@ use serde_json::Map;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
-use crate::analyse::Layoutable;
 
 pub trait Taker: Send {
     fn take(&mut self, wagons: &mut Vec<Train>) -> Vec<Train>;
@@ -120,7 +120,7 @@ fn parse_function(stencil: &str) -> Result<Transform, String> {
         "dummy" => Ok(Func(FuncTransform::new_boxed(|_stop, value| {
             &value + &Value::int(1)
         }))),
-        _ => todo!()
+        _ => panic!()
     }
 }
 
@@ -138,7 +138,11 @@ impl Configurable for Transform {
     }
 
     fn get_options(&self) -> Map<String, serde_json::Value> {
-        todo!()
+        match self {
+            Func(f) => Map::new(),
+            Lang(l) => Map::new(),
+            Custom(c) => c.get_options()
+        }
     }
 }
 
@@ -312,6 +316,15 @@ pub struct CustomTransform{
 impl CustomTransform {
 
     fn optimize(&self, transforms: HashMap<String, Transform>) -> Box<dyn ValueIterator<Item=Value> + Send>{
+        todo!()
+    }
+}
+impl Configurable for CustomTransform {
+    fn get_name(&self) -> String {
+        todo!()
+    }
+
+    fn get_options(&self) -> Map<String, serde_json::Value> {
         todo!()
     }
 }

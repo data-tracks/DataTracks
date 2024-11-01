@@ -4,7 +4,7 @@ use crate::processing::option::Configurable;
 use crate::processing::plan::DestinationModel;
 use crate::processing::station::Command;
 use crate::processing::station::Command::{Ready, Stop};
-use crate::processing::Train;
+use crate::processing::{plan, Train};
 use crate::ui::{ConfigModel, NumberModel, StringModel};
 use crate::util::{new_channel, Rx, Tx, GLOBAL_ID};
 use crossbeam::channel::{unbounded, Sender};
@@ -89,12 +89,7 @@ impl Destination for MqttDestination {
 
                 control.send(Ready(id)).unwrap();
                 loop {
-                    if let Ok(command) = rx.try_recv() {
-                        match command {
-                            Stop(_) => break,
-                            _ => {}
-                        }
-                    }
+                    if plan::check_commands(&rx) { break; }
                     match receiver.try_recv() {
                         Ok(train) => {
                             warn!("Sending {:?}", train);
@@ -107,7 +102,6 @@ impl Destination for MqttDestination {
                     }
                 }
             });
-
         });
         tx
     }

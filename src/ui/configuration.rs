@@ -26,6 +26,14 @@ impl Display for ConfigModel {
 }
 
 impl ConfigModel {
+    pub fn text(text: &str) -> ConfigModel {
+        ConfigModel::String(StringModel::new(text))
+    }
+
+    pub fn number(number: i64) -> ConfigModel {
+        ConfigModel::Number(NumberModel::new(number))
+    }
+
     pub fn as_str(&self) -> String {
         match self {
             ConfigModel::String(string) => string.string.clone(),

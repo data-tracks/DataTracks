@@ -1,11 +1,11 @@
 use crate::algebra::algebra::{Algebra, BoxedIterator, ValueIterator};
 use crate::algebra::implement::implement;
 use crate::algebra::{AlgebraType, BoxedValueHandler, Operator};
+use crate::analyse::Layoutable;
 use crate::processing::transform::Transform;
 use crate::processing::{Layout, Train};
 use crate::value::Value;
 use std::collections::HashMap;
-use crate::analyse::Layoutable;
 
 #[derive(Clone)]
 pub struct Filter {
@@ -61,7 +61,7 @@ impl ValueIterator for FilterIterator {
 
 impl Layoutable for Filter {
     fn derive_input_layout(&self) -> Layout {
-        todo!()
+        self.input.derive_input_layout().merge(&self.condition.derive_input_layout()).unwrap()
     }
 
     fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {

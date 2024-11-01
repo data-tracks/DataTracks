@@ -1,3 +1,5 @@
+use std::any::{Any, TypeId};
+use std::borrow::Cow;
 use std::cmp::PartialEq;
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
@@ -13,6 +15,9 @@ use crate::value::Value::Wagon;
 use crate::value::{bool, Bool, Float, Int};
 use json::{parse, JsonValue};
 use serde::{Deserialize, Serialize};
+use sqlx::error::BoxDynError;
+use sqlx::sqlite::{SqliteRow, SqliteTypeInfo, SqliteValue, SqliteValueRef};
+use sqlx::{Column, Database, Decode, Error, FromRow, Row, Sqlite, Type, TypeInfo, ValueRef};
 use tracing::warn;
 
 #[derive(Eq, Clone, Debug, Serialize, Deserialize)]
@@ -199,6 +204,41 @@ macro_rules! value_display {
     };
 }
 
+impl FromRow<'_, SqliteRow> for Value {
+    fn from_row(row: &'_ SqliteRow) -> Result<Self, Error> {
+        let columns = row.columns();
+        let mut values = vec![];
+        for index in 0..columns.len() {
+            values.push(row.get::<Value, usize>(index));
+        }
+        if values.len() == 1 {
+            Ok(values.remove(0))
+        } else {
+            Ok(Value::array(values))
+        }
+    }
+}
+
+impl<'r> Decode<'r, Sqlite> for Value {
+    fn decode(value: <Sqlite as Database>::ValueRef<'r>) -> Result<Self, BoxDynError> {
+        let t = value.type_info();
+        let val: String = Decode::decode(value)?;
+        match t.name().to_lowercase().as_str() {
+            "null" => Ok(Value::null()),
+            "integer" => Ok(Value::int(val.parse().unwrap())),
+            "real" => Ok(Value::float(val.parse().unwrap())),
+            "boolean" => Ok(Value::bool(val.parse().unwrap())),
+            "text" => Ok(Value::text(&val)),
+            _ => Ok(Value::null())
+        }
+    }
+}
+
+impl Type<Sqlite> for Value {
+    fn type_info() -> <Sqlite as Database>::TypeInfo {
+        panic!()
+    }
+}
 
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {

@@ -1,10 +1,10 @@
 use crate::algebra::{Algebra, AlgebraType, BoxedIterator, ValueIterator};
+use crate::analyse::Layoutable;
 use crate::processing::transform::Transform;
 use crate::processing::{Layout, Train};
 use crate::value::Value;
 use std::collections::HashMap;
 use std::vec;
-use crate::analyse::Layoutable;
 
 #[derive(Clone)]
 pub struct VariableScan {
@@ -20,11 +20,11 @@ impl VariableScan {
 
 impl Layoutable for VariableScan {
     fn derive_input_layout(&self) -> Layout {
-        todo!()
+        Layout::default()
     }
 
     fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {
-        todo!()
+        Layout::default()
     }
 }
 

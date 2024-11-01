@@ -7,7 +7,7 @@ use crate::ui::{ConfigContainer, ConfigModel, StringModel};
 use crate::util::GLOBAL_ID;
 use core::default::Default;
 use crossbeam::channel;
-use crossbeam::channel::{unbounded, Sender};
+use crossbeam::channel::{unbounded, Receiver, Sender};
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize, Serializer};
 use serde_json::{Map, Value};
@@ -512,6 +512,17 @@ impl Plan {
         befores
     }
 }
+
+pub fn check_commands(rx: &Receiver<Command>) -> bool {
+    if let Ok(command) = rx.try_recv() {
+        match command {
+            Command::Stop(_) => return true,
+            _ => {}
+        }
+    }
+    false
+}
+
 
 enum Stencil {
     Network,

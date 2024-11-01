@@ -3,8 +3,8 @@ use crate::processing::destination::Destination;
 use crate::processing::option::Configurable;
 use crate::processing::plan::DestinationModel;
 use crate::processing::station::Command;
-use crate::processing::station::Command::{Ready, Stop};
-use crate::processing::Train;
+use crate::processing::station::Command::Ready;
+use crate::processing::{plan, Train};
 use crate::ui::{ConfigModel, StringModel};
 use crate::util::{new_channel, Rx, Tx, GLOBAL_ID};
 use crate::value::Value;
@@ -32,7 +32,6 @@ impl LiteDestination {
         LiteDestination { id: GLOBAL_ID.new_id(), receiver: rx, sender: tx, path, query }
     }
 }
-
 
 
 impl Configurable for LiteDestination {
@@ -74,12 +73,7 @@ impl Destination for LiteDestination {
                 let mut conn = SqliteConnection::connect(&format!("sqlite::{}", path)).await.unwrap();
                 control.send(Ready(id)).unwrap();
                 loop {
-                    if let Ok(command) = rx.try_recv() {
-                        match command {
-                            Stop(_) => break,
-                            _ => {}
-                        }
-                    }
+                    if plan::check_commands(&rx) { break; }
                     match receiver.try_recv() {
                         Ok(mut train) => {
                             let values = train.values.take().unwrap();

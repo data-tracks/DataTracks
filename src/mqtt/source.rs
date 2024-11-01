@@ -4,20 +4,20 @@ use crate::processing::plan::SourceModel;
 use crate::processing::source::Source;
 use crate::processing::station::Command;
 use crate::processing::station::Command::{Ready, Stop};
-use crate::processing::Train;
+use crate::processing::{plan, Train};
 use crate::ui::{ConfigModel, StringModel};
 use crate::util::{Tx, GLOBAL_ID};
 use crate::value::{Dict, Value};
 use crossbeam::channel::{unbounded, Sender};
 use rumqttc::{Event, Incoming};
 use rumqttd::protocol::Publish;
-use rumqttd::{Notification};
+use rumqttd::Notification;
 use serde_json::Map;
 use std::collections::{BTreeMap, HashMap};
 use std::str;
 use std::sync::Arc;
-use std::thread::{spawn};
-use std::time::{Duration};
+use std::thread::spawn;
+use std::time::Duration;
 use tokio::runtime::Runtime;
 use tracing::{debug, warn};
 
@@ -82,12 +82,7 @@ impl Source for MqttSource {
                 link_tx.subscribe("#").unwrap(); // all topics
 
                 loop {
-                    if let Ok(command) = rx.try_recv() {
-                        match command {
-                            Stop(_) => break,
-                            _ => {}
-                        }
-                    }
+                    if plan::check_commands(&rx) { break; }
                     if let Some(notification) = link_rx.recv().unwrap() {
                         match notification {
                             Notification::Forward(f) => {

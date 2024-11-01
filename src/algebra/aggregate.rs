@@ -4,7 +4,8 @@ use crate::algebra::operator::AggOp;
 use crate::algebra::{Algebra, AlgebraType, BoxedIterator, BoxedValueHandler, Operator, ValueIterator};
 use crate::analyse::Layoutable;
 use crate::processing::transform::Transform;
-use crate::processing::{Layout, Train};
+use crate::processing::OutputType::Array;
+use crate::processing::{ArrayType, Layout, Train};
 use crate::value::Value;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
@@ -44,7 +45,12 @@ impl Layoutable for Aggregate {
     }
 
     fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {
-        todo!()
+        if self.aggregates.len() == 1 {
+            let op = self.aggregates[0].1.clone().derive_output_layout(HashMap::new());
+            self.aggregates[0].0.derive_output_layout(vec![op], inputs)
+        } else {
+            Layout::new(Array(Box::new(ArrayType::new(Layout::default(), Some(self.aggregates.len() as i32)))))
+        }
     }
 }
 

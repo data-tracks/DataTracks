@@ -100,7 +100,7 @@ impl Layout {
             }
             (this, other) => {
                 warn!("not yet handled if {:?} accepts {:?}", this, other);
-                todo!()
+                panic!()
                 //layout.type_ = Or(vec![this.clone(), other.clone()]);
             }
         }

@@ -1,9 +1,9 @@
 use crate::algebra::{Algebra, BoxedIterator, ValueIterator};
+use crate::analyse::Layoutable;
 use crate::processing::transform::Transform;
 use crate::processing::{Layout, OutputType, Train};
 use crate::value::Value;
 use std::collections::HashMap;
-use crate::analyse::Layoutable;
 
 #[derive(Clone)]
 pub struct Dual {}
@@ -29,7 +29,7 @@ impl Algebra for Dual {
     type Iterator = DualIterator;
 
     fn derive_iterator(&mut self) -> Self::Iterator {
-        todo!()
+        DualIterator::new()
     }
 
 }

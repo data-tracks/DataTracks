@@ -41,6 +41,7 @@ pub trait Destination: Send + Configurable + Sync {
     where
         Self: Sized;
 
+
     #[cfg(test)]
     fn get_result_handle(&self) -> Arc<Mutex<Vec<Train>>> {
         panic!()

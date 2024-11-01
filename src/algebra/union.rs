@@ -1,9 +1,9 @@
 use crate::algebra::{Algebra, AlgebraType, BoxedIterator, ValueIterator};
+use crate::analyse::Layoutable;
 use crate::processing::transform::Transform;
 use crate::processing::{Layout, Train};
 use crate::value::Value;
 use std::collections::HashMap;
-use crate::analyse::Layoutable;
 
 #[derive(Clone)]
 pub struct Union {
@@ -19,11 +19,11 @@ impl Union {
 
 impl Layoutable for Union {
     fn derive_input_layout(&self) -> Layout {
-        todo!()
+        self.inputs.iter().map(|x| x.derive_input_layout()).fold(Layout::default(), |a, b| a.merge(&b).unwrap())
     }
 
     fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {
-        todo!()
+        self.inputs.get(0).unwrap().derive_output_layout(inputs)
     }
 }
 
