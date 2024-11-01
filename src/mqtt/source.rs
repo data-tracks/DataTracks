@@ -3,7 +3,7 @@ use crate::processing::option::Configurable;
 use crate::processing::plan::SourceModel;
 use crate::processing::source::Source;
 use crate::processing::station::Command;
-use crate::processing::station::Command::{Ready, Stop};
+use crate::processing::station::Command::Ready;
 use crate::processing::{plan, Train};
 use crate::ui::{ConfigModel, StringModel};
 use crate::util::{Tx, GLOBAL_ID};

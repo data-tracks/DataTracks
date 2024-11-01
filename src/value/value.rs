@@ -222,7 +222,7 @@ impl FromRow<'_, SqliteRow> for Value {
 impl<'r> Decode<'r, Sqlite> for Value {
     fn decode(value: <Sqlite as Database>::ValueRef<'r>) -> Result<Self, BoxDynError> {
         let t = value.type_info();
-        let val: String = Decode::decode(value)?;
+        let val = &Decode::<String>::decode(value)?;
         match t.name().to_lowercase().as_str() {
             "null" => Ok(Value::null()),
             "integer" => Ok(Value::int(val.parse().unwrap())),

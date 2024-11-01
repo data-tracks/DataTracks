@@ -3,8 +3,9 @@ use crate::analyse::Layoutable;
 use crate::language::Language;
 use crate::processing::option::Configurable;
 use crate::processing::train::Train;
-use crate::processing::transform::Transform::{Custom, Func, Lang};
+use crate::processing::transform::Transform::{Func, Lang, SQLite};
 use crate::processing::Layout;
+use crate::sql::LiteTransformer;
 use crate::value::Value;
 use crate::{algebra, language};
 use serde_json::Map;
@@ -20,7 +21,7 @@ pub trait Taker: Send {
 pub enum Transform {
     Func(FuncTransform),
     Lang(LanguageTransform),
-    Custom(CustomTransform),
+    SQLite(LiteTransformer),
 }
 
 impl Clone for Transform {
@@ -32,9 +33,7 @@ impl Clone for Transform {
             Lang(language) => {
                 Lang(language.clone())
             }
-            Custom(transformer) => {
-                Custom(transformer.clone())
-            }
+            Transform::SQLite(s) => SQLite(s.clone())
         }
     }
 }
@@ -66,7 +65,7 @@ impl Transform {
         match self {
             Func(f) => f.derive_input_layout(),
             Lang(l) => l.derive_input_layout(),
-            Custom(t) => t.derive_input_layout()
+            SQLite(t) => t.derive_input_layout()
         }
     }
 
@@ -74,7 +73,7 @@ impl Transform {
         match self {
             Func(f) => f.derive_output_layout(),
             Lang(l) => l.derive_output_layout(inputs),
-            Custom(c) => c.derive_output_layout(inputs)
+            SQLite(c) => c.derive_output_layout(inputs)
         }
     }
 
@@ -82,7 +81,7 @@ impl Transform {
         match self {
             Func(f) => f.dump(),
             Lang(f) => f.dump(),
-            Custom(c) => c.dump()
+            SQLite(c) => c.dump()
         }
     }
 
@@ -90,7 +89,7 @@ impl Transform {
         match self {
             Func(_) => "Func".to_string(),
             Lang(_) => "Lang".to_string(),
-            Custom(c) => c.get_name()
+            SQLite(c) => c.get_name()
         }
     }
 
@@ -106,7 +105,7 @@ impl Transform {
                     initial
                 }
             },
-            Custom(c) => c.optimize(transforms)
+            SQLite(c) => c.optimize(transforms)
         }
     }
 }
@@ -133,27 +132,25 @@ impl Configurable for Transform {
             Lang(l) => {
                 l.language.to_string()
             }
-            Custom(c) => c.get_name()
+            SQLite(c) => c.get_name()
         }
     }
 
     fn get_options(&self) -> Map<String, serde_json::Value> {
         match self {
-            Func(f) => Map::new(),
-            Lang(l) => Map::new(),
-            Custom(c) => c.get_options()
+            Func(_) => Map::new(),
+            Lang(_) => Map::new(),
+            SQLite(c) => c.get_options()
         }
     }
 }
 
 
-pub trait Transformer: Clone + Sized {
-
-    fn dump(&self) -> String;
+pub trait Transformer: Clone + Sized + Configurable + Layoutable {
 
     fn parse(&self, stencil: &str) -> Result<Transform, String>;
 
-    fn get_name(&self) -> String;
+    fn optimize(&self, transforms: HashMap<String, Transform>) -> Box<dyn ValueIterator<Item=Value> + Send>;
 }
 
 pub struct LanguageTransform {
@@ -307,53 +304,6 @@ impl ValueIterator for FuncTransform {
         None
     }
 }
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct CustomTransform{
-
-}
-
-impl CustomTransform {
-
-    fn optimize(&self, transforms: HashMap<String, Transform>) -> Box<dyn ValueIterator<Item=Value> + Send>{
-        todo!()
-    }
-}
-impl Configurable for CustomTransform {
-    fn get_name(&self) -> String {
-        todo!()
-    }
-
-    fn get_options(&self) -> Map<String, serde_json::Value> {
-        todo!()
-    }
-}
-
-impl Layoutable for CustomTransform {
-    fn derive_input_layout(&self) -> Layout {
-        todo!()
-    }
-
-    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {
-        todo!()
-    }
-}
-
-impl Transformer for CustomTransform {
-    fn dump(&self) -> String {
-        todo!()
-    }
-
-    fn parse(&self, stencil: &str) -> Result<Transform, String> {
-        todo!()
-    }
-
-    fn get_name(&self) -> String {
-        todo!()
-    }
-}
-
-
 
 
 #[cfg(test)]

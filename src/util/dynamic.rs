@@ -1,4 +1,3 @@
-use rumqttd::protocol::matches;
 use crate::util::Segment::DynamicIndex;
 use crate::util::StringBuilder;
 use crate::value::{Array, Dict, Value};
