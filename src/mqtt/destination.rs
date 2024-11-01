@@ -84,7 +84,6 @@ impl Destination for MqttDestination {
                 });
 
                 warn!("Embedded MQTT broker for sending is running...");
-                control.send(Ready(id)).unwrap();
 
                 link_tx.subscribe("#").unwrap(); // all topics
 

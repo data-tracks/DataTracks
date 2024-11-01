@@ -5,13 +5,19 @@ use crate::processing::station::Command;
 use crate::processing::Train;
 use crate::ui::ConfigModel;
 use crate::util::Tx;
-use crossbeam::channel::Sender;
+use crossbeam::channel::{unbounded, Sender};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
+use sqlx::{Connection, Row, SqliteConnection};
+use sqlx::sqlite::{SqliteColumn, SqliteRow};
+use tokio::runtime::Runtime;
+use crate::processing::station::Command::{Ready, Stop};
 
 pub struct LiteSource {
     id: i64,
+    path: String,
     outs: Vec<Tx<Train>>,
     query: String,
 }
@@ -37,7 +43,34 @@ impl Source for LiteSource {
     }
 
     fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command> {
-        todo!()
+        let (tx, rx) = unbounded();
+        let id = self.id.clone();
+        let query = self.query.to_owned();
+        let runtime = Runtime::new().unwrap();
+        let path = self.path.clone();
+
+        runtime.block_on(async {
+            let mut conn = SqliteConnection::connect(&format!("sqlite::{}", path)).await.unwrap();
+            control.send(Ready(id)).unwrap();
+            loop {
+                if let Ok(command) = rx.try_recv() {
+                    match command {
+                        Stop(_) => break,
+                        _ => {}
+                    }
+                }
+
+                let mut query = sqlx::query(query.as_str());
+                let values = query.map(|r:SqliteRow| {
+                    let length = r.columns().iter().len();
+                    let mut values = vec![length];
+                    for index in 0..length {
+                        let value =r.try_get_raw(index).unwrap())
+                    }
+                }).fetch_all(&mut conn).await.unwrap();
+            }
+        });
+        tx
     }
 
     fn get_outs(&mut self) -> &mut Vec<Tx<Train>> {
@@ -64,6 +97,14 @@ impl Source for LiteSource {
     where
         Self: Sized,
     {
+        todo!()
+    }
+}
+
+impl TryInto<Value> for SqliteRow {
+    type Error = String;
+
+    fn try_into(self) -> Result<Value, Self::Error> {
         todo!()
     }
 }
