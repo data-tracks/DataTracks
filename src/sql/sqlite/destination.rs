@@ -1,18 +1,15 @@
-use crate::algebra::Algebra;
 use crate::processing::destination::Destination;
 use crate::processing::option::Configurable;
 use crate::processing::plan::DestinationModel;
 use crate::processing::station::Command;
 use crate::processing::station::Command::Ready;
 use crate::processing::{plan, Train};
-use crate::ui::{ConfigModel, StringModel};
+use crate::sql::sqlite::connection::SqliteConnector;
 use crate::util::{new_channel, Rx, Tx, GLOBAL_ID};
 use crate::value::Value;
 use crossbeam::channel::{unbounded, Sender};
 use serde_json::Map;
-use sqlx::{Connection, Executor, SqliteConnection};
 use std::collections::HashMap;
-use std::io::Write;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
@@ -22,14 +19,15 @@ pub struct LiteDestination {
     id: i64,
     receiver: Rx<Train>,
     sender: Tx<Train>,
-    path: String,
+    connector: SqliteConnector,
     query: String,
 }
 
 impl LiteDestination {
     pub fn new(path: String, query: String) -> LiteDestination {
         let (tx, _num, rx) = new_channel();
-        LiteDestination { id: GLOBAL_ID.new_id(), receiver: rx, sender: tx, path, query }
+        let connection = SqliteConnector::new(&path);
+        LiteDestination { id: GLOBAL_ID.new_id(), receiver: rx, sender: tx, connector: connection, query }
     }
 }
 
@@ -41,7 +39,8 @@ impl Configurable for LiteDestination {
 
     fn get_options(&self) -> Map<String, serde_json::Value> {
         let mut options = Map::new();
-        options.insert(String::from("path"), serde_json::Value::String(self.path.clone()));
+        self.connector.add_options(&mut options);
+        options.insert(String::from("query"), serde_json::Value::String(self.query.clone()));
         options
     }
 }
@@ -65,12 +64,12 @@ impl Destination for LiteDestination {
         let id = self.id.clone();
         let query = self.query.to_owned();
         let runtime = Runtime::new().unwrap();
-        let path = self.path.clone();
+        let connection = self.connector.clone();
 
 
         thread::spawn(move || {
             runtime.block_on(async {
-                let mut conn = SqliteConnection::connect(&format!("sqlite::{}", path)).await.unwrap();
+                let mut conn = connection.connect().unwrap();
                 control.send(Ready(id)).unwrap();
                 loop {
                     if plan::check_commands(&rx) { break; }
@@ -111,7 +110,7 @@ impl Destination for LiteDestination {
 
     fn serialize(&self) -> DestinationModel {
         let mut configs = HashMap::new();
-        configs.insert("path".to_string(), ConfigModel::String(StringModel::new(&self.path)));
+        self.connector.serialize(&mut configs);
         DestinationModel { type_name: self.get_name(), id: self.id.to_string(), configs }
     }
 

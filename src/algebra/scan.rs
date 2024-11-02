@@ -1,13 +1,13 @@
 use crate::algebra::algebra::{Algebra, RefHandler, ValueIterator};
 use crate::algebra::BoxedIterator;
+use crate::analyse::Layoutable;
 use crate::processing::transform::Transform;
 use crate::processing::{Layout, Train};
 use crate::value::Value;
 use std::collections::HashMap;
 use std::vec;
-use crate::analyse::Layoutable;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Scan {
     index: i64,
 }

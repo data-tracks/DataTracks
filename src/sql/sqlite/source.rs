@@ -4,19 +4,19 @@ use crate::processing::source::Source;
 use crate::processing::station::Command;
 use crate::processing::station::Command::Ready;
 use crate::processing::{plan, Train};
+use crate::sql::sqlite::connection::SqliteConnector;
 use crate::ui::ConfigModel;
 use crate::util::{Tx, GLOBAL_ID};
 use crate::value::value;
 use crossbeam::channel::{unbounded, Sender};
 use serde_json::{Map, Value};
-use sqlx::{Connection, Database, Row, SqliteConnection, ValueRef};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
 
 pub struct LiteSource {
     id: i64,
-    path: String,
+    connector: SqliteConnector,
     outs: Vec<Tx<Train>>,
     query: String,
 }
@@ -24,7 +24,8 @@ pub struct LiteSource {
 impl LiteSource {
     pub fn new(path: String, query: String) -> LiteSource {
         let id = GLOBAL_ID.new_id();
-        LiteSource { id, path, outs: Vec::new(), query }
+        let connection = SqliteConnector::new(path.as_str());
+        LiteSource { id, connector: connection, outs: Vec::new(), query }
     }
 }
 
@@ -36,7 +37,7 @@ impl Configurable for LiteSource {
     fn get_options(&self) -> Map<String, Value> {
         let mut options = Map::new();
         options.insert(String::from("query"), Value::String(self.query.clone()));
-        options.insert(String::from("path"), Value::String(self.path.clone()));
+        self.connector.add_options(&mut options);
         options
     }
 }
@@ -56,16 +57,16 @@ impl Source for LiteSource {
         let id = self.id.clone();
         let query = self.query.to_owned();
         let runtime = Runtime::new().unwrap();
-        let path = self.path.clone();
+        let connection = self.connector.clone();
         let sender = self.outs.clone();
 
         runtime.block_on(async {
-            let mut conn = SqliteConnection::connect(&format!("sqlite::{}", path)).await.unwrap();
+            let mut conn = connection.connect().unwrap();
             control.send(Ready(id)).unwrap();
             loop {
                 if plan::check_commands(&rx) { break; }
 
-                let mut query = sqlx::query_as(query.as_str());
+                let query = sqlx::query_as(query.as_str());
                 let values: Vec<value::Value> = query.fetch_all(&mut conn).await.unwrap();
                 let train = Train::new(-1, values);
 
@@ -89,7 +90,7 @@ impl Source for LiteSource {
 
     fn serialize(&self) -> SourceModel {
         let mut configs = HashMap::new();
-        configs.insert("path".to_string(), ConfigModel::text(self.path.as_str()));
+        self.connector.serialize(&mut configs);
         configs.insert("query".to_string(), ConfigModel::text(self.query.as_str()));
         SourceModel { type_name: String::from("SQLite"), id: self.id.to_string(), configs }
     }

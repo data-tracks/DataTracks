@@ -33,7 +33,7 @@ impl Clone for Transform {
             Lang(language) => {
                 Lang(language.clone())
             }
-            Transform::SQLite(s) => SQLite(s.clone())
+            SQLite(s) => SQLite(s.clone())
         }
     }
 }
@@ -113,13 +113,17 @@ impl Transform {
 fn parse_function(stencil: &str) -> Result<Transform, String> {
     let (name, options) = stencil.split_once('{').ok_or("Invalid transform format.".to_string())?;
     let name = name.trim();
-    let (_options, _) = options.trim().rsplit_once('}').ok_or("Invalid transform format.".to_string())?;
+    let (options, _) = options.trim().rsplit_once('}').ok_or("Invalid transform format.".to_string())?;
+
+    let options = serde_json::from_str::<serde_json::Value>(&format!("{{{}}}", options)).unwrap().as_object().ok_or(format!("Invalid options: {}", options))?.clone();
+
     match name.to_lowercase().as_str() {
         #[cfg(test)]
         "dummy" => Ok(Func(FuncTransform::new_boxed(|_stop, value| {
             &value + &Value::int(1)
         }))),
-        _ => panic!()
+        "sqlite" => Ok(SQLite(LiteTransformer::parse(options)?)),
+        fun => panic!("Unknown function {}", fun)
     }
 }
 
@@ -147,8 +151,7 @@ impl Configurable for Transform {
 
 
 pub trait Transformer: Clone + Sized + Configurable + Layoutable {
-
-    fn parse(&self, stencil: &str) -> Result<Transform, String>;
+    fn parse(options: Map<String, serde_json::Value>) -> Result<Self, String>;
 
     fn optimize(&self, transforms: HashMap<String, Transform>) -> Box<dyn ValueIterator<Item=Value> + Send>;
 }

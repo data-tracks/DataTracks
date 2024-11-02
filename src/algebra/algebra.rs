@@ -6,11 +6,11 @@ use crate::algebra::project::Project;
 use crate::algebra::scan::Scan;
 use crate::algebra::union::Union;
 use crate::algebra::variable::VariableScan;
+use crate::analyse::Layoutable;
 use crate::processing::transform::Transform;
 use crate::processing::{Layout, Train};
 use crate::value::Value;
 use std::collections::HashMap;
-use crate::analyse::Layoutable;
 
 pub type BoxedIterator = Box<dyn ValueIterator<Item=Value> + Send + 'static>;
 
@@ -18,7 +18,7 @@ pub type BoxedValueHandler = Box<dyn ValueHandler + Send + 'static>;
 
 pub type BoxedValueLoader = Box<dyn ValueLoader + Send + 'static>;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum AlgebraType {
     Dual(Dual),
     Scan(Scan),

@@ -3,19 +3,18 @@ use crate::processing::destination::Destination;
 use crate::processing::option::Configurable;
 use crate::processing::plan::DestinationModel;
 use crate::processing::station::Command;
-use crate::processing::station::Command::{Ready, Stop};
+use crate::processing::station::Command::Ready;
 use crate::processing::{plan, Train};
 use crate::ui::{ConfigModel, NumberModel, StringModel};
 use crate::util::{new_channel, Rx, Tx, GLOBAL_ID};
 use crossbeam::channel::{unbounded, Sender};
-use log::warn;
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::thread::spawn;
 use std::time::Duration;
 use tokio::runtime::Runtime;
-use tracing::debug;
+use tracing::{debug, warn};
 
 pub struct MqttDestination {
     id: i64,

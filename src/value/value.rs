@@ -1,5 +1,3 @@
-use std::any::{Any, TypeId};
-use std::borrow::Cow;
 use std::cmp::PartialEq;
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
@@ -16,8 +14,8 @@ use crate::value::{bool, Bool, Float, Int};
 use json::{parse, JsonValue};
 use serde::{Deserialize, Serialize};
 use sqlx::error::BoxDynError;
-use sqlx::sqlite::{SqliteRow, SqliteTypeInfo, SqliteValue, SqliteValueRef};
-use sqlx::{Column, Database, Decode, Error, FromRow, Row, Sqlite, Type, TypeInfo, ValueRef};
+use sqlx::sqlite::SqliteRow;
+use sqlx::{Database, Decode, Error, FromRow, Row, Sqlite, Type, TypeInfo, ValueRef};
 use tracing::warn;
 
 #[derive(Eq, Clone, Debug, Serialize, Deserialize)]
@@ -222,13 +220,25 @@ impl FromRow<'_, SqliteRow> for Value {
 impl<'r> Decode<'r, Sqlite> for Value {
     fn decode(value: <Sqlite as Database>::ValueRef<'r>) -> Result<Self, BoxDynError> {
         let t = value.type_info();
-        let val = &Decode::<String>::decode(value)?;
+
         match t.name().to_lowercase().as_str() {
             "null" => Ok(Value::null()),
-            "integer" => Ok(Value::int(val.parse().unwrap())),
-            "real" => Ok(Value::float(val.parse().unwrap())),
-            "boolean" => Ok(Value::bool(val.parse().unwrap())),
-            "text" => Ok(Value::text(&val)),
+            "integer" => {
+                let val = Decode::<Sqlite>::decode(value)?;
+                Ok(Value::int(val))
+            },
+            "real" => {
+                let val = Decode::<Sqlite>::decode(value)?;
+                Ok(Value::float(val))
+            },
+            "boolean" => {
+                let val = Decode::<Sqlite>::decode(value)?;
+                Ok(Value::bool(val))
+            },
+            "text" => {
+                let val = Decode::<Sqlite>::decode(value)?;
+                Ok(Value::text(val))
+            },
             _ => Ok(Value::null())
         }
     }

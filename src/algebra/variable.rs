@@ -6,7 +6,7 @@ use crate::value::Value;
 use std::collections::HashMap;
 use std::vec;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct VariableScan {
     name: String,
     inputs: Vec<AlgebraType>,
@@ -23,7 +23,7 @@ impl Layoutable for VariableScan {
         Layout::default()
     }
 
-    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {
+    fn derive_output_layout(&self, _inputs: HashMap<String, &Layout>) -> Layout {
         Layout::default()
     }
 }

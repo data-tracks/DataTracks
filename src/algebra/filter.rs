@@ -7,7 +7,7 @@ use crate::processing::{Layout, Train};
 use crate::value::Value;
 use std::collections::HashMap;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Filter {
     input: Box<AlgebraType>,
     condition: Operator,

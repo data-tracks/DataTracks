@@ -11,7 +11,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Aggregate {
     input: Box<AlgebraType>,
     aggregates: Vec<(AggOp, Operator)>,

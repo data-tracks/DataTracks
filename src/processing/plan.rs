@@ -1,12 +1,13 @@
 use crate::processing::destination::{parse_destination, Destination};
+use crate::processing::option::Configurable;
 use crate::processing::plan::Status::Stopped;
 use crate::processing::source::{parse_source, Source};
 use crate::processing::station::{Command, Station};
+use crate::processing::transform::Transformer;
 use crate::processing::{transform, Train};
 use crate::ui::{ConfigContainer, ConfigModel, StringModel};
 use crate::util::GLOBAL_ID;
 use core::default::Default;
-use crossbeam::channel;
 use crossbeam::channel::{unbounded, Receiver, Sender};
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize, Serializer};
@@ -24,7 +25,7 @@ pub struct Plan {
     pub sources: HashMap<i64, Box<dyn Source>>,
     pub destinations: HashMap<i64, Box<dyn Destination>>,
     pub controls: HashMap<i64, Vec<Sender<Command>>>,
-    pub control_receiver: (Arc<Sender<Command>>, channel::Receiver<Command>),
+    pub control_receiver: (Arc<Sender<Command>>, Receiver<Command>),
     pub status: Status,
     pub transforms: HashMap<String, transform::Transform>,
 }
@@ -118,9 +119,12 @@ impl Plan {
 
         if !self.transforms.is_empty() {
             dump += "\nTransform\n";
-            let mut sorted = self.transforms.values().collect::<Vec<&transform::Transform>>();
-            sorted.sort_by_key(|s| s.get_name());
-            dump += &sorted.into_iter().map(|s| s.dump()).collect::<Vec<_>>().join("\n")
+            let mut sorted = self.transforms.keys().collect::<Vec<_>>();
+            sorted.sort();
+            dump += &sorted.into_iter().map(|name| {
+                let dump = self.transforms.get(name).unwrap().dump();
+                format!("${}:{}", name, dump)
+            }).collect::<Vec<_>>().join("\n")
         }
 
         dump
@@ -668,7 +672,7 @@ impl From<transform::Transform> for ConfigContainer {
                 ConfigContainer::new(String::from("Transform"), map)
             }
 
-            transform::Transform::SQLite(l) => {
+            transform::Transform::SQLite(_l) => {
                 todo!()
             }
         }

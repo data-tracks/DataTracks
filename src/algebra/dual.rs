@@ -5,7 +5,7 @@ use crate::processing::{Layout, OutputType, Train};
 use crate::value::Value;
 use std::collections::HashMap;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Dual {}
 
 

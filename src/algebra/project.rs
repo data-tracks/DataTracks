@@ -2,13 +2,13 @@ use crate::algebra::algebra::{Algebra, ValueHandler};
 use crate::algebra::function::Operator;
 use crate::algebra::implement::implement;
 use crate::algebra::{AlgebraType, BoxedIterator, ValueIterator};
+use crate::analyse::Layoutable;
 use crate::processing::transform::Transform;
 use crate::processing::{Layout, Train};
 use crate::value::Value;
 use std::collections::HashMap;
-use crate::analyse::Layoutable;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Project {
     input: Box<AlgebraType>,
     project: Operator,
