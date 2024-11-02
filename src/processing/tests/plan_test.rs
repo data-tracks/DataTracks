@@ -301,7 +301,7 @@ pub mod tests {
         plan.build(0, first);
         plan.build(0, second);
 
-        plan.operate();
+        plan.operate().unwrap();
 
         input.send(Train::new(0, values.clone())).unwrap();
 
@@ -340,7 +340,7 @@ pub mod tests {
         plan.build_split(1, first_id).unwrap();
         plan.build(1, third);
 
-        plan.operate();
+        plan.operate().unwrap();
 
         input.send(Train::new(0, values.clone())).unwrap();
 
@@ -379,7 +379,7 @@ pub mod tests {
         let clone = plan.get_result(destination);
 
 
-        plan.operate();
+        plan.operate().unwrap();
 
         // start dummy source
         plan.send_control(&id, Ready(3));
@@ -426,7 +426,7 @@ pub mod tests {
         let mut plan = Plan::parse(&stencil).unwrap();
         let result = plan.get_result(destination);
 
-        plan.operate();
+        plan.operate().unwrap();
 
         // send ready
         plan.send_control(&source1, Ready(0));
@@ -497,7 +497,7 @@ pub mod tests {
         plan.add_destination(Box::new(destination));
         plan.connect_in_out(0, dest_id);
 
-        plan.operate();
+        plan.operate().unwrap();
         let now = SystemTime::now();
         plan.send_control(&id, Ready(0));
         plan.clone_platform(0);
@@ -538,7 +538,7 @@ pub mod tests {
                      size = 1)
         ).unwrap();
 
-        plan.operate();
+        plan.operate().unwrap();
 
         let result = plan.get_result(destination);
         plan.send_control(&source, Ready(0));
@@ -662,7 +662,7 @@ pub mod tests {
         // get result arc
         let result = plan.get_result(destination);
 
-        plan.operate();
+        plan.operate().unwrap();
 
         // start sources
         plan.send_control(&source, Ready(0));

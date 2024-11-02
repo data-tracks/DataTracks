@@ -34,7 +34,7 @@ pub(crate) fn create_broker(port: u16, url: String, id: i64) -> (Broker, LinkTx,
         ])
     );
     // Create the broker with the configuration
-    let mut broker = Broker::new(config);
-    let (mut link_tx, mut link_rx) = broker.link("link").unwrap();
+    let broker = Broker::new(config);
+    let (link_tx, link_rx) = broker.link("link").unwrap();
     (broker, link_tx, link_rx)
 }

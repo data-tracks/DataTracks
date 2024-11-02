@@ -1,9 +1,7 @@
 use crate::processing::destination::{parse_destination, Destination};
-use crate::processing::option::Configurable;
 use crate::processing::plan::Status::Stopped;
 use crate::processing::source::{parse_source, Source};
 use crate::processing::station::{Command, Station};
-use crate::processing::transform::Transformer;
 use crate::processing::{transform, Train};
 use crate::ui::{ConfigContainer, ConfigModel, StringModel};
 use crate::util::GLOBAL_ID;
@@ -161,10 +159,10 @@ impl Plan {
         self.controls.get_mut(num).unwrap_or(&mut Vec::new()).iter().for_each(|c| c.send(command.clone()).unwrap())
     }
 
-    pub fn operate(&mut self) {
-        self.connect_stops().unwrap();
-        self.connect_destinations().unwrap();
-        self.connect_sources().unwrap();
+    pub fn operate(&mut self) -> Result<(), String> {
+        self.connect_stops()?;
+        self.connect_destinations()?;
+        self.connect_sources()?;
 
         for station in self.stations.values_mut() {
             let entry = self.controls.entry(station.id).or_default();
@@ -180,10 +178,10 @@ impl Plan {
                         Command::Ready(id) => {
                             readys.push(id);
                         }
-                        _ => todo!()
+                        command => return Err(format!("Not known command {:?}", command)),
                     }
                 }
-                _ => todo!()
+                Err(err) => return Err(err.to_string()),
             }
         }
 
@@ -198,6 +196,7 @@ impl Plan {
 
 
         self.status = Status::Running;
+        Ok(())
     }
 
     pub(crate) fn clone_platform(&mut self, num: i64) {

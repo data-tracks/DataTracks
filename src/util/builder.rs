@@ -1,3 +1,4 @@
+
 pub struct StringBuilder {
     string: String,
 }
@@ -19,6 +20,10 @@ impl StringBuilder {
 
     pub fn append(&mut self, s: char) {
         self.string.push(s);
+    }
+
+    pub fn append_string(&mut self, s: &str) {
+        self.string.push_str(s);
     }
 
     pub fn clear(&mut self) {

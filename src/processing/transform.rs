@@ -290,8 +290,8 @@ impl Iterator for FuncTransform {
 }
 
 impl ValueIterator for FuncTransform {
-    fn load(&mut self, trains: Vec<Train>) {
-        self.input.load(trains);
+    fn dynamically_load(&mut self, trains: Vec<Train>) {
+        self.input.dynamically_load(trains);
     }
 
     fn clone(&self) -> BoxedIterator {
@@ -475,7 +475,7 @@ mod tests {
         match transform {
             Ok(mut t) => {
                 for (i, input) in inputs.into_iter().enumerate() {
-                    t.load(vec![Train::new(i as i64, input)]);
+                    t.dynamically_load(vec![Train::new(i as i64, input)]);
                 }
 
                 let result = t.drain_to_train(0);
@@ -490,7 +490,7 @@ mod tests {
         let transform = build_iterator(transform.unwrap());
         match transform {
             Ok(mut t) => {
-                t.load(input.into_iter().map(|v| Train::new(0, vec![v])).collect());
+                t.dynamically_load(input.into_iter().map(|v| Train::new(0, vec![v])).collect());
                 let result = t.drain_to_train(0);
                 assert_eq!(result.values.unwrap(), output);
             }
@@ -504,7 +504,7 @@ mod tests {
 
         match transform {
             Ok(mut t) => {
-                t.load(input.into_iter().map(|v| Train::new(0, vec![v])).collect());
+                t.dynamically_load(input.into_iter().map(|v| Train::new(0, vec![v])).collect());
                 let result = t.drain_to_train(0);
                 let result = result.values.unwrap();
                 for result in &result {

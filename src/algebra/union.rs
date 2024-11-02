@@ -64,9 +64,9 @@ impl Iterator for UnionIterator {
 }
 
 impl ValueIterator for UnionIterator {
-    fn load(&mut self, trains: Vec<Train>) {
+    fn dynamically_load(&mut self, trains: Vec<Train>) {
         for input in &mut self.inputs {
-            input.load(trains.clone());
+            input.dynamically_load(trains.clone());
         }
     }
 

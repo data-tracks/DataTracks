@@ -521,7 +521,7 @@ impl DictType {
                     return false;
                 }
             } else {
-                todo!()
+                return false;
             }
         }
         true

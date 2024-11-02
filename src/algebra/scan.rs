@@ -55,7 +55,7 @@ impl Iterator for ScanIterator {
 }
 
 impl ValueIterator for ScanIterator {
-    fn load(&mut self, trains: Vec<Train>) {
+    fn dynamically_load(&mut self, trains: Vec<Train>) {
         for mut train in trains {
             if train.last == self.index {
                 train.values = Some(train.values.unwrap().into_iter().map(|d| {
@@ -130,7 +130,7 @@ mod test {
         let mut scan = Scan::new(0);
 
         let mut handler = scan.derive_iterator();
-        handler.load(vec![train]);
+        handler.dynamically_load(vec![train]);
 
         let mut train_2 = handler.drain_to_train(0);
 

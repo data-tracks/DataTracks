@@ -48,7 +48,7 @@ impl Storage {
         match plan {
             None => {}
             Some(p) => {
-                p.operate();
+                p.operate().unwrap();
             }
         }
     }

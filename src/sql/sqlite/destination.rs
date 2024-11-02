@@ -5,10 +5,13 @@ use crate::processing::station::Command;
 use crate::processing::station::Command::Ready;
 use crate::processing::{plan, Train};
 use crate::sql::sqlite::connection::SqliteConnector;
-use crate::util::{new_channel, Rx, Tx, GLOBAL_ID};
+use crate::util::{new_channel, DynamicQuery, Rx, Tx, GLOBAL_ID};
 use crate::value::Value;
 use crossbeam::channel::{unbounded, Sender};
 use serde_json::Map;
+use sqlx::query::QueryAs;
+use sqlx::sqlite::SqliteArguments;
+use sqlx::Sqlite;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::thread;
@@ -20,13 +23,14 @@ pub struct LiteDestination {
     receiver: Rx<Train>,
     sender: Tx<Train>,
     connector: SqliteConnector,
-    query: String,
+    query: DynamicQuery,
 }
 
 impl LiteDestination {
     pub fn new(path: String, query: String) -> LiteDestination {
         let (tx, _num, rx) = new_channel();
         let connection = SqliteConnector::new(&path);
+        let query = DynamicQuery::build_dynamic_query(query);
         LiteDestination { id: GLOBAL_ID.new_id(), receiver: rx, sender: tx, connector: connection, query }
     }
 }
@@ -40,7 +44,7 @@ impl Configurable for LiteDestination {
     fn get_options(&self) -> Map<String, serde_json::Value> {
         let mut options = Map::new();
         self.connector.add_options(&mut options);
-        options.insert(String::from("query"), serde_json::Value::String(self.query.clone()));
+        options.insert(String::from("query"), serde_json::Value::String(self.query.get_query()));
         options
     }
 }
@@ -62,7 +66,7 @@ impl Destination for LiteDestination {
         let receiver = self.receiver.clone();
         let (tx, rx) = unbounded();
         let id = self.id.clone();
-        let query = self.query.to_owned();
+        let query = self.query.clone();
         let runtime = Runtime::new().unwrap();
         let connection = self.connector.clone();
 
@@ -70,6 +74,8 @@ impl Destination for LiteDestination {
         thread::spawn(move || {
             runtime.block_on(async {
                 let mut conn = connection.connect().unwrap();
+                let (query, value_functions) = query.prepare_query("$");
+
                 control.send(Ready(id)).unwrap();
                 loop {
                     if plan::check_commands(&rx) { break; }
@@ -80,16 +86,11 @@ impl Destination for LiteDestination {
                                 continue;
                             }
                             for value in values {
-                                let mut query = sqlx::query(query.as_str());
-                                match value {
-                                    Value::Array(a) => {
-                                        for val in a.0 {
-                                            query = query.bind(val.to_string());
-                                        }
-                                    }
-                                    val => {query = query.bind(val.to_string());}
+                                let mut query: QueryAs<Sqlite, Value, SqliteArguments> = sqlx::query_as(&query);
+                                for value in value_functions(&value) {
+                                    query = query.bind(value);
                                 }
-                                query.execute(&mut conn).await.unwrap();
+                                query.fetch_all(&mut conn).await.unwrap();
                             }
                         }
                         _ => tokio::time::sleep(Duration::from_nanos(100)).await

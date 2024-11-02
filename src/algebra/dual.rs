@@ -58,7 +58,7 @@ impl Iterator for DualIterator {
 }
 
 impl ValueIterator for DualIterator {
-    fn load(&mut self, _trains: Vec<Train>) {
+    fn dynamically_load(&mut self, _trains: Vec<Train>) {
         // nothing on purpose
     }
 

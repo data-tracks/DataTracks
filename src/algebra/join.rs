@@ -128,9 +128,9 @@ impl JoinIterator {
 }
 
 impl ValueIterator for JoinIterator {
-    fn load(&mut self, trains: Vec<Train>) {
-        self.left.load(trains.clone());
-        self.right.load(trains);
+    fn dynamically_load(&mut self, trains: Vec<Train>) {
+        self.left.dynamically_load(trains.clone());
+        self.right.dynamically_load(trains);
     }
 
     fn clone(&self) -> BoxedIterator {
@@ -206,8 +206,8 @@ mod test {
         });
 
         let mut handle = join.derive_iterator();
-        handle.load(vec![left]);
-        handle.load(vec![right]);
+        handle.dynamically_load(vec![left]);
+        handle.dynamically_load(vec![right]);
         let mut res = handle.drain_to_train(3);
         assert_eq!(res.clone().values.unwrap(), vec![Value::Dict(Dict::from(vec![5.5.into(), 5.5.into()]))]);
         assert_ne!(res.values.take().unwrap(), vec![Value::Dict(Dict::from(vec![]))]);
@@ -226,7 +226,7 @@ mod test {
         });
 
         let mut handle = join.derive_iterator();
-        handle.load(vec![train0.clone(), train1.clone()]);
+        handle.dynamically_load(vec![train0.clone(), train1.clone()]);
         let mut res = handle.drain_to_train(3);
         assert_eq!(res.values.clone().unwrap(), vec![Value::Dict(Dict::from(vec![5.5.into(), 5.5.into()])), Value::Dict(Dict::from(vec![5.5.into(), 5.5.into()]))]);
         assert_ne!(res.values.take().unwrap(), vec![vec![].into()]);

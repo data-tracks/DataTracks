@@ -4,7 +4,7 @@ use crate::processing::option::Configurable;
 use crate::processing::transform::{Transform, Transformer};
 use crate::processing::{Layout, Train};
 use crate::sql::sqlite::connection::SqliteConnector;
-use crate::util::GLOBAL_ID;
+use crate::util::{DynamicQuery, GLOBAL_ID};
 use crate::value::Value;
 use serde_json::Map;
 use std::collections::HashMap;
@@ -13,7 +13,7 @@ use tokio::runtime::Runtime;
 #[derive(Debug, PartialEq, Clone)]
 pub struct LiteTransformer {
     id: i64,
-    query: String,
+    query: DynamicQuery,
     connector: SqliteConnector
 }
 
@@ -21,6 +21,7 @@ impl LiteTransformer {
     fn new(query: String, path: String) -> LiteTransformer {
         let id = GLOBAL_ID.new_id();
         let connector = SqliteConnector::new(&path);
+        let query = DynamicQuery::build_dynamic_query(query);
         LiteTransformer { id, connector, query }
     }
 }
@@ -33,7 +34,7 @@ impl Configurable for LiteTransformer {
     fn get_options(&self) -> Map<String, serde_json::Value> {
         let mut options = Map::new();
         self.connector.add_options(&mut options);
-        options.insert(String::from("query"), serde_json::Value::String(self.query.clone()));
+        options.insert(String::from("query"), serde_json::Value::String(self.query.get_query()));
         options
     }
 }
@@ -63,14 +64,29 @@ impl Transformer for LiteTransformer {
 }
 
 pub struct LiteIterator {
-    query: String,
+    query: DynamicQuery,
     path: String,
     connector: SqliteConnector,
+    values: Vec<Value>
 }
 
 impl LiteIterator {
-    pub fn new(query: String, path: String, connector: SqliteConnector) -> LiteIterator {
-        LiteIterator { query, path, connector }
+    pub fn new(query: DynamicQuery, path: String, connector: SqliteConnector) -> LiteIterator {
+        LiteIterator { query, path, connector, values: Vec::new() }
+    }
+
+    fn query_values(&self, value: Value) -> Vec<Value> {
+        let runtime = Runtime::new().unwrap();
+        let query = self.query.clone();
+        let mut connection = self.connector.connect().unwrap();
+        runtime.block_on(async {
+            let (query, value_function) = query.prepare_query("$");
+            let mut prepared = sqlx::query_as(&query);
+            for value in value_function(&value) {
+                prepared = prepared.bind(value)
+            }
+            return Some(prepared.fetch_all(&mut connection).await.unwrap());
+        }).unwrap_or(vec![])
     }
 }
 
@@ -78,24 +94,23 @@ impl Iterator for LiteIterator {
     type Item = Value;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let runtime = Runtime::new().unwrap();
-        let query = self.query.clone();
-        let mut connection = self.connector.connect().unwrap();
-        let values: Vec<Value> = runtime.block_on(async {
-            let prepared = sqlx::query_as(&query);
-            return prepared.fetch_all(&mut connection).await.unwrap();
-        });
-        if values.is_empty() {
+        if self.values.is_empty() {
             None
         } else {
-            Some((*values.get(0).unwrap()).clone())
+            Some(self.values.remove(0))
         }
     }
 }
 
 impl ValueIterator for LiteIterator {
-    fn load(&mut self, _trains: Vec<Train>) {
-        // nothing on purpose
+    fn dynamically_load(&mut self, mut trains: Vec<Train>) {
+        for train in trains {
+            if let Some(values) = train.values {
+                for value in values {
+                    self.values.append(&mut self.query_values(value));
+                }
+            }
+        }
     }
 
     fn clone(&self) -> BoxedIterator {
@@ -127,6 +142,6 @@ mod tests {
     #[test]
     fn test_simple_operate() {
         let mut plan = Plan::parse(PLAN).unwrap();
-        plan.operate()
+        plan.operate().unwrap()
     }
 }

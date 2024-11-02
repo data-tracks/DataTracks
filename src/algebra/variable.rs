@@ -56,7 +56,7 @@ impl Iterator for BareVariableIterator {
 }
 
 impl ValueIterator for BareVariableIterator {
-    fn load(&mut self, _trains: Vec<Train>) {
+    fn dynamically_load(&mut self, _trains: Vec<Train>) {
         panic!("Not correctly enriched")
     }
     fn clone(&self) -> BoxedIterator {
@@ -99,7 +99,7 @@ impl Iterator for VariableIterator {
             }
             let values = values.iter().map(|v| v.clone().unwrap()).collect();
 
-            self.transform.load(vec![Train::new(0, values)]);
+            self.transform.dynamically_load(vec![Train::new(0, values)]);
             self.transform.next()
         };
         // we annotate it
@@ -112,8 +112,8 @@ impl Iterator for VariableIterator {
 }
 
 impl ValueIterator for VariableIterator {
-    fn load(&mut self, trains: Vec<Train>) {
-        self.inputs.iter_mut().for_each(|v| v.load(trains.clone()));
+    fn dynamically_load(&mut self, trains: Vec<Train>) {
+        self.inputs.iter_mut().for_each(|v| v.dynamically_load(trains.clone()));
     }
 
     fn clone(&self) -> BoxedIterator {

@@ -41,8 +41,8 @@ impl Iterator for FilterIterator {
 }
 
 impl ValueIterator for FilterIterator {
-    fn load(&mut self, trains: Vec<Train>) {
-        self.input.load(trains);
+    fn dynamically_load(&mut self, trains: Vec<Train>) {
+        self.input.dynamically_load(trains);
     }
 
     fn clone(&self) -> BoxedIterator {

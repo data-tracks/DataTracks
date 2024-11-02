@@ -118,7 +118,7 @@ fn optimize(stop: i64, transform: Option<Transform>, mut window: Box<dyn Taker>,
         let mut enumerator = transform.optimize(transforms);
         Box::new(move |train| {
             let windowed = window.take(train);
-            enumerator.load(windowed);
+            enumerator.dynamically_load(windowed);
             sender.send(enumerator.drain_to_train(stop));
         })
     } else {

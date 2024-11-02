@@ -1,21 +1,22 @@
-use crate::util::Segment::DynamicIndex;
 use crate::util::StringBuilder;
-use crate::value::{Array, Dict, Value};
+use crate::value::Value;
+use crate::value::Value::{Array, Dict};
 
 /**
 DynamicQueries can come in two forms, either they access values by keys, which is intended for
 dictionaries or via index, which is intended for arrays. Additionally, both allow to access the full input
 **/
-pub struct DynamicQuery{
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct DynamicQuery {
+    query: String,
     parts: Vec<Segment>,
     estimated_size: usize,
-    replace_type: ReplaceType
+    replace_type: ReplaceType,
 }
 
-
-impl DynamicQuery{
-
-    fn build_dynamic_query(query: String) -> Self {
+impl DynamicQuery {
+    pub fn build_dynamic_query(query: String) -> Self {
         let mut parts = vec![];
 
         let mut temp = StringBuilder::new();
@@ -25,31 +26,47 @@ impl DynamicQuery{
         for char in query.chars() {
             if is_dynamic && char == ' ' {
                 // we finish the value
-                if temp.is_empty(){
+                if temp.is_empty() {
                     parts.push(DynamicQuery::full());
-                }else if let Ok(num) = temp.build_and_clear().parse::<usize>(){
+                } else if let Ok(num) = temp.build_and_clear().parse::<usize>() {
                     parts.push(DynamicQuery::index(num));
-                }else {
+                } else {
                     parts.push(DynamicQuery::text(temp.build_and_clear()));
                 }
                 is_dynamic = false
-            }else if char == '"' {
+            } else if char == '"' {
                 is_text = !is_text;
-            }else if char == '$' && !is_text {
+            } else if char == '$' && !is_text {
                 if !temp.is_empty() {
                     parts.push(DynamicQuery::text(temp.build_and_clear()));
                 }
                 is_dynamic = true;
-            }else {
+            } else {
                 temp.append(char);
             }
         }
 
-        DynamicQuery::new(parts)
+        DynamicQuery::new(query, parts)
     }
 
+    pub(crate) fn replace_indexed_query(&self, prefix: &str) -> String {
+        let mut builder = StringBuilder::new();
+        let mut i = 0;
+        for part in &self.parts {
+            match part {
+                Segment::Static(s) => builder.append_string(s),
+                Segment::DynamicIndex(_) | Segment::DynamicKey(_) | Segment::DynamicFull => {
+                    let key = format!("{}{}", prefix, i);
+                    builder.append_string(&key);
+                    i += 1;
+                }
+            }
+        }
 
-    pub fn new(parts: Vec<Segment>) -> DynamicQuery{
+        builder.build()
+    }
+
+    pub fn new(query: String, parts: Vec<Segment>) -> DynamicQuery {
         let estimated_size = parts.iter().map(|p| {
             match p {
                 Segment::Static(s) => s.len(),
@@ -57,78 +74,56 @@ impl DynamicQuery{
                 Segment::DynamicFull => 10
             }
         }).sum::<usize>();
-        let replace_type = if parts.iter().all(|p| matches!(p, Segment::DynamicFull)){
+        let replace_type = if parts.iter().all(|p| matches!(p, Segment::DynamicFull)) {
             ReplaceType::Full
-        }else if parts.iter().all(|p| matches!(p, Segment::DynamicKey(_)) ){
+        } else if parts.iter().all(|p| matches!(p, Segment::DynamicKey(_))) {
             ReplaceType::Key
-        }else {
+        } else {
             ReplaceType::Index
         };
-        DynamicQuery{parts, estimated_size, replace_type}
+        DynamicQuery { query, parts, estimated_size, replace_type }
     }
 
-    pub fn construct(&self, value: Value)-> String{
-        match self.replace_type{
-            ReplaceType::Key => {
-                match value{
-                    Value::Dict(d) => self.construct_key(d),
-                    Value::Wagon(w) => self.construct(w.unwrap()),
-                    _ => self.construct_full(value),
-                }
-            }
-            ReplaceType::Index => {
-                match value{
-                    Value::Array(a) => self.construct_index(a),
-                    Value::Wagon(w) => self.construct(w.unwrap()),
-                    _ => self.construct_full(value)
-                }
-            }
-            ReplaceType::Full => {
-                self.construct_full(value)
-            }
-        }
+    pub fn get_query(&self) -> String {
+        self.query.clone()
     }
 
-    fn construct_full(&self, value: Value)-> String{
-        let mut query = String::with_capacity(self.estimated_size);
-
-        for part in &self.parts {
-            match part {
-                Segment::Static(s) => query.push_str(s),
-                Segment::DynamicFull => query.push_str(&value.to_string()),
+    pub fn prepare_query(&self, prefix: &str) -> (String, Box<dyn Fn(&Value) -> Vec<Value>>) {
+        let query = self.replace_indexed_query(prefix);
+        let parts = self.parts.iter().filter(|p| !matches!(p, Segment::Static(_))).cloned().collect::<Vec<Segment>>();
+        let parts: Vec<Box<dyn Fn(&Value) -> Value>> = parts.into_iter().map(|part| {
+            let func: Box<dyn Fn(&Value) -> Value> = match part {
+                Segment::DynamicIndex(i) => Box::new(move |value| {
+                    if let Array(array) = value {
+                        array.0.get(i).unwrap().clone()
+                    } else {
+                        panic!()
+                    }
+                }),
+                Segment::DynamicKey(k) => Box::new(move |value| {
+                    if let Dict(dict) = value {
+                        dict.get(&k).unwrap().clone()
+                    } else {
+                        panic!()
+                    }
+                }),
+                Segment::DynamicFull => Box::new(|value| {
+                    value.clone()
+                }),
                 _ => unreachable!()
-            }
-        }
-        query
-    }
+            };
+            func
+        }).collect();
 
-    fn construct_key(&self, dict: Dict) -> String {
-        let mut query = String::with_capacity(self.estimated_size);
-
-        for part in &self.parts {
-            match part {
-                Segment::Static(s) => query.push_str(s),
-                DynamicIndex(_) => unreachable!(),
-                Segment::DynamicKey(k) => query.push_str(dict.get(k).unwrap().to_string().as_str()),
-                Segment::DynamicFull => query.push_str(&dict.to_string()),
-            }
-        }
-
-        query
-    }
-
-    fn construct_index(&self, values: Array) -> String {
-        let mut query = String::with_capacity(self.estimated_size);
-
-        for part in &self.parts {
-            match part {
-                Segment::Static(s) => query.push_str(s),
-                Segment::DynamicIndex(d) => query.push_str(values.0.get(*d).unwrap().to_string().as_str()),
-                Segment::DynamicKey(_) => {}
-                Segment::DynamicFull => query.push_str(&values.to_string()),
-            }
-        }
-        query
+        (query, Box::new(move |value| {
+            parts.iter().map(|part| {
+                let mut value = value.clone();
+                while let Value::Wagon(w) = value {
+                    value = w.clone().unwrap();
+                }
+                part(&value)
+            }).collect()
+        }))
     }
 
     fn text(text: String) -> Segment {
@@ -146,22 +141,20 @@ impl DynamicQuery{
     fn full() -> Segment {
         Segment::DynamicFull
     }
-
-
 }
 
+#[derive(Clone, Debug, PartialEq)]
 enum ReplaceType {
     Key,
     Index,
-    Full
+    Full,
 }
 
 
-
-#[derive(PartialOrd, PartialEq)]
-pub enum Segment{
+#[derive(PartialOrd, PartialEq, Clone, Debug)]
+pub enum Segment {
     Static(String),
     DynamicIndex(usize),
     DynamicKey(String),
-    DynamicFull
+    DynamicFull,
 }

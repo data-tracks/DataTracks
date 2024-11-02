@@ -101,7 +101,7 @@ pub trait ValueHandler: Send {
 
 
 pub trait ValueIterator: Iterator<Item=Value> + Send + 'static {
-    fn load(&mut self, trains: Vec<Train>);
+    fn dynamically_load(&mut self, trains: Vec<Train>);
 
     fn drain(&mut self) -> Vec<Value> {
         self.into_iter().collect()

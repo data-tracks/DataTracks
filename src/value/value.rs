@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::cmp::PartialEq;
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
@@ -13,9 +14,10 @@ use crate::value::Value::Wagon;
 use crate::value::{bool, Bool, Float, Int};
 use json::{parse, JsonValue};
 use serde::{Deserialize, Serialize};
+use sqlx::encode::IsNull;
 use sqlx::error::BoxDynError;
-use sqlx::sqlite::SqliteRow;
-use sqlx::{Database, Decode, Error, FromRow, Row, Sqlite, Type, TypeInfo, ValueRef};
+use sqlx::sqlite::{SqliteArgumentValue, SqliteRow};
+use sqlx::{Database, Decode, Encode, Error, FromRow, Row, Sqlite, Type, TypeInfo, ValueRef};
 use tracing::warn;
 
 #[derive(Eq, Clone, Debug, Serialize, Deserialize)]
@@ -244,11 +246,28 @@ impl<'r> Decode<'r, Sqlite> for Value {
     }
 }
 
+impl<'q> Encode<'q, Sqlite> for Value {
+    fn encode_by_ref(&self, buf: &mut <Sqlite as Database>::ArgumentBuffer<'q>) -> Result<IsNull, BoxDynError> {
+        match self {
+            Value::Int(i) => buf.push(SqliteArgumentValue::Int64(i.0)),
+            Value::Float(f) => buf.push(SqliteArgumentValue::Double(f.as_f64())),
+            Value::Bool(b) => buf.push(SqliteArgumentValue::Int(b.0 as i32)),
+            Value::Text(t) => buf.push(SqliteArgumentValue::Text(Cow::from(t.0.clone()))),
+            Value::Array(_) => panic!(),
+            Value::Dict(_) => panic!(),
+            Value::Null => return Ok(IsNull::Yes),
+            Wagon(w) => return w.clone().unwrap().encode_by_ref(buf),
+        }
+        Ok(IsNull::No)
+    }
+}
+
 impl Type<Sqlite> for Value {
     fn type_info() -> <Sqlite as Database>::TypeInfo {
         panic!()
     }
 }
+
 
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
