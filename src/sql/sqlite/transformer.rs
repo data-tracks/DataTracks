@@ -103,7 +103,7 @@ impl Iterator for LiteIterator {
 }
 
 impl ValueIterator for LiteIterator {
-    fn dynamically_load(&mut self, mut trains: Vec<Train>) {
+    fn dynamically_load(&mut self, trains: Vec<Train>) {
         for train in trains {
             if let Some(values) = train.values {
                 for value in values {

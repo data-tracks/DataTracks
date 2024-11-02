@@ -131,6 +131,7 @@ impl Destination for LiteDestination {
 mod tests {
     use crate::processing::Plan;
 
+    #[test]
     fn test_simple_insert() {
         let plan = Plan::parse(
             "\

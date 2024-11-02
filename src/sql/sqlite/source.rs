@@ -2,7 +2,7 @@ use crate::processing::option::Configurable;
 use crate::processing::plan::SourceModel;
 use crate::processing::source::Source;
 use crate::processing::station::Command;
-use crate::processing::station::Command::Ready;
+use crate::processing::station::Command::{Ready, Stop};
 use crate::processing::{plan, Train};
 use crate::sql::sqlite::connection::SqliteConnector;
 use crate::ui::ConfigModel;
@@ -75,6 +75,7 @@ impl Source for LiteSource {
                 }
 
             }
+            control.send(Stop(id)).unwrap();
         });
         tx
     }
@@ -120,5 +121,62 @@ impl Source for LiteSource {
         Ok(SourceModel { type_name: String::from("SQLite"), id: String::from("SQLite"), configs: HashMap::new() })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::processing::Plan;
+    use sqlx::{Connection, Executor, SqliteConnection};
+    use tokio::runtime::Runtime;
+
+    fn create_sqlite_source(path: &str) {
+        let err: Result<(), String> = Runtime::new().unwrap().block_on(async {
+            // Define the database URL for a persistent file
+            let database_url = format!("sqlite://{}", path);
+
+            // Create the database connection pool
+            let mut connection = SqliteConnection::connect(&database_url).await.map_err(|e| e.to_string())?;
+
+            // Initialize a table in the database
+            connection.execute("CREATE TABLE IF NOT EXISTS user (id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
+                .await.map_err(|e| e.to_string())?;
+
+            // Insert some sample data into the table
+            sqlx::query("INSERT INTO users (name) VALUES (?1), (?2)")
+                .bind("Alice".to_string())
+                .bind("Bob".to_string())
+                .fetch_all(&mut connection)
+                .await.map_err(|e| e.to_string())?;
+            Ok(())
+        });
+        if err.is_err() {
+            panic!("{}", err.err().unwrap())
+        }
+    }
+
+    #[test]
+    fn test_simple_source() {
+        create_sqlite_source("test.db");
+        let plan = format!(
+            "\
+            0--1\n\
+            In\n\
+            Sqlite{{\"path\":\"test.db\",\"query\":\"SELECT * FROM test\"}}:0\n\
+            Out\n\
+            Dummy{{\"id\": 35, \"result_size\":2}}:1\
+            "
+        );
+        let mut plan = Plan::parse(&plan).unwrap();
+
+        let dummy = plan.get_result(35).clone();
+        plan.operate().unwrap();
+
+        for _ in 0..4 {
+            plan.control_receiver.1.recv().unwrap();
+        }
+        let values = dummy.lock().unwrap();
+        println!("{:?}", values);
+    }
+}
+
 
 
