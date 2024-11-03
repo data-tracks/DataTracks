@@ -2,7 +2,6 @@ use crate::ui::{ConfigModel, StringModel};
 use serde_json::{Map, Value};
 use sqlx::{Connection, SqliteConnection};
 use std::collections::HashMap;
-use tokio::runtime::Runtime;
 
 #[derive(Debug)]
 pub(crate) struct SqliteConnector {
@@ -19,11 +18,8 @@ impl SqliteConnector {
         options.insert(String::from("path"), Value::String(self.path.clone()));
     }
 
-    pub(crate) fn connect(&self) -> Result<SqliteConnection, String> {
-        let runtime = Runtime::new().unwrap();
-        runtime.block_on(async {
-            SqliteConnection::connect(&format!("sqlite::{}", self.path)).await.map_err(|e| e.to_string())
-        })
+    pub(crate) async fn connect(&self) -> Result<SqliteConnection, String> {
+        SqliteConnection::connect(&format!("sqlite:{}", self.path)).await.map_err(|e| e.to_string())
     }
 
     pub(crate) fn serialize(&self, configs: &mut HashMap<String, ConfigModel>) {

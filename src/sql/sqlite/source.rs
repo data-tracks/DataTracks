@@ -61,7 +61,7 @@ impl Source for LiteSource {
         let sender = self.outs.clone();
 
         runtime.block_on(async {
-            let mut conn = connection.connect().unwrap();
+            let mut conn = connection.connect().await.unwrap();
             control.send(Ready(id)).unwrap();
             loop {
                 if plan::check_commands(&rx) { break; }
@@ -131,7 +131,7 @@ mod tests {
     fn create_sqlite_source(path: &str) {
         let err: Result<(), String> = Runtime::new().unwrap().block_on(async {
             // Define the database URL for a persistent file
-            let database_url = format!("sqlite://{}", path);
+            let database_url = format!("sqlite:{}", path);
 
             // Create the database connection pool
             let mut connection = SqliteConnection::connect(&database_url).await.map_err(|e| e.to_string())?;
@@ -141,7 +141,7 @@ mod tests {
                 .await.map_err(|e| e.to_string())?;
 
             // Insert some sample data into the table
-            sqlx::query("INSERT INTO users (name) VALUES (?1), (?2)")
+            sqlx::query("INSERT INTO user (name) VALUES (?1), (?2)")
                 .bind("Alice".to_string())
                 .bind("Bob".to_string())
                 .fetch_all(&mut connection)
@@ -155,12 +155,12 @@ mod tests {
 
     #[test]
     fn test_simple_source() {
-        create_sqlite_source("test.db");
+        create_sqlite_source("//test.db");
         let plan = format!(
             "\
             0--1\n\
             In\n\
-            Sqlite{{\"path\":\"test.db\",\"query\":\"SELECT * FROM test\"}}:0\n\
+            Sqlite{{\"path\":\"//test.db\",\"query\":\"SELECT * FROM user\"}}:0\n\
             Out\n\
             Dummy{{\"id\": 35, \"result_size\":2}}:1\
             "

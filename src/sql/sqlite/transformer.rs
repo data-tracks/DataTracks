@@ -11,22 +11,22 @@ use std::collections::HashMap;
 use tokio::runtime::Runtime;
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct LiteTransformer {
+pub struct SqliteTransformer {
     id: i64,
     query: DynamicQuery,
     connector: SqliteConnector
 }
 
-impl LiteTransformer {
-    fn new(query: String, path: String) -> LiteTransformer {
+impl SqliteTransformer {
+    fn new(query: String, path: String) -> SqliteTransformer {
         let id = GLOBAL_ID.new_id();
         let connector = SqliteConnector::new(&path);
         let query = DynamicQuery::build_dynamic_query(query);
-        LiteTransformer { id, connector, query }
+        SqliteTransformer { id, connector, query }
     }
 }
 
-impl Configurable for LiteTransformer {
+impl Configurable for SqliteTransformer {
     fn get_name(&self) -> String {
         "SQLite".to_owned()
     }
@@ -39,7 +39,7 @@ impl Configurable for LiteTransformer {
     }
 }
 
-impl Layoutable for LiteTransformer {
+impl Layoutable for SqliteTransformer {
     fn derive_input_layout(&self) -> Layout {
         todo!()
     }
@@ -49,38 +49,37 @@ impl Layoutable for LiteTransformer {
     }
 }
 
-impl Transformer for LiteTransformer {
+impl Transformer for SqliteTransformer {
     fn parse(options: Map<String, serde_json::Value>) -> Result<Self, String> {
         let query = options.get("query").unwrap().as_str().unwrap();
         let path = options.get("path").unwrap().as_str().unwrap();
-        Ok(LiteTransformer::new(query.to_owned(), path.to_owned()))
+        Ok(SqliteTransformer::new(query.to_owned(), path.to_owned()))
     }
 
     fn optimize(&self, _transforms: HashMap<String, Transform>) -> Box<dyn ValueIterator<Item=Value> + Send> {
-        let iter = LiteIterator::new(self.query.clone(), self.connector.path.clone(), self.connector.clone());
+        let iter = SqliteIterator::new(self.query.clone(), self.connector.clone());
 
         Box::new(iter)
     }
 }
 
-pub struct LiteIterator {
+pub struct SqliteIterator {
     query: DynamicQuery,
-    path: String,
     connector: SqliteConnector,
     values: Vec<Value>
 }
 
-impl LiteIterator {
-    pub fn new(query: DynamicQuery, path: String, connector: SqliteConnector) -> LiteIterator {
-        LiteIterator { query, path, connector, values: Vec::new() }
+impl SqliteIterator {
+    pub fn new(query: DynamicQuery, connector: SqliteConnector) -> SqliteIterator {
+        SqliteIterator { query, connector, values: Vec::new() }
     }
 
     fn query_values(&self, value: Value) -> Vec<Value> {
         let runtime = Runtime::new().unwrap();
         let query = self.query.clone();
-        let mut connection = self.connector.connect().unwrap();
         runtime.block_on(async {
-            let (query, value_function) = query.prepare_query("$");
+            let mut connection = self.connector.connect().await.unwrap();
+            let (query, value_function) = query.prepare_query("$", None);
             let mut prepared = sqlx::query_as(&query);
             for value in value_function(&value) {
                 prepared = prepared.bind(value)
@@ -90,7 +89,7 @@ impl LiteIterator {
     }
 }
 
-impl Iterator for LiteIterator {
+impl Iterator for SqliteIterator {
     type Item = Value;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -102,7 +101,7 @@ impl Iterator for LiteIterator {
     }
 }
 
-impl ValueIterator for LiteIterator {
+impl ValueIterator for SqliteIterator {
     fn dynamically_load(&mut self, trains: Vec<Train>) {
         for train in trains {
             if let Some(values) = train.values {
@@ -114,7 +113,7 @@ impl ValueIterator for LiteIterator {
     }
 
     fn clone(&self) -> BoxedIterator {
-        Box::new(LiteIterator::new(self.query.clone(), self.path.clone(), self.connector.clone()))
+        Box::new(SqliteIterator::new(self.query.clone(), self.connector.clone()))
     }
 
     fn enrich(&mut self, _transforms: HashMap<String, Transform>) -> Option<BoxedIterator> {

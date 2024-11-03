@@ -7,6 +7,7 @@ use crate::processing::station::Command;
 #[cfg(test)]
 use crate::processing::tests::DummyDestination;
 use crate::processing::train::Train;
+use crate::sql::LiteDestination;
 use crate::util::Tx;
 use crossbeam::channel::Sender;
 use serde_json::{Map, Value};
@@ -14,6 +15,7 @@ use serde_json::{Map, Value};
 pub fn parse_destination(type_: &str, options: Map<String, Value>) -> Result<Box<dyn Destination>, String> {
     let destination: Box<dyn Destination> = match type_.to_ascii_lowercase().as_str() {
         "mqtt" => Box::new(MqttDestination::parse(options)?),
+        "sqlite" => Box::new(LiteDestination::parse(options)?),
         #[cfg(test)]
         "dummy" => Box::new(DummyDestination::parse(options)?),
         _ => Err(format!("Invalid type: {}", type_))?,

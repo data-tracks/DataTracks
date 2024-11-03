@@ -15,6 +15,7 @@ pub struct DynamicQuery {
     replace_type: ReplaceType,
 }
 
+
 impl DynamicQuery {
     pub fn build_dynamic_query(query: String) -> Self {
         let mut parts = vec![];
@@ -24,7 +25,7 @@ impl DynamicQuery {
         let mut is_dynamic = false;
 
         for char in query.chars() {
-            if is_dynamic && char == ' ' {
+            if is_dynamic && char.is_whitespace() {
                 // we finish the value
                 if temp.is_empty() {
                     parts.push(DynamicQuery::full());
@@ -49,14 +50,22 @@ impl DynamicQuery {
         DynamicQuery::new(query, parts)
     }
 
-    pub(crate) fn replace_indexed_query(&self, prefix: &str) -> String {
+    pub(crate) fn get_parts(&self) -> Vec<Segment> {
+        self.parts.clone()
+    }
+
+    pub(crate) fn replace_indexed_query(&self, prefix: &str, placeholder: Option<&str>) -> String {
         let mut builder = StringBuilder::new();
         let mut i = 0;
         for part in &self.parts {
             match part {
                 Segment::Static(s) => builder.append_string(s),
                 Segment::DynamicIndex(_) | Segment::DynamicKey(_) | Segment::DynamicFull => {
-                    let key = format!("{}{}", prefix, i);
+                    let index = match placeholder {
+                        None => i.to_string().as_str(),
+                        Some(placeholder) => placeholder
+                    };
+                    let key = format!("{}{}", prefix, index);
                     builder.append_string(&key);
                     i += 1;
                 }
@@ -84,12 +93,16 @@ impl DynamicQuery {
         DynamicQuery { query, parts, estimated_size, replace_type }
     }
 
+    pub fn get_replacement_type(&self) -> &ReplaceType {
+        &self.replace_type
+    }
+
     pub fn get_query(&self) -> String {
         self.query.clone()
     }
 
-    pub fn prepare_query(&self, prefix: &str) -> (String, Box<dyn Fn(&Value) -> Vec<Value>>) {
-        let query = self.replace_indexed_query(prefix);
+    pub fn prepare_query(&self, prefix: &str, placeholder: Option<&str>) -> (String, Box<dyn Fn(&Value) -> Vec<Value>>) {
+        let query = self.replace_indexed_query(prefix, placeholder);
         let parts = self.parts.iter().filter(|p| !matches!(p, Segment::Static(_))).cloned().collect::<Vec<Segment>>();
         let parts: Vec<Box<dyn Fn(&Value) -> Value>> = parts.into_iter().map(|part| {
             let func: Box<dyn Fn(&Value) -> Value> = match part {
@@ -144,7 +157,7 @@ impl DynamicQuery {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-enum ReplaceType {
+pub enum ReplaceType {
     Key,
     Index,
     Full,

@@ -7,6 +7,7 @@ use crate::value::{ValType, Value};
 use std::cmp::min;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
+use std::ops::Deref;
 use tracing::warn;
 
 const ARRAY_OPEN: char = '[';
@@ -112,6 +113,23 @@ impl Layout {
         let mut reader = BufferedReader::new(stencil.to_string());
 
         parse(&mut reader)
+    }
+
+    pub fn dict(keys: Vec<String>) -> Layout {
+        let mut layout = Layout::default();
+        let mut dict = HashMap::new();
+        keys.iter().for_each(|v| {
+            dict.insert(Some(v.clone()), Layout::default());
+        });
+        layout.type_ = Dict(Box::new(DictType::new(dict)));
+        layout
+    }
+
+    pub fn array(index: Option<i32>) -> Layout {
+        let mut layout = Layout::default();
+
+        layout.type_ = Array(Box::new(ArrayType::new(Layout::default(), index)));
+        layout
     }
 
     pub(crate) fn fits(&self, value: &Value) -> bool {

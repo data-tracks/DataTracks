@@ -73,8 +73,8 @@ impl Destination for LiteDestination {
 
         thread::spawn(move || {
             runtime.block_on(async {
-                let mut conn = connection.connect().unwrap();
-                let (query, value_functions) = query.prepare_query("$");
+                let mut conn = connection.connect().await.unwrap();
+                let (query, value_functions) = query.prepare_query("$", None);
 
                 control.send(Ready(id)).unwrap();
                 loop {

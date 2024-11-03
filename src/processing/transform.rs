@@ -3,9 +3,9 @@ use crate::analyse::Layoutable;
 use crate::language::Language;
 use crate::processing::option::Configurable;
 use crate::processing::train::Train;
-use crate::processing::transform::Transform::{Func, Lang, SQLite};
+use crate::processing::transform::Transform::{Func, Lang, Postgres, SQLite};
 use crate::processing::Layout;
-use crate::sql::LiteTransformer;
+use crate::sql::{PostgresTransformer, SqliteTransformer};
 use crate::value::Value;
 use crate::{algebra, language};
 use serde_json::Map;
@@ -21,19 +21,17 @@ pub trait Taker: Send {
 pub enum Transform {
     Func(FuncTransform),
     Lang(LanguageTransform),
-    SQLite(LiteTransformer),
+    SQLite(SqliteTransformer),
+    Postgres(PostgresTransformer)
 }
 
 impl Clone for Transform {
     fn clone(&self) -> Self {
         match self {
-            Func(f) => {
-                Func(Clone::clone(f))
-            }
-            Lang(language) => {
-                Lang(language.clone())
-            }
-            SQLite(s) => SQLite(s.clone())
+            Func(f) => Func(Clone::clone(f)),
+            Lang(language) => Lang(language.clone()),
+            SQLite(s) => SQLite(s.clone()),
+            Postgres(p) => Postgres(p.clone())
         }
     }
 }
@@ -65,7 +63,8 @@ impl Transform {
         match self {
             Func(f) => f.derive_input_layout(),
             Lang(l) => l.derive_input_layout(),
-            SQLite(t) => t.derive_input_layout()
+            SQLite(t) => t.derive_input_layout(),
+            Postgres(p) => p.derive_input_layout()
         }
     }
 
@@ -73,7 +72,8 @@ impl Transform {
         match self {
             Func(f) => f.derive_output_layout(),
             Lang(l) => l.derive_output_layout(inputs),
-            SQLite(c) => c.derive_output_layout(inputs)
+            SQLite(c) => c.derive_output_layout(inputs),
+            Postgres(p) => p.derive_output_layout(inputs)
         }
     }
 
@@ -81,7 +81,8 @@ impl Transform {
         match self {
             Func(f) => f.dump(),
             Lang(f) => f.dump(),
-            SQLite(c) => c.dump()
+            SQLite(c) => c.dump(),
+            Postgres(p) => p.dump()
         }
     }
 
@@ -89,7 +90,8 @@ impl Transform {
         match self {
             Func(_) => "Func".to_string(),
             Lang(_) => "Lang".to_string(),
-            SQLite(c) => c.get_name()
+            SQLite(c) => c.get_name(),
+            Postgres(p) => p.get_name()
         }
     }
 
@@ -105,7 +107,8 @@ impl Transform {
                     initial
                 }
             },
-            SQLite(c) => c.optimize(transforms)
+            SQLite(c) => c.optimize(transforms),
+            Postgres(p) => p.optimize(transforms)
         }
     }
 }
@@ -122,7 +125,8 @@ fn parse_function(stencil: &str) -> Result<Transform, String> {
         "dummy" => Ok(Func(FuncTransform::new_boxed(|_stop, value| {
             &value + &Value::int(1)
         }))),
-        "sqlite" => Ok(SQLite(LiteTransformer::parse(options)?)),
+        "sqlite" => Ok(SQLite(SqliteTransformer::parse(options)?)),
+        "postgres" | "postgresql" => Ok(Postgres(PostgresTransformer::parse(options)?)),
         fun => panic!("Unknown function {}", fun)
     }
 }
@@ -130,13 +134,10 @@ fn parse_function(stencil: &str) -> Result<Transform, String> {
 impl Configurable for Transform {
     fn get_name(&self) -> String {
         match self {
-            Func(_) => {
-                "Func".to_string()
-            }
-            Lang(l) => {
-                l.language.to_string()
-            }
-            SQLite(c) => c.get_name()
+            Func(_) => "Func".to_string(),
+            Lang(l) => l.language.to_string(),
+            SQLite(c) => c.get_name(),
+            Postgres(p) => p.get_name()
         }
     }
 
@@ -144,7 +145,8 @@ impl Configurable for Transform {
         match self {
             Func(_) => Map::new(),
             Lang(_) => Map::new(),
-            SQLite(c) => c.get_options()
+            SQLite(c) => c.get_options(),
+            Postgres(p) => p.get_options()
         }
     }
 }
