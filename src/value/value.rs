@@ -7,12 +7,8 @@ use crate::value::Value::Wagon;
 use crate::value::{bool, Bool, Float, Int};
 use bytes::BufMut;
 use json::{parse, JsonValue};
+use postgres::Row;
 use serde::{Deserialize, Serialize};
-use sqlx::encode::IsNull;
-use sqlx::error::BoxDynError;
-use sqlx::postgres::{PgArguments, PgRow, PgTypeInfo, PgTypeKind, PgValue};
-use sqlx::sqlite::{SqliteArgumentValue, SqliteRow};
-use sqlx::{Database, Decode, Encode, Error, FromRow, Postgres, Row, Sqlite, Type, TypeInfo, ValueRef};
 use std::borrow::Cow;
 use std::cmp::PartialEq;
 use std::collections::BTreeMap;
@@ -205,140 +201,6 @@ macro_rules! value_display {
             }
         }
     };
-}
-
-//// PostgreSQL
-
-impl FromRow<'_, PgRow> for Value {
-    fn from_row(row: &'_ PgRow) -> Result<Self, Error> {
-        let columns = row.columns();
-        let mut values = vec![];
-        for index in 0..columns.len() {
-            values.push(row.get::<Value, usize>(index));
-        }
-        if values.len() == 1 {
-            Ok(values.remove(0))
-        } else {
-            Ok(Value::array(values))
-        }
-    }
-}
-
-impl<'r> Decode<'r, Postgres> for Value {
-    fn decode(value: <Postgres as Database>::ValueRef<'r>) -> Result<Self, BoxDynError> {
-        let info = value.type_info();
-        if info.is_null() {
-            return Ok(Value::Null);
-        }
-
-        match info.oid().unwrap().0 {
-            20..=23 => {
-                let val = Decode::<Postgres>::decode(value)?;
-                Ok(Value::int(val))
-            },
-            700..=701 => {
-                let val = Decode::<Postgres>::decode(value)?;
-                Ok(Value::float(val))
-            },
-            16 => {
-                let val = Decode::<Postgres>::decode(value)?;
-                Ok(Value::bool(val))
-            },
-            18 | 25 => {
-                let val = Decode::<Postgres>::decode(value)?;
-                Ok(Value::text(val))
-            },
-            _ => Ok(Value::null())
-        }
-    }
-}
-
-impl<'q> Encode<'q, Postgres> for Value {
-    fn encode_by_ref(&self, buf: &mut <Postgres as Database>::ArgumentBuffer<'q>) -> Result<IsNull, BoxDynError> {
-        let write = match self {
-            Value::Int(i) => buf.push(i.0.into()),
-            Value::Float(f) => buf.push(f.as_f64().into()),
-            Value::Bool(b) => buf.push(b.0.into()),
-            Value::Text(t) => buf.push(t.0.as_bytes().into()),
-            Value::Array(_) => return Err(BoxDynError::from("Cannot transform array")),
-            Value::Dict(_) => return Err(BoxDynError::from("Cannot transform dict")),
-            Value::Null => return Ok(IsNull::Yes),
-            Wagon(w) => return w.clone().unwrap().encode_by_ref(buf)
-        };
-        Ok(IsNull::No)
-    }
-}
-
-impl Type<Postgres> for Value {
-    fn type_info() -> <Postgres as Database>::TypeInfo {
-        <String as Type<Postgres>>::type_info()
-    }
-}
-
-
-//// SQLite
-impl FromRow<'_, SqliteRow> for Value {
-    fn from_row(row: &'_ SqliteRow) -> Result<Self, Error> {
-        let columns = row.columns();
-        let mut values = vec![];
-        for index in 0..columns.len() {
-            values.push(row.get::<Value, usize>(index));
-        }
-        if values.len() == 1 {
-            Ok(values.remove(0))
-        } else {
-            Ok(Value::array(values))
-        }
-    }
-}
-
-impl<'r> Decode<'r, Sqlite> for Value {
-    fn decode(value: <Sqlite as Database>::ValueRef<'r>) -> Result<Self, BoxDynError> {
-        let info = value.type_info();
-
-        match info.name().to_lowercase().as_str() {
-            "null" => Ok(Value::null()),
-            "integer" => {
-                let val = Decode::<Sqlite>::decode(value)?;
-                Ok(Value::int(val))
-            },
-            "real" => {
-                let val = Decode::<Sqlite>::decode(value)?;
-                Ok(Value::float(val))
-            },
-            "boolean" => {
-                let val = Decode::<Sqlite>::decode(value)?;
-                Ok(Value::bool(val))
-            },
-            "text" => {
-                let val = Decode::<Sqlite>::decode(value)?;
-                Ok(Value::text(val))
-            },
-            _ => Ok(Value::null())
-        }
-    }
-}
-
-impl<'q> Encode<'q, Sqlite> for Value {
-    fn encode_by_ref(&self, buf: &mut <Sqlite as Database>::ArgumentBuffer<'q>) -> Result<IsNull, BoxDynError> {
-        match self {
-            Value::Int(i) => buf.push(SqliteArgumentValue::Int64(i.0)),
-            Value::Float(f) => buf.push(SqliteArgumentValue::Double(f.as_f64())),
-            Value::Bool(b) => buf.push(SqliteArgumentValue::Int(b.0 as i32)),
-            Value::Text(t) => buf.push(SqliteArgumentValue::Text(Cow::from(t.0.clone()))),
-            Value::Array(_) => panic!(),
-            Value::Dict(_) => panic!(),
-            Value::Null => return Ok(IsNull::Yes),
-            Wagon(w) => return w.clone().unwrap().encode_by_ref(buf),
-        }
-        Ok(IsNull::No)
-    }
-}
-
-impl Type<Sqlite> for Value {
-    fn type_info() -> <Sqlite as Database>::TypeInfo {
-        <String as Type<Sqlite>>::type_info()
-    }
 }
 
 
@@ -595,6 +457,13 @@ impl Div for &Value {
             Wagon(w) => w.value.div(_rhs),
             _ => panic!("Cannot div value with {:?}.", self)
         }
+    }
+}
+
+
+impl From<postgres::Row> for Value {
+    fn from(row: Row) -> Self {
+        row.
     }
 }
 

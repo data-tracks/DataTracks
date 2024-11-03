@@ -2,6 +2,9 @@ use crate::util::StringBuilder;
 use crate::value::Value;
 use crate::value::Value::{Array, Dict};
 
+
+pub type ValueExtractor = Box<dyn Fn(&Value) -> Vec<Value>>;
+
 /**
 DynamicQueries can come in two forms, either they access values by keys, which is intended for
 dictionaries or via index, which is intended for arrays. Additionally, both allow to access the full input
@@ -101,7 +104,7 @@ impl DynamicQuery {
         self.query.clone()
     }
 
-    pub fn prepare_query(&self, prefix: &str, placeholder: Option<&str>) -> (String, Box<dyn Fn(&Value) -> Vec<Value>>) {
+    pub fn prepare_query(&self, prefix: &str, placeholder: Option<&str>) -> (String, ValueExtractor) {
         let query = self.replace_indexed_query(prefix, placeholder);
         let parts = self.parts.iter().filter(|p| !matches!(p, Segment::Static(_))).cloned().collect::<Vec<Segment>>();
         let parts: Vec<Box<dyn Fn(&Value) -> Value>> = parts.into_iter().map(|part| {

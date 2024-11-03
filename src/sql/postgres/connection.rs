@@ -1,5 +1,5 @@
+use postgres::{Client, NoTls};
 use serde_json::{Map, Number, Value};
-use sqlx::{postgres, Connection};
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct PostgresConnection {
@@ -20,7 +20,7 @@ impl PostgresConnection {
         options.insert(String::from("db"), Value::String(self.db.clone()));
     }
 
-    pub async fn connect(&self) -> postgres::PgConnection {
-        postgres::PgConnection::connect(&self.url).await.unwrap()
+    pub async fn connect(&self) -> Result<Client, String> {
+        Client::connect(&format!("postgresql://{}@{}:{}", self.db, self.url, self.port), NoTls).await?
     }
 }

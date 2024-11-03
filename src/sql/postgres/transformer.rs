@@ -4,12 +4,10 @@ use crate::processing::option::Configurable;
 use crate::processing::transform::{Transform, Transformer};
 use crate::processing::{Layout, Train};
 use crate::sql::postgres::connection::PostgresConnection;
-use crate::util::{DynamicQuery, ReplaceType, Segment};
+use crate::util::{DynamicQuery, ReplaceType, Segment, ValueExtractor};
 use crate::value::value;
+use postgres::{Client, Statement};
 use serde_json::{Map, Value};
-use sqlx::postgres::PgArguments;
-use sqlx::query::QueryAs;
-use sqlx::Postgres;
 use std::collections::HashMap;
 use tokio::runtime::Runtime;
 
@@ -87,29 +85,34 @@ impl Transformer for PostgresTransformer {
 }
 
 pub struct PostgresIterator {
+    client: Client,
     query: DynamicQuery,
     connector: PostgresConnection,
+    statement: Statement,
+    value_functions: ValueExtractor,
     values: Vec<value::Value>,
 }
 
 
 impl PostgresIterator {
     pub fn new(query: DynamicQuery, connector: PostgresConnection) -> Self {
-        PostgresIterator { query, connector, values: vec![] }
+        let (q, value_functions) = query.prepare_query("$", None);
+        let con = connector.clone();
+        let statement = Runtime::new().unwrap().block_on(async {
+            let mut client = con.connect().await.unwrap();
+
+            return client.prepare(&q).unwrap();
+        });
+
+        let client = Runtime::new().unwrap().block_on(async {
+            connector.clone().connect().await.unwrap()
+        });
+
+        PostgresIterator { client, query, connector, statement, value_functions, values: vec![] }
     }
 
-    pub(crate) fn query_values(&self, value: value::Value) -> Vec<value::Value> {
-        let runtime = Runtime::new().unwrap();
-        let query = self.query.clone();
-        runtime.block_on(async {
-            let mut connection = self.connector.connect().await;
-            let (query, value_function) = query.prepare_query("", Some("?"));
-            let mut prepared: QueryAs<'_, Postgres, value::Value, PgArguments, > = sqlx::query_as(&query);
-            for value in value_function(&value) {
-                prepared = prepared.bind(value)
-            }
-            return Some(prepared.fetch_all(&mut connection).await.unwrap());
-        }).unwrap_or(vec![])
+    pub(crate) async fn query_values(&mut self, value: value::Value) -> Vec<value::Value> {
+        self.client.query(&self.statement, self.value_functions(&value)).unwrap().into()
     }
 }
 

@@ -38,7 +38,8 @@ mime_guess = "2.0.4"
 bytes = "1.6.0"
 rumqttc = "0.24.0"
 rumqttd = "0.19.0"
-sqlx = { version = "0.8.2", features = ["sqlite", "postgres"] }
+rusqlite = "0.32.1"
+postgres = "0.19.9"
 
 [dev-dependencies]
 rstest = "0.23.0"
