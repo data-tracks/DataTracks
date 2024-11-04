@@ -84,7 +84,7 @@ impl Destination for LiteDestination {
                                 continue;
                             }
                             for value in values {
-                                let _ = prepared.query(value_functions(&value).into()).unwrap();
+                                let _ = prepared.query::<[&Value]>(value_functions(&value).into()).unwrap();
                             }
                         }
                         _ => tokio::time::sleep(Duration::from_nanos(100)).await

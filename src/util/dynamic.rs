@@ -3,7 +3,8 @@ use crate::value::Value;
 use crate::value::Value::{Array, Dict};
 
 
-pub type ValueExtractor = Box<dyn Fn(&Value) -> Vec<Value>>;
+pub type ValueExtractor = Box<dyn Fn(&Value) -> Vec<Value> + Send + Sync>;
+type FieldExtractor = Box<dyn Fn(&Value) -> Value + Send + Sync>;
 
 /**
 DynamicQueries can come in two forms, either they access values by keys, which is intended for
@@ -107,8 +108,8 @@ impl DynamicQuery {
     pub fn prepare_query(&self, prefix: &str, placeholder: Option<&str>) -> (String, ValueExtractor) {
         let query = self.replace_indexed_query(prefix, placeholder);
         let parts = self.parts.iter().filter(|p| !matches!(p, Segment::Static(_))).cloned().collect::<Vec<Segment>>();
-        let parts: Vec<Box<dyn Fn(&Value) -> Value>> = parts.into_iter().map(|part| {
-            let func: Box<dyn Fn(&Value) -> Value> = match part {
+        let parts: Vec<FieldExtractor> = parts.into_iter().map(|part| {
+            let func: FieldExtractor = match part {
                 Segment::DynamicIndex(i) => Box::new(move |value| {
                     if let Array(array) = value {
                         array.0.get(i).unwrap().clone()

@@ -7,7 +7,6 @@ use crate::value::{ValType, Value};
 use std::cmp::min;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
-use std::ops::Deref;
 use tracing::warn;
 
 const ARRAY_OPEN: char = '[';

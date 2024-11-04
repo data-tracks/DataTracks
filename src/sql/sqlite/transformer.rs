@@ -80,12 +80,15 @@ impl SqliteIterator {
         runtime.block_on(async {
             let mut connection = self.connector.connect().await.unwrap();
             let (query, value_function) = query.prepare_query("$", None);
-            let mut prepared = sqlx::query_as(&query);
-            for value in value_function(&value) {
-                prepared = prepared.bind(value)
+            let mut prepared = connection.prepare(&query).unwrap();
+            let count = prepared.column_count();
+            let mut iter = prepared.query::<[&Value]>(value_function(&value).into()).unwrap();
+            let mut values = vec![];
+            while let Ok(Some(row)) = iter.next() {
+                values.push((row, count).try_into().unwrap());
             }
-            return Some(prepared.fetch_all(&mut connection).await.unwrap());
-        }).unwrap_or(vec![])
+            values
+        })
     }
 }
 

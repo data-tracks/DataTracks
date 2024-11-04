@@ -6,6 +6,7 @@ use crate::processing::{Layout, Train};
 use crate::sql::postgres::connection::PostgresConnection;
 use crate::util::{DynamicQuery, ReplaceType, Segment, ValueExtractor};
 use crate::value::value;
+use postgres::types::ToSql;
 use postgres::{Client, Statement};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
@@ -112,8 +113,10 @@ impl PostgresIterator {
     }
 
     pub(crate) async fn query_values(&mut self, value: value::Value) -> Vec<value::Value> {
-        let values = (self.value_functions)(&value).iter().collect();
-        self.client.query(&self.statement, &values).unwrap().iter().map(|v| v.into()).collect()
+        let values = (self.value_functions)(&value);
+        let values = values.iter().map(|v| v as &(dyn ToSql + Sync)).collect::<Vec<_>>();
+        let values: &[&(dyn ToSql + Sync)] = &values;
+        self.client.query(&self.statement, values).unwrap().into_iter().map(|v| v.into()).collect()
     }
 }
 

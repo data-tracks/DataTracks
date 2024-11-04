@@ -20,7 +20,7 @@ impl PostgresConnection {
         options.insert(String::from("db"), Value::String(self.db.clone()));
     }
 
-    pub async fn connect(&self) -> Result<Client, String> {
-        Client::connect(&format!("postgresql://{}@{}:{}", self.db, self.url, self.port), NoTls).await?
+    pub fn connect(&self) -> Result<Client, String> {
+        Client::connect(&format!("postgresql://{}@{}:{}", self.db, self.url, self.port), NoTls).map_err(|e| e.to_string())
     }
 }

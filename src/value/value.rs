@@ -5,9 +5,13 @@ use crate::value::r#type::ValType;
 use crate::value::string::Text;
 use crate::value::Value::Wagon;
 use crate::value::{bool, Bool, Float, Int};
-use bytes::{BytesMut};
+use bytes::BytesMut;
 use json::{parse, JsonValue};
+use logos::Source;
+use postgres::types::{IsNull, Type};
 use postgres::Row;
+use rusqlite::types::{FromSqlResult, ToSqlOutput, ValueRef};
+use rusqlite::Statement;
 use serde::{Deserialize, Serialize};
 use std::cmp::PartialEq;
 use std::collections::BTreeMap;
@@ -15,8 +19,6 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::ops::{Add, AddAssign, Div, Mul, Sub};
-use postgres::types::{IsNull, Type};
-use rusqlite::types::{FromSqlResult, ToSqlOutput, ValueRef};
 use tracing::warn;
 
 #[derive(Eq, Clone, Debug, Serialize, Deserialize)]
@@ -359,6 +361,7 @@ impl From<&JsonValue> for Value {
 }
 
 
+
 impl Add for &Value {
     type Output = Value;
 
@@ -494,6 +497,25 @@ impl<'a> postgres::types::FromSql<'a> for Value {
         }
     }
 }
+
+impl TryFrom<(&rusqlite::Row<'_>, usize)> for Value {
+    type Error = rusqlite::Error;
+
+    fn try_from(pair: (&rusqlite::Row<'_>, usize)) -> Result<Self, Self::Error> {
+        let row = pair.0;
+        let mut values = Vec::with_capacity(pair.1);
+        for i in 0..pair.1 {
+            let value_ref = row.get_ref(i)?;
+            values.push(rusqlite::types::FromSql::column_result(value_ref)?);
+        }
+        if values.len() == 1 {
+            Ok(values.pop().unwrap())
+        } else {
+            Ok(Value::array(values))
+        }
+    }
+}
+
 
 impl postgres::types::ToSql for Value {
     fn to_sql(&self, ty: &Type, out: &mut BytesMut) -> Result<IsNull, Box<dyn Error + Sync + Send>>
