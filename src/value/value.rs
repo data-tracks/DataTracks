@@ -5,18 +5,18 @@ use crate::value::r#type::ValType;
 use crate::value::string::Text;
 use crate::value::Value::Wagon;
 use crate::value::{bool, Bool, Float, Int};
-use bytes::BufMut;
+use bytes::{BytesMut};
 use json::{parse, JsonValue};
 use postgres::Row;
 use serde::{Deserialize, Serialize};
-use std::borrow::Cow;
 use std::cmp::PartialEq;
 use std::collections::BTreeMap;
+use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
-use std::io::Write;
-use std::ops::{Add, AddAssign, Deref, Div, Mul, Sub};
-use tokio::io::AsyncWriteExt;
+use std::ops::{Add, AddAssign, Div, Mul, Sub};
+use postgres::types::{IsNull, Type};
+use rusqlite::types::{FromSqlResult, ToSqlOutput, ValueRef};
 use tracing::warn;
 
 #[derive(Eq, Clone, Debug, Serialize, Deserialize)]
@@ -463,7 +463,74 @@ impl Div for &Value {
 
 impl From<postgres::Row> for Value {
     fn from(row: Row) -> Self {
-        row.
+        let len = row.len();
+        let mut values = Vec::with_capacity(len);
+        for i in 0..len {
+            values.push(row.get::<usize, Value>(i).into());
+        }
+        if values.len() == 1 {
+            values.pop().unwrap()
+        }else {
+            Value::array(values)
+        }
+    }
+}
+
+impl<'a> postgres::types::FromSql<'a> for Value {
+    fn from_sql(ty: &Type, raw: &'a [u8]) -> Result<Self, Box<dyn Error + Sync + Send>> {
+        match ty.oid() {
+            16 => Ok(Value::bool(postgres::types::FromSql::from_sql(ty, raw)?)),
+            18 | 25 => Ok(Value::text(postgres::types::FromSql::from_sql(ty, raw)?)),
+            20 | 21 | 23 => Ok(Value::int(postgres::types::FromSql::from_sql(ty, raw)?)),
+            700 | 701 => Ok(Value::float(postgres::types::FromSql::from_sql(ty, raw)?)),
+            _ => Err(format!("Unrecognized value type: {}", ty).into()),
+        }
+    }
+
+    fn accepts(ty: &Type) -> bool {
+        match ty.oid() {
+            16 | 18 | 20 | 21 | 23 | 25 | 700 | 701  => true,
+            _ => false
+        }
+    }
+}
+
+impl postgres::types::ToSql for Value {
+    fn to_sql(&self, ty: &Type, out: &mut BytesMut) -> Result<IsNull, Box<dyn Error + Sync + Send>>
+    where
+        Self: Sized
+    {
+        todo!()
+    }
+
+    fn accepts(ty: &Type) -> bool
+    where
+        Self: Sized
+    {
+        todo!()
+    }
+
+    fn to_sql_checked(&self, ty: &Type, out: &mut BytesMut) -> Result<IsNull, Box<dyn Error + Sync + Send>> {
+        todo!()
+    }
+}
+
+
+impl rusqlite::types::FromSql for Value {
+    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+        match value.data_type() {
+            rusqlite::types::Type::Null => Ok(Value::null()),
+            rusqlite::types::Type::Integer => Ok(Value::int(value.as_i64()?)),
+            rusqlite::types::Type::Real => Ok(Value::float(value.as_f64()?)),
+            rusqlite::types::Type::Text => Ok(Value::text(value.as_str()?)),
+            rusqlite::types::Type::Blob => Err(rusqlite::types::FromSqlError::InvalidType),
+        }
+    }
+}
+
+impl rusqlite::types::ToSql for Value {
+    fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
+        todo!()
     }
 }
 

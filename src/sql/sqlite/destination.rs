@@ -9,9 +9,6 @@ use crate::util::{new_channel, DynamicQuery, Rx, Tx, GLOBAL_ID};
 use crate::value::Value;
 use crossbeam::channel::{unbounded, Sender};
 use serde_json::Map;
-use sqlx::query::QueryAs;
-use sqlx::sqlite::SqliteArguments;
-use sqlx::Sqlite;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::thread;
@@ -75,6 +72,7 @@ impl Destination for LiteDestination {
             runtime.block_on(async {
                 let mut conn = connection.connect().await.unwrap();
                 let (query, value_functions) = query.prepare_query("$", None);
+                let mut prepared = conn.prepare_cached(&query).unwrap();
 
                 control.send(Ready(id)).unwrap();
                 loop {
@@ -86,11 +84,7 @@ impl Destination for LiteDestination {
                                 continue;
                             }
                             for value in values {
-                                let mut query: QueryAs<Sqlite, Value, SqliteArguments> = sqlx::query_as(&query);
-                                for value in value_functions(&value) {
-                                    query = query.bind(value);
-                                }
-                                query.fetch_all(&mut conn).await.unwrap();
+                                let _ = prepared.query(value_functions(&value).into()).unwrap();
                             }
                         }
                         _ => tokio::time::sleep(Duration::from_nanos(100)).await

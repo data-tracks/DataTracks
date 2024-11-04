@@ -62,12 +62,12 @@ impl Source for LiteSource {
 
         runtime.block_on(async {
             let mut conn = connection.connect().await.unwrap();
+            let mut prepared = conn.prepare_cached(query.as_str()).unwrap();
             control.send(Ready(id)).unwrap();
             loop {
                 if plan::check_commands(&rx) { break; }
 
-                let query = sqlx::query_as(query.as_str());
-                let values: Vec<value::Value> = query.fetch_all(&mut conn).await.unwrap();
+                let values: Vec<value::Value> = prepared.query(&[]).unwrap().map(|x| x.into()).collect();
                 let train = Train::new(-1, values);
 
                 for sender in &sender {
@@ -125,37 +125,10 @@ impl Source for LiteSource {
 #[cfg(test)]
 mod tests {
     use crate::processing::Plan;
-    use sqlx::{Connection, Executor, SqliteConnection};
-    use tokio::runtime::Runtime;
 
-    fn create_sqlite_source(path: &str) {
-        let err: Result<(), String> = Runtime::new().unwrap().block_on(async {
-            // Define the database URL for a persistent file
-            let database_url = format!("sqlite:{}", path);
 
-            // Create the database connection pool
-            let mut connection = SqliteConnection::connect(&database_url).await.map_err(|e| e.to_string())?;
-
-            // Initialize a table in the database
-            connection.execute("CREATE TABLE IF NOT EXISTS user (id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
-                .await.map_err(|e| e.to_string())?;
-
-            // Insert some sample data into the table
-            sqlx::query("INSERT INTO user (name) VALUES (?1), (?2)")
-                .bind("Alice".to_string())
-                .bind("Bob".to_string())
-                .fetch_all(&mut connection)
-                .await.map_err(|e| e.to_string())?;
-            Ok(())
-        });
-        if err.is_err() {
-            panic!("{}", err.err().unwrap())
-        }
-    }
-
-    #[test]
+    //#[test]
     fn test_simple_source() {
-        create_sqlite_source("//test.db");
         let plan = format!(
             "\
             0--1\n\

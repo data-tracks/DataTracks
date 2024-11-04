@@ -112,7 +112,8 @@ impl PostgresIterator {
     }
 
     pub(crate) async fn query_values(&mut self, value: value::Value) -> Vec<value::Value> {
-        self.client.query(&self.statement, self.value_functions(&value)).unwrap().into()
+        let values = (self.value_functions)(&value).iter().collect();
+        self.client.query(&self.statement, &values).unwrap().iter().map(|v| v.into()).collect()
     }
 }
 
@@ -143,7 +144,7 @@ impl ValueIterator for PostgresIterator {
         Box::new(PostgresIterator::new(self.query.clone(), self.connector.clone()))
     }
 
-    fn enrich(&mut self, transforms: HashMap<String, Transform>) -> Option<BoxedIterator> {
+    fn enrich(&mut self, _transforms: HashMap<String, Transform>) -> Option<BoxedIterator> {
         None
     }
 }
