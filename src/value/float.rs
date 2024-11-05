@@ -1,5 +1,4 @@
 use crate::value::int::Int;
-use crate::value::number::Number;
 use crate::value::{Bool, Text};
 use serde::{Deserialize, Serialize};
 use std::cmp::min;
@@ -41,16 +40,6 @@ impl Float {
     }
 }
 
-
-impl Number for Float {
-    fn float(&self) -> f64 {
-        self.as_f64()
-    }
-
-    fn int(&self) -> i64 {
-        self.number
-    }
-}
 
 impl Add for Float {
     type Output = Self;

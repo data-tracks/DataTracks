@@ -9,7 +9,6 @@ pub use value::Value;
 
 mod float;
 mod int;
-mod number;
 mod string;
 pub(crate) mod value;
 mod bool;

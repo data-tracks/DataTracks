@@ -494,8 +494,11 @@ impl Div for &Value {
             (Value::Float(a), Value::Int(b)) => {
                 Value::float(a.as_f64() / b.0 as f64)
             }
+            (Value::Float(a), Value::Float(b)) => {
+                Value::float(a.as_f64() / b.as_f64())
+            }
             (Wagon(w), b) => w.value.div(b),
-            _ => panic!("Cannot divide value with {:?}.", self)
+            _ => panic!("Cannot divide {:?} with {:?}.", self, rhs)
         }
     }
 }

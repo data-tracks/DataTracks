@@ -1,4 +1,3 @@
-use crate::value::number::Number;
 use crate::value::{Bool, Float, Text};
 use crate::value_display;
 use serde::{Deserialize, Serialize};
@@ -7,16 +6,6 @@ use std::ops::{Add, Div, Sub};
 
 #[derive(Eq, Hash, PartialEq, Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Int(pub(crate) i64);
-
-impl Number for Int {
-    fn float(&self) -> f64 {
-        self.0 as f64
-    }
-    fn int(&self) -> i64 {
-        self.0
-    }
-}
-
 
 impl Add for Int {
     type Output = Self;
