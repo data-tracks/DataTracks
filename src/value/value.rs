@@ -377,10 +377,21 @@ impl Add for &Value {
                 Value::Float(*a + *b)
             }
             (Value::Float(a), Value::Float(b)) => Value::Float(*a + *b),
-
+            // text
+            (Value::Text(a), b) => {
+                let b = b.as_text().unwrap();
+                Value::text(&format!("{}{}", a.0, b.0))
+            }
+            // array
+            (Value::Array(a), b) => {
+                let mut a = a.clone();
+                a.0.push(b.clone());
+                Value::Array(a)
+            }
             // Handle Wagon custom addition
             (Wagon(w), rhs) => &*w.value.clone() + rhs,
             (lhs, Wagon(w)) => lhs + &*w.value.clone(),
+
 
             // Panic on unsupported types
             (lhs, rhs) => panic!("Cannot add {:?} with {:?}.", lhs, rhs),
@@ -461,6 +472,9 @@ impl Mul for &Value {
                 let shift_diff = a.shift.abs_diff(b.shift) as i64;
                 Value::float_parts(a.number * b.number * (10 ^ shift_diff), max)
             }
+            (Value::Text(text), Value::Int(b)) => {
+                Value::text(&text.0.repeat(b.0 as usize))
+            }
             (lhs, rhs) => panic!("Cannot multiply {:?} with {:?}.", lhs, rhs),
         }
     }
@@ -469,18 +483,19 @@ impl Mul for &Value {
 impl Div for &Value {
     type Output = Value;
 
-    fn div(self, _rhs: Self) -> Self::Output {
-        match self {
-            Value::Int(i) => {
-                let _rhs = _rhs.as_int().unwrap();
-                Value::Int(*i / _rhs)
+    fn div(self, rhs: Self) -> Self::Output {
+        match (self, rhs) {
+            (Value::Int(a), Value::Int(b)) => {
+                Value::float(a.0 as f64 / b.0 as f64)
             }
-            Value::Float(f) => {
-                let _rhs = _rhs.as_float().unwrap();
-                Value::Float(*f / _rhs)
+            (Value::Int(a), Value::Float(b)) => {
+                Value::float(a.0 as f64 / b.as_f64())
             }
-            Wagon(w) => w.value.div(_rhs),
-            _ => panic!("Cannot div value with {:?}.", self)
+            (Value::Float(a), Value::Int(b)) => {
+                Value::float(a.as_f64() / b.0 as f64)
+            }
+            (Wagon(w), b) => w.value.div(b),
+            _ => panic!("Cannot divide value with {:?}.", self)
         }
     }
 }
@@ -695,5 +710,85 @@ mod tests {
         let b = hasher.finish();
 
         assert_eq!(a, b);
+    }
+
+    #[test]
+    fn test_add() {
+        let value = add(1.into(), 2.into());
+        assert_eq!(value, 3.into());
+        assert_ne!(value, 0.into());
+
+        let value = add(3.into(), 0.5.into());
+        assert_eq!(value, 3.5.into());
+
+        let value = add(3.into(), (-0.5).into());
+        assert_eq!(value, 2.5.into());
+
+        let value = add("test".into(), "test".into());
+        assert_eq!(value, "testtest".into());
+
+        let value = add("test".into(), true.into());
+        assert_eq!(value, "testtrue".into());
+
+        let value = add("test".into(), 1.5.into());
+        assert_eq!(value, "test1.5".into());
+
+        let value = add(vec![1.into(), 2.into()].into(), 3.into());
+        assert_eq!(value, vec![1.into(), 2.into(), 3.into()].into());
+    }
+
+    #[test]
+    fn test_sub() {
+        let value = sub(1.into(), 2.into());
+        assert_eq!(value, (-1).into());
+        assert_ne!(value, 0.into());
+
+        let value = sub(3.into(), 0.5.into());
+        assert_eq!(value, 2.5.into());
+
+        let value = sub(3.into(), (-0.5).into());
+        assert_eq!(value, 3.5.into());
+    }
+
+    #[test]
+    fn test_mul() {
+        let value = mul(2.into(), 2.into());
+        assert_eq!(value, 4.into());
+        assert_ne!(value, 0.into());
+
+        let value = mul(2.into(), 1.5.into());
+        assert_eq!(value, 3.into());
+
+        let value = mul("test".into(), 3.into());
+        assert_eq!(value, "testtesttest".into());
+    }
+
+    #[test]
+    fn test_div() {
+        let value = div(2.into(), 2.into());
+        assert_eq!(value, 1.into());
+        assert_ne!(value, 0.into());
+
+        let value = div(2.into(), 4.into());
+        assert_eq!(value, 0.5.into());
+
+        let value = div(2.5.into(), 5.into());
+        assert_eq!(value, 0.5.into());
+    }
+
+    fn add(a: Value, b: Value) -> Value {
+        &a + &b
+    }
+
+    fn sub(a: Value, b: Value) -> Value {
+        &a - &b
+    }
+
+    fn mul(a: Value, b: Value) -> Value {
+        &a * &b
+    }
+
+    fn div(a: Value, b: Value) -> Value {
+        &a / &b
     }
 }

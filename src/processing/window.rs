@@ -122,7 +122,7 @@ fn parse_interval(stencil: &str) -> Result<(i64, TimeUnit), String> {
     let mut digit_passed: bool = false;
     for char in stencil.chars() {
         if !char.is_numeric() && !digit_passed {
-            digit = temp.parse().map_err(|e| format!("Could not parse {} as time", stencil))?;
+            digit = temp.parse().map_err(|_| format!("Could not parse {} as time", stencil))?;
             digit_passed = false;
             temp = "".to_string();
         }
