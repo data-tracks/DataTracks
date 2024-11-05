@@ -4,18 +4,17 @@ use crate::processing::option::Configurable;
 use crate::processing::transform::{Transform, Transformer};
 use crate::processing::{Layout, Train};
 use crate::sql::postgres::connection::PostgresConnection;
-use crate::util::{DynamicQuery, ReplaceType, Segment, ValueExtractor};
+use crate::util::{DynamicQuery, ValueExtractor};
 use crate::value::value;
 use postgres::types::ToSql;
 use postgres::{Client, Statement};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
-use tokio::runtime::Runtime;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct PostgresTransformer {
-    connector: PostgresConnection,
-    query: DynamicQuery,
+    pub(crate) connector: PostgresConnection,
+    pub(crate) query: DynamicQuery,
 }
 
 impl PostgresTransformer {
@@ -41,32 +40,10 @@ impl Configurable for PostgresTransformer {
 
 impl Layoutable for PostgresTransformer {
     fn derive_input_layout(&self) -> Layout {
-        match self.query.get_replacement_type() {
-            ReplaceType::Key => {
-                let mut keys = vec![];
-                for part in self.query.get_parts() {
-                    if let Segment::DynamicKey(key) = part {
-                        keys.push(key.clone());
-                    }
-                }
-                Layout::dict(keys)
-            }
-            ReplaceType::Index => {
-                let mut indexes = vec![];
-                for part in self.query.get_parts() {
-                    if let Segment::DynamicIndex(index) = part {
-                        indexes.push(index.clone());
-                    }
-                }
-                indexes.iter().max().map(|i| Layout::array(Some(*i as i32))).unwrap_or(Layout::array(None))
-            }
-            ReplaceType::Full => {
-                Layout::default()
-            }
-        }
+        self.query.derive_input_layout()
     }
 
-    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {
+    fn derive_output_layout(&self, _inputs: HashMap<String, &Layout>) -> Layout {
         todo!()
     }
 }
@@ -99,20 +76,17 @@ impl PostgresIterator {
     pub fn new(query: DynamicQuery, connector: PostgresConnection) -> Self {
         let (q, value_functions) = query.prepare_query("$", None);
         let con = connector.clone();
-        let statement = Runtime::new().unwrap().block_on(async {
-            let mut client = con.connect().await.unwrap();
 
-            return client.prepare(&q).unwrap();
-        });
+        let mut client = con.connect().unwrap();
 
-        let client = Runtime::new().unwrap().block_on(async {
-            connector.clone().connect().await.unwrap()
-        });
+        let statement = client.prepare(&q).unwrap();
+
+        let client = connector.clone().connect().unwrap();
 
         PostgresIterator { client, query, connector, statement, value_functions, values: vec![] }
     }
 
-    pub(crate) async fn query_values(&mut self, value: value::Value) -> Vec<value::Value> {
+    pub(crate) fn query_values(&mut self, value: value::Value) -> Vec<value::Value> {
         let values = (self.value_functions)(&value);
         let values = values.iter().map(|v| v as &(dyn ToSql + Sync)).collect::<Vec<_>>();
         let values: &[&(dyn ToSql + Sync)] = &values;
@@ -137,7 +111,8 @@ impl ValueIterator for PostgresIterator {
         for train in trains {
             if let Some(values) = train.values {
                 for value in values {
-                    self.values.append(&mut self.query_values(value));
+                    let values = &mut self.query_values(value);
+                    self.values.append(values);
                 }
             }
         }

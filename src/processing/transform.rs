@@ -156,6 +156,7 @@ pub trait Transformer: Clone + Sized + Configurable + Layoutable {
     fn parse(options: Map<String, serde_json::Value>) -> Result<Self, String>;
 
     fn optimize(&self, transforms: HashMap<String, Transform>) -> Box<dyn ValueIterator<Item=Value> + Send>;
+
 }
 
 pub struct LanguageTransform {
@@ -224,7 +225,7 @@ impl Debug for FuncTransform {
 
 impl PartialEq for FuncTransform {
     fn eq(&self, _other: &Self) -> bool {
-        todo!()
+        false
     }
 }
 

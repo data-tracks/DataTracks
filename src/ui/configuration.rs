@@ -53,6 +53,37 @@ impl ConfigModel {
     }
 }
 
+impl From<String> for ConfigModel {
+    fn from(value: String) -> Self {
+        ConfigModel::String(StringModel::new(&value))
+    }
+}
+
+impl From<&str> for ConfigModel {
+    fn from(value: &str) -> Self {
+        ConfigModel::String(StringModel::new(value))
+    }
+}
+
+impl From<i64> for ConfigModel {
+    fn from(value: i64) -> Self {
+        ConfigModel::Number(NumberModel::new(value))
+    }
+}
+
+impl From<u16> for ConfigModel {
+    fn from(value: u16) -> Self {
+        ConfigModel::Number(NumberModel::new(value as i64))
+    }
+}
+
+impl From<bool> for ConfigModel {
+    fn from(value: bool) -> Self {
+        ConfigModel::Boolean(BooleanModel::new(value))
+    }
+}
+
+
 
 #[derive(Serialize, Deserialize)]
 pub struct ConfigContainer {
@@ -81,10 +112,28 @@ impl StringModel {
     }
 }
 
+impl From<String> for StringModel {
+    fn from(value: String) -> Self {
+        StringModel::new(&value)
+    }
+}
+
+impl From<&str> for StringModel {
+    fn from(value: &str) -> Self {
+        StringModel::new(value)
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct BooleanModel {
     base_config: BaseConfig,
     boolean: bool,
+}
+
+impl BooleanModel {
+    pub(crate) fn new(boolean: bool) -> Self {
+        BooleanModel { base_config: BaseConfig::default(), boolean }
+    }
 }
 
 

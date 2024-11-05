@@ -7,8 +7,8 @@ use crate::processing::{plan, Train};
 use crate::sql::sqlite::connection::SqliteConnector;
 use crate::ui::ConfigModel;
 use crate::util::{Tx, GLOBAL_ID};
-use crate::value::value;
 use crossbeam::channel::{unbounded, Sender};
+use rusqlite::params;
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -61,13 +61,18 @@ impl Source for LiteSource {
         let sender = self.outs.clone();
 
         runtime.block_on(async {
-            let mut conn = connection.connect().await.unwrap();
+            let conn = connection.connect().await.unwrap();
             let mut prepared = conn.prepare_cached(query.as_str()).unwrap();
             control.send(Ready(id)).unwrap();
+            let count = prepared.column_count();
             loop {
                 if plan::check_commands(&rx) { break; }
 
-                let values: Vec<value::Value> = prepared.query(&[]).unwrap().map(|x| x.into()).collect();
+                let mut iter = prepared.query(params![]).unwrap();
+                let mut values = vec![];
+                while let Ok(Some(row)) = iter.next() {
+                    values.push((row, count).try_into().unwrap());
+                }
                 let train = Train::new(-1, values);
 
                 for sender in &sender {

@@ -1,3 +1,4 @@
+use crate::processing::Layout;
 use crate::util::StringBuilder;
 use crate::value::Value;
 use crate::value::Value::{Array, Dict};
@@ -66,8 +67,8 @@ impl DynamicQuery {
                 Segment::Static(s) => builder.append_string(s),
                 Segment::DynamicIndex(_) | Segment::DynamicKey(_) | Segment::DynamicFull => {
                     let index = match placeholder {
-                        None => i.to_string().as_str(),
-                        Some(placeholder) => placeholder
+                        None => i.to_string(),
+                        Some(placeholder) => placeholder.to_owned()
                     };
                     let key = format!("{}{}", prefix, index);
                     builder.append_string(&key);
@@ -95,6 +96,32 @@ impl DynamicQuery {
             ReplaceType::Index
         };
         DynamicQuery { query, parts, estimated_size, replace_type }
+    }
+
+    pub fn derive_input_layout(&self) -> Layout {
+        match self.get_replacement_type() {
+            ReplaceType::Key => {
+                let mut keys = vec![];
+                for part in self.get_parts() {
+                    if let Segment::DynamicKey(key) = part {
+                        keys.push(key.clone());
+                    }
+                }
+                Layout::dict(keys)
+            }
+            ReplaceType::Index => {
+                let mut indexes = vec![];
+                for part in self.get_parts() {
+                    if let Segment::DynamicIndex(index) = part {
+                        indexes.push(index.clone());
+                    }
+                }
+                indexes.iter().max().map(|i| Layout::array(Some(*i as i32))).unwrap_or(Layout::array(None))
+            }
+            ReplaceType::Full => {
+                Layout::default()
+            }
+        }
     }
 
     pub fn get_replacement_type(&self) -> &ReplaceType {

@@ -3,9 +3,9 @@ use serde_json::{Map, Number, Value};
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct PostgresConnection {
-    pub url: String,
-    pub port: u16,
-    pub db: String,
+    pub(crate) url: String,
+    pub(crate) port: u16,
+    pub(crate) db: String,
 }
 
 

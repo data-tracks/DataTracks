@@ -6,6 +6,7 @@ use crate::processing::{Layout, Train};
 use crate::sql::sqlite::connection::SqliteConnector;
 use crate::util::{DynamicQuery, GLOBAL_ID};
 use crate::value::Value;
+use rusqlite::{params_from_iter, ToSql};
 use serde_json::Map;
 use std::collections::HashMap;
 use tokio::runtime::Runtime;
@@ -13,8 +14,8 @@ use tokio::runtime::Runtime;
 #[derive(Debug, PartialEq, Clone)]
 pub struct SqliteTransformer {
     id: i64,
-    query: DynamicQuery,
-    connector: SqliteConnector
+    pub query: DynamicQuery,
+    pub connector: SqliteConnector
 }
 
 impl SqliteTransformer {
@@ -41,7 +42,7 @@ impl Configurable for SqliteTransformer {
 
 impl Layoutable for SqliteTransformer {
     fn derive_input_layout(&self) -> Layout {
-        todo!()
+        self.query.derive_input_layout()
     }
 
     fn derive_output_layout(&self, _inputs: HashMap<String, &Layout>) -> Layout {
@@ -78,11 +79,11 @@ impl SqliteIterator {
         let runtime = Runtime::new().unwrap();
         let query = self.query.clone();
         runtime.block_on(async {
-            let mut connection = self.connector.connect().await.unwrap();
+            let connection = self.connector.connect().await.unwrap();
             let (query, value_function) = query.prepare_query("$", None);
-            let mut prepared = connection.prepare(&query).unwrap();
+            let mut prepared = connection.prepare_cached(&query).unwrap();
             let count = prepared.column_count();
-            let mut iter = prepared.query::<[&Value]>(value_function(&value).into()).unwrap();
+            let mut iter = prepared.query(params_from_iter(value_function(&value).iter().map(|v| v.to_sql().unwrap()))).unwrap();
             let mut values = vec![];
             while let Ok(Some(row)) = iter.next() {
                 values.push((row, count).try_into().unwrap());

@@ -56,7 +56,7 @@ impl Station {
     }
 
     // |1 or <1 or -1
-    pub(crate) fn parse(stencil: String, last: Option<i64>) -> Self{
+    pub(crate) fn parse(stencil: String, last: Option<i64>) -> Result<Self, String> {
         let mut stencil = stencil;
         if stencil.starts_with('-') {
             stencil = stencil[1..].to_string()
@@ -133,11 +133,11 @@ impl Station {
         Self::parse_parts(last, stages)
     }
 
-    pub(crate) fn parse_parts(last: Option<i64>, parts: Vec<(PlanStage, String)>) -> Self {
+    pub(crate) fn parse_parts(last: Option<i64>, parts: Vec<(PlanStage, String)>) -> Result<Self, String> {
         let mut station: Station = Station::default();
         for stage in parts {
             match stage.0 {
-                PlanStage::Window => station.set_window(Window::parse(stage.1)),
+                PlanStage::Window => station.set_window(Window::parse(stage.1)?),
                 PlanStage::Transform => station.set_transform(Transform::parse(&stage.1).unwrap()),
                 PlanStage::Layout => station.add_explicit_layout(Layout::parse(&stage.1)),
                 PlanStage::Num => {
@@ -151,7 +151,7 @@ impl Station {
                 },
             }
         }
-        station
+        Ok(station)
     }
 
     pub(crate) fn add_insert(&mut self, input: i64) {

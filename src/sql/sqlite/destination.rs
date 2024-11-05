@@ -6,8 +6,8 @@ use crate::processing::station::Command::Ready;
 use crate::processing::{plan, Train};
 use crate::sql::sqlite::connection::SqliteConnector;
 use crate::util::{new_channel, DynamicQuery, Rx, Tx, GLOBAL_ID};
-use crate::value::Value;
 use crossbeam::channel::{unbounded, Sender};
+use rusqlite::params_from_iter;
 use serde_json::Map;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -70,7 +70,7 @@ impl Destination for LiteDestination {
 
         thread::spawn(move || {
             runtime.block_on(async {
-                let mut conn = connection.connect().await.unwrap();
+                let conn = connection.connect().await.unwrap();
                 let (query, value_functions) = query.prepare_query("$", None);
                 let mut prepared = conn.prepare_cached(&query).unwrap();
 
@@ -84,7 +84,7 @@ impl Destination for LiteDestination {
                                 continue;
                             }
                             for value in values {
-                                let _ = prepared.query::<[&Value]>(value_functions(&value).into()).unwrap();
+                                let _ = prepared.query(params_from_iter(value_functions(&value))).unwrap();
                             }
                         }
                         _ => tokio::time::sleep(Duration::from_nanos(100)).await
@@ -127,12 +127,12 @@ mod tests {
 
     #[test]
     fn test_simple_insert() {
-        let plan = Plan::parse(
+        Plan::parse(
             "\
             0--1\n\
             \n\
             Out\n\
-            SQLite{{path: \"local.db\", query: \"INSERT INTO test_table VALUES($.0, $.1)\"}}:1"
+            SQLite{\"path\": \"local.db\", \"query\": \"INSERT INTO test_table VALUES($.0, $.1)\"}:1"
         ).unwrap();
     }
 }

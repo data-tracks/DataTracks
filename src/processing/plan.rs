@@ -1,9 +1,10 @@
 use crate::processing::destination::{parse_destination, Destination};
+use crate::processing::option::Configurable;
 use crate::processing::plan::Status::Stopped;
 use crate::processing::source::{parse_source, Source};
 use crate::processing::station::{Command, Station};
 use crate::processing::{transform, Train};
-use crate::ui::{ConfigContainer, ConfigModel, StringModel};
+use crate::ui::{ConfigContainer, ConfigModel};
 use crate::util::GLOBAL_ID;
 use core::default::Default;
 use crossbeam::channel::{unbounded, Receiver, Sender};
@@ -266,7 +267,7 @@ impl Plan {
                     plan.parse_transform(line)?;
                 }
                 _ => {
-                    plan.parse_line(line_number as i64, line);
+                    let _ = plan.parse_line(line_number as i64, line);
                 }
             }
             
@@ -274,7 +275,7 @@ impl Plan {
 
         Ok(plan)
     }
-    fn parse_line(&mut self, line: i64, stencil: &str) {
+    fn parse_line(&mut self, line: i64, stencil: &str) -> Result<(), String> {
         let mut temp = String::default();
         let mut is_text = false;
 
@@ -297,7 +298,7 @@ impl Plan {
                         let mut blueprint = temp.clone();
                         blueprint.remove(blueprint.len() - 1); // remove last }-
 
-                        let station = Station::parse(blueprint, last);
+                        let station = Station::parse(blueprint, last)?;
                         last = Some(station.stop);
                         self.build(line, station);
 
@@ -318,9 +319,10 @@ impl Plan {
         }
 
         if !temp.is_empty() {
-            let station = Station::parse(temp, last);
+            let station = Station::parse(temp, last)?;
             self.build(line, station);
         }
+        Ok(())
     }
     pub(crate) fn build(&mut self, line_num: i64, station: Station) {
         self.lines.entry(line_num).or_default().push(station.stop);
@@ -421,10 +423,12 @@ impl Plan {
         let (stencil, stops) = stencil.rsplit_once("}:").unwrap();
         let stops = stops.split(',').map(|num| num.parse::<i64>()).collect::<Result<Vec<_>, _>>().map_err(|err| err.to_string())?;
 
-        let (type_, template) = stencil.split_once('{').ok_or(format!("Invalid template: {}", stencil))?;
+        let (type_name, template) = stencil.split_once('{').ok_or(format!("Invalid template: {}", stencil))?;
         let json = format!("{{ {} }}", template.trim());
-        let options = serde_json::from_str::<Value>(&json).unwrap().as_object().ok_or(format!("Invalid options: {}", template))?.clone();
-        Ok((stops, type_, options))
+        let options = serde_json::from_str::<Value>(&json)
+            .map_err(|e| format!("Could not parse options for {}: {}", type_name, e.to_string()))?
+            .as_object().ok_or(format!("Invalid options: {}", template))?.clone();
+        Ok((stops, type_name, options))
     }
 
     fn parse_out(&mut self, stencil: &str) -> Result<(), String> {
@@ -660,19 +664,30 @@ impl From<transform::Transform> for ConfigContainer {
         match value {
             transform::Transform::Func(_) => {
                 let mut map = HashMap::new();
-                map.insert(String::from("type"), ConfigModel::String(StringModel::new("Function")));
-                map.insert(String::from("query"), ConfigModel::String(StringModel::new("")));
+                map.insert(String::from("type"), "Function".into());
+                map.insert(String::from("query"), "".into());
                 ConfigContainer::new(String::from("Transform"), map)
             }
             transform::Transform::Lang(l) => {
                 let mut map = HashMap::new();
-                map.insert(String::from("language"), ConfigModel::String(StringModel::new(&l.language.to_string())));
-                map.insert(String::from("query"), ConfigModel::String(StringModel::new(&l.query.to_string())));
+                map.insert(String::from("language"), l.language.name().into());
+                map.insert(String::from("query"), l.query.into());
                 ConfigContainer::new(String::from("Transform"), map)
             }
 
-            transform::Transform::SQLite(_l) => {
-                todo!()
+            transform::Transform::SQLite(l) => {
+                let mut map = HashMap::new();
+                map.insert(String::from("query"), l.query.get_query().into());
+                map.insert(String::from("path"), l.connector.path.clone().into());
+                ConfigContainer::new(l.get_name(), map)
+            }
+            transform::Transform::Postgres(p) => {
+                let mut map = HashMap::new();
+                map.insert(String::from("query"), p.query.get_query().into());
+                map.insert(String::from("url"), p.connector.url.clone().into());
+                map.insert(String::from("port"), p.connector.port.into());
+                map.insert(String::from("db"), p.connector.db.clone().into());
+                ConfigContainer::new(p.get_name(), map)
             }
         }
     }

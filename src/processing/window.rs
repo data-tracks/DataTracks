@@ -40,11 +40,11 @@ impl Window {
         }
     }
 
-    pub(crate) fn parse(stencil: String) -> Self {
+    pub(crate) fn parse(stencil: String) -> Result<Self, String> {
         if stencil.contains('@') {
-            return Interval(IntervalWindow::parse(stencil));
+            return Ok(Interval(IntervalWindow::parse(stencil)?));
         }
-        Back(BackWindow::parse(stencil))
+        Ok(Back(BackWindow::parse(stencil)?))
     }
 }
 
@@ -72,10 +72,10 @@ impl BackWindow {
     pub fn new(time: i64, time_unit: TimeUnit) -> Self {
         BackWindow { time, time_unit: time_unit.clone(), duration: get_duration(time, time_unit), buffer: VecDeque::new() }
     }
-    fn parse(stencil: String) -> Self {
-        let (digit, time_unit) = parse_interval(stencil.as_str());
+    fn parse(stencil: String) -> Result<Self, String> {
+        let (digit, time_unit) = parse_interval(stencil.as_str())?;
 
-        BackWindow::new(digit, time_unit)
+        Ok(BackWindow::new(digit, time_unit))
     }
 
 
@@ -116,27 +116,24 @@ fn get_duration(time: i64, time_unit: TimeUnit) -> Duration {
     }
 }
 
-fn parse_interval(stencil: &str) -> (i64, TimeUnit) {
+fn parse_interval(stencil: &str) -> Result<(i64, TimeUnit), String> {
     let mut temp = "".to_string();
     let mut digit: i64 = 0;
     let mut digit_passed: bool = false;
     for char in stencil.chars() {
         if !char.is_numeric() && !digit_passed {
-            digit = temp.parse().unwrap();
+            digit = temp.parse().map_err(|e| format!("Could not parse {} as time", stencil))?;
             digit_passed = false;
             temp = "".to_string();
         }
         temp.push(char);
     }
-    let time_unit = parse_time_unit(temp);
-    (digit, time_unit)
+    let time_unit = parse_time_unit(temp)?;
+    Ok((digit, time_unit))
 }
 
-fn parse_time_unit(time: String) -> TimeUnit {
-    match TimeUnit::try_from(time.as_str()) {
-        Ok(t) => t,
-        Err(_) => todo!()
-    }
+fn parse_time_unit(time: String) -> Result<TimeUnit, String> {
+    TimeUnit::try_from(time.as_str()).map_err(|e| e.to_string())
 }
 
 #[derive(Clone)]
@@ -154,14 +151,19 @@ impl IntervalWindow {
     pub(crate) fn dump(&self) -> String {
         format!("[{}{}@{}]", &self.time, self.time_unit, &self.start.format("%H:%M"))
     }
-    fn parse(input: String) -> IntervalWindow {
+    fn parse(input: String) -> Result<IntervalWindow, String> {
         match input.split_once('@') {
-            None => todo!(),
+            None => {
+                let (time, time_unit) = parse_interval(&input)?;
+                let start = NaiveTime::from_hms_opt(0, 0, 0).ok_or("Could not parse start time for interval".to_string())?;
+
+                Ok(IntervalWindow::new(time, time_unit, start))
+            },
             Some((interval, start)) => {
-                let (time, time_unit) = parse_interval(interval);
+                let (time, time_unit) = parse_interval(interval)?;
                 let start = parse_time(start).unwrap();
 
-                IntervalWindow::new(time, time_unit, start)
+                Ok(IntervalWindow::new(time, time_unit, start))
             }
         }
     }

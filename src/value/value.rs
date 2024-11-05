@@ -5,13 +5,11 @@ use crate::value::r#type::ValType;
 use crate::value::string::Text;
 use crate::value::Value::Wagon;
 use crate::value::{bool, Bool, Float, Int};
-use bytes::BytesMut;
+use bytes::{BufMut, BytesMut};
 use json::{parse, JsonValue};
-use logos::Source;
 use postgres::types::{IsNull, Type};
 use postgres::Row;
 use rusqlite::types::{FromSqlResult, ToSqlOutput, ValueRef};
-use rusqlite::Statement;
 use serde::{Deserialize, Serialize};
 use std::cmp::PartialEq;
 use std::collections::BTreeMap;
@@ -43,6 +41,10 @@ impl Value {
 
     pub fn float(float: f64) -> Value {
         Value::Float(Float::new(float))
+    }
+
+    pub fn float_parts(number: i64, shift: u8) -> Value {
+        Value::Float(Float { number, shift })
     }
 
     pub fn bool(bool: bool) -> Value {
@@ -395,13 +397,12 @@ impl AddAssign for Value {
             }
             Value::Float(f) => {
                 let rhs = rhs.as_float().unwrap();
+                let diff = f.shift.abs_diff(rhs.shift);
                 match (f, rhs) {
                     (l, r) if l.shift > r.shift => {
-                        let diff = l.shift - r.shift;
                         l.number += r.number * (10 ^ diff) as i64;
                     }
                     (l, r) if l.shift < r.shift => {
-                        let diff = r.shift - l.shift;
                         l.number = l.number * (10 ^ diff) as i64 + r.number;
                         l.shift = r.shift;
                     }
@@ -431,16 +432,37 @@ impl AddAssign for Value {
 impl Sub for &Value {
     type Output = Value;
 
-    fn sub(self, _rhs: Self) -> Self::Output {
-        todo!()
+    fn sub(self, rhs: Self) -> Self::Output {
+        match (self, rhs) {
+            (Value::Int(a), Value::Int(b)) => Value::int(a.0 - b.0),
+            (Value::Int(_), Value::Float(b)) => {
+                let right = Value::float_parts(-b.number, b.shift);
+                right.add(self)
+            },
+            (Value::Float(_), Value::Int(b)) => {
+                Value::int(-b.0).add(self)
+            }
+            (lhs, rhs) => panic!("Cannot subtract {:?} from {:?}.", lhs, rhs),
+        }
     }
 }
 
 impl Mul for &Value {
     type Output = Value;
 
-    fn mul(self, _rhs: Self) -> Self::Output {
-        todo!()
+    fn mul(self, rhs: Self) -> Self::Output {
+        match (self, rhs) {
+            (Value::Int(a), Value::Int(b)) => Value::int(a.0 * b.0),
+            (Value::Int(a), Value::Float(b)) | (Value::Float(b), Value::Int(a)) => {
+                Value::float_parts(a.0 * b.number, b.shift)
+            }
+            (Value::Float(a), Value::Float(b)) => {
+                let max = a.shift.max(b.shift);
+                let shift_diff = a.shift.abs_diff(b.shift) as i64;
+                Value::float_parts(a.number * b.number * (10 ^ shift_diff), max)
+            }
+            (lhs, rhs) => panic!("Cannot multiply {:?} with {:?}.", lhs, rhs),
+        }
     }
 }
 
@@ -481,18 +503,21 @@ impl From<postgres::Row> for Value {
 
 impl<'a> postgres::types::FromSql<'a> for Value {
     fn from_sql(ty: &Type, raw: &'a [u8]) -> Result<Self, Box<dyn Error + Sync + Send>> {
-        match ty.oid() {
-            16 => Ok(Value::bool(postgres::types::FromSql::from_sql(ty, raw)?)),
-            18 | 25 => Ok(Value::text(postgres::types::FromSql::from_sql(ty, raw)?)),
-            20 | 21 | 23 => Ok(Value::int(postgres::types::FromSql::from_sql(ty, raw)?)),
-            700 | 701 => Ok(Value::float(postgres::types::FromSql::from_sql(ty, raw)?)),
+        match *ty {
+            Type::BOOL => Ok(Value::bool(postgres::types::FromSql::from_sql(ty, raw)?)),
+            Type::TEXT | Type::CHAR => Ok(Value::text(postgres::types::FromSql::from_sql(ty, raw)?)),
+            Type::INT2 | Type::INT4 | Type::INT8 => Ok(Value::int(postgres::types::FromSql::from_sql(ty, raw)?)),
+            Type::FLOAT4 | Type::FLOAT8 => Ok(Value::float(postgres::types::FromSql::from_sql(ty, raw)?)),
             _ => Err(format!("Unrecognized value type: {}", ty).into()),
         }
     }
 
     fn accepts(ty: &Type) -> bool {
-        match ty.oid() {
-            16 | 18 | 20 | 21 | 23 | 25 | 700 | 701  => true,
+        match *ty {
+            Type::TEXT | Type::CHAR => true,
+            Type::BOOL => true,
+            Type::INT2 | Type::INT8 | Type::INT4 => true,
+            Type::FLOAT4 | Type::FLOAT8 => true,
             _ => false
         }
     }
@@ -522,19 +547,36 @@ impl postgres::types::ToSql for Value {
     where
         Self: Sized
     {
-        todo!()
+        match self {
+            Value::Int(i) => out.put_i64(i.0),
+            Value::Float(f) => out.put_f64(f.as_f64()),
+            Value::Bool(b) => out.extend_from_slice(&[b.0 as u8]),
+            Value::Text(t) => out.extend_from_slice(&t.0.as_bytes()),
+            Value::Array(_) => return Err("Array not supported".into()),
+            Value::Dict(_) => return Err("Dict not supported".into()),
+            Value::Null => return Ok(IsNull::Yes),
+            Wagon(w) => return w.clone().unwrap().to_sql(ty, out),
+        }
+        Ok(IsNull::No)
     }
 
     fn accepts(ty: &Type) -> bool
     where
         Self: Sized
     {
-        todo!()
+        match *ty {
+            Type::TEXT => true,
+            Type::BOOL => true,
+            Type::INT8 => true,
+            Type::INT4 => true,
+            Type::INT2 => true,
+            Type::FLOAT4 => true,
+            Type::FLOAT8 => true,
+            _ => false
+        }
     }
 
-    fn to_sql_checked(&self, ty: &Type, out: &mut BytesMut) -> Result<IsNull, Box<dyn Error + Sync + Send>> {
-        todo!()
-    }
+    postgres::types::to_sql_checked!();
 }
 
 
@@ -552,7 +594,18 @@ impl rusqlite::types::FromSql for Value {
 
 impl rusqlite::types::ToSql for Value {
     fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
-        todo!()
+        match self {
+            Value::Int(i) => Ok(ToSqlOutput::from(i.0)),
+            Value::Float(f) => Ok(ToSqlOutput::from(f.as_f64())),
+            Value::Bool(b) => Ok(ToSqlOutput::from(b.0)),
+            Value::Text(t) => Ok(ToSqlOutput::from(t.0.clone())),
+            Value::Array(_) => Err(rusqlite::Error::InvalidQuery),
+            Value::Dict(_) => Err(rusqlite::Error::InvalidQuery),
+            Value::Null => Ok(ToSqlOutput::from(rusqlite::types::Null)),
+            Wagon(w) => {
+                w.value.to_sql()
+            }
+        }
     }
 }
 
