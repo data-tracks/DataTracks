@@ -3,9 +3,9 @@ use crate::algebra::algebra::{BoxedValueLoader, ValueHandler};
 use crate::algebra::function::{Implementable, Operator};
 use crate::algebra::operator::AggOp::{Avg, Count, Sum};
 use crate::algebra::operator::TupleOp::{Division, Equal, Minus, Multiplication, Not, Plus};
+use crate::algebra::BoxedValueHandler;
 use crate::algebra::Op::{Agg, Tuple};
 use crate::algebra::TupleOp::{And, Combine, Index, Input, Or};
-use crate::algebra::BoxedValueHandler;
 use crate::processing::{ArrayType, DictType, Layout, OutputType};
 use crate::value::Value;
 use crate::value::Value::{Array, Bool, Dict, Float, Int, Null, Text, Wagon};
@@ -88,7 +88,7 @@ impl TupleOp {
             Minus => {
                 Box::new(
                     TupleFunction::new(move |value| {
-                        let a = value.get(0).unwrap();
+                        let a = value.first().unwrap();
                         let b = value.get(1).unwrap();
                         a - b
                     }, operands)
@@ -106,7 +106,7 @@ impl TupleOp {
             Division => {
                 Box::new(
                     TupleFunction::new(move |value| {
-                        let a = value.get(0).unwrap();
+                        let a = value.first().unwrap();
                         let b = value.get(1).unwrap();
                         a / b
                     }, operands)
@@ -115,7 +115,7 @@ impl TupleOp {
             Equal => {
                 Box::new(
                     TupleFunction::new(move |value| {
-                        let a = value.get(0).unwrap();
+                        let a = value.first().unwrap();
                         let b = value.get(1).unwrap();
                         (a.clone() == b.clone()).into()
                     }, operands)
@@ -131,8 +131,8 @@ impl TupleOp {
             Not => {
                 Box::new(
                     TupleFunction::new(move |vec| {
-                        let value = Value::bool(vec.get(0).unwrap().as_bool().unwrap().0);
-                        match vec.get(0).unwrap() {
+                        let value = Value::bool(vec.first().unwrap().as_bool().unwrap().0);
+                        match vec.first().unwrap() {
                             Int(_) => Int(value.as_int().unwrap()),
                             Float(_) => Float(value.as_float().unwrap()),
                             Bool(_) => Bool(value.as_bool().unwrap()),
@@ -196,7 +196,7 @@ impl TupleOp {
     pub(crate) fn derive_input_layout(&self, operands: Vec<Layout>) -> Layout {
         match self {
             Plus | Minus | Multiplication | Division | Equal => {
-                let left = operands.get(0).cloned().unwrap_or(Layout::default());
+                let left = operands.first().cloned().unwrap_or(Layout::default());
                 let _right = operands.get(1).cloned().unwrap_or(Layout::default());
                 left
             }
@@ -207,7 +207,7 @@ impl TupleOp {
                 operands.iter().fold( Layout::default(),|a, b | a.clone().merge(b).unwrap())
             }
             TupleOp::KeyValue(_) => {
-                let first = operands.get(0).cloned().unwrap_or(Layout::default());
+                let first = operands.first().cloned().unwrap_or(Layout::default());
                 let second = operands.get(1).cloned().unwrap_or(Layout::default());
                 first.merge(&second).unwrap()
             }
@@ -241,7 +241,7 @@ impl TupleOp {
     pub(crate) fn derive_output_layout(&self, operands: Vec<Layout>, inputs: HashMap<String, &Layout>) -> Layout {
         match self {
             Plus | Minus | Multiplication | Division => {
-                let left = operands.get(0).cloned().unwrap_or(Layout::default());
+                let left = operands.first().cloned().unwrap_or(Layout::default());
                 let _right = operands.get(1).cloned().unwrap_or(Layout::default());
                 left
             }
@@ -252,7 +252,7 @@ impl TupleOp {
                 layout
             }
             TupleOp::KeyValue(name) => {
-                let _key = operands.get(0).cloned().unwrap_or(Layout::default());
+                let _key = operands.first().cloned().unwrap_or(Layout::default());
                 let value = operands.get(1).cloned().unwrap_or(Layout::default());
                 let map = HashMap::from([(name.clone(), value.clone())]);
                 Layout::new(OutputType::Dict(Box::new(DictType::new(map))))
@@ -267,7 +267,7 @@ impl TupleOp {
                 Layout::default()
             }
             TupleOp::Name(n) => {
-                let layout = operands.get(0).unwrap();
+                let layout = operands.first().unwrap();
                 match layout.type_.clone() {
                     OutputType::Dict(d) => {
                         d.fields.get(&Some(n.name.clone())).cloned().unwrap_or(Layout::default())
@@ -276,7 +276,7 @@ impl TupleOp {
                 }
             }
             Index(i) => {
-                let layout = operands.get(0).unwrap();
+                let layout = operands.first().unwrap();
                 match layout.type_.clone() {
                     OutputType::Array(a) => {
                         a.fields
@@ -292,9 +292,7 @@ impl TupleOp {
                 }
             }
             TupleOp::Literal(l) => {
-                let mut layout = Layout::default();
-                layout.type_ = OutputType::from(&l.literal.clone());
-                layout
+                Layout { type_: OutputType::from(&l.literal.clone()), ..Default::default() }
             }
             TupleOp::Context(c) => {
                 (*inputs.get(&c.name).unwrap()).clone()

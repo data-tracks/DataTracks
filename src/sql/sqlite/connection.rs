@@ -1,10 +1,10 @@
 use crate::ui::{ConfigModel, StringModel};
+use rusqlite::Connection;
 use serde_json::{Map, Value};
 use std::collections::HashMap;
-use rusqlite::Connection;
 
 #[derive(Debug)]
-pub(crate) struct SqliteConnector {
+pub struct SqliteConnector {
     pub path: String,
 }
 
@@ -19,7 +19,7 @@ impl SqliteConnector {
     }
 
     pub(crate) async fn connect(&self) -> Result<Connection, String> {
-        Connection::open(&format!("sqlite:{}", self.path)).map_err(|e| e.to_string())
+        Connection::open(format!("sqlite:{}", self.path)).map_err(|e| e.to_string())
     }
 
     pub(crate) fn serialize(&self, configs: &mut HashMap<String, ConfigModel>) {

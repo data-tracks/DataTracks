@@ -13,7 +13,9 @@ use serde::{Deserialize, Serialize, Serializer};
 use serde_json::{Map, Value};
 use std::cmp::PartialEq;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+#[cfg(test)]
+use std::sync::Mutex;
 
 pub struct Plan {
     pub id: i64,
@@ -426,7 +428,7 @@ impl Plan {
         let (type_name, template) = stencil.split_once('{').ok_or(format!("Invalid template: {}", stencil))?;
         let json = format!("{{ {} }}", template.trim());
         let options = serde_json::from_str::<Value>(&json)
-            .map_err(|e| format!("Could not parse options for {}: {}", type_name, e.to_string()))?
+            .map_err(|e| format!("Could not parse options for {}: {}", type_name, e))?
             .as_object().ok_or(format!("Invalid options: {}", template))?.clone();
         Ok((stops, type_name, options))
     }
@@ -503,7 +505,7 @@ impl Plan {
 
     fn get_previous_stations(&self, station: &i64) -> HashMap<i64, &Station> {
         let mut befores = HashMap::new();
-        for (_, stations) in &self.lines {
+        for stations in self.lines.values() {
             if stations.is_empty() {
                 continue;
             }
@@ -523,7 +525,7 @@ impl Plan {
 pub fn check_commands(rx: &Receiver<Command>) -> bool {
     if let Ok(command) = rx.try_recv() {
         match command {
-            Command::Stop(_) => return true,
+            Command::Stop(_) => { return true }
             _ => {}
         }
     }

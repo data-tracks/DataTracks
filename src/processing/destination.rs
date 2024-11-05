@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use crate::mqtt::MqttDestination;
 use crate::processing::option::Configurable;
@@ -11,6 +11,8 @@ use crate::sql::LiteDestination;
 use crate::util::Tx;
 use crossbeam::channel::Sender;
 use serde_json::{Map, Value};
+#[cfg(test)]
+use std::sync::Mutex;
 
 pub fn parse_destination(type_: &str, options: Map<String, Value>) -> Result<Box<dyn Destination>, String> {
     let destination: Box<dyn Destination> = match type_.to_ascii_lowercase().as_str() {

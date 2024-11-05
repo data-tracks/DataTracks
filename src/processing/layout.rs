@@ -37,9 +37,7 @@ impl Default for Layout {
 
 impl Layout {
     pub fn new(type_: OutputType) -> Layout {
-        let mut field = Layout::default();
-        field.type_ = type_;
-        field
+        Layout { type_, ..Default::default() }
     }
 
     pub fn fits_train(&self, train: &Train) -> bool {
@@ -125,10 +123,7 @@ impl Layout {
     }
 
     pub fn array(index: Option<i32>) -> Layout {
-        let mut layout = Layout::default();
-
-        layout.type_ = Array(Box::new(ArrayType::new(Layout::default(), index)));
-        layout
+        Layout { type_: Array(Box::new(ArrayType::new(Layout::default(), index))), ..Default::default() }
     }
 
     pub(crate) fn fits(&self, value: &Value) -> bool {
@@ -273,7 +268,7 @@ fn parse_field(type_: OutputType, reader: &mut BufferedReader) -> (Layout, Optio
             ':' => {
                 let mut num = String::new();
                 while let Some(char) = reader.peek_next() {
-                    if char.is_digit(10) {
+                    if char.is_ascii_digit() {
                         num.push(char);
                         reader.next();
                     } else {
@@ -463,8 +458,7 @@ impl From<&Value> for OutputType {
                 } else {
                     OutputType::from(&a.0.first().unwrap().clone())
                 };
-                let mut layout = Layout::default();
-                layout.type_ = output;
+                let layout = Layout { type_: output, ..Default::default() };
 
                 Array(Box::new(ArrayType { fields: layout, length: None }))
             }

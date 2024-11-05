@@ -113,7 +113,7 @@ impl DynamicQuery {
                 let mut indexes = vec![];
                 for part in self.get_parts() {
                     if let Segment::DynamicIndex(index) = part {
-                        indexes.push(index.clone());
+                        indexes.push(index);
                     }
                 }
                 indexes.iter().max().map(|i| Layout::array(Some(*i as i32))).unwrap_or(Layout::array(None))

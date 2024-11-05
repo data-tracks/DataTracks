@@ -62,7 +62,7 @@ impl Destination for LiteDestination {
     fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command> {
         let receiver = self.receiver.clone();
         let (tx, rx) = unbounded();
-        let id = self.id.clone();
+        let id = self.id;
         let query = self.query.clone();
         let runtime = Runtime::new().unwrap();
         let connection = self.connector.clone();
@@ -100,7 +100,7 @@ impl Destination for LiteDestination {
     }
 
     fn get_id(&self) -> i64 {
-        self.id.clone()
+        self.id
     }
 
     fn serialize(&self) -> DestinationModel {

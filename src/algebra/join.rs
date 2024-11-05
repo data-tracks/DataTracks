@@ -162,9 +162,7 @@ impl Layoutable for Join {
         let left = self.left.derive_output_layout(inputs.clone());
         let right = self.right.derive_output_layout(inputs);
 
-        let mut layout = Layout::default();
-        layout.type_ = Array(Box::new(ArrayType::new(left.merge(&right).unwrap(), Some(2))));
-        layout
+        Layout { type_: Array(Box::new(ArrayType::new(left.merge(&right).unwrap(), Some(2)))), ..Default::default() }
     }
 }
 

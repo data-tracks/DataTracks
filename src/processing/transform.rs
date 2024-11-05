@@ -101,8 +101,8 @@ impl Transform {
             Lang(f) => {
                 let mut initial = algebra::build_iterator(f.algebra.clone()).unwrap();
                 let iter = initial.enrich(transforms);
-                if iter.is_some() {
-                    iter.unwrap()
+                if let Some(iter) = iter {
+                    iter
                 } else {
                     initial
                 }

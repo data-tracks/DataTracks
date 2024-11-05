@@ -23,7 +23,7 @@ impl Layoutable for Union {
     }
 
     fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {
-        self.inputs.get(0).unwrap().derive_output_layout(inputs)
+        self.inputs.first().unwrap().derive_output_layout(inputs)
     }
 }
 

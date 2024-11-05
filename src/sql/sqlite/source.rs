@@ -54,7 +54,7 @@ impl Source for LiteSource {
 
     fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command> {
         let (tx, rx) = unbounded();
-        let id = self.id.clone();
+        let id = self.id;
         let query = self.query.to_owned();
         let runtime = Runtime::new().unwrap();
         let connection = self.connector.clone();
