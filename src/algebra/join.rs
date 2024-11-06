@@ -1,6 +1,6 @@
 use crate::algebra::algebra::Algebra;
 use crate::algebra::{AlgebraType, BoxedIterator, ValueIterator};
-use crate::analyse::Layoutable;
+use crate::analyse::{InputDerivable, OutputDerivable};
 use crate::processing::transform::Transform;
 use crate::processing::OutputType::Array;
 use crate::processing::{ArrayType, Layout, Train};
@@ -151,13 +151,15 @@ impl ValueIterator for JoinIterator {
     }
 }
 
-impl Layoutable for Join {
+impl InputDerivable for Join {
     fn derive_input_layout(&self) -> Layout {
         let left = self.left.derive_input_layout();
         let right = self.right.derive_input_layout();
         left.merge(&right).unwrap()
     }
+}
 
+impl OutputDerivable for Join {
     fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {
         let left = self.left.derive_output_layout(inputs.clone());
         let right = self.right.derive_output_layout(inputs);

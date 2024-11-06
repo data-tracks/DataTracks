@@ -1,6 +1,6 @@
 use crate::algebra::algebra::{Algebra, RefHandler, ValueIterator};
 use crate::algebra::BoxedIterator;
-use crate::analyse::Layoutable;
+use crate::analyse::{InputDerivable, OutputDerivable};
 use crate::processing::transform::Transform;
 use crate::processing::{Layout, Train};
 use crate::value::Value;
@@ -95,11 +95,13 @@ impl RefHandler for ScanIterator {
     }
 }
 
-impl Layoutable for Scan {
+impl InputDerivable for Scan {
     fn derive_input_layout(&self) -> Layout {
         Layout::default()
     }
+}
 
+impl OutputDerivable for Scan {
     fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {
         inputs.get(self.index.to_string().as_str()).cloned().unwrap().clone()
     }

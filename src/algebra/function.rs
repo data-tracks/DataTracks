@@ -3,10 +3,10 @@ use crate::algebra::operator::{AggOp, InputOp, LiteralOp, NameOp, Op};
 use crate::algebra::Op::Tuple;
 use crate::algebra::TupleOp::{Combine, Context, Input, Literal, Name};
 use crate::algebra::{BoxedValueHandler, ContextOp};
+use crate::analyse::{InputDerivable, OutputDerivable};
 use crate::processing::Layout;
 use crate::value::Value;
 use std::collections::HashMap;
-use crate::analyse::Layoutable;
 
 pub trait Replaceable {
     fn replace(&mut self, replace: fn(&mut Operator) -> Vec<(AggOp, Vec<Operator>)>) -> Vec<(AggOp, Vec<Operator>)>;
@@ -54,14 +54,17 @@ impl Operator {
 
 }
 
-impl Layoutable for Operator{
+impl OutputDerivable for Operator {
+    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {
+        self.op.derive_output_layout(self.operands.iter().cloned().map(|o| o.derive_output_layout(inputs.clone())).collect(), inputs)
+    }
+}
+
+impl InputDerivable for Operator {
     fn derive_input_layout(&self) -> Layout {
         self.op.derive_input_layout(self.operands.iter().cloned().map(|o| o.derive_input_layout()).collect())
     }
 
-    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {
-        self.op.derive_output_layout(self.operands.iter().cloned().map(|o| o.derive_output_layout(inputs.clone())).collect(), inputs)
-    }
 }
 
 impl Replaceable for Operator {

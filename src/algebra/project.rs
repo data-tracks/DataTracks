@@ -2,7 +2,7 @@ use crate::algebra::algebra::{Algebra, ValueHandler};
 use crate::algebra::function::Operator;
 use crate::algebra::implement::implement;
 use crate::algebra::{AlgebraType, BoxedIterator, ValueIterator};
-use crate::analyse::Layoutable;
+use crate::analyse::{InputDerivable, OutputDerivable};
 use crate::processing::transform::Transform;
 use crate::processing::{Layout, Train};
 use crate::value::Value;
@@ -56,15 +56,18 @@ impl ValueIterator for ProjectIterator {
     }
 }
 
-impl Layoutable for Project {
+impl InputDerivable for Project {
     fn derive_input_layout(&self) -> Layout {
         self.project.derive_input_layout()
     }
+}
 
+impl OutputDerivable for Project {
     fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {
         self.project.derive_output_layout(inputs)
     }
 }
+
 
 impl Algebra for Project {
     type Iterator = ProjectIterator;

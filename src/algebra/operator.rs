@@ -722,7 +722,7 @@ mod tests {
     use crate::algebra::Op::Tuple;
     use crate::algebra::Operator;
     use crate::algebra::TupleOp::{And, Division, Equal, Index, Literal, Minus, Multiplication, Name, Not, Or, Plus};
-    use crate::analyse::Layoutable;
+    use crate::analyse::{InputDerivable, OutputDerivable};
     use crate::processing::OutputType::{Array, Dict};
     use crate::processing::{ArrayType, DictType, Layout, OutputType};
     use crate::value::Value;

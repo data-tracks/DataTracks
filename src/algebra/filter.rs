@@ -1,7 +1,7 @@
 use crate::algebra::algebra::{Algebra, BoxedIterator, ValueIterator};
 use crate::algebra::implement::implement;
 use crate::algebra::{AlgebraType, BoxedValueHandler, Operator};
-use crate::analyse::Layoutable;
+use crate::analyse::{InputDerivable, OutputDerivable};
 use crate::processing::transform::Transform;
 use crate::processing::{Layout, Train};
 use crate::value::Value;
@@ -59,11 +59,13 @@ impl ValueIterator for FilterIterator {
     }
 }
 
-impl Layoutable for Filter {
+impl InputDerivable for Filter {
     fn derive_input_layout(&self) -> Layout {
         self.input.derive_input_layout().merge(&self.condition.derive_input_layout()).unwrap()
     }
+}
 
+impl OutputDerivable for Filter {
     fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {
         self.input.derive_output_layout(inputs)
     }

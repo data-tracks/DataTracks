@@ -1,5 +1,5 @@
 use crate::algebra::{Algebra, AlgebraType, BoxedIterator, ValueIterator};
-use crate::analyse::Layoutable;
+use crate::analyse::{InputDerivable, OutputDerivable};
 use crate::processing::transform::Transform;
 use crate::processing::{Layout, Train};
 use crate::value::Value;
@@ -17,11 +17,13 @@ impl Union {
     }
 }
 
-impl Layoutable for Union {
+impl InputDerivable for Union {
     fn derive_input_layout(&self) -> Layout {
         self.inputs.iter().map(|x| x.derive_input_layout()).fold(Layout::default(), |a, b| a.merge(&b).unwrap())
     }
+}
 
+impl OutputDerivable for Union {
     fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {
         self.inputs.first().unwrap().derive_output_layout(inputs)
     }

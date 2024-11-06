@@ -1,5 +1,5 @@
 use crate::algebra::{BoxedIterator, ValueIterator};
-use crate::analyse::Layoutable;
+use crate::analyse::{InputDerivable, OutputDerivationStrategy};
 use crate::processing::option::Configurable;
 use crate::processing::transform::{Transform, Transformer};
 use crate::processing::{Layout, Train};
@@ -40,14 +40,11 @@ impl Configurable for SqliteTransformer {
     }
 }
 
-impl Layoutable for SqliteTransformer {
+impl InputDerivable for SqliteTransformer {
     fn derive_input_layout(&self) -> Layout {
         self.query.derive_input_layout()
     }
 
-    fn derive_output_layout(&self, _inputs: HashMap<String, &Layout>) -> Layout {
-        todo!()
-    }
 }
 
 impl Transformer for SqliteTransformer {
@@ -61,6 +58,10 @@ impl Transformer for SqliteTransformer {
         let iter = SqliteIterator::new(self.query.clone(), self.connector.clone());
 
         Box::new(iter)
+    }
+
+    fn get_output_derivation_strategy(&self) -> &OutputDerivationStrategy {
+        todo!()
     }
 }
 

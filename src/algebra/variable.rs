@@ -1,5 +1,5 @@
 use crate::algebra::{Algebra, AlgebraType, BoxedIterator, ValueIterator};
-use crate::analyse::Layoutable;
+use crate::analyse::{InputDerivable, OutputDerivable};
 use crate::processing::transform::Transform;
 use crate::processing::{Layout, Train};
 use crate::value::Value;
@@ -18,11 +18,13 @@ impl VariableScan {
     }
 }
 
-impl Layoutable for VariableScan {
+impl InputDerivable for VariableScan {
     fn derive_input_layout(&self) -> Layout {
         Layout::default()
     }
+}
 
+impl OutputDerivable for VariableScan {
     fn derive_output_layout(&self, _inputs: HashMap<String, &Layout>) -> Layout {
         Layout::default()
     }

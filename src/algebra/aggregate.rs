@@ -2,7 +2,7 @@ use crate::algebra::algebra::BoxedValueLoader;
 use crate::algebra::function::Implementable;
 use crate::algebra::operator::AggOp;
 use crate::algebra::{Algebra, AlgebraType, BoxedIterator, BoxedValueHandler, Operator, ValueIterator};
-use crate::analyse::Layoutable;
+use crate::analyse::{InputDerivable, OutputDerivable};
 use crate::processing::transform::Transform;
 use crate::processing::OutputType::Array;
 use crate::processing::{ArrayType, Layout, Train};
@@ -38,12 +38,14 @@ impl Aggregate {
     }
 }
 
-impl Layoutable for Aggregate {
+impl InputDerivable for Aggregate {
     fn derive_input_layout(&self) -> Layout {
         let ags = self.aggregates.iter().map(|(op, ops)| ops.derive_input_layout().merge(&op.derive_input_layout(vec![])).unwrap()).fold(Layout::default(), |a, b| a.merge(&b).unwrap());
         self.group.derive_input_layout().merge(&ags).unwrap()
     }
+}
 
+impl OutputDerivable for Aggregate {
     fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {
         if self.aggregates.len() == 1 {
             let op = self.aggregates[0].1.clone().derive_output_layout(HashMap::new());

@@ -1,5 +1,5 @@
 use crate::algebra::{BoxedIterator, ValueIterator};
-use crate::analyse::Layoutable;
+use crate::analyse::{InputDerivable, OutputDerivationStrategy};
 use crate::processing::option::Configurable;
 use crate::processing::transform::{Transform, Transformer};
 use crate::processing::{Layout, Train};
@@ -38,13 +38,9 @@ impl Configurable for PostgresTransformer {
     }
 }
 
-impl Layoutable for PostgresTransformer {
+impl InputDerivable for PostgresTransformer {
     fn derive_input_layout(&self) -> Layout {
         self.query.derive_input_layout()
-    }
-
-    fn derive_output_layout(&self, _inputs: HashMap<String, &Layout>) -> Layout {
-        todo!()
     }
 }
 
@@ -59,6 +55,10 @@ impl Transformer for PostgresTransformer {
 
     fn optimize(&self, _transforms: HashMap<String, Transform>) -> Box<dyn ValueIterator<Item=value::Value> + Send> {
         Box::new(PostgresIterator::new(self.query.clone(), self.connector.clone()))
+    }
+
+    fn get_output_derivation_strategy(&self) -> &OutputDerivationStrategy {
+        todo!()
     }
 }
 

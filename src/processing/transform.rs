@@ -1,5 +1,5 @@
 use crate::algebra::{Algebra, AlgebraType, BoxedIterator, Scan, ValueIterator};
-use crate::analyse::Layoutable;
+use crate::analyse::{InputDerivable, OutputDerivable, OutputDerivationStrategy};
 use crate::language::Language;
 use crate::processing::option::Configurable;
 use crate::processing::train::Train;
@@ -152,11 +152,18 @@ impl Configurable for Transform {
 }
 
 
-pub trait Transformer: Clone + Sized + Configurable + Layoutable {
+pub trait Transformer: Clone + Sized + Configurable + InputDerivable + OutputDerivable {
     fn parse(options: Map<String, serde_json::Value>) -> Result<Self, String>;
 
     fn optimize(&self, transforms: HashMap<String, Transform>) -> Box<dyn ValueIterator<Item=Value> + Send>;
 
+    fn get_output_derivation_strategy(&self) -> &OutputDerivationStrategy;
+}
+
+impl<T: Transformer> OutputDerivable for T {
+    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {
+        self.get_output_derivation_strategy().derive_output_layout(inputs)
+    }
 }
 
 pub struct LanguageTransform {

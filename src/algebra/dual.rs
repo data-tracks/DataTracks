@@ -1,5 +1,5 @@
 use crate::algebra::{Algebra, BoxedIterator, ValueIterator};
-use crate::analyse::Layoutable;
+use crate::analyse::{InputDerivable, OutputDerivable};
 use crate::processing::transform::Transform;
 use crate::processing::{Layout, OutputType, Train};
 use crate::value::Value;
@@ -15,11 +15,13 @@ impl Dual {
     }
 }
 
-impl Layoutable for Dual {
+impl InputDerivable for Dual {
     fn derive_input_layout(&self) -> Layout {
         Layout::default()
     }
+}
 
+impl OutputDerivable for Dual {
     fn derive_output_layout(&self, _inputs: HashMap<String, &Layout>) -> Layout {
         Layout::new(OutputType::Integer)
     }

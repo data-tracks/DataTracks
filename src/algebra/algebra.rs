@@ -6,7 +6,7 @@ use crate::algebra::project::Project;
 use crate::algebra::scan::Scan;
 use crate::algebra::union::Union;
 use crate::algebra::variable::VariableScan;
-use crate::analyse::Layoutable;
+use crate::analyse::{InputDerivable, OutputDerivable};
 use crate::processing::transform::Transform;
 use crate::processing::{Layout, Train};
 use crate::value::Value;
@@ -30,7 +30,7 @@ pub enum AlgebraType {
     Variable(VariableScan),
 }
 
-impl Layoutable for AlgebraType {
+impl InputDerivable for AlgebraType {
     fn derive_input_layout(&self) -> Layout {
         match self {
             AlgebraType::Scan(s) => s.derive_input_layout(),
@@ -43,7 +43,9 @@ impl Layoutable for AlgebraType {
             AlgebraType::Dual(d) => d.derive_input_layout()
         }
     }
+}
 
+impl OutputDerivable for AlgebraType {
     fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {
         match self {
             AlgebraType::Scan(s) => s.derive_output_layout(inputs),
@@ -77,7 +79,7 @@ impl Algebra for AlgebraType {
 
 }
 
-pub trait Algebra: Clone + Layoutable {
+pub trait Algebra: Clone + InputDerivable + OutputDerivable {
     type Iterator: Iterator<Item=Value> + Send + 'static;
     fn derive_iterator(&mut self) -> Self::Iterator;
 

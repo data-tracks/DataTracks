@@ -8,7 +8,6 @@ use crate::value::{bool, Bool, Float, Int};
 use bytes::{BufMut, BytesMut};
 use json::{parse, JsonValue};
 use postgres::types::{IsNull, Type};
-use postgres::Row;
 use rusqlite::types::{FromSqlResult, ToSqlOutput, ValueRef};
 use serde::{Deserialize, Serialize};
 use std::cmp::PartialEq;
@@ -505,7 +504,7 @@ impl Div for &Value {
 
 
 impl From<postgres::Row> for Value {
-    fn from(row: Row) -> Self {
+    fn from(row: postgres::Row) -> Self {
         let len = row.len();
         let mut values = Vec::with_capacity(len);
         for i in 0..len {
