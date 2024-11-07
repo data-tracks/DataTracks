@@ -187,7 +187,7 @@ impl Algebra for Join {
 mod test {
     use crate::algebra::algebra::Algebra;
     use crate::algebra::join::Join;
-    use crate::algebra::scan::Scan;
+    use crate::algebra::scan::IndexScan;
     use crate::algebra::{AlgebraType, ValueIterator};
     use crate::processing::Train;
     use crate::value::{Dict, Value};
@@ -197,11 +197,11 @@ mod test {
         let left = Train::new(0, Dict::transform(vec![3.into(), 5.5.into()]));
         let right = Train::new(1, Dict::transform(vec![5.5.into(), "test".into()]));
 
-        let left_scan = Scan::new(0);
+        let left_scan = IndexScan::new(0);
 
-        let right_scan = Scan::new(1);
+        let right_scan = IndexScan::new(1);
 
-        let mut join = Join::new(AlgebraType::Scan(left_scan), AlgebraType::Scan(right_scan), |val| val.clone(), |val| val.clone(), |left, right| {
+        let mut join = Join::new(AlgebraType::IndexScan(left_scan), AlgebraType::IndexScan(right_scan), |val| val.clone(), |val| val.clone(), |left, right| {
             Value::Dict(left.as_dict().unwrap().merge(right.as_dict().unwrap()))
         });
 
@@ -218,10 +218,10 @@ mod test {
         let train0 = Train::new(0, Dict::transform(vec![3.into(), 5.5.into()]));
         let train1 = Train::new(1, Dict::transform(vec![5.5.into(), 5.5.into()]));
 
-        let left = Scan::new(0);
-        let right = Scan::new(1);
+        let left = IndexScan::new(0);
+        let right = IndexScan::new(1);
 
-        let mut join = Join::new(AlgebraType::Scan(left), AlgebraType::Scan(right), |val| val.clone(), |val| val.clone(), |left, right| {
+        let mut join = Join::new(AlgebraType::IndexScan(left), AlgebraType::IndexScan(right), |val| val.clone(), |val| val.clone(), |left, right| {
             Value::Dict(left.as_dict().unwrap().merge(right.as_dict().unwrap()))
         });
 

@@ -25,7 +25,7 @@ impl SqliteTransformer {
         let id = GLOBAL_ID.new_id();
         let connector = SqliteConnector::new(&path);
         let query = DynamicQuery::build_dynamic_query(query);
-        let output_derivation_strategy = OutputDerivationStrategy::query_based(query.get_query(), Language::Sql);
+        let output_derivation_strategy = OutputDerivationStrategy::query_based(query.get_query(), Language::Sql).unwrap_or_default();
         SqliteTransformer { id, connector, query, output_derivation_strategy }
     }
 }
@@ -52,8 +52,8 @@ impl InputDerivable for SqliteTransformer {
 
 impl Transformer for SqliteTransformer {
     fn parse(options: Map<String, serde_json::Value>) -> Result<Self, String> {
-        let query = options.get("query").unwrap().as_str().unwrap();
-        let path = options.get("path").unwrap().as_str().unwrap();
+        let query = options.get("query").unwrap().as_str().ok_or("Could not find query option.")?;
+        let path = options.get("path").unwrap().as_str().ok_or("Could not find path option.".to_string())?;
         Ok(SqliteTransformer::new(query.to_owned(), path.to_owned()))
     }
 
@@ -64,7 +64,7 @@ impl Transformer for SqliteTransformer {
     }
 
     fn get_output_derivation_strategy(&self) -> &OutputDerivationStrategy {
-        todo!()
+        &self.output_derivation_strategy
     }
 }
 
@@ -132,13 +132,16 @@ impl ValueIterator for SqliteIterator {
 
 #[cfg(test)]
 mod tests {
-    use crate::processing::Plan;
+    use crate::analyse::OutputDerivable;
+    use crate::processing::{Layout, Plan};
+    use crate::sql::SqliteTransformer;
+    use std::collections::HashMap;
 
     const PLAN: &str = "\
             0--1{sql|SELECT \"id\", \"name\" FROM $0, $lite($0.id)}\n\
             \n\
             Transform\n\
-            $lite:SQLite{\"path\":\"memory:\",\"query\":\"SELECT \"id\" FROM \"company\" WHERE \"name\" = $\"}";
+            $lite:SQLite{\"path\":\"memory:\",\"query\":\"SELECT \\\"id\\\" FROM \\\"company\\\" WHERE \\\"name\\\" = $\"}";
 
     #[test]
     fn test_simple_parse() {
@@ -150,5 +153,19 @@ mod tests {
     fn test_simple_operate() {
         let mut plan = Plan::parse(PLAN).unwrap();
         plan.operate().unwrap()
+    }
+
+    #[test]
+    fn test_simple_layout_single() {
+        let transformer = SqliteTransformer::new("SELECT \"id\" FROM \"company\" WHERE \"name\" = $".to_string(), "memory:".to_string());
+        let output = transformer.output_derivation_strategy.derive_output_layout(HashMap::new()).unwrap();
+        assert_eq!(Layout::default(), output);
+    }
+
+    #[test]
+    fn test_simple_layout_array() {
+        let transformer = SqliteTransformer::new("SELECT \"id\", \"name\" FROM \"company\" WHERE \"name\" = $".to_string(), "memory:".to_string());
+        let output = transformer.output_derivation_strategy.derive_output_layout(HashMap::new()).unwrap();
+        assert_eq!(Layout::array(Some(2)), output);
     }
 }

@@ -8,13 +8,13 @@ use std::collections::HashMap;
 use std::vec;
 
 #[derive(Clone, Debug)]
-pub struct Scan {
+pub struct IndexScan {
     index: i64,
 }
 
-impl Scan {
+impl IndexScan {
     pub(crate) fn new(index: i64) -> Self {
-        Scan { index }
+        IndexScan { index }
     }
 }
 
@@ -95,19 +95,19 @@ impl RefHandler for ScanIterator {
     }
 }
 
-impl InputDerivable for Scan {
+impl InputDerivable for IndexScan {
     fn derive_input_layout(&self) -> Option<Layout> {
         Some(Layout::default())
     }
 }
 
-impl OutputDerivable for Scan {
+impl OutputDerivable for IndexScan {
     fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Option<Layout> {
         inputs.get(self.index.to_string().as_str()).cloned().cloned()
     }
 }
 
-impl Algebra for Scan {
+impl Algebra for IndexScan {
     type Iterator = ScanIterator;
 
     fn derive_iterator(&mut self) -> Self::Iterator {
@@ -116,11 +116,72 @@ impl Algebra for Scan {
 
 }
 
+#[derive(Debug)]
+pub struct TableScan {
+    name: String,
+}
+
+impl TableScan {
+    pub fn new(name: String) -> Self {
+        TableScan { name }
+    }
+}
+
+impl Clone for TableScan {
+    fn clone(&self) -> Self {
+        TableScan { name: self.name.clone() }
+    }
+}
+
+impl InputDerivable for TableScan {
+    fn derive_input_layout(&self) -> Option<Layout> {
+        todo!()
+    }
+}
+
+impl OutputDerivable for TableScan {
+    fn derive_output_layout(&self, _inputs: HashMap<String, &Layout>) -> Option<Layout> {
+        Some(Layout::default())
+    }
+}
+
+impl Algebra for TableScan {
+    type Iterator = EmptyIterator;
+
+    fn derive_iterator(&mut self) -> Self::Iterator {
+        panic!()
+    }
+}
+
+pub struct EmptyIterator {}
+
+impl Iterator for EmptyIterator {
+    type Item = Value;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        todo!()
+    }
+}
+
+impl ValueIterator for EmptyIterator {
+    fn dynamically_load(&mut self, trains: Vec<Train>) {
+        todo!()
+    }
+
+    fn clone(&self) -> BoxedIterator {
+        Box::new(EmptyIterator {})
+    }
+
+    fn enrich(&mut self, transforms: HashMap<String, Transform>) -> Option<BoxedIterator> {
+        todo!()
+    }
+}
+
 
 #[cfg(test)]
 mod test {
     use crate::algebra::algebra::Algebra;
-    use crate::algebra::scan::Scan;
+    use crate::algebra::scan::IndexScan;
     use crate::algebra::ValueIterator;
     use crate::processing::Train;
     use crate::value::Dict;
@@ -129,7 +190,7 @@ mod test {
     fn simple_scan() {
         let train = Train::new(0, Dict::transform(vec![3.into(), "test".into()]));
 
-        let mut scan = Scan::new(0);
+        let mut scan = IndexScan::new(0);
 
         let mut handler = scan.derive_iterator();
         handler.dynamically_load(vec![train]);

@@ -1,5 +1,5 @@
 use crate::algebra;
-use crate::algebra::AlgebraType::{Aggregate, Dual, Filter, Join, Project, Scan, Variable};
+use crate::algebra::AlgebraType::{Aggregate, Dual, Filter, IndexScan, Join, Project, TableScan, Variable};
 use crate::algebra::Op::Tuple;
 use crate::algebra::TupleOp::Input;
 use crate::algebra::{AlgebraType, Op, Operator, Replaceable, VariableScan};
@@ -161,11 +161,11 @@ fn handle_field(column: SqlStatement) -> Result<Operator, String> {
 fn handle_table(identifier: SqlIdentifier) -> Result<AlgebraType, String> {
     let mut names = identifier.names.clone();
     let scan = match names.remove(0) {
-        s if s.starts_with('$') => s.strip_prefix('$')
+        name if name.starts_with('$') => name.strip_prefix('$')
             .ok_or("Prefix not found".to_string())
             .and_then(|rest| rest.parse::<i64>().map_err(|_| "Could not parse number".to_string()))
-            .map(|num| Scan(algebra::Scan::new(num)))?,
-        _ => Err("Could not translate table".to_string())?
+            .map(|num| IndexScan(algebra::IndexScan::new(num)))?,
+        name => TableScan(algebra::TableScan::new(name)),
     };
     if !names.is_empty() {
         let field = handle_field(Identifier(identifier))?;

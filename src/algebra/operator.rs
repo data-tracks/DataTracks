@@ -267,10 +267,10 @@ impl TupleOp {
                 Layout::default()
             }
             TupleOp::Name(n) => {
-                let layout = operands.first().unwrap();
+                let layout = operands.first().cloned().unwrap_or_default();
                 match layout.type_.clone() {
                     OutputType::Dict(d) => {
-                        d.fields.get(&Some(n.name.clone())).cloned().unwrap_or(Layout::default())
+                        d.fields.get(&Some(n.name.clone())).cloned().unwrap_or_default()
                     }
                     _ => Layout::default()
                 }

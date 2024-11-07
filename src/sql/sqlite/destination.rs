@@ -132,7 +132,7 @@ mod tests {
             0--1\n\
             \n\
             Out\n\
-            SQLite{\"path\": \"local.db\", \"query\": \"INSERT INTO test_table VALUES($.0, $.1)\"}:1"
+            Sqlite{\"path\": \"local.db\", \"query\": \"INSERT INTO \\\"test_table\\\" VALUES(\\\"$.0\\\", \\\"$.1\\\")\"}:1"
         ).unwrap();
     }
 }

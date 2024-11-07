@@ -23,7 +23,7 @@ impl PostgresTransformer {
     pub fn new(url: String, port: u16, db: String, query: String) -> PostgresTransformer {
         let query = DynamicQuery::build_dynamic_query(query.clone());
         let connector = PostgresConnection::new(url, port, db);
-        let output_derivation_strategy = OutputDerivationStrategy::query_based(query.get_query(), Language::Sql);
+        let output_derivation_strategy = OutputDerivationStrategy::query_based(query.get_query(), Language::Sql).unwrap_or_default();
         PostgresTransformer { connector, query, output_derivation_strategy }
     }
 }
@@ -47,13 +47,17 @@ impl InputDerivable for PostgresTransformer {
     }
 }
 
+fn error(param: &str) -> String {
+    format!("Missing {} parameter", param)
+}
+
 impl Transformer for PostgresTransformer {
     fn parse(options: Map<String, Value>) -> Result<Self, String> {
-        let query = options.get("query").unwrap().as_str().unwrap();
-        let url = options.get("url").unwrap().as_str().unwrap();
-        let port = options.get("port").unwrap().as_i64().unwrap();
-        let db = options.get("db").unwrap().as_str().unwrap();
-        Ok(PostgresTransformer::new(url.to_owned(), port.to_owned() as u16, db.to_owned(), query.to_owned()))
+        let query = options.get("query").and_then(Value::as_str).ok_or(error("query"))?.to_string();
+        let url = options.get("url").and_then(Value::as_str).ok_or(error("url"))?.to_string();
+        let port = options.get("port").and_then(Value::as_i64).ok_or(error("port"))?.to_string().parse::<u16>().map_err(|e| e.to_string())?;
+        let db = options.get("db").and_then(Value::as_str).ok_or(error("database name"))?.to_string();
+        Ok(PostgresTransformer::new(url, port, db, query))
     }
 
     fn optimize(&self, _transforms: HashMap<String, Transform>) -> Box<dyn ValueIterator<Item=value::Value> + Send> {
@@ -61,7 +65,7 @@ impl Transformer for PostgresTransformer {
     }
 
     fn get_output_derivation_strategy(&self) -> &OutputDerivationStrategy {
-        todo!()
+        &self.output_derivation_strategy
     }
 }
 

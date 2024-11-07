@@ -138,7 +138,7 @@ mod tests {
             "\
             0--1\n\
             In\n\
-            Sqlite{{\"path\":\"//test.db\",\"query\":\"SELECT * FROM user\"}}:0\n\
+            Sqlite{{\"path\":\"//test.db\",\"query\":\"SELECT * FROM \\\"user\\\"\"}}:0\n\
             Out\n\
             Dummy{{\"id\": 35, \"result_size\":2}}:1\
             "

@@ -3,9 +3,10 @@ use crate::algebra::dual::Dual;
 use crate::algebra::filter::Filter;
 use crate::algebra::join::Join;
 use crate::algebra::project::Project;
-use crate::algebra::scan::Scan;
+use crate::algebra::scan::IndexScan;
 use crate::algebra::union::Union;
 use crate::algebra::variable::VariableScan;
+use crate::algebra::TableScan;
 use crate::analyse::{InputDerivable, OutputDerivable};
 use crate::processing::transform::Transform;
 use crate::processing::{Layout, Train};
@@ -21,7 +22,8 @@ pub type BoxedValueLoader = Box<dyn ValueLoader + Send + 'static>;
 #[derive(Clone, Debug)]
 pub enum AlgebraType {
     Dual(Dual),
-    Scan(Scan),
+    IndexScan(IndexScan),
+    TableScan(TableScan),
     Project(Project),
     Filter(Filter),
     Join(Join),
@@ -33,14 +35,15 @@ pub enum AlgebraType {
 impl InputDerivable for AlgebraType {
     fn derive_input_layout(&self) -> Option<Layout> {
         match self {
-            AlgebraType::Scan(s) => s.derive_input_layout(),
+            AlgebraType::IndexScan(s) => s.derive_input_layout(),
             AlgebraType::Project(p) => p.derive_input_layout(),
             AlgebraType::Filter(f) => f.derive_input_layout(),
             AlgebraType::Join(j) => j.derive_input_layout(),
             AlgebraType::Union(u) => u.derive_input_layout(),
             AlgebraType::Aggregate(a) => a.derive_input_layout(),
             AlgebraType::Variable(v) => v.derive_input_layout(),
-            AlgebraType::Dual(d) => d.derive_input_layout()
+            AlgebraType::Dual(d) => d.derive_input_layout(),
+            AlgebraType::TableScan(t) => t.derive_input_layout()
         }
     }
 }
@@ -48,14 +51,15 @@ impl InputDerivable for AlgebraType {
 impl OutputDerivable for AlgebraType {
     fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Option<Layout> {
         match self {
-            AlgebraType::Scan(s) => s.derive_output_layout(inputs),
+            AlgebraType::IndexScan(s) => s.derive_output_layout(inputs),
             AlgebraType::Project(p) => p.derive_output_layout(inputs),
             AlgebraType::Filter(f) => f.derive_output_layout(inputs),
             AlgebraType::Join(j) => j.derive_output_layout(inputs),
             AlgebraType::Union(u) => u.derive_output_layout(inputs),
             AlgebraType::Aggregate(a) => a.derive_output_layout(inputs),
             AlgebraType::Variable(v) => v.derive_output_layout(inputs),
-            AlgebraType::Dual(d) => d.derive_output_layout(inputs)
+            AlgebraType::Dual(d) => d.derive_output_layout(inputs),
+            AlgebraType::TableScan(t) => t.derive_output_layout(inputs),
         }
     }
 }
@@ -65,14 +69,15 @@ impl Algebra for AlgebraType {
 
     fn derive_iterator(&mut self) -> Self::Iterator {
         match self {
-            AlgebraType::Scan(s) => Box::new(s.derive_iterator()),
+            AlgebraType::IndexScan(s) => Box::new(s.derive_iterator()),
             AlgebraType::Project(p) => Box::new(p.derive_iterator()),
             AlgebraType::Filter(f) => Box::new(f.derive_iterator()),
             AlgebraType::Join(j) => Box::new(j.derive_iterator()),
             AlgebraType::Union(u) => Box::new(u.derive_iterator()),
             AlgebraType::Aggregate(a) => Box::new(a.derive_iterator()),
             AlgebraType::Variable(s) => Box::new(s.derive_iterator()),
-            AlgebraType::Dual(d) => Box::new(d.derive_iterator())
+            AlgebraType::Dual(d) => Box::new(d.derive_iterator()),
+            AlgebraType::TableScan(t) => Box::new(t.derive_iterator()),
         }
     }
 

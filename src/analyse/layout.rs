@@ -1,4 +1,4 @@
-use crate::analyse::OutputDerivationStrategy::QueryBased;
+use crate::analyse::OutputDerivationStrategy::{QueryBased, Undefined};
 use crate::language::Language;
 use crate::processing::transform::build_algebra;
 use crate::processing::Layout;
@@ -21,11 +21,18 @@ pub enum OutputDerivationStrategy {
     UserDefined(Layout),
     External,
     Combined(CombinedStrategy),
+    Undefined
+}
+
+impl Default for OutputDerivationStrategy {
+    fn default() -> Self {
+        Undefined
+    }
 }
 
 impl OutputDerivationStrategy {
-    pub fn query_based(query: String, language: Language) -> Self {
-        QueryBased(QueryBasedStrategy::new(query, language))
+    pub fn query_based(query: String, language: Language) -> Result<Self, String> {
+        Ok(QueryBased(QueryBasedStrategy::new(query, language)?))
     }
 
     pub fn user_defined(layout: Layout) -> Self {
@@ -46,6 +53,7 @@ impl OutputDerivable for OutputDerivationStrategy {
             UserDefined(layout) => Some(layout.clone()),
             External => todo!(),
             Combined(comb) => comb.derive_output_layout(inputs),
+            Undefined => Some(Layout::default())
         }
     }
 }
@@ -58,10 +66,10 @@ pub struct QueryBasedStrategy {
 }
 
 impl QueryBasedStrategy {
-    pub fn new(query: String, language: Language) -> Self {
-        let algebra = build_algebra(&language, &query).unwrap();
-        let layout = algebra.derive_output_layout(HashMap::new()).unwrap();
-        QueryBasedStrategy { query, layout, language }
+    pub fn new(query: String, language: Language) -> Result<Self, String> {
+        let algebra = build_algebra(&language, &query)?;
+        let layout = algebra.derive_output_layout(HashMap::new()).ok_or("Could not derive layout.")?;
+        Ok(QueryBasedStrategy { query, layout, language })
     }
 }
 

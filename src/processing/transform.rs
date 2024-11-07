@@ -1,4 +1,4 @@
-use crate::algebra::{Algebra, AlgebraType, BoxedIterator, Scan, ValueIterator};
+use crate::algebra::{Algebra, AlgebraType, BoxedIterator, IndexScan, ValueIterator};
 use crate::analyse::{InputDerivable, OutputDerivable, OutputDerivationStrategy};
 use crate::language::Language;
 use crate::processing::option::Configurable;
@@ -259,7 +259,7 @@ impl FuncTransform {
     }
 
     pub(crate) fn new_with_layout(func: Arc<(dyn Fn(i64, Value) -> Value + Send + Sync)>, in_layout: Layout, out_layout: Layout) -> Self {
-        let mut scan = Scan::new(0);
+        let mut scan = IndexScan::new(0);
         let iterator = scan.derive_iterator();
         FuncTransform { input: Box::new(iterator), func, in_layout, out_layout }
     }
