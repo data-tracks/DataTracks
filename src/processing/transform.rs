@@ -59,7 +59,7 @@ impl Transform {
         }
     }
 
-    pub fn derive_input_layout(&self) -> Result<Layout, String> {
+    pub fn derive_input_layout(&self) -> Option<Layout> {
         match self {
             Func(f) => f.derive_input_layout(),
             Lang(l) => l.derive_input_layout(),
@@ -68,7 +68,7 @@ impl Transform {
         }
     }
 
-    pub fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Result<Layout, String> {
+    pub fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Option<Layout> {
         match self {
             Func(f) => f.derive_output_layout(),
             Lang(l) => l.derive_output_layout(inputs),
@@ -161,7 +161,7 @@ pub trait Transformer: Clone + Sized + Configurable + InputDerivable + OutputDer
 }
 
 impl<T: Transformer> OutputDerivable for T {
-    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Result<Layout, String> {
+    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Option<Layout> {
         self.get_output_derivation_strategy().derive_output_layout(inputs)
     }
 }
@@ -196,11 +196,11 @@ impl LanguageTransform {
         LanguageTransform { language, query: query.to_string(), algebra }
     }
 
-    pub(crate) fn derive_input_layout(&self) -> Layout {
+    pub(crate) fn derive_input_layout(&self) -> Option<Layout> {
         self.algebra.derive_input_layout()
     }
 
-    pub(crate) fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Result<Layout, String> {
+    pub(crate) fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Option<Layout> {
         self.algebra.derive_output_layout(inputs)
     }
 
@@ -274,12 +274,12 @@ impl FuncTransform {
         }))
     }
 
-    pub(crate) fn derive_input_layout(&self) -> Result<Layout, String> {
-        Ok(self.in_layout.clone())
+    pub(crate) fn derive_input_layout(&self) -> Option<Layout> {
+        Some(self.in_layout.clone())
     }
 
-    pub(crate) fn derive_output_layout(&self) -> Result<Layout, String> {
-        Ok(self.out_layout.clone())
+    pub(crate) fn derive_output_layout(&self) -> Option<Layout> {
+        Some(self.out_layout.clone())
     }
 
     fn dump(&self) -> String {

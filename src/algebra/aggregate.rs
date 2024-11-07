@@ -39,19 +39,19 @@ impl Aggregate {
 }
 
 impl InputDerivable for Aggregate {
-    fn derive_input_layout(&self) -> Layout {
-        let ags = self.aggregates.iter().map(|(op, ops)| ops.derive_input_layout().merge(&op.derive_input_layout(vec![])).unwrap()).fold(Layout::default(), |a, b| a.merge(&b).unwrap());
-        self.group.derive_input_layout().merge(&ags).unwrap()
+    fn derive_input_layout(&self) -> Option<Layout> {
+        let ags = self.aggregates.iter().map(|(op, ops)| ops.derive_input_layout().unwrap_or_default().merge(&op.derive_input_layout(vec![]))).fold(Layout::default(), |a, b| a.merge(&b));
+        Some(self.group.derive_input_layout()?.merge(&ags))
     }
 }
 
 impl OutputDerivable for Aggregate {
-    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Result<Layout, String> {
+    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Option<Layout> {
         if self.aggregates.len() == 1 {
-            let op = self.aggregates[0].1.clone().derive_output_layout(HashMap::new());
-            Ok(self.aggregates[0].0.derive_output_layout(vec![op], inputs))
+            let op = self.aggregates[0].1.clone().derive_output_layout(HashMap::new())?;
+            Some(self.aggregates[0].0.derive_output_layout(vec![op], inputs))
         } else {
-            Ok(Layout::new(Array(Box::new(ArrayType::new(Layout::default(), Some(self.aggregates.len() as i32))))))
+            Some(Layout::new(Array(Box::new(ArrayType::new(Layout::default(), Some(self.aggregates.len() as i32))))))
         }
     }
 }

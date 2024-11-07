@@ -55,14 +55,14 @@ impl Operator {
 }
 
 impl OutputDerivable for Operator {
-    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Result<Layout, String> {
-        Ok(self.op.derive_output_layout(self.operands.iter().cloned().map(|o| o.derive_output_layout(inputs.clone()).unwrap()).collect(), inputs))
+    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Option<Layout> {
+        Some(self.op.derive_output_layout(self.operands.iter().cloned().map(|o| o.derive_output_layout(inputs.clone()).unwrap()).collect(), inputs))
     }
 }
 
 impl InputDerivable for Operator {
-    fn derive_input_layout(&self) -> Result<Layout, String> {
-        Ok(self.op.derive_input_layout(self.operands.iter().cloned().map(|o| o.derive_input_layout()).collect()))
+    fn derive_input_layout(&self) -> Option<Layout> {
+        Some(self.op.derive_input_layout(self.operands.iter().cloned().map(|o| o.derive_input_layout().unwrap_or_default()).collect()))
     }
 
 }

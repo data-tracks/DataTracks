@@ -57,13 +57,13 @@ impl ValueIterator for ProjectIterator {
 }
 
 impl InputDerivable for Project {
-    fn derive_input_layout(&self) -> Result<Layout, String> {
+    fn derive_input_layout(&self) -> Option<Layout> {
         self.project.derive_input_layout()
     }
 }
 
 impl OutputDerivable for Project {
-    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Result<Layout, String> {
+    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Option<Layout> {
         self.project.derive_output_layout(inputs)
     }
 }

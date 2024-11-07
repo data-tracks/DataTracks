@@ -96,14 +96,14 @@ impl RefHandler for ScanIterator {
 }
 
 impl InputDerivable for Scan {
-    fn derive_input_layout(&self) -> Result<Layout, String> {
-        Ok(Layout::default())
+    fn derive_input_layout(&self) -> Option<Layout> {
+        Some(Layout::default())
     }
 }
 
 impl OutputDerivable for Scan {
-    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Result<Layout, String> {
-        Ok(inputs.get(self.index.to_string().as_str()).cloned().unwrap().clone())
+    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Option<Layout> {
+        inputs.get(self.index.to_string().as_str()).cloned().cloned()
     }
 }
 

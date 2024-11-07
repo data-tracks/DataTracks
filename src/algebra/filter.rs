@@ -60,13 +60,13 @@ impl ValueIterator for FilterIterator {
 }
 
 impl InputDerivable for Filter {
-    fn derive_input_layout(&self) -> Result<Layout, String> {
-        Ok(self.input.derive_input_layout()?.merge(&self.condition.derive_input_layout()?)?)
+    fn derive_input_layout(&self) -> Option<Layout> {
+        self.input.derive_input_layout().map(|l| l.merge(&self.condition.derive_input_layout().unwrap_or_default()))
     }
 }
 
 impl OutputDerivable for Filter {
-    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Result<Layout, String> {
+    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Option<Layout> {
         self.input.derive_output_layout(inputs)
     }
 }

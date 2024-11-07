@@ -19,14 +19,14 @@ impl VariableScan {
 }
 
 impl InputDerivable for VariableScan {
-    fn derive_input_layout(&self) -> Layout {
-        Layout::default()
+    fn derive_input_layout(&self) -> Option<Layout> {
+        Some(Layout::default())
     }
 }
 
 impl OutputDerivable for VariableScan {
-    fn derive_output_layout(&self, _inputs: HashMap<String, &Layout>) -> Layout {
-        Layout::default()
+    fn derive_output_layout(&self, _inputs: HashMap<String, &Layout>) -> Option<Layout> {
+        Some(Layout::default())
     }
 }
 

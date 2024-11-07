@@ -57,15 +57,11 @@ impl Layout {
         self.type_.accepts(&other.type_)
     }
 
-    pub(crate) fn merge(&self, other: &Layout) -> Result<Layout, String> {
+    pub(crate) fn merge(&self, other: &Layout) -> Layout {
         let mut layout = self.clone();
-        if other.explicit && self.explicit != other.explicit {
-            layout = other.clone();
-        }
+        layout.explicit = other.explicit || self.explicit;
 
-        if other.nullable && self.nullable != other.nullable {
-            return Err("Mismatch between nullable and not".to_owned());
-        }
+        layout.nullable = other.nullable || self.nullable;
 
 
         match (&self.type_, &other.type_) {
@@ -76,7 +72,7 @@ impl Layout {
                 layout.type_ = Dict(Box::new(DictType::new(dict)))
             }
             (Array(this), Array(other)) => {
-                let mut array = ArrayType::new(this.fields.merge(&other.fields)?, None);
+                let mut array = ArrayType::new(this.fields.merge(&other.fields), None);
 
                 array.length = match (this.length, other.length) {
                     (Some(this), Some(other)) => {
@@ -102,7 +98,7 @@ impl Layout {
                 //layout.type_ = Or(vec![this.clone(), other.clone()]);
             }
         }
-        Ok(layout)
+        layout
     }
 
 

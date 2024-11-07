@@ -167,18 +167,14 @@ impl Station {
 
     pub fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {
         if let Some(transform) = self.transform.clone() {
-            transform.derive_output_layout(inputs)
+            transform.derive_output_layout(inputs).unwrap_or_default()
         } else {
-            inputs.values().next().cloned().cloned().unwrap_or(Layout::default())
+            inputs.values().next().cloned().cloned().unwrap_or_default()
         }
     }
 
     pub fn derive_input_layout(&self) -> Layout {
-        if let Some(transform) = self.transform.clone() {
-            transform.derive_input_layout()
-        } else {
-            Layout::default()
-        }
+        self.clone().transform.map(|t| t.derive_input_layout().unwrap_or_default()).unwrap_or_default()
     }
 
     pub(crate) fn close(&mut self) {

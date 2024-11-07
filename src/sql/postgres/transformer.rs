@@ -42,8 +42,8 @@ impl Configurable for PostgresTransformer {
 }
 
 impl InputDerivable for PostgresTransformer {
-    fn derive_input_layout(&self) -> Layout {
-        self.query.derive_input_layout()
+    fn derive_input_layout(&self) -> Option<Layout> {
+        Some(self.query.derive_input_layout())
     }
 }
 

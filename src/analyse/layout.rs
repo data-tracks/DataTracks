@@ -6,11 +6,11 @@ use std::collections::HashMap;
 use OutputDerivationStrategy::{Combined, ContentBased, External, UserDefined};
 
 pub trait InputDerivable {
-    fn derive_input_layout(&self) -> Result<Layout, String>;
+    fn derive_input_layout(&self) -> Option<Layout>;
 }
 
 pub trait OutputDerivable {
-    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Result<Layout, String>;
+    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Option<Layout>;
 }
 
 
@@ -39,11 +39,11 @@ impl OutputDerivationStrategy {
 
 
 impl OutputDerivable for OutputDerivationStrategy {
-    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Result<Layout, String> {
+    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Option<Layout> {
         match self {
             QueryBased(strategy) => strategy.derive_output_layout(inputs),
             ContentBased => todo!(),
-            UserDefined(layout) => Ok(layout.clone()),
+            UserDefined(layout) => Some(layout.clone()),
             External => todo!(),
             Combined(comb) => comb.derive_output_layout(inputs),
         }
@@ -60,15 +60,15 @@ pub struct QueryBasedStrategy {
 impl QueryBasedStrategy {
     pub fn new(query: String, language: Language) -> Self {
         let algebra = build_algebra(&language, &query).unwrap();
-        let layout = algebra.derive_output_layout(HashMap::new());
+        let layout = algebra.derive_output_layout(HashMap::new()).unwrap();
         QueryBasedStrategy { query, layout, language }
     }
 }
 
 
 impl OutputDerivable for QueryBasedStrategy {
-    fn derive_output_layout(&self, _inputs: HashMap<String, &Layout>) -> Result<Layout, String> {
-        Ok(self.layout.clone())
+    fn derive_output_layout(&self, _inputs: HashMap<String, &Layout>) -> Option<Layout> {
+        Some(self.layout.clone())
     }
 }
 
@@ -84,7 +84,7 @@ impl CombinedStrategy {
 }
 
 impl OutputDerivable for CombinedStrategy {
-    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Result<Layout, String> {
-        Ok(self.strategies.iter().fold(Layout::default(), |a, b| a.merge(&b.derive_output_layout(inputs).unwrap()).unwrap()))
+    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Option<Layout> {
+        Some(self.strategies.iter().fold(Layout::default(), |a, b| a.merge(&b.derive_output_layout(inputs.clone()).unwrap())))
     }
 }

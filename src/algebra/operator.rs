@@ -204,15 +204,15 @@ impl TupleOp {
                 Layout::new(OutputType::Boolean)
             }
             Combine => {
-                operands.iter().fold( Layout::default(),|a, b | a.clone().merge(b).unwrap())
+                operands.iter().fold( Layout::default(),|a, b | a.clone().merge(b))
             }
             TupleOp::KeyValue(_) => {
                 let first = operands.first().cloned().unwrap_or(Layout::default());
                 let second = operands.get(1).cloned().unwrap_or(Layout::default());
-                first.merge(&second).unwrap()
+                first.merge(&second)
             }
             TupleOp::Doc => {
-                operands.iter().fold(Layout::default(), |a, b| a.clone().merge(b).unwrap())
+                operands.iter().fold(Layout::default(), |a, b| a.clone().merge(b))
             }
             Input(_) => {
                 Layout::default()
@@ -247,7 +247,7 @@ impl TupleOp {
             }
             Combine => {
                 let mut layout = Layout::default();
-                let fields = operands.iter().fold(Layout::default(), |a, b| a.merge(b).unwrap());
+                let fields = operands.iter().fold(Layout::default(), |a, b| a.merge(b));
                 layout.type_ = OutputType::Array(Box::new(ArrayType::new(fields, Some(operands.len() as i32))));
                 layout
             }
@@ -261,7 +261,7 @@ impl TupleOp {
                 Layout::new(OutputType::Boolean)
             }
             TupleOp::Doc => {
-                operands.into_iter().fold(Layout::new(OutputType::Dict(Box::new(DictType::new(HashMap::new())))), |a, b| a.merge(&b).unwrap())
+                operands.into_iter().fold(Layout::new(OutputType::Dict(Box::new(DictType::new(HashMap::new())))), |a, b| a.merge(&b))
             }
             Input(_) => {
                 Layout::default()
@@ -798,10 +798,10 @@ mod tests {
         map.insert(Some("key2".to_string()), Layout::default());
         layout.type_ = Dict(Box::new(DictType::new(map)));
 
-        assert_eq!(op.derive_input_layout(), layout);
+        assert_eq!(op.derive_input_layout().unwrap(), layout);
 
         let array = Layout::new(Array(Box::new(ArrayType::new(Layout::default(), Some(2)))));
-        assert_eq!(op.derive_output_layout(HashMap::new()), array);
+        assert_eq!(op.derive_output_layout(HashMap::new()).unwrap(), array);
 
     }
 }

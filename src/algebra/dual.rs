@@ -16,14 +16,14 @@ impl Dual {
 }
 
 impl InputDerivable for Dual {
-    fn derive_input_layout(&self) -> Layout {
-        Layout::default()
+    fn derive_input_layout(&self) -> Option<Layout> {
+        Some(Layout::default())
     }
 }
 
 impl OutputDerivable for Dual {
-    fn derive_output_layout(&self, _inputs: HashMap<String, &Layout>) -> Layout {
-        Layout::new(OutputType::Integer)
+    fn derive_output_layout(&self, _inputs: HashMap<String, &Layout>) -> Option<Layout> {
+        Some(Layout::new(OutputType::Integer))
     }
 }
 

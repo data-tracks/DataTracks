@@ -152,19 +152,19 @@ impl ValueIterator for JoinIterator {
 }
 
 impl InputDerivable for Join {
-    fn derive_input_layout(&self) -> Result<Layout, String> {
+    fn derive_input_layout(&self) -> Option<Layout> {
         let left = self.left.derive_input_layout()?;
         let right = self.right.derive_input_layout()?;
-        left.merge(&right)
+        Some(left.merge(&right))
     }
 }
 
 impl OutputDerivable for Join {
-    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Result<Layout, String> {
+    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Option<Layout> {
         let left = self.left.derive_output_layout(inputs.clone())?;
         let right = self.right.derive_output_layout(inputs)?;
 
-        Ok(Layout { type_: Array(Box::new(ArrayType::new(left.merge(&right)?, Some(2)))), ..Default::default() })
+        Some(Layout { type_: Array(Box::new(ArrayType::new(left.merge(&right), Some(2)))), ..Default::default() })
     }
 }
 
