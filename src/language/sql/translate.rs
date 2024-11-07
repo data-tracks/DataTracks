@@ -16,10 +16,10 @@ pub(crate) fn translate(query: SqlStatement) -> Result<AlgebraType, String> {
 }
 
 fn handle_select(query: SqlSelect) -> Result<AlgebraType, String> {
-    let mut sources: Vec<AlgebraType> = query.froms.into_iter().map(|from| handle_from(from).unwrap()).collect();
-    let mut projections: Vec<Operator> = query.columns.into_iter().map(|column| handle_field(column).unwrap()).collect();
-    let mut filters: Vec<Operator> = query.wheres.into_iter().map(|w| handle_field(w).unwrap()).collect();
-    let mut groups: Vec<Operator> = query.groups.into_iter().map(|g| handle_field(g).unwrap()).collect();
+    let mut sources: Vec<AlgebraType> = query.froms.into_iter().map(|from| handle_from(from)).collect::<Result<Vec<_>,_>>()?;
+    let mut projections: Vec<Operator> = query.columns.into_iter().map(|column| handle_field(column)).collect::<Result<Vec<_>,_>>()?;
+    let mut filters: Vec<Operator> = query.wheres.into_iter().map(|w| handle_field(w)).collect::<Result<Vec<_>,_>>()?;
+    let mut groups: Vec<Operator> = query.groups.into_iter().map(|g| handle_field(g)).collect::<Result<Vec<_>,_>>()?;
 
 
     let node = {

@@ -135,10 +135,10 @@ mod tests {
     use crate::processing::Plan;
 
     const PLAN: &str = "\
-            0--1{sql|SELECT id, name FROM $0, $lite($0.id)}\n\
+            0--1{sql|SELECT \"id\", \"name\" FROM $0, $lite($0.id)}\n\
             \n\
             Transform\n\
-            $lite:SQLite{\"path\":\"memory:\",\"query\":\"SELECT id FROM company WHERE name = $\"}";
+            $lite:SQLite{\"path\":\"memory:\",\"query\":\"SELECT \"id\" FROM \"company\" WHERE \"name\" = $\"}";
 
     #[test]
     fn test_simple_parse() {
