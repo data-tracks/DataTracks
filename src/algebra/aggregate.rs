@@ -46,12 +46,12 @@ impl InputDerivable for Aggregate {
 }
 
 impl OutputDerivable for Aggregate {
-    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {
+    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Result<Layout, String> {
         if self.aggregates.len() == 1 {
             let op = self.aggregates[0].1.clone().derive_output_layout(HashMap::new());
-            self.aggregates[0].0.derive_output_layout(vec![op], inputs)
+            Ok(self.aggregates[0].0.derive_output_layout(vec![op], inputs))
         } else {
-            Layout::new(Array(Box::new(ArrayType::new(Layout::default(), Some(self.aggregates.len() as i32)))))
+            Ok(Layout::new(Array(Box::new(ArrayType::new(Layout::default(), Some(self.aggregates.len() as i32))))))
         }
     }
 }

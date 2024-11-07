@@ -1,5 +1,6 @@
 use crate::algebra::{BoxedIterator, ValueIterator};
 use crate::analyse::{InputDerivable, OutputDerivationStrategy};
+use crate::language::Language;
 use crate::processing::option::Configurable;
 use crate::processing::transform::{Transform, Transformer};
 use crate::processing::{Layout, Train};
@@ -15,7 +16,8 @@ use tokio::runtime::Runtime;
 pub struct SqliteTransformer {
     id: i64,
     pub query: DynamicQuery,
-    pub connector: SqliteConnector
+    pub connector: SqliteConnector,
+    output_derivation_strategy: OutputDerivationStrategy
 }
 
 impl SqliteTransformer {
@@ -23,7 +25,8 @@ impl SqliteTransformer {
         let id = GLOBAL_ID.new_id();
         let connector = SqliteConnector::new(&path);
         let query = DynamicQuery::build_dynamic_query(query);
-        SqliteTransformer { id, connector, query }
+        let output_derivation_strategy = OutputDerivationStrategy::query_based(query.get_query(), Language::Sql);
+        SqliteTransformer { id, connector, query, output_derivation_strategy }
     }
 }
 

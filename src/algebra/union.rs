@@ -18,13 +18,14 @@ impl Union {
 }
 
 impl InputDerivable for Union {
-    fn derive_input_layout(&self) -> Layout {
-        self.inputs.iter().map(|x| x.derive_input_layout()).fold(Layout::default(), |a, b| a.merge(&b).unwrap())
+    fn derive_input_layout(&self) -> Result<Layout, String> {
+        let input = self.inputs.iter().map(|x| x.derive_input_layout()).collect::<Result<Vec<_>, _>>()?;
+        Ok(input.into_iter().fold(Layout::default(), |a, b| a.merge(&b).unwrap()))
     }
 }
 
 impl OutputDerivable for Union {
-    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {
+    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Result<Layout, String> {
         self.inputs.first().unwrap().derive_output_layout(inputs)
     }
 }

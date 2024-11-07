@@ -1,5 +1,6 @@
 use crate::algebra::{BoxedIterator, ValueIterator};
 use crate::analyse::{InputDerivable, OutputDerivationStrategy};
+use crate::language::Language;
 use crate::processing::option::Configurable;
 use crate::processing::transform::{Transform, Transformer};
 use crate::processing::{Layout, Train};
@@ -15,13 +16,15 @@ use std::collections::HashMap;
 pub struct PostgresTransformer {
     pub(crate) connector: PostgresConnection,
     pub(crate) query: DynamicQuery,
+    output_derivation_strategy: OutputDerivationStrategy
 }
 
 impl PostgresTransformer {
     pub fn new(url: String, port: u16, db: String, query: String) -> PostgresTransformer {
         let query = DynamicQuery::build_dynamic_query(query.clone());
         let connector = PostgresConnection::new(url, port, db);
-        PostgresTransformer { connector, query }
+        let output_derivation_strategy = OutputDerivationStrategy::query_based(query.get_query(), Language::Sql);
+        PostgresTransformer { connector, query, output_derivation_strategy }
     }
 }
 

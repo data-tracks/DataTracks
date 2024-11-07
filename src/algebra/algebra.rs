@@ -31,7 +31,7 @@ pub enum AlgebraType {
 }
 
 impl InputDerivable for AlgebraType {
-    fn derive_input_layout(&self) -> Layout {
+    fn derive_input_layout(&self) -> Result<Layout, String> {
         match self {
             AlgebraType::Scan(s) => s.derive_input_layout(),
             AlgebraType::Project(p) => p.derive_input_layout(),
@@ -46,7 +46,7 @@ impl InputDerivable for AlgebraType {
 }
 
 impl OutputDerivable for AlgebraType {
-    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {
+    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Result<Layout, String> {
         match self {
             AlgebraType::Scan(s) => s.derive_output_layout(inputs),
             AlgebraType::Project(p) => p.derive_output_layout(inputs),
