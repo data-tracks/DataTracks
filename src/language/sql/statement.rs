@@ -1,4 +1,6 @@
-use crate::algebra::Op;
+use log::warn;
+use rumqttc::matches;
+use crate::algebra::{Op, TupleOp};
 use crate::language::statement::Statement;
 use crate::value::Value;
 
@@ -36,6 +38,9 @@ impl SqlStatement {
             SqlStatement::Value(v) => {
                 Some(v.value.clone())
             }
+            SqlStatement::Identifier(i) => {
+                Some(Value::text(&i.names.join(".")))
+            }
             _ => None,
         }
     }
@@ -66,6 +71,7 @@ pub struct SqlIdentifier {
 
 impl SqlIdentifier {
     pub fn new(names: Vec<String>) -> Self {
+        warn!("tst{:?}", names);
         SqlIdentifier { names }
     }
 }
@@ -110,10 +116,17 @@ impl SqlOperator {
 impl Statement for SqlOperator {
     fn dump(&self, quote: &str) -> String {
 
+        // special cases
         if self.is_call {
             let op = self.operator.dump(true);
             return format!("{}({})", op, self.operands.iter().map(|o| o.dump(quote)).collect::<Vec<String>>().join(", "))
+        }else if matches!(self.operator, Op::Tuple(TupleOp::Doc)){
+            let operators = self.operands.iter().map(|o|o.dump(quote)).collect::<Vec<String>>().join(", ");
+            return format!("{{{}}}", operators)
+        }else if matches!(self.operator, Op::Tuple(TupleOp::KeyValue(_))){
+            return format!("{}:{}", self.operands.first().unwrap().dump(quote), self.operands.get(1).unwrap().dump(quote))
         }
+
         let op = self.operator.dump(false);
         match self.operands.len() {
             1 => {

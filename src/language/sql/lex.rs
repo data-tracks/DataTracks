@@ -8,6 +8,7 @@ use crate::language::sql::lex::Token::{As, BracketClose, Comma, From, GroupBy, I
 use crate::language::sql::statement::{SqlAlias, SqlIdentifier, SqlList, SqlOperator, SqlSelect, SqlStatement, SqlSymbol, SqlValue, SqlVariable};
 use crate::value;
 use logos::{Lexer, Logos};
+use tracing::warn;
 
 #[derive(Logos, Debug, PartialEq, Clone)]
 #[logos(skip r"[ \t\n\f]+")] // Ignore this regex pattern between tokens
@@ -84,7 +85,7 @@ pub(crate) enum Token {
     Divide,
     #[token("COUNT")]
     Count,
-    #[regex(r#"["]?[a-zA-Z_$][a-zA-Z_$0-9.]*["]?"#, | lex | lex.slice().to_owned())]
+    #[regex(r#"["]?[a-zA-Z_$][a-zA-Z_$0-9.]*["]?"#, | lex | lex.slice().trim_matches('"').to_owned())]
     Identifier(String),
 }
 
@@ -172,7 +173,8 @@ fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> Result<Sql
 
         match tok {
             Identifier(i) => {
-                expressions.push(SqlStatement::Identifier(SqlIdentifier::new(i.split('.').map(|s| s.to_string()).collect::<Vec<String>>())))
+                warn!("key:{}",i);
+                expressions.push(SqlStatement::Identifier(SqlIdentifier::new(i.split('.').map(|s| s.to_string()).collect::<Vec<_>>())))
             }
             t if t == Star && expressions.is_empty() => {
                 expressions.push(SqlStatement::Symbol(SqlSymbol::new("*")))
@@ -278,7 +280,7 @@ fn parse_doc(lexer: &mut BufferedLexer) -> Result<SqlStatement, String> {
         let value = parse_expression(lexer, &vec![Token::CuBracketClose, Comma])?;
 
         let name = if let Some(name) = key.as_literal() {
-            name.as_text().map(|t| Some(t.0)).unwrap_or(None)
+            name.as_text().map(|t| Some(t.0)).unwrap_or_default()
         } else {
             None
         };
@@ -395,6 +397,18 @@ mod test {
     #[test]
     fn test_star() {
         let query = &select("*", "$0", None, None);
+        test_query_diff(query, query);
+    }
+
+    #[test]
+    fn test_table() {
+        let query = &select("name", "table", None, None);
+        test_query_diff(query, query);
+    }
+
+    #[test]
+    fn test_dict() {
+        let query = "SELECT {\"name\":\"name\", \"id\":1} FROM \"table\"";
         test_query_diff(query, query);
     }
 

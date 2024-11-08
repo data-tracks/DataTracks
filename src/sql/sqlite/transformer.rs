@@ -132,10 +132,7 @@ impl ValueIterator for SqliteIterator {
 
 #[cfg(test)]
 mod tests {
-    use crate::analyse::OutputDerivable;
-    use crate::processing::{Layout, Plan};
-    use crate::sql::SqliteTransformer;
-    use std::collections::HashMap;
+    use crate::processing::Plan;
 
     const PLAN: &str = "\
             0--1{sql|SELECT \"id\", \"name\" FROM $0, $lite($0.id)}\n\
@@ -155,17 +152,4 @@ mod tests {
         plan.operate().unwrap()
     }
 
-    #[test]
-    fn test_simple_layout_single() {
-        let transformer = SqliteTransformer::new("SELECT \"id\" FROM \"company\" WHERE \"name\" = $".to_string(), "memory:".to_string());
-        let output = transformer.output_derivation_strategy.derive_output_layout(HashMap::new()).unwrap();
-        assert_eq!(Layout::default(), output);
-    }
-
-    #[test]
-    fn test_simple_layout_array() {
-        let transformer = SqliteTransformer::new("SELECT \"id\", \"name\" FROM \"company\" WHERE \"name\" = $".to_string(), "memory:".to_string());
-        let output = transformer.output_derivation_strategy.derive_output_layout(HashMap::new()).unwrap();
-        assert_eq!(Layout::array(Some(2)), output);
-    }
 }

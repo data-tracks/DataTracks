@@ -241,8 +241,8 @@ impl TupleOp {
     pub(crate) fn derive_output_layout(&self, operands: Vec<Layout>, inputs: HashMap<String, &Layout>) -> Layout {
         match self {
             Plus | Minus | Multiplication | Division => {
-                let left = operands.first().cloned().unwrap_or(Layout::default());
-                let _right = operands.get(1).cloned().unwrap_or(Layout::default());
+                let left = operands.first().cloned().unwrap_or_default();
+                let _right = operands.get(1).cloned().unwrap_or_default();
                 left
             }
             Combine => {
@@ -252,8 +252,8 @@ impl TupleOp {
                 layout
             }
             TupleOp::KeyValue(name) => {
-                let _key = operands.first().cloned().unwrap_or(Layout::default());
-                let value = operands.get(1).cloned().unwrap_or(Layout::default());
+                let _key = operands.first().cloned().unwrap_or_default();
+                let value = operands.get(1).cloned().unwrap_or_default();
                 let map = HashMap::from([(name.clone(), value.clone())]);
                 Layout::new(OutputType::Dict(Box::new(DictType::new(map))))
             }

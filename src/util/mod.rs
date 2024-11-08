@@ -6,6 +6,7 @@ pub use id::GLOBAL_ID;
 pub use logo::logo;
 pub use reader::BufferedReader;
 pub use timeunit::TimeUnit;
+pub use iterator::EmptyIterator;
 
 mod logo;
 mod id;
@@ -14,4 +15,5 @@ mod channel;
 mod reader;
 mod dynamic;
 mod builder;
+mod iterator;
 

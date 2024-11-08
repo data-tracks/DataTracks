@@ -6,6 +6,7 @@ use crate::processing::{Layout, Train};
 use crate::value::Value;
 use std::collections::HashMap;
 use std::vec;
+use crate::util::EmptyIterator;
 
 #[derive(Clone, Debug)]
 pub struct IndexScan {
@@ -135,7 +136,7 @@ impl Clone for TableScan {
 
 impl InputDerivable for TableScan {
     fn derive_input_layout(&self) -> Option<Layout> {
-        todo!()
+        None
     }
 }
 
@@ -149,31 +150,7 @@ impl Algebra for TableScan {
     type Iterator = EmptyIterator;
 
     fn derive_iterator(&mut self) -> Self::Iterator {
-        panic!()
-    }
-}
-
-pub struct EmptyIterator {}
-
-impl Iterator for EmptyIterator {
-    type Item = Value;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        todo!()
-    }
-}
-
-impl ValueIterator for EmptyIterator {
-    fn dynamically_load(&mut self, trains: Vec<Train>) {
-        todo!()
-    }
-
-    fn clone(&self) -> BoxedIterator {
-        Box::new(EmptyIterator {})
-    }
-
-    fn enrich(&mut self, transforms: HashMap<String, Transform>) -> Option<BoxedIterator> {
-        todo!()
+        EmptyIterator{}
     }
 }
 

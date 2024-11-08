@@ -21,7 +21,6 @@ fn handle_select(query: SqlSelect) -> Result<AlgebraType, String> {
     let mut filters: Vec<Operator> = query.wheres.into_iter().map(|w| handle_field(w)).collect::<Result<Vec<_>,_>>()?;
     let mut groups: Vec<Operator> = query.groups.into_iter().map(|g| handle_field(g)).collect::<Result<Vec<_>,_>>()?;
 
-
     let node = {
         if sources.is_empty() {
             Dual(algebra::Dual::new())
@@ -125,7 +124,6 @@ fn handle_field(column: SqlStatement) -> Result<Operator, String> {
             let mut names = i.names.clone();
             let mut name = names.remove(0);
 
-
             let mut op = if name.starts_with('$') && name.len() > 1 {
                 name.remove(0);
                 let num = name.parse().unwrap();
@@ -133,7 +131,6 @@ fn handle_field(column: SqlStatement) -> Result<Operator, String> {
             } else {
                 Operator::name(&name, vec![])
             };
-
 
             for name in names {
                 if let Ok(num) = name.parse() {
@@ -143,7 +140,6 @@ fn handle_field(column: SqlStatement) -> Result<Operator, String> {
 
                 op = Operator::name(&name, vec![op]);
             }
-
 
             Ok(op)
         }
@@ -173,6 +169,5 @@ fn handle_table(identifier: SqlIdentifier) -> Result<AlgebraType, String> {
     } else {
         Ok(scan)
     }
-
 
 }

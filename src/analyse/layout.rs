@@ -96,3 +96,43 @@ impl OutputDerivable for CombinedStrategy {
         Some(self.strategies.iter().fold(Layout::default(), |a, b| a.merge(&b.derive_output_layout(inputs.clone()).unwrap())))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::analyse::{OutputDerivable, OutputDerivationStrategy};
+    use crate::language::Language;
+    use crate::processing::Layout;
+    use std::collections::HashMap;
+    use crate::processing::transform::build_algebra;
+
+    #[test]
+    fn test_simple_layout_single() {
+        let strategy = OutputDerivationStrategy::query_based("SELECT \"id\" FROM \"company\" WHERE \"name\" = $".to_string(), Language::Sql).unwrap();
+        let output = strategy.derive_output_layout(HashMap::new()).unwrap();
+        assert_eq!(Layout::default(), output);
+    }
+
+    #[test]
+    fn test_simple_layout_array() {
+        let strategy = OutputDerivationStrategy::query_based("SELECT \"id\", \"name\" FROM \"company\" WHERE \"name\" = $".to_string(), Language::Sql).unwrap();
+        let output = strategy.derive_output_layout(HashMap::new()).unwrap();
+        assert_eq!(Layout::array(Some(2)), output);
+        assert_ne!(Layout::default(), output);
+    }
+
+    #[test]
+    fn test_simple_layout_dic_alg() {
+        let node = build_algebra(&Language::Sql, &"SELECT {\"id\":\"id\", \"name\":\"name\"} FROM \"company\"".to_string()).unwrap();
+        let output = node.derive_output_layout(HashMap::new()).unwrap();
+        assert_eq!(Layout::dict(vec!["id".to_string(), "name".to_string()]), output);
+        assert_ne!(Layout::default(), output);
+    }
+
+    #[test]
+    fn test_simple_layout_dic() {
+        let strategy = OutputDerivationStrategy::query_based("SELECT {'id':\"id\", 'name':\"name\"} FROM \"company\" WHERE \"name\" = $".to_string(), Language::Sql).unwrap();
+        let output = strategy.derive_output_layout(HashMap::new()).unwrap();
+        assert_eq!(Layout::dict(vec!["id".to_string(), "name".to_string()]), output);
+        assert_ne!(Layout::default(), output);
+    }
+}
