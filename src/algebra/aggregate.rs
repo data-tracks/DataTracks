@@ -51,7 +51,7 @@ impl OutputDerivable for Aggregate {
             let op = self.aggregates[0].1.clone().derive_output_layout(HashMap::new())?;
             Some(self.aggregates[0].0.derive_output_layout(vec![op], inputs))
         } else {
-            Some(Layout::new(Array(Box::new(ArrayType::new(Layout::default(), Some(self.aggregates.len() as i32))))))
+            Some(Layout::from(Array(Box::new(ArrayType::new(Layout::default(), Some(self.aggregates.len() as i32))))))
         }
     }
 }

@@ -101,9 +101,9 @@ impl OutputDerivable for CombinedStrategy {
 mod tests {
     use crate::analyse::{OutputDerivable, OutputDerivationStrategy};
     use crate::language::Language;
+    use crate::processing::transform::build_algebra;
     use crate::processing::Layout;
     use std::collections::HashMap;
-    use crate::processing::transform::build_algebra;
 
     #[test]
     fn test_simple_layout_single() {
@@ -116,7 +116,7 @@ mod tests {
     fn test_simple_layout_array() {
         let strategy = OutputDerivationStrategy::query_based("SELECT \"id\", \"name\" FROM \"company\" WHERE \"name\" = $".to_string(), Language::Sql).unwrap();
         let output = strategy.derive_output_layout(HashMap::new()).unwrap();
-        assert_eq!(Layout::array(Some(2)), output);
+        assert_eq!(Layout::tuple(vec![Some("id".to_string()), Some("name".to_string())]), output);
         assert_ne!(Layout::default(), output);
     }
 

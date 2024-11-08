@@ -1,8 +1,7 @@
-use log::warn;
-use rumqttc::matches;
 use crate::algebra::{Op, TupleOp};
 use crate::language::statement::Statement;
 use crate::value::Value;
+use log::warn;
 
 pub trait Sql: Statement {}
 

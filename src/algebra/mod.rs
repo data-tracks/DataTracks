@@ -17,8 +17,6 @@ pub use project::Project;
 pub use scan::IndexScan;
 pub use scan::TableScan;
 pub use variable::VariableScan;
-pub use operator::TupleOp::Doc;
-pub use operator::TupleOp::KeyValue;
 
 mod project;
 mod algebra;

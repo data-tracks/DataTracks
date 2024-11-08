@@ -1,13 +1,16 @@
 use crate::processing::layout::OutputType::{Any, Array, Boolean, Dict, Float, Integer, Text};
 use crate::processing::plan::PlanStage;
+use crate::processing::OutputType::Tuple;
 use crate::processing::Train;
 use crate::util::BufferedReader;
 use crate::value;
 use crate::value::{ValType, Value};
 use std::cmp::min;
 use std::collections::HashMap;
-use std::hash::{Hash, Hasher};
+use std::hash::Hash;
+use std::iter::zip;
 use tracing::warn;
+use OutputType::{And, Or};
 
 const ARRAY_OPEN: char = '[';
 const ARRAY_CLOSE: char = ']';
@@ -17,6 +20,7 @@ const DICT_CLOSE: char = '}';
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
 pub struct Layout {
+    pub name: Option<String>,
     pub explicit: bool,
     pub nullable: bool,
     pub optional: bool,
@@ -27,6 +31,7 @@ pub struct Layout {
 impl Default for Layout {
     fn default() -> Self {
         Layout {
+            name: None,
             explicit: false,
             nullable: false,
             optional: false,
@@ -36,10 +41,6 @@ impl Default for Layout {
 }
 
 impl Layout {
-    pub fn new(type_: OutputType) -> Layout {
-        Layout { type_, ..Default::default() }
-    }
-
     pub fn fits_train(&self, train: &Train) -> bool {
         train.values.as_ref().map_or(false, |v| {
             v.iter().all(|value| self.fits(value))
@@ -66,9 +67,12 @@ impl Layout {
 
         match (&self.type_, &other.type_) {
             (Dict(this), Dict(other)) => {
-                let mut dict = HashMap::new();
-                this.fields.iter().for_each(|(k, v)| { dict.insert(k.clone(), v.clone()); });
-                other.fields.iter().for_each(|(k, v)| { dict.insert(k.clone(), v.clone()); });
+                let mut dict = vec![];
+
+                this.fields.iter().for_each(|f| {
+                    dict.push(f.clone())
+                });
+                other.fields.iter().filter(|f| f.name.as_ref().map_or(true, |name| this.contains_key(name))).for_each(|f| { dict.push(f.clone()) });
                 layout.type_ = Dict(Box::new(DictType::new(dict)))
             }
             (Array(this), Array(other)) => {
@@ -110,9 +114,9 @@ impl Layout {
 
     pub fn dict(keys: Vec<String>) -> Layout {
         let mut layout = Layout::default();
-        let mut dict = HashMap::new();
-        keys.iter().for_each(|v| {
-            dict.insert(Some(v.clone()), Layout::default());
+        let mut dict = Vec::new();
+        keys.into_iter().for_each(|v| {
+            dict.push(Layout::from(v.as_str()));
         });
         layout.type_ = Dict(Box::new(DictType::new(dict)));
         layout
@@ -122,10 +126,42 @@ impl Layout {
         Layout { type_: Array(Box::new(ArrayType::new(Layout::default(), index))), ..Default::default() }
     }
 
+    pub fn tuple(names: Vec<Option<String>>) -> Layout {
+        Layout { type_: Tuple(Box::new(TupleType::new(names.into_iter().map(|n| (n, Layout::default())).collect()))), ..Default::default() }
+    }
+
     pub(crate) fn fits(&self, value: &Value) -> bool {
         self.type_.fits(value)
     }
 }
+
+impl From<OutputType> for Layout {
+    fn from(type_: OutputType) -> Self {
+        Layout { type_, ..Default::default() }
+    }
+}
+
+impl From<(&str, Layout)> for Layout {
+    fn from((name, mut type_): (&str, Layout)) -> Self {
+        type_.name = Some(name.to_string());
+        type_
+    }
+}
+
+impl From<&str> for Layout {
+    fn from(name: &str) -> Self {
+        let mut layout = Layout::default();
+        layout.name = Some(name.to_string());
+        layout
+    }
+}
+
+impl From<(&str, OutputType)> for Layout {
+    fn from((name, type_): (&str, OutputType)) -> Self {
+        Layout { name: Some(name.to_string()), type_, ..Default::default() }
+    }
+}
+
 
 fn parse(reader: &mut BufferedReader) -> Layout {
     reader.consume_spaces();
@@ -181,7 +217,7 @@ fn parse_dict_fields(reader: &mut BufferedReader) -> DictType {
 
 #[derive(Default)]
 pub struct DictBuilder {
-    fields: HashMap<Option<String>, Layout>,
+    fields: Vec<Layout>,
     key: String,
 }
 
@@ -190,12 +226,13 @@ impl DictBuilder {
         self.key.push(char)
     }
 
-    pub fn push_value(&mut self, layout: Layout) {
-        self.fields.insert(Some(self.key.clone()), layout);
+    pub fn push_value(&mut self, mut layout: Layout) {
+        layout.name = Some(self.key.clone());
+        self.fields.push(layout);
         self.key.clear()
     }
 
-    pub fn build_fields(&mut self) -> HashMap<Option<String>, Layout> {
+    pub fn build_fields(&mut self) -> Vec<Layout> {
         let fields = self.fields.clone();
         self.fields.clear();
         fields
@@ -286,6 +323,7 @@ fn parse_field(type_: OutputType, reader: &mut BufferedReader) -> (Layout, Optio
     reader.consume_if_next(PlanStage::LAYOUT_CLOSE);
 
     (Layout {
+        name: None,
         explicit: true,
         nullable,
         optional,
@@ -320,7 +358,8 @@ pub enum OutputType {
     Text,
     Boolean,
     Any,
-    Array(Box<ArrayType>),
+    Array(Box<ArrayType>), // variable length same type
+    Tuple(Box<TupleType>), // fixed length different type
     Dict(Box<DictType>),
     And(Vec<OutputType>),
     Or(Vec<OutputType>),
@@ -355,14 +394,12 @@ impl OutputType {
 
     pub(crate) fn accepts(&self, other: &OutputType) -> bool {
         match self {
-            Integer | Float | Text | Boolean => {
-                match other {
-                    Integer | Float | Text | Boolean => true,
-                    Any | Array(_) | Dict(_) => false,
-                    OutputType::And(a) => a.iter().all(|v| self.accepts(v)),
-                    OutputType::Or(o) => o.iter().any(|v| self.accepts(v))
-                }
-            }
+            Integer | Float | Text | Boolean => match other {
+                Integer | Float | Text | Boolean => true,
+                Any | Array(_) | Dict(_) | Tuple(_) => false,
+                And(a) => a.iter().all(|v| self.accepts(v)),
+                Or(o) => o.iter().any(|v| self.accepts(v)),
+            },
             Any => {
                 true
             }
@@ -380,36 +417,48 @@ impl OutputType {
                         }
                         a.length.unwrap() <= other.length.unwrap()
                     }
-                    OutputType::And(a) => a.iter().all(|v| self.accepts(v)),
-                    OutputType::Or(o) => o.iter().any(|v| self.accepts(v)),
+                    And(a) => a.iter().all(|v| self.accepts(v)),
+                    Or(o) => o.iter().any(|v| self.accepts(v)),
                     _ => false
                 }
             }
             Dict(d) => {
                 match other {
                     Dict(other) => {
-                        for (key, value) in &d.fields {
-                            if let Some(other) = other.fields.get(key) {
-                                if !value.accepts(other) {
-                                    return false;
-                                }
-                            } else {
-                                return false;
-                            }
-                        }
-                        true
+                        d.fields.iter().all(|field| {
+                            field.name.as_ref().map_or(true, |n| {
+                                other.get(n).map_or(false, |other| {
+                                    field.accepts(other)
+                                })
+                            })
+                        })
                     }
-                    OutputType::And(a) => a.iter().all(|v| self.accepts(v)),
-                    OutputType::Or(o) => o.iter().any(|v| self.accepts(v)),
+                    And(a) => a.iter().all(|v| self.accepts(v)),
+                    Or(o) => o.iter().any(|v| self.accepts(v)),
                     _ => false
                 }
             }
-            OutputType::And(a) => {
+            And(a) => {
                 a.iter().all(|v| v.accepts(other))
             }
-            OutputType::Or(o) => {
+            Or(o) => {
                 o.iter().any(|v| v.accepts(other))
             }
+            Tuple(t) => match other {
+                Tuple(other) => {
+                    if other.fields.len() != t.fields.len() {
+                        return false;
+                    }
+
+                    if !zip(t.fields.iter(), other.fields.iter()).all(|(a, b)| a == b) {
+                        return false;
+                    }
+                    zip(t.names.iter(), other.names.iter()).all(|(a, b)| a == b)
+                }
+                And(a) => a.iter().all(|v| self.accepts(v)),
+                Or(o) => o.iter().any(|v| self.accepts(v)),
+                _ => false
+            },
         }
     }
 
@@ -422,8 +471,9 @@ impl OutputType {
             Any => ValType::Any,
             Array(_) => ValType::Array,
             Dict(_) => ValType::Dict,
-            OutputType::And(a) => a.first().unwrap().value_type(),
-            OutputType::Or(o) => o.first().unwrap().value_type(),
+            Tuple(_) => ValType::Tuple,
+            And(a) => a.first().unwrap().value_type(),
+            Or(o) => o.first().unwrap().value_type(),
         }
     }
 }
@@ -459,9 +509,9 @@ impl From<&Value> for OutputType {
                 Array(Box::new(ArrayType { fields: layout, length: None }))
             }
             Value::Dict(d) => {
-                let mut fields = HashMap::new();
+                let mut fields = Vec::new();
                 d.iter().for_each(|(k, v)| {
-                    fields.insert(Some(k.clone()), Layout::new(OutputType::from(v)));
+                    fields.push(Layout::from((k.as_str(), OutputType::from(v))));
                 });
                 Dict(Box::new(DictType { fields }))
             }
@@ -489,10 +539,27 @@ impl ArrayType {
     }
 }
 
+#[derive(PartialEq, Eq, Debug, Hash, Clone)]
+pub struct TupleType {
+    pub names: Vec<Option<String>>,
+    pub fields: Vec<Layout>,
+}
 
-#[derive(Debug, Clone, Default)]
+impl TupleType {
+    pub fn new(name_fields: Vec<(Option<String>, Layout)>) -> Self {
+        let (names, fields) = name_fields.into_iter().unzip();
+        Self { names, fields }
+    }
+
+    pub(crate) fn fits(&self, array: &value::Array) -> bool {
+        array.0.len() == self.names.len() && array.0.iter().zip(self.fields.iter()).all(|(element, layout)| layout.fits(element))
+    }
+}
+
+
+#[derive(Debug, Clone, Default, Hash)]
 pub struct DictType {
-    pub fields: HashMap<Option<String>, Layout>, // "name" -> Value // we do not know if name is dynamically assigned or static
+    pub fields: Vec<Layout>, // "name" -> Value // we do not know if name is dynamically assigned or static
 }
 
 impl PartialEq for DictType {
@@ -501,37 +568,38 @@ impl PartialEq for DictType {
     }
 }
 
-impl Hash for DictType {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        for (k, v) in &self.fields {
-            k.hash(state);
-            v.hash(state);
-        }
-    }
-}
-
 impl Eq for DictType {}
 
 impl DictType {
-    pub fn new(fields: HashMap<Option<String>, Layout>) -> Self {
+    pub fn new(fields: Vec<Layout>) -> Self {
         DictType { fields }
     }
 
+    pub fn contains_key(&self, key: &str) -> bool {
+        self.fields.iter().any(|f| f.name.as_ref().map_or(false, |n| n == key))
+    }
+
+    pub fn get(&self, key: &str) -> Option<&Layout> {
+        self.fields.iter().find(|f| f.name.as_ref().map_or(false, |n| n == key))
+    }
+
+    pub fn names(&self) -> Vec<&str> {
+        self.fields.iter().filter_map(|l| l.name.as_ref().map(|n| n.as_str())).collect()
+    }
+
+
     pub(crate) fn fits(&self, dict: &Value) -> bool {
-        for (key, field) in self.fields.iter().by_ref() {
-            if let Some(name) = key {
-                if let Some(value) = dict.as_dict().unwrap().get(name) {
-                    if !field.fits(value) {
-                        return false;
-                    }
-                } else {
-                    return false;
-                }
-            } else {
-                return false;
-            }
-        }
-        true
+        let dict = match dict.as_dict() {
+            Ok(dict) => dict,
+            Err(..) => return false
+        };
+
+        self.fields.iter().all(|l| {
+            l.name
+                .as_ref()
+                .map_or(true,
+                        |name| dict.get(name).map_or(false, |v| l.fits(v)))
+        })
     }
 }
 
@@ -616,16 +684,16 @@ mod test {
             let field = Layout::parse(stencil);
             match field.clone().type_ {
                 Dict(d) => {
-                    assert!(d.fields.contains_key(&Some("address".to_string())));
-                    match d.fields.get(&Some("address".to_string())).cloned().unwrap().type_ {
+                    assert!(d.contains_key("address"));
+                    match d.get("address").cloned().unwrap().type_ {
                         Dict(dict) => {
-                            assert_eq!(dict.fields.get(&Some("num".to_string())).unwrap().type_, Integer);
-                            assert_eq!(dict.fields.get(&Some("street".to_string())).unwrap().type_, Text);
+                            assert_eq!(dict.get("num").unwrap().type_, Integer);
+                            assert_eq!(dict.get("street").unwrap().type_, Text);
                         }
                         _ => panic!("Wrong output dict")
                     }
-                    assert!(d.fields.contains_key(&Some("age".to_string())));
-                    assert_eq!(d.fields.get(&Some("age".to_string())).cloned().map(|e| e.type_).unwrap(), Integer);
+                    assert!(d.contains_key("age"));
+                    assert_eq!(d.get("age").cloned().map(|e| e.type_).unwrap(), Integer);
                 }
                 _ => panic!("Wrong output format")
             }
@@ -656,7 +724,7 @@ mod test {
 
         let station_1 = plan.stations.get(&1).unwrap();
         assert_eq!(station_1.derive_input_layout(), Layout::default());
-        assert_eq!(station_1.derive_output_layout(HashMap::new()), Layout::new(Integer));
+        assert_eq!(station_1.derive_output_layout(HashMap::new()), Layout::from(Integer));
     }
 
     #[test]
@@ -666,7 +734,7 @@ mod test {
 
         let station_1 = plan.stations.get(&1).unwrap();
         assert_eq!(station_1.derive_input_layout(), Layout::default());
-        assert_eq!(station_1.derive_output_layout(HashMap::new()), Layout::new(Array(Box::new(ArrayType::new(Layout::new(Text), Some(1))))));
+        assert_eq!(station_1.derive_output_layout(HashMap::new()), Layout::from(Array(Box::new(ArrayType::new(Layout::from(Text), Some(1))))));
     }
 
     #[test]

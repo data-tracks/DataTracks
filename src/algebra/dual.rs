@@ -23,7 +23,7 @@ impl InputDerivable for Dual {
 
 impl OutputDerivable for Dual {
     fn derive_output_layout(&self, _inputs: HashMap<String, &Layout>) -> Option<Layout> {
-        Some(Layout::new(OutputType::Integer))
+        Some(Layout::from(OutputType::Integer))
     }
 }
 

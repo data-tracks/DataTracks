@@ -7,7 +7,8 @@ pub enum ValType {
     Array,
     Dict,
     Null,
-    Any
+    Any,
+    Tuple
 }
 
 impl ValType {
