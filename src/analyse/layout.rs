@@ -109,7 +109,7 @@ mod tests {
     fn test_simple_layout_single() {
         let strategy = OutputDerivationStrategy::query_based("SELECT \"id\" FROM \"company\" WHERE \"name\" = $".to_string(), Language::Sql).unwrap();
         let output = strategy.derive_output_layout(HashMap::new()).unwrap();
-        assert_eq!(Layout::default(), output);
+        assert_eq!(Layout::from("id"), output);
     }
 
     #[test]

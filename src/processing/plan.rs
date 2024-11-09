@@ -489,9 +489,12 @@ impl Plan {
                         inputs.insert(num.to_string(), layouts.get(&num).unwrap());
                     });
 
-                    if !station.derive_input_layout().accepts(&layout) {
+                    let current = station.derive_input_layout();
+
+                    if !current.accepts(&layout) {
                         return Err(format!("On line {} station {} does not accept the previous input", line, stop_num));
                     }
+
                     let current = station.derive_output_layout(inputs);
 
                     layouts.insert(*stop_num, current.clone());

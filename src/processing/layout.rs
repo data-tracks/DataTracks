@@ -64,6 +64,7 @@ impl Layout {
 
         layout.nullable = other.nullable || self.nullable;
 
+        layout.name = self.name.as_ref().or(other.name.as_ref()).cloned();
 
         match (&self.type_, &other.type_) {
             (Dict(this), Dict(other)) => {
@@ -72,7 +73,7 @@ impl Layout {
                 this.fields.iter().for_each(|f| {
                     dict.push(f.clone())
                 });
-                other.fields.iter().filter(|f| f.name.as_ref().map_or(true, |name| this.contains_key(name))).for_each(|f| { dict.push(f.clone()) });
+                other.fields.iter().filter(|f| f.name.as_ref().map_or(true, |name| !this.contains_key(name))).for_each(|f| { dict.push(f.clone()) });
                 layout.type_ = Dict(Box::new(DictType::new(dict)))
             }
             (Array(this), Array(other)) => {
@@ -127,7 +128,7 @@ impl Layout {
     }
 
     pub fn tuple(names: Vec<Option<String>>) -> Layout {
-        Layout { type_: Tuple(Box::new(TupleType::new(names.into_iter().map(|n| (n, Layout::default())).collect()))), ..Default::default() }
+        Layout { type_: Tuple(Box::new(TupleType::from(names.into_iter().map(|n| n.map_or(Layout::default(), |n| Layout::from(n.as_str()))).collect::<Vec<_>>()))), ..Default::default() }
     }
 
     pub(crate) fn fits(&self, value: &Value) -> bool {
@@ -417,6 +418,15 @@ impl OutputType {
                         }
                         a.length.unwrap() <= other.length.unwrap()
                     }
+                    Tuple(t) => {
+                        if let Some(length) = a.length {
+                            if length > t.fields.len() as i32 {
+                                return false;
+                            }
+                        }
+
+                        t.fields.iter().all(|t| a.fields.accepts(t))
+                    },
                     And(a) => a.iter().all(|v| self.accepts(v)),
                     Or(o) => o.iter().any(|v| self.accepts(v)),
                     _ => false
@@ -455,6 +465,17 @@ impl OutputType {
                     }
                     zip(t.names.iter(), other.names.iter()).all(|(a, b)| a == b)
                 }
+                Array(other) => {
+                    if let Some(length) = other.length {
+                        if length < t.fields.len() as i32 {
+                            // incoming array is shorter than current tuple
+                            return false;
+                        }
+                    } else {
+                        return false;
+                    }
+                    t.fields.iter().all(|f| f.accepts(&other.fields))
+                },
                 And(a) => a.iter().all(|v| self.accepts(v)),
                 Or(o) => o.iter().any(|v| self.accepts(v)),
                 _ => false
@@ -556,6 +577,13 @@ impl TupleType {
     }
 }
 
+impl From<Vec<Layout>> for TupleType {
+    fn from(value: Vec<Layout>) -> Self {
+        let (names, fields) = value.into_iter().map(|l| (l.name.clone(), l)).unzip();
+        TupleType { names, fields }
+    }
+}
+
 
 #[derive(Debug, Clone, Default, Hash)]
 pub struct DictType {
@@ -613,8 +641,10 @@ pub struct ShadowKey {
 mod test {
     use crate::processing::layout::Layout;
     use crate::processing::layout::OutputType::{Array, Dict, Float, Integer, Text};
-    use crate::processing::{ArrayType, Plan};
+    use crate::processing::OutputType::Tuple;
+    use crate::processing::{Plan, TupleType};
     use std::collections::HashMap;
+    use std::vec;
 
     #[test]
     fn scalar() {
@@ -734,7 +764,7 @@ mod test {
 
         let station_1 = plan.stations.get(&1).unwrap();
         assert_eq!(station_1.derive_input_layout(), Layout::default());
-        assert_eq!(station_1.derive_output_layout(HashMap::new()), Layout::from(Array(Box::new(ArrayType::new(Layout::from(Text), Some(1))))));
+        assert_eq!(station_1.derive_output_layout(HashMap::new()), Layout::from(Tuple(Box::new(TupleType::from(vec![Layout::from(Text)])))));
     }
 
     #[test]
@@ -757,6 +787,11 @@ mod test {
     fn test_two_stations_dict_match() {
         let stencil = "1{sql|SELECT {'key1': 38, 'key2': 'test'}}--2{sql|SELECT [$1.key1, $1.key2]  FROM $1}";
         let plan = Plan::parse(stencil).unwrap();
+
+        match plan.layouts_match() {
+            Ok(_) => {}
+            Err(e) => println!("{}", e)
+        }
 
         assert!(plan.layouts_match().is_ok());
     }

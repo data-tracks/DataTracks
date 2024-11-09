@@ -76,8 +76,8 @@ impl SqlIdentifier {
 }
 
 impl Statement for SqlIdentifier {
-    fn dump(&self, _quote: &str) -> String {
-        self.names.join(".").to_string()
+    fn dump(&self, quote: &str) -> String {
+        self.names.iter().map(|n| format!("{}{}{}", quote, n, quote)).collect::<Vec<_>>().join(".").to_string()
     }
 }
 

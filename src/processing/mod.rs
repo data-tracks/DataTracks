@@ -1,9 +1,10 @@
 pub use crate::http::http::HttpSource;
 pub use debug::DebugDestination;
+pub use layout::ArrayType;
 pub use layout::DictType;
 pub use layout::Layout;
-pub use layout::ArrayType;
 pub use layout::OutputType;
+pub use layout::TupleType;
 pub use plan::Plan;
 pub use train::Train;
 pub use wagon::Wagon;

@@ -6,7 +6,7 @@ use crate::algebra::operator::TupleOp::{Division, Equal, Minus, Multiplication, 
 use crate::algebra::BoxedValueHandler;
 use crate::algebra::Op::{Agg, Tuple};
 use crate::algebra::TupleOp::{And, Combine, Index, Input, Or};
-use crate::processing::{ArrayType, DictType, Layout, OutputType};
+use crate::processing::{ArrayType, DictType, Layout, OutputType, TupleType};
 use crate::value::Value;
 use crate::value::Value::{Array, Bool, Dict, Float, Int, Null, Text, Wagon};
 use std::collections::{BTreeMap, HashMap};
@@ -247,14 +247,14 @@ impl TupleOp {
             }
             Combine => {
                 let mut layout = Layout::default();
-                let fields = operands.iter().fold(Layout::default(), |a, b| a.merge(b));
-                layout.type_ = OutputType::Array(Box::new(ArrayType::new(fields, Some(operands.len() as i32))));
+                layout.type_ = OutputType::Tuple(Box::new(TupleType::from(operands)));
                 layout
             }
-            TupleOp::KeyValue(_) => {
+            TupleOp::KeyValue(n) => {
                 let _key = operands.first().cloned().unwrap_or_default();
-                let value = operands.get(1).cloned().unwrap_or_default();
-                let fields = vec![value.clone()];
+                let mut value = operands.get(1).cloned().unwrap_or_default();
+                value.name = n.clone();
+                let fields = vec![value];
                 Layout::from(OutputType::Dict(Box::new(DictType::new(fields))))
             }
             Not | Equal | And | Or => {
@@ -272,7 +272,7 @@ impl TupleOp {
                     OutputType::Dict(d) => {
                         d.get(&n.name).cloned().unwrap_or_default()
                     }
-                    _ => Layout::default()
+                    _ => Layout::from(n.name.clone().as_str()),
                 }
             }
             Index(i) => {
@@ -757,16 +757,17 @@ mod tests {
     #[test]
     fn test_layout_name() {
         let op = Name(NameOp::new(String::from("test")));
-        let mut layout = Layout::default();
+
         let mut map = Vec::new();
         map.push(Layout::from("test"));
+        let mut layout = Layout::default();
         layout.type_ = Dict(Box::new(DictType::new(map)));
-
         assert_eq!(op.derive_input_layout(vec![]), layout);
+
         let mut map = Vec::new();
         map.push(Layout::from(("test", OutputType::Float)));
         let dict = Layout::from(Dict(Box::new(DictType::new(map))));
-        assert_eq!(op.derive_output_layout(vec![dict], HashMap::new()), Layout::from(OutputType::Float));
+        assert_eq!(op.derive_output_layout(vec![dict], HashMap::new()), Layout::from(("test", OutputType::Float)));
     }
 
     #[test]
@@ -790,7 +791,7 @@ mod tests {
     }
 
     #[test]
-    fn test_layout_or() {
+    fn test_layout_tuple() {
         let op = Operator::combine(vec![Operator::name("key1", vec![Operator::input()]), Operator::name("key2", vec![Operator::input()])]);
 
         let mut layout = Layout::default();
@@ -801,7 +802,7 @@ mod tests {
 
         assert_eq!(op.derive_input_layout().unwrap(), layout);
 
-        let array = Layout::from(Array(Box::new(ArrayType::new(Layout::default(), Some(2)))));
+        let array = Layout::tuple(vec![Some("key1".to_string()), Some("key2".to_string())]);
         assert_eq!(op.derive_output_layout(HashMap::new()).unwrap(), array);
 
     }

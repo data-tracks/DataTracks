@@ -403,12 +403,13 @@ mod test {
     #[test]
     fn test_table() {
         let query = &select("name", "table", None, None);
-        test_query_diff(query, query);
+        let query_res = &select(&quote_identifier("name"), "table", None, None);
+        test_query_diff(query, query_res);
     }
 
     #[test]
     fn test_dict() {
-        let query = "SELECT {\"name\":\"name\", \"id\":1} FROM \"table\"";
+        let query = "SELECT {\"name\":\"name\", \"id\":1} FROM table";
         test_query_diff(query, query);
     }
 
