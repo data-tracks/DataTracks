@@ -3,7 +3,9 @@ use crate::processing::option::Configurable;
 use crate::processing::plan::Status::Stopped;
 use crate::processing::source::{parse_source, Source};
 use crate::processing::station::{Command, Station};
-use crate::processing::{transform, Train};
+#[cfg(test)]
+use crate::processing::Train;
+use crate::processing::transform;
 use crate::ui::{ConfigContainer, ConfigModel};
 use crate::util::GLOBAL_ID;
 use core::default::Default;
@@ -491,8 +493,8 @@ impl Plan {
 
                     let current = station.derive_input_layout();
 
-                    if !current.accepts(&layout) {
-                        return Err(format!("On line {} station {} does not accept the previous input", line, stop_num));
+                    if let Err(e) = current.accepts(&layout) {
+                        return Err(format!("On line {} station {} does not accept the previous input due to :{}", line, stop_num, e));
                     }
 
                     let current = station.derive_output_layout(inputs);

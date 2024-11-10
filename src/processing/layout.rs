@@ -47,12 +47,12 @@ impl Layout {
         })
     }
 
-    pub(crate) fn accepts(&self, other: &Layout) -> bool {
+    pub(crate) fn accepts(&self, other: &Layout) -> Result<(), String> {
         if !self.nullable && other.nullable {
-            return false;
+            return Err("Input is nullable, but station is not".to_string());
         }
         if !self.optional && other.optional {
-            return false;
+            return Err("Input is optional, but station is not".to_string());
         }
 
         self.type_.accepts(&other.type_)
@@ -393,94 +393,159 @@ impl OutputType {
         }
     }
 
-    pub(crate) fn accepts(&self, other: &OutputType) -> bool {
+    pub(crate) fn accepts(&self, other: &OutputType) -> Result<(), String> {
         match self {
             Integer | Float | Text | Boolean => match other {
-                Integer | Float | Text | Boolean => true,
-                Any | Array(_) | Dict(_) | Tuple(_) => false,
-                And(a) => a.iter().all(|v| self.accepts(v)),
-                Or(o) => o.iter().any(|v| self.accepts(v)),
+                Integer | Float | Text | Boolean => Ok(()),
+                Any | Array(_) | Dict(_) | Tuple(_) => self.type_mismatch_error(other),
+                And(a) => {
+                    if a.iter().all(|v| self.accepts(v).is_ok()) {
+                        return Ok(())
+                    }
+                    self.type_mismatch_error(other)
+                },
+                Or(o) => {
+                    if o.iter().any(|v| self.accepts(v).is_ok()) {
+                        return Ok(())
+                    }
+                    self.type_mismatch_error(other)
+                },
             },
             Any => {
-                true
+                Ok(())
             }
             Array(a) => {
                 match other {
-                    Array(other) => {
-                        if !a.fields.accepts(&other.fields) {
-                            return false;
+                    Array(o) => {
+                        if let Err(e) = a.fields.accepts(&o.fields) {
+                            return Err(e);
                         }
-                        if a.length.is_some() && other.length.is_none() {
-                            return false;
+                        if a.length.is_some() && o.length.is_none() {
+                            return self.type_mismatch_error(other)
                         }
-                        if a.length.is_none() && other.length.is_none() {
-                            return true;
+                        if a.length.is_none() && o.length.is_none() {
+                            return self.type_mismatch_error(other)
                         }
-                        a.length.unwrap() <= other.length.unwrap()
+                        if a.length.unwrap() <= o.length.unwrap() {
+                            return Err(format!("Type mismatch {:?} with length {} cannot accept {:?} with length {}", a, a.length.unwrap(), o, o.length.unwrap()));
+                        }
+                        Ok(())
                     }
                     Tuple(t) => {
                         if let Some(length) = a.length {
                             if length > t.fields.len() as i32 {
-                                return false;
+                                return Err(format!("Type mismatch {:?} with length {} cannot accept {:?} with length {}", a, length, t, t.fields.len()));
                             }
                         }
 
-                        t.fields.iter().all(|t| a.fields.accepts(t))
+                        if t.fields.iter().all(|t| a.fields.accepts(t).is_ok()) {
+                            return Ok(());
+                        }
+                        self.type_mismatch_error(other)
                     },
-                    And(a) => a.iter().all(|v| self.accepts(v)),
-                    Or(o) => o.iter().any(|v| self.accepts(v)),
-                    _ => false
+                    And(a) => {
+                        if a.iter().all(|v| self.accepts(v).is_ok()) {
+                            return Ok(())
+                        }
+                        self.type_mismatch_error(other)
+                    },
+                    Or(o) => {
+                        if o.iter().any(|v| self.accepts(v).is_ok()) {
+                            return Ok(());
+                        }
+                        self.type_mismatch_error(other)
+                    },
+                    _ => self.type_mismatch_error(other)
                 }
             }
             Dict(d) => {
                 match other {
-                    Dict(other) => {
-                        d.fields.iter().all(|field| {
+                    Dict(o) => {
+                        if d.fields.iter().all(|field| {
                             field.name.as_ref().map_or(true, |n| {
-                                other.get(n).map_or(false, |other| {
-                                    field.accepts(other)
+                                o.get(n).map_or(false, |o| {
+                                    field.accepts(o).is_ok()
                                 })
                             })
-                        })
+                        }) {
+                            return Ok(())
+                        }
+                        self.type_mismatch_error(other)
                     }
-                    And(a) => a.iter().all(|v| self.accepts(v)),
-                    Or(o) => o.iter().any(|v| self.accepts(v)),
-                    _ => false
+                    And(a) => {
+                        if a.iter().all(|v| self.accepts(v).is_ok()) {
+                            return Ok(())
+                        }
+                        self.type_mismatch_error(other)
+                    },
+                    Or(o) => {
+                        if o.iter().any(|v| self.accepts(v).is_ok()) {
+                            return Ok(());
+                        }
+                        self.type_mismatch_error(other)
+                    },
+                    _ => self.type_mismatch_error(other)
                 }
             }
             And(a) => {
-                a.iter().all(|v| v.accepts(other))
+                if a.iter().all(|v| v.accepts(other).is_ok()) {
+                    return Ok(());
+                }
+                self.type_mismatch_error(other)
             }
             Or(o) => {
-                o.iter().any(|v| v.accepts(other))
+                if o.iter().any(|v| v.accepts(other).is_ok()) {
+                    return Ok(());
+                }
+                self.type_mismatch_error(other)
             }
             Tuple(t) => match other {
-                Tuple(other) => {
-                    if other.fields.len() != t.fields.len() {
-                        return false;
+                Tuple(o) => {
+                    if o.fields.len() != t.fields.len() {
+                        return Err(format!("Type {:?} with length {} cannot accept {:?} with {}", t, t.fields.len(), o, o.fields.len()));
                     }
 
-                    if !zip(t.fields.iter(), other.fields.iter()).all(|(a, b)| a == b) {
-                        return false;
+                    if !zip(t.fields.iter(), o.fields.iter()).all(|(a, b)| a.accepts(b).is_ok()) {
+                        return self.type_mismatch_error(other)
                     }
-                    zip(t.names.iter(), other.names.iter()).all(|(a, b)| a == b)
+                    if zip(t.names.iter(), o.names.iter()).all(|(a, b)| a == b) {
+                        return Ok(());
+                    }
+                    self.type_mismatch_error(other)
                 }
-                Array(other) => {
-                    if let Some(length) = other.length {
+                Array(o) => {
+                    if let Some(length) = o.length {
                         if length < t.fields.len() as i32 {
                             // incoming array is shorter than current tuple
-                            return false;
+                            return Err(format!("Type mismatch {:?} cannot accept {:?} as incoming is shorter than this station", t, o));
                         }
                     } else {
-                        return false;
+                        return self.type_mismatch_error(other)
                     }
-                    t.fields.iter().all(|f| f.accepts(&other.fields))
+                    if t.fields.iter().all(|f| f.accepts(&o.fields).is_ok()) {
+                        return Ok(());
+                    }
+                    self.type_mismatch_error(other)
                 },
-                And(a) => a.iter().all(|v| self.accepts(v)),
-                Or(o) => o.iter().any(|v| self.accepts(v)),
-                _ => false
+                And(a) => {
+                    if a.iter().all(|v| self.accepts(v).is_ok()) {
+                        return Ok(());
+                    }
+                    self.type_mismatch_error(other)
+                },
+                Or(o) => {
+                    if o.iter().any(|v| self.accepts(v).is_ok()) {
+                        return Ok(());
+                    }
+                    self.type_mismatch_error(other)
+                },
+                _ => self.type_mismatch_error(other)
             },
         }
+    }
+
+    fn type_mismatch_error(&self, other: &OutputType) -> Result<(), String> {
+        Err(format!("Type mismatch {:?} cannot accept {:?}", self, other))
     }
 
     fn value_type(&self) -> ValType {

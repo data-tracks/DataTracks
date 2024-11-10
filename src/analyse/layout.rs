@@ -19,7 +19,7 @@ pub enum OutputDerivationStrategy {
     QueryBased(QueryBasedStrategy),
     ContentBased,
     UserDefined(Layout),
-    External,
+    External(ExternalStrategy),
     Combined(CombinedStrategy),
     Undefined
 }
@@ -51,7 +51,7 @@ impl OutputDerivable for OutputDerivationStrategy {
             QueryBased(strategy) => strategy.derive_output_layout(inputs),
             ContentBased => todo!(),
             UserDefined(layout) => Some(layout.clone()),
-            External => todo!(),
+            External(e) => e.derive_output_layout(inputs),
             Combined(comb) => comb.derive_output_layout(inputs),
             Undefined => Some(Layout::default())
         }
@@ -94,6 +94,15 @@ impl CombinedStrategy {
 impl OutputDerivable for CombinedStrategy {
     fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Option<Layout> {
         Some(self.strategies.iter().fold(Layout::default(), |a, b| a.merge(&b.derive_output_layout(inputs.clone()).unwrap())))
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ExternalStrategy {}
+
+impl OutputDerivable for ExternalStrategy {
+    fn derive_output_layout(&self, _inputs: HashMap<String, &Layout>) -> Option<Layout> {
+        todo!()
     }
 }
 
