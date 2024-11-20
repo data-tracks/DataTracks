@@ -12,6 +12,7 @@ use serde_json::Map;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
+use crate::optimize::OptimizeStrategy;
 
 pub trait Taker: Send {
     fn take(&mut self, wagons: &mut Vec<Train>) -> Vec<Train>;
@@ -95,11 +96,15 @@ impl Transform {
         }
     }
 
-    pub fn optimize(&self, transforms: HashMap<String, Transform>) -> Box<dyn ValueIterator<Item=Value> + Send> {
+    pub fn optimize(&self, transforms: HashMap<String, Transform>, optimizer: Option<OptimizeStrategy>) -> Box<dyn ValueIterator<Item=Value> + Send> {
         match self {
             Func(f) => ValueIterator::clone(f),
             Lang(f) => {
-                let mut initial = algebra::build_iterator(f.algebra.clone()).unwrap();
+                let optimized = match optimizer {
+                    None => f.algebra.clone(),
+                    Some(o) => o.apply(f.algebra.clone())
+                };
+                let mut initial = algebra::build_iterator(optimized).unwrap();
                 let iter = initial.enrich(transforms);
                 if let Some(iter) = iter {
                     iter

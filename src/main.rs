@@ -20,6 +20,7 @@ mod http;
 mod mqtt;
 mod analyse;
 mod sql;
+mod optimize;
 
 fn main() {
     setup_logging();

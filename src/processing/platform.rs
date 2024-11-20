@@ -115,7 +115,7 @@ impl Platform {
 
 fn optimize(stop: i64, transform: Option<Transform>, mut window: Box<dyn Taker>, sender: Sender, transforms: HashMap<String, Transform>) -> MutWagonsFunc {
     if let Some(transform) = transform {
-        let mut enumerator = transform.optimize(transforms);
+        let mut enumerator = transform.optimize(transforms, None);
         Box::new(move |train| {
             let windowed = window.take(train);
             enumerator.dynamically_load(windowed);

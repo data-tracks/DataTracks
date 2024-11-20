@@ -8,6 +8,7 @@ use crate::algebra::union::Union;
 use crate::algebra::variable::VariableScan;
 use crate::algebra::TableScan;
 use crate::analyse::{InputDerivable, OutputDerivable};
+use crate::optimize::Effort;
 use crate::processing::transform::Transform;
 use crate::processing::{Layout, Train};
 use crate::value::Value;
@@ -30,6 +31,12 @@ pub enum AlgebraType {
     Union(Union),
     Aggregate(Aggregate),
     Variable(VariableScan),
+}
+
+impl AlgebraType {
+    pub(crate) fn calc_effort(&self) -> Effort {
+        todo!()
+    }
 }
 
 impl InputDerivable for AlgebraType {
@@ -80,7 +87,6 @@ impl Algebra for AlgebraType {
             AlgebraType::TableScan(t) => Box::new(t.derive_iterator()),
         }
     }
-
 
 }
 
