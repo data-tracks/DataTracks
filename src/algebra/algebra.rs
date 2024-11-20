@@ -4,6 +4,7 @@ use crate::algebra::filter::Filter;
 use crate::algebra::join::Join;
 use crate::algebra::project::Project;
 use crate::algebra::scan::IndexScan;
+use crate::algebra::set::AlgSet;
 use crate::algebra::union::Union;
 use crate::algebra::variable::VariableScan;
 use crate::algebra::TableScan;
@@ -11,7 +12,9 @@ use crate::analyse::{InputDerivable, OutputDerivable};
 use crate::optimize::Effort;
 use crate::processing::transform::Transform;
 use crate::processing::{Layout, Train};
+use crate::util::Visitor;
 use crate::value::Value;
+use postgres::fallible_iterator::FallibleIterator;
 use std::collections::HashMap;
 
 pub type BoxedIterator = Box<dyn ValueIterator<Item=Value> + Send + 'static>;
@@ -31,6 +34,7 @@ pub enum AlgebraType {
     Union(Union),
     Aggregate(Aggregate),
     Variable(VariableScan),
+    Set(AlgSet)
 }
 
 impl AlgebraType {
@@ -50,7 +54,8 @@ impl InputDerivable for AlgebraType {
             AlgebraType::Aggregate(a) => a.derive_input_layout(),
             AlgebraType::Variable(v) => v.derive_input_layout(),
             AlgebraType::Dual(d) => d.derive_input_layout(),
-            AlgebraType::TableScan(t) => t.derive_input_layout()
+            AlgebraType::TableScan(t) => t.derive_input_layout(),
+            AlgebraType::Set(s) => s.derive_input_layout(),
         }
     }
 }
@@ -67,6 +72,7 @@ impl OutputDerivable for AlgebraType {
             AlgebraType::Variable(v) => v.derive_output_layout(inputs),
             AlgebraType::Dual(d) => d.derive_output_layout(inputs),
             AlgebraType::TableScan(t) => t.derive_output_layout(inputs),
+            AlgebraType::Set(s) => s.initial.derive_output_layout(inputs)
         }
     }
 }
@@ -85,12 +91,13 @@ impl Algebra for AlgebraType {
             AlgebraType::Variable(s) => Box::new(s.derive_iterator()),
             AlgebraType::Dual(d) => Box::new(d.derive_iterator()),
             AlgebraType::TableScan(t) => Box::new(t.derive_iterator()),
+            AlgebraType::Set(s) => Box::new(s.initial.derive_iterator()),
         }
     }
 
 }
 
-pub trait Algebra: Clone + InputDerivable + OutputDerivable {
+pub trait Algebra: Clone + InputDerivable + OutputDerivable + Visitor<Option<AlgebraType>> {
     type Iterator: Iterator<Item=Value> + Send + 'static;
     fn derive_iterator(&mut self) -> Self::Iterator;
 
