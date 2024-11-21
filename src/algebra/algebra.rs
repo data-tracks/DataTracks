@@ -9,7 +9,7 @@ use crate::algebra::union::Union;
 use crate::algebra::variable::VariableScan;
 use crate::algebra::TableScan;
 use crate::analyse::{InputDerivable, OutputDerivable};
-use crate::optimize::Reward;
+use crate::optimize::Cost;
 use crate::processing::transform::Transform;
 use crate::processing::{Layout, Train};
 use crate::value::Value;
@@ -35,9 +35,43 @@ pub enum AlgebraType {
     Set(AlgSet)
 }
 
+
+
 impl AlgebraType {
-    pub(crate) fn calc_reward(&self) -> Reward {
-        todo!()
+    pub(crate) fn calc_cost(&self) -> Cost {
+        match self {
+            AlgebraType::Dual(_) => Cost::new(1),
+            AlgebraType::IndexScan(_) => Cost::new(1),
+            AlgebraType::TableScan(_) => Cost::new(1),
+            AlgebraType::Project(p) => {
+                p.project.calc_cost() * p.input.calc_cost()
+            }
+            AlgebraType::Filter(f) => {
+                f.condition.calc_cost() * f.input.calc_cost()
+            }
+            AlgebraType::Join(j) => {
+                j.left.calc_cost() * j.right.calc_cost()
+            }
+            AlgebraType::Union(u) => {
+                u.inputs.iter().fold(Cost::default(), |a,b| a * b.calc_cost())
+            }
+            AlgebraType::Aggregate(a) => {
+                Cost::new(a.aggregates.len()) * a.input.calc_cost()
+            }
+            AlgebraType::Variable(v) => {
+                Cost::default()
+            }
+            AlgebraType::Set(s) => {
+                s.set.iter().fold(Cost::default(), |a, b| {
+                    let b = b.calc_cost();
+                    if a < b {
+                        a
+                    }else {
+                        b
+                    }
+                })
+            }
+        }
     }
 }
 

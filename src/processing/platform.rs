@@ -17,6 +17,7 @@ use crate::util::{Rx, GLOBAL_ID};
 use crossbeam::channel;
 use crossbeam::channel::{unbounded, Receiver};
 use tracing::debug;
+use crate::optimize::{OptimizeStrategy};
 
 const IDLE_TIMEOUT: Duration = Duration::from_nanos(10);
 
@@ -115,7 +116,7 @@ impl Platform {
 
 fn optimize(stop: i64, transform: Option<Transform>, mut window: Box<dyn Taker>, sender: Sender, transforms: HashMap<String, Transform>) -> MutWagonsFunc {
     if let Some(transform) = transform {
-        let mut enumerator = transform.optimize(transforms, None);
+        let mut enumerator = transform.optimize(transforms, Some(OptimizeStrategy::rule_based()));
         Box::new(move |train| {
             let windowed = window.take(train);
             enumerator.dynamically_load(windowed);

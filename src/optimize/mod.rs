@@ -1,8 +1,9 @@
-pub use reward::Reward;
+pub use cost::Cost;
 pub use optimizer::OptimizeStrategy;
+pub use optimizer::RuleBasedOptimizer;
 
 mod optimizer;
 mod rule;
-mod reward;
+mod cost;
 mod rules;
 mod tree;

@@ -10,7 +10,7 @@ use std::collections::HashMap;
 #[derive(Clone, Debug)]
 pub struct Filter {
     pub input: Box<AlgebraType>,
-    condition: Operator,
+    pub condition: Operator,
 }
 
 impl Filter {

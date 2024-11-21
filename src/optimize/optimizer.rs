@@ -1,3 +1,4 @@
+use tracing::{debug, warn};
 use crate::algebra::{AlgSet, AlgebraType};
 use crate::optimize::rule::Rule::Merge;
 use crate::optimize::rule::{Rule, RuleBehavior};
@@ -14,6 +15,10 @@ impl OptimizeStrategy {
         match self {
             OptimizeStrategy::RuleBased(o) => o.optimize(expandable)
         }
+    }
+
+    pub(crate) fn rule_based() -> Self {
+        OptimizeStrategy::RuleBased(RuleBasedOptimizer::new())
     }
 }
 
@@ -46,20 +51,22 @@ impl Optimizer for RuleBasedOptimizer {
         let mut uneventful_rounds = 0;
 
         while uneventful_rounds < 2 {
-            let initial_reward = alg.calc_reward();
+            let initial_reward = alg.calc_cost();
 
             for rule in rules {
                 self.visit(&mut alg, rule)
             }
 
-            if initial_reward >= alg.calc_reward() {
+            if initial_reward >= alg.calc_cost() {
                 uneventful_rounds += 1;
             }else {
                 uneventful_rounds = 0;
             }
 
             round += 1;
+            warn!("round {}", round);
         }
+        debug!("Used {} rounds for optimization.", round);
         alg
     }
 }
@@ -139,3 +146,4 @@ impl Visitor<AlgebraType, AlgSet> for SetInserter {
         }
     }
 }
+

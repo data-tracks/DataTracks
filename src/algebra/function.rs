@@ -2,11 +2,12 @@ use crate::algebra::algebra::BoxedValueLoader;
 use crate::algebra::operator::{AggOp, InputOp, LiteralOp, NameOp, Op};
 use crate::algebra::Op::Tuple;
 use crate::algebra::TupleOp::{Combine, Context, Input, Literal, Name};
-use crate::algebra::{BoxedValueHandler, ContextOp};
+use crate::algebra::{BoxedValueHandler, ContextOp, TupleOp};
 use crate::analyse::{InputDerivable, OutputDerivable};
 use crate::processing::Layout;
 use crate::value::Value;
 use std::collections::HashMap;
+use crate::optimize::Cost;
 
 pub trait Replaceable {
     fn replace(&mut self, replace: fn(&mut Operator) -> Vec<(AggOp, Vec<Operator>)>) -> Vec<(AggOp, Vec<Operator>)>;
@@ -21,6 +22,9 @@ pub struct Operator {
     pub op: Op,
     pub operands: Vec<Operator>,
 }
+
+
+
 impl Operator {
     pub fn new(op: Op, operands: Vec<Operator>) -> Operator {
         Operator { op, operands }
@@ -28,6 +32,30 @@ impl Operator {
 
     pub fn name(name: &str, operands: Vec<Operator>) -> Operator {
         Operator { op: Tuple(Name(NameOp::new(name.to_string()))), operands }
+    }
+
+    pub(crate) fn calc_cost(&self) -> Cost {
+        match &self.op {
+            Op::Agg(a) => {
+                match a {
+                    AggOp::Count => Cost::default(),
+                    AggOp::Sum => Cost::default(),
+                    AggOp::Avg => Cost::default(),
+                }
+            }
+            Tuple(t) => {
+                match t {
+                    TupleOp::Plus | TupleOp::Minus | TupleOp::Multiplication | TupleOp::Division | TupleOp::Equal | TupleOp::KeyValue(_) => self.operands[0].calc_cost() + self.operands[1].calc_cost(),
+                    Combine | TupleOp::And | TupleOp::Or | TupleOp::Doc => self.operands.iter().map(|o| o.calc_cost()).fold(Cost::new(0), |a, b| a + b),
+                    TupleOp::Not => self.operands[0].calc_cost(),
+                    Input(_) => Cost::default(),
+                    Name(_) => Cost::default(),
+                    TupleOp::Index(_) => Cost::default(),
+                    Literal(_) => Cost::default(),
+                    Context(_) => Cost::default(),
+                }
+            }
+        }
     }
 
     pub fn context(name: String) -> Operator {

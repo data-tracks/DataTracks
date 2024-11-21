@@ -11,7 +11,7 @@ use std::collections::HashMap;
 #[derive(Clone, Debug)]
 pub struct Project {
     pub input: Box<AlgebraType>,
-    project: Operator,
+    pub project: Operator,
 }
 
 impl Project {
