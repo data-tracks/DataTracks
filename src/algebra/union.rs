@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 #[derive(Clone, Debug)]
 pub struct Union {
-    inputs: Vec<AlgebraType>,
+    pub inputs: Vec<AlgebraType>,
     distinct: bool,
 }
 

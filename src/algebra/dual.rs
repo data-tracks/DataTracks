@@ -27,6 +27,7 @@ impl OutputDerivable for Dual {
     }
 }
 
+
 impl Algebra for Dual {
     type Iterator = DualIterator;
 

@@ -10,7 +10,7 @@ use std::collections::HashMap;
 
 #[derive(Clone, Debug)]
 pub struct Project {
-    input: Box<AlgebraType>,
+    pub input: Box<AlgebraType>,
     project: Operator,
 }
 

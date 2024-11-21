@@ -8,6 +8,7 @@ pub use logo::logo;
 pub use reader::BufferedReader;
 pub use timeunit::TimeUnit;
 pub use visitor::Visitor;
+pub use visitor::LoadedVisitor;
 
 mod logo;
 mod id;

@@ -9,12 +9,10 @@ use crate::algebra::union::Union;
 use crate::algebra::variable::VariableScan;
 use crate::algebra::TableScan;
 use crate::analyse::{InputDerivable, OutputDerivable};
-use crate::optimize::Effort;
+use crate::optimize::Reward;
 use crate::processing::transform::Transform;
 use crate::processing::{Layout, Train};
-use crate::util::Visitor;
 use crate::value::Value;
-use postgres::fallible_iterator::FallibleIterator;
 use std::collections::HashMap;
 
 pub type BoxedIterator = Box<dyn ValueIterator<Item=Value> + Send + 'static>;
@@ -38,7 +36,7 @@ pub enum AlgebraType {
 }
 
 impl AlgebraType {
-    pub(crate) fn calc_effort(&self) -> Effort {
+    pub(crate) fn calc_reward(&self) -> Reward {
         todo!()
     }
 }
@@ -77,6 +75,7 @@ impl OutputDerivable for AlgebraType {
     }
 }
 
+
 impl Algebra for AlgebraType {
     type Iterator = BoxedIterator;
 
@@ -91,13 +90,13 @@ impl Algebra for AlgebraType {
             AlgebraType::Variable(s) => Box::new(s.derive_iterator()),
             AlgebraType::Dual(d) => Box::new(d.derive_iterator()),
             AlgebraType::TableScan(t) => Box::new(t.derive_iterator()),
-            AlgebraType::Set(s) => Box::new(s.initial.derive_iterator()),
+            AlgebraType::Set(s) => s.initial.derive_iterator(),
         }
     }
 
 }
 
-pub trait Algebra: Clone + InputDerivable + OutputDerivable + Visitor<Option<AlgebraType>> {
+pub trait Algebra: Clone + InputDerivable + OutputDerivable {
     type Iterator: Iterator<Item=Value> + Send + 'static;
     fn derive_iterator(&mut self) -> Self::Iterator;
 

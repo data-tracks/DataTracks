@@ -6,13 +6,13 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct AlgSet {
-    pub initial: AlgebraType,
-    set: Vec<AlgebraType>,
+    pub initial: Box<AlgebraType>,
+    pub set: Vec<AlgebraType>,
 }
 
 impl AlgSet {
     pub fn new(initial: AlgebraType) -> AlgSet {
-        AlgSet { initial, set: vec![] }
+        AlgSet { initial: Box::new(initial), set: vec![] }
     }
 }
 

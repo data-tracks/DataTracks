@@ -9,8 +9,8 @@ use std::collections::HashMap;
 
 #[derive(Clone, Debug)]
 pub struct Join {
-    left: Box<AlgebraType>,
-    right: Box<AlgebraType>,
+    pub left: Box<AlgebraType>,
+    pub right: Box<AlgebraType>,
     left_hash: Option<fn(&Value) -> Value>,
     right_hash: Option<fn(&Value) -> Value>,
     out: Option<fn(Value, Value) -> Value>,

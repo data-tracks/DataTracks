@@ -13,7 +13,7 @@ use std::hash::{Hash, Hasher};
 
 #[derive(Clone, Debug)]
 pub struct Aggregate {
-    input: Box<AlgebraType>,
+    pub input: Box<AlgebraType>,
     aggregates: Vec<(AggOp, Operator)>,
     group: Operator,
 }

@@ -17,6 +17,7 @@ pub use project::Project;
 pub use scan::IndexScan;
 pub use scan::TableScan;
 pub use variable::VariableScan;
+pub use set::AlgSet;
 
 mod project;
 mod algebra;

@@ -1,22 +1,22 @@
 use std::cmp::Ordering;
 
-pub struct  Effort {
+pub struct Reward {
     value: usize
 }
 
-impl Effort {
+impl Reward {
     pub(crate) fn default() -> Self {
-        Effort{value:0}
+        Reward {value:0}
     }
 }
 
-impl PartialEq<Self> for Effort {
+impl PartialEq<Self> for Reward {
     fn eq(&self, other: &Self) -> bool {
         self.value == other.value
     }
 }
 
-impl PartialOrd for Effort {
+impl PartialOrd for Reward {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         self.value.partial_cmp(&other.value)
     }
