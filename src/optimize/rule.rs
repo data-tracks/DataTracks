@@ -9,7 +9,7 @@ pub enum Rule {
 
 pub trait RuleBehavior: Clone {
     fn can_apply(&self, algebra: &AlgebraType) -> bool;
-    fn apply(&self, algebra: &AlgebraType) -> AlgebraType;
+    fn apply(&self, algebra: &mut AlgebraType) -> Vec<AlgebraType>;
 }
 
 impl RuleBehavior for Rule {
@@ -19,7 +19,7 @@ impl RuleBehavior for Rule {
         }
     }
 
-    fn apply(&self, algebra: &AlgebraType) -> AlgebraType {
+    fn apply(&self, algebra: &mut AlgebraType) -> Vec<AlgebraType> {
        match self {
            Rule::Merge(m) => m.apply(algebra),
        }

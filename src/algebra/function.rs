@@ -58,6 +58,10 @@ impl Operator {
         }
     }
 
+    pub fn chain(&self, after: Operator) -> Operator {
+
+    }
+
     pub fn context(name: String) -> Operator {
         Operator { op: Tuple(Context(ContextOp::new(name))), operands: vec![] }
     }
