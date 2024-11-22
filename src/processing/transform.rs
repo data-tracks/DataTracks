@@ -102,7 +102,7 @@ impl Transform {
             Lang(f) => {
                 let optimized = match optimizer {
                     None => f.algebra.clone(),
-                    Some(o) => o.apply(f.algebra.clone())
+                    Some(mut o) => o.apply(f.algebra.clone())
                 };
                 let mut initial = algebra::build_iterator(optimized).unwrap();
                 let iter = initial.enrich(transforms);

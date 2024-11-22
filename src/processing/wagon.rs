@@ -4,8 +4,8 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 // wagon holds context information
 #[derive(Clone, Debug, Eq)]
 pub struct Wagon {
-    topic: Vec<String>,
-    pub(crate) origin: String,
+    pub topic: Vec<String>,
+    pub origin: String,
     pub value: Box<Value>,
 }
 

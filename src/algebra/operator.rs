@@ -465,7 +465,7 @@ impl FromStr for Op {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct IndexOp {
-    index: usize,
+    pub index: usize,
 }
 
 impl IndexOp {

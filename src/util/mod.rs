@@ -7,8 +7,8 @@ pub use iterator::EmptyIterator;
 pub use logo::logo;
 pub use reader::BufferedReader;
 pub use timeunit::TimeUnit;
-pub use visitor::Visitor;
-pub use visitor::LoadedVisitor;
+pub use visitor::CreatingVisitor;
+pub use visitor::ChangingVisitor;
 
 mod logo;
 mod id;

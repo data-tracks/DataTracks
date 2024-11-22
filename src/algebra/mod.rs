@@ -13,6 +13,7 @@ pub use join::Join;
 pub use operator::ContextOp;
 pub use operator::Op;
 pub use operator::TupleOp;
+pub use operator::AggOp;
 pub use project::Project;
 pub use scan::IndexScan;
 pub use scan::TableScan;

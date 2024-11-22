@@ -1,16 +1,16 @@
 use tracing::{debug, warn};
 use crate::algebra::{AlgSet, AlgebraType};
-use crate::optimize::rule::Rule::Merge;
+use crate::optimize::rule::Rule::{Impossible, Merge};
 use crate::optimize::rule::{Rule, RuleBehavior};
 use crate::optimize::rules::MergeRule;
-use crate::util::{LoadedVisitor, Visitor};
+use crate::util::{ChangingVisitor, CreatingVisitor};
 
 pub enum OptimizeStrategy {
     RuleBased(RuleBasedOptimizer)
 }
 
 impl OptimizeStrategy {
-    pub(crate) fn apply(&self, raw: AlgebraType) -> AlgebraType {
+    pub(crate) fn apply(&mut self, raw: AlgebraType) -> AlgebraType {
         let expandable = AlgebraType::Set(SetInserter.visit(raw));
         match self {
             OptimizeStrategy::RuleBased(o) => o.optimize(expandable)
@@ -24,11 +24,12 @@ impl OptimizeStrategy {
 
 pub trait Optimizer {
 
-    fn optimize(&self, raw: AlgebraType) -> AlgebraType;
+    fn optimize(&mut self, raw: AlgebraType) -> AlgebraType;
 }
 
 pub struct RuleBasedOptimizer {
     rules: Vec<Rule>,
+    current_rule: Rule
 }
 
 impl RuleBasedOptimizer {
@@ -38,14 +39,14 @@ impl RuleBasedOptimizer {
         rules.push(Merge(MergeRule::Filter));
         rules.push(Merge(MergeRule::Project));
         
-        RuleBasedOptimizer { rules }
+        RuleBasedOptimizer { rules, current_rule: Impossible }
     }
 }
 
 
 impl Optimizer for RuleBasedOptimizer {
-    fn optimize(&self, raw: AlgebraType) -> AlgebraType {
-        let mut rules = &self.rules.clone();
+    fn optimize(&mut self, raw: AlgebraType) -> AlgebraType {
+        let rules = &self.rules.clone();
         let mut alg = raw.clone();
         let mut round = 0;
         let mut uneventful_rounds = 0;
@@ -54,7 +55,8 @@ impl Optimizer for RuleBasedOptimizer {
             let initial_reward = alg.calc_cost();
 
             for rule in rules {
-                self.visit(&mut alg, rule)
+                self.current_rule = rule.clone();
+                self.visit(&mut alg)
             }
 
             if initial_reward >= alg.calc_cost() {
@@ -72,35 +74,35 @@ impl Optimizer for RuleBasedOptimizer {
 }
 
 
-impl LoadedVisitor<&mut AlgebraType, &Rule> for RuleBasedOptimizer {
-    fn visit(&self, target: &mut AlgebraType, rule: &Rule) {
+impl ChangingVisitor<&mut AlgebraType> for RuleBasedOptimizer {
+    fn visit(&self, target: &mut AlgebraType) {
         match target {
             AlgebraType::Dual(_) => (),
             AlgebraType::IndexScan(_) => (),
             AlgebraType::TableScan(_) => (),
-            AlgebraType::Project(ref mut p) => self.visit(&mut *p.input, rule ),
-            AlgebraType::Filter(ref mut f) => self.visit(&mut *f.input, rule ),
+            AlgebraType::Project(ref mut p) => self.visit(&mut *p.input),
+            AlgebraType::Filter(ref mut f) => self.visit(&mut *f.input),
             AlgebraType::Join(j) => {
-                self.visit(&mut *j.left, rule );
-                self.visit(&mut *j.right, rule );
+                self.visit(&mut *j.left);
+                self.visit(&mut *j.right);
             }
             AlgebraType::Union(u) => {
-                u.inputs.iter_mut().for_each(|i| self.visit(i, rule ));
+                u.inputs.iter_mut().for_each(|i| self.visit(i));
             }
-            AlgebraType::Aggregate(a) => self.visit(&mut *a.input, rule ),
+            AlgebraType::Aggregate(a) => self.visit(&mut *a.input),
             AlgebraType::Variable(_) => (),
             AlgebraType::Set(ref mut s) => {
                 let mut algs = vec![];
 
                 s.set.iter_mut().for_each(|a| {
-                    self.visit(a, rule);
-                    if rule.can_apply(&a) {
-                        algs.push(rule.apply(a));
+                    self.visit(a);
+                    if self.current_rule.can_apply(&a) {
+                        algs.append(self.current_rule.apply(a).as_mut());
                     }
                 });
                 s.set.append(&mut algs);
 
-                s.set.iter_mut().for_each(|a| self.visit(a, rule ));
+                s.set.iter_mut().for_each(|a| self.visit(a ));
             }
         }
     }
@@ -109,7 +111,7 @@ impl LoadedVisitor<&mut AlgebraType, &Rule> for RuleBasedOptimizer {
 
 pub struct SetInserter;
 
-impl Visitor<AlgebraType, AlgSet> for SetInserter {
+impl CreatingVisitor<AlgebraType, AlgSet> for SetInserter {
     fn visit(&self, target: AlgebraType) -> AlgSet {
         match target {
             AlgebraType::Dual(ref d) => AlgSet::new(target),

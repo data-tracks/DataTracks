@@ -1,8 +1,8 @@
-pub trait Visitor<Target, Output> {
+pub trait CreatingVisitor<Target, Output> {
     fn visit(&self, target: Target) -> Output;
 }
 
 
-pub trait LoadedVisitor<Target, Arg> {
-    fn visit(&self, target: Target, arg: Arg);
+pub trait ChangingVisitor<Target> {
+    fn visit(&self, target: Target);
 }
