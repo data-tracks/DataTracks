@@ -1,16 +1,13 @@
-use std::ops::Index;
-use mime_guess::mime::Name;
-use crate::algebra::{AggOp, AlgebraType, Filter, Op, Operator, Project, TupleOp};
+use crate::algebra::{AggOp, AlgSet, AlgebraType, Filter, Op, Operator, Project, TupleOp};
 use crate::optimize::rule::RuleBehavior;
 use crate::util::CreatingVisitor;
 use crate::value::Value;
 
 #[derive(Debug, Clone)]
-pub enum MergeRule{
+pub enum MergeRule {
     Filter,
-    Project
+    Project,
 }
-
 
 impl RuleBehavior for MergeRule {
     fn can_apply(&self, algebra: &AlgebraType) -> bool {
@@ -23,11 +20,13 @@ impl RuleBehavior for MergeRule {
 
     fn apply(&self, algebra: &mut AlgebraType) -> Vec<AlgebraType> {
         if let AlgebraType::Set(parent) = algebra {
-            parent
+
+            let values = parent
                 .set
                 .iter()
                 .filter_map(|a| apply_rule_to_child(self, a))
-                .collect()
+                .collect();
+            values
         } else {
             unreachable!("apply should only be called with AlgebraType::Set")
         }
@@ -64,7 +63,7 @@ fn apply_rule_to_child(rule: &MergeRule, algebra: &AlgebraType) -> Option<Algebr
                                     vec![f.condition.clone(), f_child.condition.clone()],
                                 ),
                             )))
-                        }
+                        },
                         _ => None,
                     })
                     .next()
@@ -73,23 +72,19 @@ fn apply_rule_to_child(rule: &MergeRule, algebra: &AlgebraType) -> Option<Algebr
             }
         }
         (MergeRule::Project, AlgebraType::Project(p)) => {
-            if let AlgebraType::Set(child) = p.input.as_ref() {
-                child
+            if let AlgebraType::Set(parent) = p.input.as_ref() {
+
+                parent
                     .set
                     .iter()
                     .filter_map(|b| match b {
                         AlgebraType::Project(p_child) => {
+
                             Some(AlgebraType::Project(Project::new(
+                                OperatorMerger::merge(&p_child.project, &mut p.project.clone()),
                                 (*p_child.input).clone(),
-                                Operator::new(
-                                    Op::and(),
-                                    vec![OperatorMerger::merge(
-                                        &p_child.project,
-                                        &mut p.project.clone(),
-                                    )],
-                                ),
                             )))
-                        }
+                        },
                         _ => None,
                     })
                     .next()
@@ -101,15 +96,13 @@ fn apply_rule_to_child(rule: &MergeRule, algebra: &AlgebraType) -> Option<Algebr
     }
 }
 
-
-
-struct OperatorMerger<'op>{
+struct OperatorMerger<'op> {
     child: &'op Operator,
 }
 
-impl OperatorMerger<'_>{
-    fn merge(child: &Operator, parent: &mut Operator ) -> Operator {
-        let merger = OperatorMerger{child};
+impl OperatorMerger<'_> {
+    fn merge(child: &Operator, parent: &mut Operator) -> Operator {
+        let merger = OperatorMerger { child };
         merger.visit(parent)
     }
 }
@@ -127,8 +120,24 @@ impl CreatingVisitor<&mut Operator, Operator> for OperatorMerger<'_> {
                 parent.clone()
             }
             Op::Tuple(t) => match t {
-                TupleOp::Name(n) => self.handle_tuple_name(parent, &n.name),
-                TupleOp::Index(i) => self.handle_tuple_index(parent, i.index),
+                TupleOp::Name(n)
+                    if parent.operands.len() == 1
+                        && matches!(
+                            parent.operands.first().unwrap().op,
+                            Op::Tuple(TupleOp::Input(_))
+                        ) =>
+                {
+                    self.handle_tuple_name(parent, &n.name)
+                }
+                TupleOp::Index(i)
+                    if parent.operands.len() == 1
+                        && matches!(
+                            parent.operands.first().unwrap().op,
+                            Op::Tuple(TupleOp::Input(_))
+                        ) =>
+                {
+                    self.handle_tuple_index(parent, i.index)
+                }
                 _ => {
                     parent.operands = parent
                         .operands
@@ -146,20 +155,22 @@ impl OperatorMerger<'_> {
     /// Handles the `TupleOp::Name` case.
     fn handle_tuple_name(&self, parent: &Operator, name: &str) -> Operator {
         match &self.child.op {
-            Op::Tuple(TupleOp::Doc) => {
-                parent
-                    .operands
-                    .iter()
-                    .find_map(|o| match &o.op {
-                        Op::Tuple(TupleOp::KeyValue(v)) if v.as_ref().is_some_and(|v| *v == name) => Some(o.clone()),
-                        _ => None,
-                    })
-                    .expect("KeyValue matching name not found")
-            }
+            Op::Tuple(TupleOp::Doc) => parent
+                .operands
+                .iter()
+                .find_map(|o| match &o.op {
+                    Op::Tuple(TupleOp::KeyValue(v)) if v.as_ref().is_some_and(|v| *v == name) => {
+                        Some(o.clone())
+                    }
+                    _ => None,
+                })
+                .expect("KeyValue matching name not found"),
             Op::Tuple(TupleOp::Literal(l)) => match &l.literal {
                 Value::Dict(d) => Operator::literal(d.get(&name).expect("Key not found").clone()),
                 Value::Wagon(w) => match w.value.as_ref() {
-                    Value::Dict(d) => Operator::literal(d.get(&name).expect("Key not found").clone()),
+                    Value::Dict(d) => {
+                        Operator::literal(d.get(&name).expect("Key not found").clone())
+                    }
                     _ => panic!("Unexpected Wagon value"),
                 },
                 _ => panic!("Unexpected Literal value"),
@@ -180,12 +191,18 @@ impl OperatorMerger<'_> {
             Op::Tuple(TupleOp::Doc) => {
                 let child = self.child.operands.get(index).expect("Index out of bounds");
                 match &child.op {
-                    Op::Tuple(TupleOp::KeyValue(_)) => child.operands.get(0).expect("KeyValue missing child").clone(),
+                    Op::Tuple(TupleOp::KeyValue(_)) => child
+                        .operands
+                        .get(0)
+                        .expect("KeyValue missing child")
+                        .clone(),
                     _ => panic!("Unexpected child operator for TupleOp::Doc"),
                 }
             }
             Op::Tuple(TupleOp::Literal(l)) => match &l.literal {
-                Value::Array(a) => Operator::literal(a.0.get(index).expect("Index out of bounds").clone()),
+                Value::Array(a) => {
+                    Operator::literal(a.0.get(index).expect("Index out of bounds").clone())
+                }
                 Value::Dict(d) => Operator::literal(
                     d.values()
                         .nth(index)
@@ -193,7 +210,9 @@ impl OperatorMerger<'_> {
                         .clone(),
                 ),
                 Value::Wagon(w) => match w.value.as_ref() {
-                    Value::Array(a) => Operator::literal(a.0.get(index).expect("Index out of bounds").clone()),
+                    Value::Array(a) => {
+                        Operator::literal(a.0.get(index).expect("Index out of bounds").clone())
+                    }
                     Value::Dict(d) => Operator::literal(
                         d.values()
                             .nth(index)
@@ -204,7 +223,11 @@ impl OperatorMerger<'_> {
                 },
                 _ => panic!("Unexpected Literal value"),
             },
-            _ => panic!("Unsupported child operator for TupleOp::Index"),
+            _ if index == 0 => self.child.clone(),
+            _ => panic!(
+                "Unsupported child operator for TupleOp::Index parent {:?} child {:?}",
+                parent, self.child
+            ),
         }
     }
 }

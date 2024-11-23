@@ -1,7 +1,6 @@
 use crate::algebra::{Op, TupleOp};
 use crate::language::statement::Statement;
 use crate::value::Value;
-use log::warn;
 
 pub trait Sql: Statement {}
 
@@ -70,7 +69,6 @@ pub struct SqlIdentifier {
 
 impl SqlIdentifier {
     pub fn new(names: Vec<String>) -> Self {
-        warn!("tst{:?}", names);
         SqlIdentifier { names }
     }
 }

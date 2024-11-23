@@ -7,7 +7,7 @@ use crate::algebra::scan::IndexScan;
 use crate::algebra::set::AlgSet;
 use crate::algebra::union::Union;
 use crate::algebra::variable::VariableScan;
-use crate::algebra::TableScan;
+use crate::algebra::{Operator, TableScan};
 use crate::analyse::{InputDerivable, OutputDerivable};
 use crate::optimize::Cost;
 use crate::processing::transform::Transform;
@@ -44,22 +44,22 @@ impl AlgebraType {
             AlgebraType::IndexScan(_) => Cost::new(1),
             AlgebraType::TableScan(_) => Cost::new(1),
             AlgebraType::Project(p) => {
-                p.project.calc_cost() * p.input.calc_cost()
+                Cost::new(1) + p.project.calc_cost() * p.input.calc_cost()
             }
             AlgebraType::Filter(f) => {
-                f.condition.calc_cost() * f.input.calc_cost()
+                Cost::new(1) + f.condition.calc_cost() * f.input.calc_cost()
             }
             AlgebraType::Join(j) => {
-                j.left.calc_cost() * j.right.calc_cost()
+                Cost::new(2) + j.left.calc_cost() * j.right.calc_cost()
             }
             AlgebraType::Union(u) => {
-                u.inputs.iter().fold(Cost::default(), |a,b| a * b.calc_cost())
+                Cost::new(u.inputs.len()) + u.inputs.iter().fold(Cost::default(), |a,b| a * b.calc_cost())
             }
             AlgebraType::Aggregate(a) => {
-                Cost::new(a.aggregates.len()) * a.input.calc_cost()
+                Cost::new(1) + Cost::new(a.aggregates.len()) * a.input.calc_cost()
             }
-            AlgebraType::Variable(v) => {
-                Cost::default()
+            AlgebraType::Variable(_) => {
+                Cost::new(1) + Cost::default()
             }
             AlgebraType::Set(s) => {
                 s.set.iter().fold(Cost::default(), |a, b| {
@@ -72,6 +72,14 @@ impl AlgebraType {
                 })
             }
         }
+    }
+
+    pub fn table(name: String) -> AlgebraType {
+        AlgebraType::TableScan(TableScan::new(name))
+    }
+
+    pub fn project(project: Operator, input: AlgebraType) -> AlgebraType {
+        AlgebraType::Project(Project::new(project, input))
     }
 }
 

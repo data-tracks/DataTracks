@@ -533,7 +533,7 @@ impl Implementable<BoxedValueHandler> for LiteralOp {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ContextOp {
-    name: String,
+    pub name: String,
 }
 
 impl ContextOp {

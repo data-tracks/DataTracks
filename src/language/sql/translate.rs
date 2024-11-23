@@ -90,7 +90,7 @@ fn handle_select(query: SqlSelect) -> Result<AlgebraType, String> {
         return Ok(node);
     }
 
-    Ok(Project(algebra::Project::new(node, function)))
+    Ok(Project(algebra::Project::new(function, node)))
 }
 
 fn handle_from(from: SqlStatement) -> Result<AlgebraType, String> {
@@ -165,7 +165,7 @@ fn handle_table(identifier: SqlIdentifier) -> Result<AlgebraType, String> {
     };
     if !names.is_empty() {
         let field = handle_field(Identifier(identifier))?;
-        Ok(Project(algebra::Project::new(scan, field)))
+        Ok(Project(algebra::Project::new(field, scan)))
     } else {
         Ok(scan)
     }

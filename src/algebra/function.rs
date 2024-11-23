@@ -41,9 +41,9 @@ impl Operator {
     pub(crate) fn calc_cost(&self) -> Cost {
         match &self.op {
             Op::Agg(a) => match a {
-                AggOp::Count => Cost::default(),
-                AggOp::Sum => Cost::default(),
-                AggOp::Avg => Cost::default(),
+                AggOp::Count => Cost::new(1),
+                AggOp::Sum => Cost::new(1),
+                AggOp::Avg => Cost::new(1),
             },
             Tuple(t) => match t {
                 TupleOp::Plus
@@ -60,11 +60,11 @@ impl Operator {
                     .map(|o| o.calc_cost())
                     .fold(Cost::new(0), |a, b| a + b),
                 TupleOp::Not => self.operands[0].calc_cost(),
-                Input(_) => Cost::default(),
-                Name(_) => Cost::default(),
-                TupleOp::Index(_) => Cost::default(),
-                Literal(_) => Cost::default(),
-                Context(_) => Cost::default(),
+                Input(_) => Cost::new(1),
+                Name(_) => Cost::new(1),
+                TupleOp::Index(_) => Cost::new(1),
+                Literal(_) => Cost::new(1),
+                Context(_) => Cost::new(1),
             },
         }
     }

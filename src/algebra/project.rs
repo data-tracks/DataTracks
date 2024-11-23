@@ -15,7 +15,7 @@ pub struct Project {
 }
 
 impl Project {
-    pub fn new(input: AlgebraType, project: Operator) -> Self {
+    pub fn new(project: Operator, input: AlgebraType) -> Self {
         Project { input: Box::new(input), project }
     }
 }
