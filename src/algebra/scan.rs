@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::vec;
 use crate::util::EmptyIterator;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct IndexScan {
     index: i64,
 }
@@ -117,7 +117,7 @@ impl Algebra for IndexScan {
 
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Hash)]
 pub struct TableScan {
     name: String,
 }

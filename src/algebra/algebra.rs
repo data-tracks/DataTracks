@@ -21,7 +21,7 @@ pub type BoxedValueHandler = Box<dyn ValueHandler + Send + 'static>;
 
 pub type BoxedValueLoader = Box<dyn ValueLoader + Send + 'static>;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub enum AlgebraType {
     Dual(Dual),
     IndexScan(IndexScan),
@@ -44,13 +44,13 @@ impl AlgebraType {
             AlgebraType::IndexScan(_) => Cost::new(1),
             AlgebraType::TableScan(_) => Cost::new(1),
             AlgebraType::Project(p) => {
-                Cost::new(1) + p.project.calc_cost() * p.input.calc_cost()
+                Cost::new(1) + p.project.calc_cost() + p.input.calc_cost()
             }
             AlgebraType::Filter(f) => {
-                Cost::new(1) + f.condition.calc_cost() * f.input.calc_cost()
+                Cost::new(1) + f.condition.calc_cost() + f.input.calc_cost()
             }
             AlgebraType::Join(j) => {
-                Cost::new(2) + j.left.calc_cost() * j.right.calc_cost()
+                Cost::new(2) + j.left.calc_cost() + j.right.calc_cost()
             }
             AlgebraType::Union(u) => {
                 Cost::new(u.inputs.len()) + u.inputs.iter().fold(Cost::default(), |a,b| a * b.calc_cost())
@@ -80,6 +80,10 @@ impl AlgebraType {
 
     pub fn project(project: Operator, input: AlgebraType) -> AlgebraType {
         AlgebraType::Project(Project::new(project, input))
+    }
+
+    pub fn filter(condition: Operator, input: AlgebraType) -> AlgebraType {
+        AlgebraType::Filter(Filter::new(input, condition))
     }
 }
 

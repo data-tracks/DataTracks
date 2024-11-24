@@ -7,7 +7,7 @@ use crate::processing::{ArrayType, Layout, Train};
 use crate::value::Value;
 use std::collections::HashMap;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Join {
     pub left: Box<AlgebraType>,
     pub right: Box<AlgebraType>,

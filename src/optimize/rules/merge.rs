@@ -1,9 +1,9 @@
-use crate::algebra::{AggOp, AlgSet, AlgebraType, Filter, Op, Operator, Project, TupleOp};
+use crate::algebra::{AggOp, AlgebraType, Filter, Op, Operator, Project, TupleOp};
 use crate::optimize::rule::RuleBehavior;
 use crate::util::CreatingVisitor;
 use crate::value::Value;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum MergeRule {
     Filter,
     Project,
@@ -12,7 +12,8 @@ pub enum MergeRule {
 impl RuleBehavior for MergeRule {
     fn can_apply(&self, algebra: &AlgebraType) -> bool {
         if let AlgebraType::Set(s) = algebra {
-            s.set.iter().any(|a| match_rule_with_child(self, a))
+            let bool = s.set.iter().any(|a| match_rule_with_child(self, a));
+            bool
         } else {
             false
         }
@@ -20,7 +21,6 @@ impl RuleBehavior for MergeRule {
 
     fn apply(&self, algebra: &mut AlgebraType) -> Vec<AlgebraType> {
         if let AlgebraType::Set(parent) = algebra {
-
             let values = parent
                 .set
                 .iter()
@@ -50,12 +50,13 @@ fn match_rule_with_child(rule: &MergeRule, algebra: &AlgebraType) -> bool {
 fn apply_rule_to_child(rule: &MergeRule, algebra: &AlgebraType) -> Option<AlgebraType> {
     match (rule, algebra) {
         (MergeRule::Filter, AlgebraType::Filter(f)) => {
-            if let AlgebraType::Set(child) = f.input.as_ref() {
-                child
+            if let AlgebraType::Set(parent) = f.input.as_ref() {
+                parent
                     .set
                     .iter()
                     .filter_map(|b| match b {
                         AlgebraType::Filter(f_child) => {
+
                             Some(AlgebraType::Filter(Filter::new(
                                 (*f_child.input).clone(),
                                 Operator::new(
@@ -73,13 +74,11 @@ fn apply_rule_to_child(rule: &MergeRule, algebra: &AlgebraType) -> Option<Algebr
         }
         (MergeRule::Project, AlgebraType::Project(p)) => {
             if let AlgebraType::Set(parent) = p.input.as_ref() {
-
                 parent
                     .set
                     .iter()
                     .filter_map(|b| match b {
                         AlgebraType::Project(p_child) => {
-
                             Some(AlgebraType::Project(Project::new(
                                 OperatorMerger::merge(&p_child.project, &mut p.project.clone()),
                                 (*p_child.input).clone(),

@@ -14,7 +14,7 @@ use std::fmt::Debug;
 use std::str::FromStr;
 use std::vec;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Op {
     Agg(AggOp),
     Tuple(TupleOp),
@@ -50,7 +50,7 @@ impl Op {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TupleOp {
     Plus,
     Minus,
@@ -374,7 +374,7 @@ impl TupleOp {
 }
 
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum AggOp {
     Count,
     Sum,
@@ -463,7 +463,7 @@ impl FromStr for Op {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct IndexOp {
     pub index: usize,
 }
@@ -503,7 +503,7 @@ impl Implementable<BoxedValueHandler> for IndexOp {
 }
 
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct LiteralOp {
     pub literal: Value,
 }
@@ -531,7 +531,7 @@ impl Implementable<BoxedValueHandler> for LiteralOp {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ContextOp {
     pub name: String,
 }
@@ -602,7 +602,7 @@ impl Implementable<BoxedValueHandler> for ContextOp {
 }
 
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct InputOp {}
 
 impl ValueHandler for InputOp {
@@ -615,7 +615,7 @@ impl ValueHandler for InputOp {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct NameOp {
     pub name: String,
 }

@@ -1,7 +1,7 @@
 use crate::algebra::AlgebraType;
 use crate::optimize::rules::MergeRule;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Rule {
     Merge(MergeRule),
     Impossible

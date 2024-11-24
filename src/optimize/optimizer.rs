@@ -1,6 +1,4 @@
-use std::ops::DerefMut;
 use crate::algebra::{AlgSet, AlgebraType};
-use crate::algebra::AlgebraType::Set;
 use crate::optimize::rule::Rule::{Impossible, Merge};
 use crate::optimize::rule::{Rule, RuleBehavior};
 use crate::optimize::rules::MergeRule;
@@ -96,8 +94,9 @@ impl ChangingVisitor<&mut AlgebraType> for RuleBasedOptimizer {
             AlgebraType::Variable(_) => (),
             AlgebraType::Set(ref mut s) => {
 
-                if self.current_rule.can_apply(&Set(s.clone())) {
-                    s.set.append(&mut self.current_rule.apply(&mut Set(s.clone())));
+                if self.current_rule.can_apply(&AlgebraType::Set(s.clone())) {
+                    let applied = self.current_rule.apply(&mut AlgebraType::Set(s.clone()));
+                    s.set.extend(applied);
                 }
             }
         }
@@ -205,6 +204,25 @@ mod tests {
             AlgebraType::Project(p) => match p.input.as_ref() {
                 AlgebraType::TableScan(_) => {}
                 a => panic!("Expected project but got {:?}", a),
+            },
+            a => panic!("wrong algebra type {:?}", a),
+        }
+    }
+
+    #[test]
+    fn filter_test() {
+        let scan = AlgebraType::filter(
+            Operator::index(0, vec![Operator::input()]),
+            AlgebraType::filter(Operator::input(), AlgebraType::table("table".to_string())),
+        );
+
+        let optimizer = RuleBasedOptimizer::new();
+        let optimized = OptimizeStrategy::RuleBased(optimizer).apply(scan);
+
+        match optimized {
+            AlgebraType::Filter(p) => match p.input.as_ref() {
+                AlgebraType::TableScan(_) => {}
+                a => panic!("Expected filter but got {:?}", a),
             },
             a => panic!("wrong algebra type {:?}", a),
         }

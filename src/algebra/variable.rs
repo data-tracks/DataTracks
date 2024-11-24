@@ -6,7 +6,7 @@ use crate::value::Value;
 use std::collections::HashMap;
 use std::vec;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct VariableScan {
     name: String,
     inputs: Vec<AlgebraType>,

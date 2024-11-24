@@ -11,7 +11,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Aggregate {
     pub input: Box<AlgebraType>,
     pub aggregates: Vec<(AggOp, Operator)>,
@@ -35,6 +35,12 @@ impl Aggregate {
             }).collect(),
             group: group.unwrap_or(Operator::literal(Value::bool(true))),
         }
+    }
+}
+
+impl Hash for Aggregate {
+    fn hash<H: Hasher>(&self, _state: &mut H) {
+        panic!()
     }
 }
 

@@ -1,6 +1,7 @@
 use std::cmp::Ordering;
 use std::ops::{Add, Mul};
 
+#[derive(Debug)]
 pub enum  Cost {
     Numeric(usize),
     Infinite
