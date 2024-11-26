@@ -3,7 +3,7 @@ use crate::analyse::{InputDerivable, OutputDerivable, OutputDerivationStrategy};
 use crate::language::Language;
 use crate::processing::option::Configurable;
 use crate::processing::train::Train;
-use crate::processing::transform::Transform::{Func, Lang, Postgres, SQLite};
+use crate::processing::transform::Transform::{DummyDB, Func, Lang, Postgres, SQLite};
 use crate::processing::Layout;
 use crate::sql::{PostgresTransformer, SqliteTransformer};
 use crate::value::Value;
@@ -13,6 +13,8 @@ use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 use crate::optimize::OptimizeStrategy;
+#[cfg(test)]
+use crate::processing::tests::DummyDatabase;
 
 pub trait Taker: Send {
     fn take(&mut self, wagons: &mut Vec<Train>) -> Vec<Train>;
@@ -23,7 +25,9 @@ pub enum Transform {
     Func(FuncTransform),
     Lang(LanguageTransform),
     SQLite(SqliteTransformer),
-    Postgres(PostgresTransformer)
+    Postgres(PostgresTransformer),
+    #[cfg(test)]
+    DummyDB(DummyDatabase)
 }
 
 impl Clone for Transform {
@@ -32,7 +36,9 @@ impl Clone for Transform {
             Func(f) => Func(Clone::clone(f)),
             Lang(language) => Lang(language.clone()),
             SQLite(s) => SQLite(s.clone()),
-            Postgres(p) => Postgres(p.clone())
+            Postgres(p) => Postgres(p.clone()),
+            #[cfg(test)]
+            Transform::DummyDB(_) => unreachable!()
         }
     }
 }
@@ -65,7 +71,9 @@ impl Transform {
             Func(f) => f.derive_input_layout(),
             Lang(l) => l.derive_input_layout(),
             SQLite(t) => t.derive_input_layout(),
-            Postgres(p) => p.derive_input_layout()
+            Postgres(p) => p.derive_input_layout(),
+            #[cfg(test)]
+            Transform::DummyDB(_) => todo!()
         }
     }
 
@@ -74,7 +82,9 @@ impl Transform {
             Func(f) => f.derive_output_layout(),
             Lang(l) => l.derive_output_layout(inputs),
             SQLite(c) => c.derive_output_layout(inputs),
-            Postgres(p) => p.derive_output_layout(inputs)
+            Postgres(p) => p.derive_output_layout(inputs),
+            #[cfg(test)]
+            Transform::DummyDB(_) => todo!()
         }
     }
 
@@ -83,7 +93,8 @@ impl Transform {
             Func(f) => f.dump(),
             Lang(f) => f.dump(),
             SQLite(c) => c.dump(),
-            Postgres(p) => p.dump()
+            Postgres(p) => p.dump(),
+            Transform::DummyDB(_) => todo!()
         }
     }
 
@@ -92,7 +103,8 @@ impl Transform {
             Func(_) => "Func".to_string(),
             Lang(_) => "Lang".to_string(),
             SQLite(c) => c.get_name(),
-            Postgres(p) => p.get_name()
+            Postgres(p) => p.get_name(),
+            Transform::DummyDB(_) => todo!()
         }
     }
 
@@ -113,7 +125,9 @@ impl Transform {
                 }
             },
             SQLite(c) => c.optimize(transforms),
-            Postgres(p) => p.optimize(transforms)
+            Postgres(p) => p.optimize(transforms),
+            #[cfg(test)]
+            Transform::DummyDB(_) => todo!()
         }
     }
 }
@@ -130,6 +144,8 @@ fn parse_function(stencil: &str) -> Result<Transform, String> {
         "dummy" => Ok(Func(FuncTransform::new_boxed(|_stop, value| {
             &value + &Value::int(1)
         }))),
+        #[cfg(test)]
+        "dummydb" => Ok(DummyDB(DummyDatabase::parse(options)?)),
         "sqlite" => Ok(SQLite(SqliteTransformer::parse(options)?)),
         "postgres" | "postgresql" => Ok(Postgres(PostgresTransformer::parse(options)?)),
         fun => panic!("Unknown function {}", fun)
@@ -142,7 +158,9 @@ impl Configurable for Transform {
             Func(_) => "Func".to_string(),
             Lang(l) => l.language.to_string(),
             SQLite(c) => c.get_name(),
-            Postgres(p) => p.get_name()
+            Postgres(p) => p.get_name(),
+            #[cfg(test)]
+            DummyDB(_) => todo!()
         }
     }
 
@@ -151,7 +169,9 @@ impl Configurable for Transform {
             Func(_) => Map::new(),
             Lang(_) => Map::new(),
             SQLite(c) => c.get_options(),
-            Postgres(p) => p.get_options()
+            Postgres(p) => p.get_options(),
+            #[cfg(test)]
+            DummyDB(_) => todo!()
         }
     }
 }

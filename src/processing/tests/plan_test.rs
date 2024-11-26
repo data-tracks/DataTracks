@@ -5,6 +5,8 @@ pub mod dummy {
     use std::thread::{sleep, spawn};
     use std::time::Duration;
 
+    use crate::algebra::{BoxedIterator, ValueIterator};
+    use crate::analyse::{InputDerivable, OutputDerivationStrategy};
     use crate::processing::destination::Destination;
     use crate::processing::option::Configurable;
     use crate::processing::plan::{DestinationModel, SourceModel};
@@ -12,6 +14,8 @@ pub mod dummy {
     use crate::processing::station::Command;
     use crate::processing::station::Command::{Ready, Stop};
     use crate::processing::train::Train;
+    use crate::processing::transform::{Transform, Transformer};
+    use crate::processing::Layout;
     use crate::ui::ConfigModel;
     use crate::util::{new_channel, Rx, Tx, GLOBAL_ID};
     use crate::value::Value;
@@ -258,7 +262,106 @@ pub mod dummy {
         }
 
     }
+
+    #[derive(Clone, Debug, PartialEq)]
+    pub struct DummyDatabase{
+        query: String,
+        mapping: Option<HashMap<Value, Value>>,
+    }
+
+    impl DummyDatabase {
+        pub(crate) fn new(query: String,) -> DummyDatabase {
+            DummyDatabase { query, mapping: None }
+        }
+
+        pub fn add_mapping(&mut self, mapping: HashMap<Value, Value>) {
+            self.mapping = Some(mapping);
+        }
+    }
+
+    impl Configurable for DummyDatabase {
+        fn get_name(&self) -> String {
+            "DummyDb".to_string()
+        }
+
+        fn get_options(&self) -> Map<String, serde_json::Value> {
+            Map::new()
+        }
+    }
+
+    impl InputDerivable for DummyDatabase {
+        fn derive_input_layout(&self) -> Option<Layout> {
+            Some(Layout::default())
+        }
+    }
+
+    impl Transformer for DummyDatabase {
+        fn parse(options: Map<String, serde_json::Value>) -> Result<Self, String> {
+            Ok(DummyDatabase::new(options.get("query").unwrap().to_string()))
+        }
+
+        fn optimize(&self, _transforms: HashMap<String, Transform>) -> Box<dyn ValueIterator<Item=Value> + Send> {
+            Box::new(MappingIterator::new(self.mapping.clone().unwrap()))
+        }
+
+        fn get_output_derivation_strategy(&self) -> &OutputDerivationStrategy {
+            &OutputDerivationStrategy::Undefined
+        }
+    }
+
+    pub struct MappingIterator{
+        mapping: HashMap<Value, Value>,
+        values: Vec<Value>,
+    }
+
+
+    impl MappingIterator {
+        pub fn new(mapping: HashMap<Value, Value>) -> MappingIterator {
+            MappingIterator{mapping, values: Vec::new()}
+        }
+
+        pub(crate) fn get_value(&self, value: Value) -> Option<Value> {
+            self.mapping.get(&value).cloned()
+        }
+    }
+
+    impl Iterator for MappingIterator {
+        type Item = Value;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            if self.values.is_empty() {
+                None
+            } else {
+                Some(self.values.remove(0))
+            }
+        }
+    }
+
+    impl ValueIterator for MappingIterator {
+        fn dynamically_load(&mut self, trains: Vec<Train>) {
+            for train in trains {
+                if let Some(values) = train.values {
+                    for value in values {
+                        let values = self.get_value(value);
+                        if let Some(values) = values {
+                            self.values.push(values);
+                        }
+                    }
+                }
+            }
+        }
+
+        fn clone(&self) -> BoxedIterator {
+            Box::new(MappingIterator::new(self.mapping.clone()))
+        }
+
+        fn enrich(&mut self, _transforms: HashMap<String, Transform>) -> Option<BoxedIterator> {
+            None
+        }
+    }
 }
+
+
 
 
 #[cfg(test)]
@@ -378,7 +481,6 @@ pub mod tests {
 
         let clone = plan.get_result(destination);
 
-
         plan.operate().unwrap();
 
         // start dummy source
@@ -396,7 +498,7 @@ pub mod tests {
         }
     }
 
-    fn dump(value: &Vec<Vec<Value>>) -> String {
+    pub(crate) fn dump(value: &Vec<Vec<Value>>) -> String {
         let values: Value = value.iter().cloned().map(|v| v.into()).collect::<Vec<_>>().into();
         serde_json::to_string(&values).unwrap()
     }

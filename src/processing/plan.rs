@@ -458,6 +458,11 @@ impl Plan {
         self.transforms.insert(name.to_string(), transform);
     }
 
+    #[cfg(test)]
+    pub fn get_transformation(&mut self, name: &str) -> Result<&mut transform::Transform, String> {
+        self.transforms.get_mut(name).ok_or("No transform found".to_string())
+    }
+
     fn get_station(&self, stop_num: &i64) -> Result<&Station, String> {
         self.stations.get(stop_num).ok_or_else(|| format!("Station {} not found", stop_num))
     }
@@ -695,6 +700,10 @@ impl From<transform::Transform> for ConfigContainer {
                 map.insert(String::from("port"), p.connector.port.into());
                 map.insert(String::from("db"), p.connector.db.clone().into());
                 ConfigContainer::new(p.get_name(), map)
+            }
+            #[cfg(test)]
+            transform::Transform::DummyDB(_) => {
+                panic!("Dummy DB transform is not supported");
             }
         }
     }
