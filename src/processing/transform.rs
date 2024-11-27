@@ -38,7 +38,7 @@ impl Clone for Transform {
             SQLite(s) => SQLite(s.clone()),
             Postgres(p) => Postgres(p.clone()),
             #[cfg(test)]
-            Transform::DummyDB(_) => unreachable!()
+            DummyDB(d) => DummyDB(d.clone())
         }
     }
 }
@@ -104,7 +104,8 @@ impl Transform {
             Lang(_) => "Lang".to_string(),
             SQLite(c) => c.get_name(),
             Postgres(p) => p.get_name(),
-            Transform::DummyDB(_) => todo!()
+            #[cfg(test)]
+            DummyDB(d) => d.get_name()
         }
     }
 
@@ -127,7 +128,7 @@ impl Transform {
             SQLite(c) => c.optimize(transforms),
             Postgres(p) => p.optimize(transforms),
             #[cfg(test)]
-            Transform::DummyDB(_) => todo!()
+            DummyDB(d) => d.optimize(transforms),
         }
     }
 }

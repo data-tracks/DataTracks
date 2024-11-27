@@ -24,14 +24,14 @@ pub mod advertise_tests {
 
         let stencil = format!(
             "\
-            3{{sql|SELECT $comp($0) FROM $0}}\n\
+            3{{sql|SELECT $comp FROM $comp($0)}}\n\
         In\n\
         Dummy{{\"id\": {source_id}, \"delay\":{delay},\"values\":{values}}}:3\n\
         Out\n\
         Dummy{{\"id\": {destination_id},\"result_size\":{size}}}:3\n\
-        Transformer\n\
+        Transform\n\
         $comp:DummyDb{{\"query\":\"SELECT id FROM company WHERE id = $\"}}",
-            delay = 3,
+            delay = 10,
             values = plan_test::tests::dump(&values),
             size = values.len(),
             source_id = source_id,
@@ -40,7 +40,7 @@ pub mod advertise_tests {
 
         let mut plan = Plan::parse(&stencil).unwrap();
 
-        let transformation: &mut _ = plan.get_transformation("$comp").unwrap();
+        let transformation: &mut _ = plan.get_transformation("comp").unwrap();
 
         match transformation {
             Transform::DummyDB(ref mut d) => {
@@ -48,8 +48,6 @@ pub mod advertise_tests {
             }
             _ => panic!(),
         }
-
-        let mut plan = Plan::parse(&stencil).unwrap();
 
         let clone = plan.get_result(destination_id);
 
@@ -65,7 +63,9 @@ pub mod advertise_tests {
 
         let results = clone.lock().unwrap();
         for mut train in results.clone() {
-            assert_eq!(train.values.take().unwrap(), *result.get(0).unwrap())
+            let vals = train.values.take().unwrap();
+            assert_eq!(vals.clone(), *result.get(0).unwrap());
+            assert_ne!(vals, vec!["companyA".into(), "companyB".into()]);
         }
     }
 }

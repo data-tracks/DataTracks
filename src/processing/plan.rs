@@ -18,6 +18,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 #[cfg(test)]
 use std::sync::Mutex;
+use std::thread::sleep;
+use std::time::{Duration, Instant};
 
 pub struct Plan {
     pub id: i64,
@@ -176,8 +178,9 @@ impl Plan {
 
         // wait for all stations to be ready
         let mut readys = vec![];
+        let start_time = Instant::now();
         while readys.len() != self.controls.len() {
-            match self.control_receiver.1.recv() {
+            match self.control_receiver.1.try_recv() {
                 Ok(command) => {
                     match command {
                         Command::Ready(id) => {
@@ -186,7 +189,12 @@ impl Plan {
                         command => return Err(format!("Not known command {:?}", command)),
                     }
                 }
-                Err(err) => return Err(err.to_string()),
+                Err(_) => {
+                    if start_time.elapsed().as_secs() > 3 {
+                        return Err("Stations did not start properly".to_string());
+                    }
+                    sleep(Duration::from_millis(100));
+                }
             }
         }
 
@@ -198,7 +206,6 @@ impl Plan {
         for source in self.sources.values_mut() {
             self.controls.entry(source.get_id()).or_default().push(source.operate(Arc::clone(&self.control_receiver.0)));
         }
-
 
         self.status = Status::Running;
         Ok(())

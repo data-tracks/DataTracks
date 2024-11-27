@@ -12,10 +12,9 @@ impl OptimizeStrategy {
     pub(crate) fn apply(&mut self, raw: AlgebraType) -> AlgebraType {
         let expandable = AlgebraType::Set(add_set(raw));
         let optimized = match self {
-            OptimizeStrategy::RuleBased(o) => o.optimize(expandable),
+            OptimizeStrategy::RuleBased(o) => o.optimize(expandable.clone()),
         };
-
-        remove_set(optimized)
+        remove_set(optimized.unwrap_or(expandable))
     }
 
     pub(crate) fn rule_based() -> Self {
@@ -24,7 +23,7 @@ impl OptimizeStrategy {
 }
 
 pub trait Optimizer {
-    fn optimize(&mut self, raw: AlgebraType) -> AlgebraType;
+    fn optimize(&mut self, raw: AlgebraType) -> Result<AlgebraType, String>;
 }
 
 pub struct RuleBasedOptimizer {
@@ -47,13 +46,17 @@ impl RuleBasedOptimizer {
 }
 
 impl Optimizer for RuleBasedOptimizer {
-    fn optimize(&mut self, raw: AlgebraType) -> AlgebraType {
+    fn optimize(&mut self, raw: AlgebraType) -> Result<AlgebraType, String> {
         let rules = &self.rules.clone();
         let mut alg = raw.clone();
         let mut round = 0;
         let mut uneventful_rounds = 0;
 
         while uneventful_rounds < 2 {
+            if round < rules.len() * 100 {
+                return Err("Infinite loop detected".to_string());
+            }
+
             let initial_cost = alg.calc_cost();
 
             for rule in rules {
@@ -68,10 +71,9 @@ impl Optimizer for RuleBasedOptimizer {
             }
 
             round += 1;
-            println!("round {}", round);
         }
         println!("Used {} rounds for optimization.", round);
-        alg
+        Ok(alg)
     }
 }
 
