@@ -20,6 +20,10 @@ pub trait Implementable<Implementation> {
     fn implement(&self) -> Result<Implementation, ()>;
 }
 
+pub trait ArgImplementable<Implementation, Argument> {
+    fn implement(&self, arg: Argument) -> Result<Implementation, ()>;
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Operator {
     pub op: Op,
@@ -65,6 +69,7 @@ impl Operator {
                 TupleOp::Index(_) => Cost::new(1),
                 Literal(_) => Cost::new(1),
                 Context(_) => Cost::new(1),
+                TupleOp::Split(_) => Cost::new(1) + self.operands[0].calc_cost()
             },
             Op::Collection(_) => {
                 self.operands.iter().map(|o| o.calc_cost()).reduce(|a, b| a + b).unwrap_or(Cost::new(0))

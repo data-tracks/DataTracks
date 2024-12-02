@@ -189,7 +189,7 @@ fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> Result<Sql
                 expressions.push(SqlStatement::Value(SqlValue::new(value::Value::float(float))))
             }
             Token::Function(func) => {
-                let stops = vec![Token::BracketClose];
+                let stops = vec![BracketClose];
                 if let Ok(op) = Op::from_str(&func) {
                     let exp = parse_expressions(lexer, &stops);
                     if let Ok(exprs) = exp {
@@ -416,6 +416,12 @@ mod test {
     #[test]
     fn test_unwind() {
         let query = "SELECT \"unwind\" FROM UNWIND($0)";
+        test_query_diff(query, query);
+    }
+
+    #[test]
+    fn test_split() {
+        let query = "SELECT SPLIT(\"$0\", '\\s+') FROM $0";
         test_query_diff(query, query);
     }
 

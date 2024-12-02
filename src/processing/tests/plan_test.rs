@@ -687,6 +687,17 @@ pub mod tests {
     }
 
     #[test]
+    fn split_test() {
+        let values = vec![vec!["Hey there".into(), "how are you".into()]];
+        let res: Vec<Vec<Value>> = vec![vec![Value::array(vec!["Hey".into(), "there".into()]), Value::array(vec!["how".into(), "are".into(), "you".into()])]];
+        let source = 1;
+        let destination = 5;
+
+
+        test_single_in_out("1{sql|SELECT SPLIT($0, '\\s+') FROM $0}", values.clone(), res.clone(), source, destination);
+    }
+
+    #[test]
     fn dict_test() {
         let values = vec![vec![Value::float(3.6), Value::float(4.6)]];
         let res: Vec<Vec<Value>> = vec![vec![Value::dict_from_kv("key", Value::float(3.6)), Value::dict_from_kv("key", Value::float(4.6))]];

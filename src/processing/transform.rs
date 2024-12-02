@@ -3,7 +3,7 @@ use crate::analyse::{InputDerivable, OutputDerivable, OutputDerivationStrategy};
 use crate::language::Language;
 use crate::processing::option::Configurable;
 use crate::processing::train::Train;
-use crate::processing::transform::Transform::{DummyDB, Func, Lang, Postgres, SQLite};
+use crate::processing::transform::Transform::{ Func, Lang, Postgres, SQLite};
 use crate::processing::Layout;
 use crate::sql::{PostgresTransformer, SqliteTransformer};
 use crate::value::Value;
@@ -15,6 +15,8 @@ use std::sync::Arc;
 use crate::optimize::OptimizeStrategy;
 #[cfg(test)]
 use crate::processing::tests::DummyDatabase;
+#[cfg(test)]
+use crate::processing::transform::Transform::DummyDB;
 
 pub trait Taker: Send {
     fn take(&mut self, wagons: &mut Vec<Train>) -> Vec<Train>;
@@ -94,7 +96,8 @@ impl Transform {
             Lang(f) => f.dump(),
             SQLite(c) => c.dump(),
             Postgres(p) => p.dump(),
-            Transform::DummyDB(_) => todo!()
+            #[cfg(test)]
+            DummyDB(_) => "DummyDB".to_string()
         }
     }
 
