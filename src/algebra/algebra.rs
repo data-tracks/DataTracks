@@ -2,7 +2,7 @@ use crate::algebra::aggregate::{Aggregate, ValueLoader};
 use crate::algebra::dual::Dual;
 use crate::algebra::filter::Filter;
 use crate::algebra::join::Join;
-use crate::algebra::project::Project;
+use crate::algebra::project::{Project, ProjectIter};
 use crate::algebra::scan::IndexScan;
 use crate::algebra::set::AlgSet;
 use crate::algebra::union::Union;
@@ -128,7 +128,13 @@ impl Algebra for AlgebraType {
     fn derive_iterator(&mut self) -> Self::Iterator {
         match self {
             AlgebraType::IndexScan(s) => Box::new(s.derive_iterator()),
-            AlgebraType::Project(p) => Box::new(p.derive_iterator()),
+            AlgebraType::Project(p) => {
+                let iter = Box::new(p.derive_iterator());
+                match *iter {
+                    ProjectIter::ValueProjectIterator(p) => Box::new(p),
+                    ProjectIter::ValueSetProjectIterator(p) => Box::new(p),
+                }
+            },
             AlgebraType::Filter(f) => Box::new(f.derive_iterator()),
             AlgebraType::Join(j) => Box::new(j.derive_iterator()),
             AlgebraType::Union(u) => Box::new(u.derive_iterator()),
@@ -163,6 +169,25 @@ pub trait ValueHandler: Send {
 
     fn clone(&self) -> BoxedValueHandler;
 }
+
+
+pub struct IdentityHandler;
+
+impl IdentityHandler {
+
+    pub fn new() -> BoxedValueHandler {
+        Box::new(IdentityHandler {})
+    }
+}
+impl ValueHandler for IdentityHandler {
+    fn process(&self, value: &Value) -> Value {
+        value.clone()
+    }
+    fn clone(&self) -> Box<dyn ValueHandler + Send + 'static> {
+        Box::new(IdentityHandler)
+    }
+}
+
 
 
 pub trait ValueIterator: Iterator<Item=Value> + Send + 'static {

@@ -4,7 +4,7 @@ use crate::algebra::Op::Tuple;
 use crate::algebra::TupleOp::Input;
 use crate::algebra::{AlgebraType, Op, Operator, Replaceable, VariableScan};
 use crate::language::sql::statement::SqlStatement::Identifier;
-use crate::language::sql::statement::{SqlIdentifier, SqlSelect, SqlStatement, SqlVariable};
+use crate::language::sql::statement::{SqlIdentifier, SqlOperator, SqlSelect, SqlStatement, SqlVariable};
 use crate::value::Value;
 
 pub(crate) fn translate(query: SqlStatement) -> Result<AlgebraType, String> {
@@ -97,7 +97,19 @@ fn handle_from(from: SqlStatement) -> Result<AlgebraType, String> {
     match from {
         Identifier(i) => handle_table(i),
         SqlStatement::Variable(v) => handle_variable(v),
+        SqlStatement::Operator(o) => handle_collection_operator(o),
         _ => Err("Could not translate FROM clause".to_string())
+    }
+}
+
+fn handle_collection_operator(operator: SqlOperator) -> Result<AlgebraType, String> {
+    let op = operator.operator;
+    let inputs = operator.operands.into_iter().map(|o| handle_from(o)).collect::<Result<Vec<_>,_>>()?;
+    match inputs.len() {
+        1 => {
+            Ok(AlgebraType::project(Operator::new(op, vec![]), inputs.into_iter().next().unwrap()))
+        }
+        _ => unreachable!()
     }
 }
 

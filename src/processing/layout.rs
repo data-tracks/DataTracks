@@ -131,6 +131,10 @@ impl Layout {
         Layout { type_: Tuple(Box::new(TupleType::from(names.into_iter().map(|n| n.map_or(Layout::default(), |n| Layout::from(n.as_str()))).collect::<Vec<_>>()))), ..Default::default() }
     }
 
+    pub fn or(left: OutputType, right: OutputType) -> Layout {
+        Layout{ name: None, explicit: false, nullable: false, optional: false, type_: Or(vec![left, right]) }
+    }
+
     pub(crate) fn fits(&self, value: &Value) -> bool {
         self.type_.fits(value)
     }

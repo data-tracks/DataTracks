@@ -66,6 +66,9 @@ impl Operator {
                 Literal(_) => Cost::new(1),
                 Context(_) => Cost::new(1),
             },
+            Op::Collection(_) => {
+                self.operands.iter().map(|o| o.calc_cost()).reduce(|a, b| a + b).unwrap_or(Cost::new(0))
+            }
         }
     }
 
@@ -142,7 +145,7 @@ impl Replaceable for Operator {
     ) -> Vec<(AggOp, Vec<Operator>)> {
         match &self.op {
             Op::Agg(_) => replace(self),
-            Tuple(_) => self
+            Tuple(_) | Op::Collection(_) => self
                 .operands
                 .iter_mut()
                 .flat_map(|o| o.replace(replace))
@@ -156,6 +159,7 @@ impl Implementable<BoxedValueHandler> for Operator {
         match &self.op {
             Op::Agg(_) => Err(()),
             Tuple(t) => Ok(t.implement(self.operands.clone())),
+            Op::Collection(_) => Err(())
         }
     }
 }
@@ -165,6 +169,7 @@ impl Implementable<BoxedValueLoader> for Operator {
         match &self.op {
             Op::Agg(a) => a.implement(),
             Tuple(_) => Err(()),
+            Op::Collection(_) => Err(())
         }
     }
 }

@@ -3,21 +3,24 @@ use crate::algebra::algebra::{BoxedValueLoader, ValueHandler};
 use crate::algebra::function::{Implementable, Operator};
 use crate::algebra::operator::AggOp::{Avg, Count, Sum};
 use crate::algebra::operator::TupleOp::{Division, Equal, Minus, Multiplication, Not, Plus};
-use crate::algebra::BoxedValueHandler;
-use crate::algebra::Op::{Agg, Tuple};
+use crate::algebra::{BoxedIterator, BoxedValueHandler, ValueIterator};
+use crate::algebra::Op::{Agg, Collection, Tuple};
 use crate::algebra::TupleOp::{And, Combine, Index, Input, Or};
-use crate::processing::{ArrayType, DictType, Layout, OutputType, TupleType};
+use crate::processing::{ArrayType, DictType, Layout, OutputType, Train, TupleType};
 use crate::value::Value;
 use crate::value::Value::{Array, Bool, Dict, Float, Int, Null, Text, Wagon};
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::Debug;
 use std::str::FromStr;
 use std::vec;
+use crate::algebra::operator::CollectionOp::Unwind;
+use crate::processing::transform::Transform;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Op {
     Agg(AggOp),
     Tuple(TupleOp),
+    Collection(CollectionOp)
 }
 
 impl Op {
@@ -25,20 +28,16 @@ impl Op {
         match self {
             Agg(a) => a.dump(as_call),
             Tuple(t) => t.dump(as_call),
+            Collection(e) => e.dump(as_call)
         }
     }
 
-    pub(crate) fn implement(&self, operators: Vec<Operator>) -> BoxedValueHandler {
-        match self {
-            Agg(_) => panic!("Aggregations should have been replaced!"),
-            Tuple(t) => t.implement(operators),
-        }
-    }
 
     pub(crate) fn derive_input_layout(&self, operands: Vec<Layout>) -> Layout {
         match self {
             Agg(a) => a.derive_input_layout(operands),
             Tuple(t) => t.derive_input_layout(operands),
+            Collection(e) => e.derive_input_layout(operands),
         }
     }
 
@@ -46,7 +45,110 @@ impl Op {
         match self {
             Agg(a) => a.derive_output_layout(operands, inputs),
             Tuple(t) => t.derive_output_layout(operands, inputs),
+            Collection(e) => e.derive_output_layout(operands, inputs),
         }
+    }
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub enum CollectionOp {
+    Unwind
+}
+
+impl CollectionOp {
+
+    pub fn implement(&self, input: BoxedIterator, operators: Vec<Operator>) -> BoxedIterator {
+        match self {
+            Unwind => {
+                let op = match operators.len() {
+                    1 => operators.first().unwrap(),
+                    _ => &Operator::combine(operators)
+                };
+                Box::new(SetProjectIterator::new(input, op.implement().unwrap()))
+            }
+        }
+    }
+
+    pub(crate) fn dump(&self, _as_call: bool) -> String {
+        match self {
+            Unwind => {
+                "UNWIND".to_string()
+            }
+        }
+    }
+
+    pub(crate) fn derive_output_layout(&self, operands: Vec<Layout>, _inputs: HashMap<String, &Layout>) -> Layout {
+        match self {
+            Unwind => {
+                operands.first().cloned().unwrap_or_default()
+            }
+        }
+    }
+
+    pub(crate) fn derive_input_layout(&self, operands: Vec<Layout>) -> Layout {
+        match self {
+            Unwind => {
+                if operands.is_empty() {
+                    Layout::array(None)
+                }else {
+                    operands.first().unwrap().clone()
+                }
+
+            }
+        }
+    }
+}
+
+pub struct SetProjectIterator {
+    input: BoxedIterator,
+    values: Vec<Value>,
+    before_project: BoxedValueHandler,
+}
+
+impl SetProjectIterator {
+    pub fn new(input: BoxedIterator, before_project: BoxedValueHandler) -> Self {
+        Self { input, values: vec![], before_project }
+    }
+}
+
+impl Iterator for SetProjectIterator {
+    type Item = Value;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            if !self.values.is_empty() {
+                return Some(self.values.remove(0));
+            }
+            match self.input.next() {
+                None => return None,
+                Some(values) => {
+                    self.values.append(&mut unwind(values));
+                }
+            }
+        }
+    }
+}
+
+fn unwind<'a>(value: Value) -> Vec<Value> {
+    match value {
+        Array(a) => a.0.clone(),
+        Dict(d) => d.iter().map(|(k, v)| v.clone()).collect(),
+        Wagon(w) => unwind(w.unwrap()),
+        v => vec![v]
+    }
+}
+
+impl ValueIterator for SetProjectIterator {
+    fn dynamically_load(&mut self, trains: Vec<Train>) {
+        self.input.dynamically_load(trains);
+    }
+
+    fn clone(&self) -> BoxedIterator {
+        Box::new(SetProjectIterator::new(self.input.clone(), self.before_project.clone()))
+    }
+
+    fn enrich(&mut self, _transforms: HashMap<String, Transform>) -> Option<BoxedIterator> {
+        None
     }
 }
 
@@ -458,6 +560,7 @@ impl FromStr for Op {
             "count" => Ok(Agg(Count)),
             "sum" => Ok(Agg(Sum)),
             "avg" => Ok(Agg(Avg)),
+            "unwind" => Ok(Collection(Unwind)),
             _ => Err(())
         }
     }

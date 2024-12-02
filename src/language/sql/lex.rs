@@ -414,6 +414,12 @@ mod test {
     }
 
     #[test]
+    fn test_unwind() {
+        let query = "SELECT \"unwind\" FROM UNWIND($0)";
+        test_query_diff(query, query);
+    }
+
+    #[test]
     fn test_single() {
         let query = &select(&quote_identifier("name"), "$0", None, None);
         test_query_diff(query, query);

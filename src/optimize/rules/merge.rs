@@ -118,6 +118,10 @@ impl CreatingVisitor<&mut Operator, Operator> for OperatorMerger<'_> {
                     .collect();
                 parent.clone()
             }
+            Op::Collection(_) => {
+                parent.operands = parent.operands.iter().cloned().map(|mut o| self.visit(&mut o)).collect();
+                parent.clone()
+            }
             Op::Tuple(t) => match t {
                 TupleOp::Name(n)
                     if parent.operands.len() == 1
