@@ -660,8 +660,8 @@ pub mod tests {
         let destination= 5;
 
 
-        test_single_in_out("1{sql|SELECT * FROM $example($0)}", values.clone(), res.clone(), source, destination);
-        test_single_in_out("1{sql|SELECT $example FROM $example($0)}", values, res, source, destination);
+        test_single_in_out("1{sql|SELECT * FROM $example($0)}", values.clone(), res.clone(), source, destination, true);
+        test_single_in_out("1{sql|SELECT $example FROM $example($0)}", values, res, source, destination, true);
     }
 
     #[test]
@@ -672,7 +672,7 @@ pub mod tests {
         let destination = 5;
 
 
-        test_single_in_out("1{sql|SELECT * FROM $example($0.age)}", values.clone(), res.clone(), source, destination);
+        test_single_in_out("1{sql|SELECT * FROM $example($0.age)}", values.clone(), res.clone(), source, destination, true);
     }
 
     #[test]
@@ -683,8 +683,10 @@ pub mod tests {
         let destination = 5;
 
 
-        test_single_in_out("1{sql|SELECT * FROM UNWIND($0)}", values.clone(), res.clone(), source, destination);
+        test_single_in_out("1{sql|SELECT * FROM UNWIND($0)}", values.clone(), res.clone(), source, destination, true);
+        test_single_in_out("1{sql|SELECT unwind FROM UNWIND($0)}", values.clone(), res.clone(), source, destination, true);
     }
+
 
     #[test]
     fn split_test() {
@@ -694,7 +696,51 @@ pub mod tests {
         let destination = 5;
 
 
-        test_single_in_out("1{sql|SELECT SPLIT($0, '\\s+') FROM $0}", values.clone(), res.clone(), source, destination);
+        test_single_in_out("1{sql|SELECT SPLIT($0, '\\s+') FROM $0}", values.clone(), res.clone(), source, destination, true);
+    }
+
+    #[test]
+    fn nested_test() {
+        let values = vec![vec!["Hey there".into(), 3.into()]];
+        let res: Vec<Vec<Value>> = vec![vec!["Hey there".into(), 3.into()]];
+        let source = 1;
+        let destination = 5;
+
+
+        test_single_in_out("1{sql|SELECT * FROM (SELECT * FROM $0)}", values.clone(), res.clone(), source, destination, true);
+    }
+
+    #[test]
+    fn wordcount_test() {
+        let values = vec![vec!["Hey there".into(), "how are you".into()]];
+        let res: Vec<Vec<Value>> = vec![vec!["Hey".into(), "there".into(),"how".into(), "are".into(), "you".into()]];
+        let source = 1;
+        let destination = 5;
+
+
+        test_single_in_out("1{sql|SELECT * FROM UNWIND(SELECT SPLIT($0, '\\s+') FROM $0)}", values.clone(), res.clone(), source, destination, true);
+    }
+
+    #[test]
+    fn group_test() {
+        let values = vec![vec!["Hey".into(), "Hallo".into(), "Hey".into()]];
+        let res: Vec<Vec<Value>> = vec![vec![vec![2.into(), "Hey".into(), 7.into()].into(), vec![1.into(), "Hallo".into(), 6.into()].into()]];
+        let source = 1;
+        let destination = 5;
+
+        test_single_in_out("1{sql|SELECT COUNT(*), $0, COUNT(*) + 5 FROM $0 GROUP BY $0}", values.clone(), res.clone(), source, destination, true);
+    }
+
+
+    #[test]
+    fn wordcount_group_test() {
+        let values = vec![vec!["Hey Hallo".into(), "Hey".into()]];
+        let res: Vec<Vec<Value>> = vec![vec![vec!["Hey".into(), 2.into()].into(), vec!["Hallo".into(), 1.into()].into()]];
+        let source = 1;
+        let destination = 5;
+
+
+        test_single_in_out("1{sql|SELECT unwind, COUNT(*) FROM UNWIND(SELECT SPLIT($0, '\\s+') FROM $0) GROUP BY unwind}", values.clone(), res.clone(), source, destination, false);
     }
 
     #[test]
@@ -705,7 +751,7 @@ pub mod tests {
         let destination = 5;
 
 
-        test_single_in_out("1{sql|SELECT {'key': $0} FROM $0}", values.clone(), res.clone(), source, destination);
+        test_single_in_out("1{sql|SELECT {'key': $0} FROM $0}", values.clone(), res.clone(), source, destination, true);
     }
 
     #[test]
@@ -716,7 +762,7 @@ pub mod tests {
         let destination = 5;
 
 
-        test_single_in_out("1{sql|SELECT [$0] FROM $0}", values.clone(), res.clone(), source, destination);
+        test_single_in_out("1{sql|SELECT [$0] FROM $0}", values.clone(), res.clone(), source, destination, true);
     }
 
     #[test]
@@ -727,7 +773,7 @@ pub mod tests {
         let destination = 5;
 
 
-        test_single_in_out("1{sql|SELECT [$0,$0] FROM $0}", values.clone(), res.clone(), source, destination);
+        test_single_in_out("1{sql|SELECT [$0,$0] FROM $0}", values.clone(), res.clone(), source, destination, true);
     }
 
     #[test]
@@ -738,7 +784,7 @@ pub mod tests {
         let destination = 5;
 
 
-        test_single_in_out("1{sql|SELECT $0.1 FROM $0}", values.clone(), res.clone(), source, destination);
+        test_single_in_out("1{sql|SELECT $0.1 FROM $0}", values.clone(), res.clone(), source, destination, true);
     }
 
     #[test]
@@ -749,7 +795,7 @@ pub mod tests {
         let destination = 5;
 
 
-        test_single_in_out("1{sql|SELECT [$0.1, $0.0] FROM $0}", values.clone(), res.clone(), source, destination);
+        test_single_in_out("1{sql|SELECT [$0.1, $0.0] FROM $0}", values.clone(), res.clone(), source, destination, true);
     }
 
     #[test]
@@ -762,10 +808,10 @@ pub mod tests {
         let destination = 5;
 
 
-        test_single_in_out("1{sql|SELECT {'key': $0, 'key2': $0 } FROM $0}", values.clone(), res.clone(), source, destination);
+        test_single_in_out("1{sql|SELECT {'key': $0, 'key2': $0 } FROM $0}", values.clone(), res.clone(), source, destination, true);
     }
 
-    fn test_single_in_out(query: &str, values: Vec<Vec<Value>>, res: Vec<Vec<Value>>, source: i64, destination: i64) {
+    fn test_single_in_out(query: &str, values: Vec<Vec<Value>>, res: Vec<Vec<Value>>, source: i64, destination: i64, ordered: bool) {
         let mut plan = Plan::parse(
             &format!("\
             0--{query}--2\n\
@@ -801,9 +847,18 @@ pub mod tests {
         let mut train = lock.clone().pop().unwrap();
         drop(lock);
 
-        assert_eq!(train.values.clone().unwrap().len(), res.get(0).unwrap().len());
-        for (i, value) in train.values.take().unwrap().into_iter().enumerate() {
-            assert_eq!(res.get(0).unwrap().get(i).unwrap().clone(), value)
+        let mut expected = res.get(0).unwrap().clone();
+        assert_eq!(train.values.clone().unwrap().len(), expected.len());
+        if ordered {
+            for (i, value) in train.values.take().unwrap().into_iter().enumerate() {
+                assert_eq!(expected.get(i).unwrap().clone(), value)
+            }
+        }else {
+            for value in train.values.take().unwrap().into_iter() {
+                let i = expected.iter().position(|x| x == &value);
+                assert!(i.is_some());
+                expected.remove(i.unwrap());
+            }
         }
     }
 }

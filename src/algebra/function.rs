@@ -42,6 +42,14 @@ impl Operator {
         }
     }
 
+    pub fn contains_agg(&self) -> bool {
+        match &self.op {
+            Op::Agg(_) => return true,
+            _ => {}
+        }
+        self.operands.iter().any(|o| o.contains_agg())
+    }
+
     pub(crate) fn calc_cost(&self) -> Cost {
         match &self.op {
             Op::Agg(a) => match a {

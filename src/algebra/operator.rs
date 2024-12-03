@@ -16,6 +16,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::fmt::Debug;
 use std::str::FromStr;
 use std::vec;
+use tracing::warn;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Op {
@@ -708,7 +709,6 @@ impl SplitOp {
     }
 
     fn split(value: &Value, regex: &str) -> Value {
-        println!("ste {}", regex);
         let re = Regex::new(regex).unwrap();
         match value {
             Text(t) => Value::array(re.split(&t.0).collect::<Vec<_>>().into_iter().map(|v| v.into()).collect::<Vec<_>>(),
@@ -736,7 +736,10 @@ impl ValueHandler for NameOp {
             Dict(d) => d.get(&self.name).unwrap_or(&Value::null()).clone(),
             Null => Value::null(),
             Wagon(w) => self.process(w.value.as_ref()),
-            v => panic!("Could not process {} with key {}", v, self.name),
+            v => {
+                warn!("Could not process {} with key {}", v, self.name);
+                Null
+            },
         }
     }
 
