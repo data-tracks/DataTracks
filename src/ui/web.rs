@@ -21,14 +21,8 @@ use tokio::runtime::Runtime;
 use tower_http::cors::CorsLayer;
 use tracing::{debug, info};
 
-/*curl --header "Content-Type: application/json" \
---request POST \
---json '{"name":"wordcount","plan":"0--1{sql|SELECT * FROM $0}\nIn\nHttp{\"url\": \"localhost\", \"port\": \"3666\"}:0"}' \
-http://localhost:2666/plans/create*/
-/*curl --header "Content-Type: application/json" \
---request POST \
---json '{"name":"wordcount"}' \
-http://localhost:2666/plans/start*/
+/*curl --header "Content-Type: application/json" --request POST --json '{"name":"wordcount","plan":"0--1{sql|SELECT * FROM $0}--2\nIn\nHttp{\"url\": \"localhost\", \"port\": \"3666\"}:0\nOut\nHttp{\"url\": \"localhost\", \"port\": \"4666\"}:2"}' http://localhost:2666/plans/create*/
+/*curl --header "Content-Type: application/json" --request POST --json '{"name":"wordcount"}' http://localhost:2666/plans/start*/
 
 
 // Embed the entire directory

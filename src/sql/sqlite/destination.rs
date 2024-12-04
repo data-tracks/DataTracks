@@ -24,7 +24,7 @@ pub struct LiteDestination {
 }
 
 impl LiteDestination {
-    pub fn new(path: String, query: String) -> LiteDestination {
+    pub fn new(path: String, query: String) -> Self {
         let (tx, _num, rx) = new_channel();
         let connection = SqliteConnector::new(&path);
         let query = DynamicQuery::build_dynamic_query(query);
