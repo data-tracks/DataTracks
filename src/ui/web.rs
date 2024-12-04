@@ -23,8 +23,12 @@ use tracing::{debug, info};
 
 /*curl --header "Content-Type: application/json" \
 --request POST \
---json '{"name":"wordcount","plan":"0--1{sql|SELECT * FROM $0}\nIn\nHttp{\"url\": \"http://localhost\", \"port\": \"3666\"}:0"}' \
+--json '{"name":"wordcount","plan":"0--1{sql|SELECT * FROM $0}\nIn\nHttp{\"url\": \"localhost\", \"port\": \"3666\"}:0"}' \
 http://localhost:2666/plans/create*/
+/*curl --header "Content-Type: application/json" \
+--request POST \
+--json '{"name":"wordcount"}' \
+http://localhost:2666/plans/start*/
 
 
 // Embed the entire directory

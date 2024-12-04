@@ -1,4 +1,4 @@
-pub use crate::http::http::HttpSource;
+pub use crate::http::source::HttpSource;
 pub use debug::DebugDestination;
 pub use layout::ArrayType;
 pub use layout::DictType;

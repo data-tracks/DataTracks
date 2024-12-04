@@ -28,6 +28,7 @@ use tower_http::cors::CorsLayer;
 use tracing::{debug, info, warn};
 use tracing_subscriber::fmt::format;
 
+// ws: npx wscat -c ws://127.0.0.1:3666/ws/data
 // messages like: curl --json '{"website": "linuxize.com"}' localhost:5555/data/isabel
 #[derive(Clone)]
 pub struct HttpSource {
@@ -42,116 +43,112 @@ impl HttpSource {
         HttpSource { id: GLOBAL_ID.new_id(), url, port, outs: Default::default() }
     }
 
+}
 
-    async fn publish(State(state): State<SourceState>, Json(payload): Json<Value>) -> impl IntoResponse {
-        debug!("New http message received: {:?}", payload);
+async fn publish(State(state): State<SourceState>, Json(payload): Json<Value>) -> impl IntoResponse {
+    debug!("New http message received: {:?}", payload);
 
-        let value = Self::transform_to_value(payload);
-        let train = Train::new(-1, vec![value::Value::Dict(value)]);
+    let value = transform_to_value(payload);
+    let train = Train::new(-1, vec![value::Value::Dict(value)]);
 
-        for out in state.source.lock().unwrap().iter() {
-            out.send(train.clone()).unwrap();
-        }
-
-        // Return a response
-        (StatusCode::OK, "Done".to_string())
+    for out in state.source.lock().unwrap().iter() {
+        out.send(train.clone()).unwrap();
     }
 
-    fn transform_to_value(payload: Value) -> Dict {
-        match payload {
-            Value::Object(o) => o.into(),
-            v => {
-                let mut map = BTreeMap::new();
-                map.insert(String::from("data"), v.into());
-                Dict::new(map)
-            }
-        }
-    }
+    // Return a response
+    (StatusCode::OK, "Done".to_string())
+}
 
-    async fn publish_with_topic(Path(topic): Path<String>, State(state): State<SourceState>, Json(payload): Json<Value>) -> impl IntoResponse {
-        debug!("New http message received: {:?}", payload);
-
-        let mut dict = Self::transform_to_value(payload);
-        dict.insert(String::from("topic"), value::Value::text(topic.as_str()));
-
-        let train = Train::new(-1, vec![value::Value::Dict(dict)]);
-        for out in state.source.lock().unwrap().iter() {
-            out.send(train.clone()).unwrap();
-        }
-
-
-        // Return a response
-        (StatusCode::OK, "Done".to_string())
-    }
-
-    async fn startup(self, _rx: Receiver<Command>) {
-        info!("starting http source on {url}:{port}...", url=self.url, port=self.port);
-        // We could also read our port in from the environment as well
-        let url = match &self.url {
-            u if u.to_lowercase() == "localhost" => "127.0.0.1",
-            u => u.as_str(),
-        };
-
-        let addr = match &url {
-            url if url.parse::<IpAddr>().is_ok() => {
-                    format!("{url}:{port}", url = url, port = self.port)
-                        .parse::<SocketAddr>()
-                        .map_err(| e | format!("Failed to parse address: {}", e)).unwrap()
-                }
-            _ => {
-                tokio::net::lookup_host(format!("{url}:{port}", url=url, port=self.port)).await.unwrap()
-                    .next()
-                    .ok_or("No valid addresses found").unwrap()
-            }
-        };
-
-        let state = SourceState { source: Arc::new(Mutex::new(self.outs.clone())) };
-
-        let app = Router::new()
-            .route("/data", post(Self::publish))
-            .route("/data/*topic", post(Self::publish_with_topic))
-            .route("/ws/data", get(Self::publish_ws))
-            .layer(CorsLayer::permissive())
-            .with_state(state);
-
-        let listener = TcpListener::bind(&addr).await.unwrap();
-        axum::serve(listener, app).await.unwrap();
-    }
-
-    async fn publish_ws(ws: WebSocketUpgrade, State(state): State<SourceState>) -> Response {
-        ws.on_upgrade(|socket|Self::handle_socket(socket, state))
-    }
-
-    async fn handle_socket(mut socket: WebSocket, state: SourceState) {
-        while let Some(msg) = socket.recv().await {
-            match msg {
-                Ok(Message::Text(text)) => {
-                    debug!("New http message received: {:?}", text);
-
-                    let value = if let Ok(payload) = serde_json::from_str::<Value>(&text) {
-                        Self::transform_to_value(payload)
-                    } else{
-                        let value = json!({"d": text});
-                        Self::transform_to_value(value.get("d").unwrap().clone())
-                    };
-                    let train = Train::new(-1, vec![value::Value::Dict(value)]);
-
-                    debug!("New train created: {:?}", train);
-                    for out in state.source.lock().unwrap().iter_mut() {
-                        if let Err(e) = out.send(train.clone()) {
-                            debug!("Failed to send message: {:?}", e);
-                        }
-                    }
-                }
-                _ => warn!("Error while reading from socket: {:?}", msg)
-            }
+fn transform_to_value(payload: Value) -> Dict {
+    match payload {
+        Value::Object(o) => o.into(),
+        v => {
+            let mut map = BTreeMap::new();
+            map.insert(String::from("data"), v.into());
+            Dict::new(map)
         }
     }
 }
 
+async fn publish_with_topic(Path(topic): Path<String>, State(state): State<SourceState>, Json(payload): Json<Value>) -> impl IntoResponse {
+    debug!("New http message received: {:?}", payload);
+
+    let mut dict = transform_to_value(payload);
+    dict.insert(String::from("topic"), value::Value::text(topic.as_str()));
+
+    let train = Train::new(-1, vec![value::Value::Dict(dict)]);
+    for out in state.source.lock().unwrap().iter() {
+        out.send(train.clone()).unwrap();
+    }
 
 
+    // Return a response
+    (StatusCode::OK, "Done".to_string())
+}
 
+async fn startup(http: HttpSource, _rx: Receiver<Command>) {
+    info!("starting http source on {url}:{port}...", url=http.url, port=http.port);
+    // We could also read our port in from the environment as well
+    let url = match &http.url {
+        u if u.to_lowercase() == "localhost" => "127.0.0.1",
+        u => u.as_str(),
+    };
+
+    let addr = match &url {
+        url if url.parse::<IpAddr>().is_ok() => {
+            format!("{url}:{port}", url = url, port = http.port)
+                .parse::<SocketAddr>()
+                .map_err(| e | format!("Failed to parse address: {}", e)).unwrap()
+        }
+        _ => {
+            tokio::net::lookup_host(format!("{url}:{port}", url=url, port=http.port)).await.unwrap()
+                .next()
+                .ok_or("No valid addresses found").unwrap()
+        }
+    };
+
+    let state = SourceState { source: Arc::new(Mutex::new(http.outs.clone())) };
+
+    let app = Router::new()
+        .route("/data", post(publish))
+        .route("/data/*topic", post(publish_with_topic))
+        .route("/ws/data", get(publish_ws))
+        .layer(CorsLayer::permissive())
+        .with_state(state);
+
+    let listener = TcpListener::bind(&addr).await.unwrap();
+    axum::serve(listener, app).await.unwrap();
+}
+
+async fn publish_ws(ws: WebSocketUpgrade, State(state): State<SourceState>) -> Response {
+    ws.on_upgrade(|socket|handle_socket(socket, state))
+}
+
+async fn handle_socket(mut socket: WebSocket, state: SourceState) {
+    while let Some(msg) = socket.recv().await {
+        match msg {
+            Ok(Message::Text(text)) => {
+                debug!("New http message received: {:?}", text);
+
+                let value = if let Ok(payload) = serde_json::from_str::<Value>(&text) {
+                    transform_to_value(payload)
+                } else{
+                    let value = json!({"d": text});
+                    transform_to_value(value.get("d").unwrap().clone())
+                };
+                let train = Train::new(-1, vec![value::Value::Dict(value)]);
+
+                debug!("New train created: {:?}", train);
+                for out in state.source.lock().unwrap().iter_mut() {
+                    if let Err(e) = out.send(train.clone()) {
+                        debug!("Failed to send message: {:?}", e);
+                    }
+                }
+            }
+            _ => warn!("Error while reading from socket: {:?}", msg)
+        }
+    }
+}
 
 impl Configurable for HttpSource {
     fn get_name(&self) -> String {
@@ -180,10 +177,12 @@ impl Source for HttpSource {
         let rt = Runtime::new().unwrap();
 
         let (tx, rx) = unbounded();
+
         let clone = self.clone();
+
         thread::spawn(move || {
             rt.block_on(async {
-                Self::startup(clone, rx).await;
+                startup(clone, rx).await;
             });
         });
 
