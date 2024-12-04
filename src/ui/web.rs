@@ -21,6 +21,12 @@ use tokio::runtime::Runtime;
 use tower_http::cors::CorsLayer;
 use tracing::{debug, info};
 
+/*curl --header "Content-Type: application/json" \
+--request POST \
+--json '{"name":"wordcount","plan":"0--1{sql|SELECT * FROM $0}\nIn\nHttp{\"url\": \"http://localhost\", \"port\": \"3666\"}:0"}' \
+http://localhost:2666/plans/create*/
+
+
 // Embed the entire directory
 static ASSETS_DIR: Dir<'_> = include_dir!("ui/dist");
 
@@ -126,7 +132,7 @@ async fn create_plan(State(state): State<WebState>, Json(payload): Json<CreatePl
 async fn start_plan(State(state): State<WebState>, Json(payload): Json<PlanPayload>) -> impl IntoResponse {
     debug!("{:?}", payload);
 
-    state.storage.lock().unwrap().start_plan(payload.plan_id);
+    state.storage.lock().unwrap().start_plan_by_name(payload.name);
 
     // Return a response
     (StatusCode::OK, "Plan started".to_string())
@@ -203,5 +209,5 @@ struct WebState {
 
 #[derive(Deserialize, Debug)]
 struct PlanPayload {
-    plan_id: i64
+    name: String,
 }

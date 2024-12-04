@@ -7,20 +7,26 @@ use crate::ui::ConfigModel;
 use crate::util::{Tx, GLOBAL_ID};
 use crate::value;
 use crate::value::Dict;
-use axum::extract::{Path, State};
+use axum::extract::{Path, State, WebSocketUpgrade};
 use axum::http::StatusCode;
-use axum::response::IntoResponse;
-use axum::routing::post;
+use axum::response::{IntoResponse, Response};
+use axum::routing::{get, post};
 use axum::{Json, Router};
 use crossbeam::channel::{unbounded, Receiver, Sender};
-use serde_json::{Map, Value};
+use serde_json::{json, Map, Value};
 use std::collections::{BTreeMap, HashMap};
+use std::net::{IpAddr, SocketAddr};
 use std::sync::{Arc, Mutex};
 use std::thread;
+use axum::extract::ws::{Message, WebSocket};
+use futures_util::stream::{SplitSink, SplitStream};
+use futures_util::StreamExt;
+use json::value;
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
 use tower_http::cors::CorsLayer;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
+use tracing_subscriber::fmt::format;
 
 // messages like: curl --json '{"website": "linuxize.com"}' localhost:5555/data/isabel
 #[derive(Clone)]
@@ -79,22 +85,73 @@ impl HttpSource {
     }
 
     async fn startup(self, _rx: Receiver<Command>) {
-        info!("starting http source...");
+        info!("starting http source on {url}:{port}...", url=self.url, port=self.port);
         // We could also read our port in from the environment as well
-        let addr = std::net::SocketAddr::from(([0, 0, 0, 0], self.port));
+        let url = match &self.url {
+            u if u.to_lowercase() == "localhost" => "127.0.0.1",
+            u => u.as_str(),
+        };
+
+        let addr = match &url {
+            url if url.parse::<IpAddr>().is_ok() => {
+                    format!("{url}:{port}", url = url, port = self.port)
+                        .parse::<SocketAddr>()
+                        .map_err(| e | format!("Failed to parse address: {}", e)).unwrap()
+                }
+            _ => {
+                tokio::net::lookup_host(format!("{url}:{port}", url=url, port=self.port)).await.unwrap()
+                    .next()
+                    .ok_or("No valid addresses found").unwrap()
+            }
+        };
 
         let state = SourceState { source: Arc::new(Mutex::new(self.outs.clone())) };
 
         let app = Router::new()
             .route("/data", post(Self::publish))
             .route("/data/*topic", post(Self::publish_with_topic))
+            .route("/ws/data", get(Self::publish_ws))
             .layer(CorsLayer::permissive())
             .with_state(state);
 
         let listener = TcpListener::bind(&addr).await.unwrap();
         axum::serve(listener, app).await.unwrap();
     }
+
+    async fn publish_ws(ws: WebSocketUpgrade, State(state): State<SourceState>) -> Response {
+        ws.on_upgrade(|socket|Self::handle_socket(socket, state))
+    }
+
+    async fn handle_socket(mut socket: WebSocket, state: SourceState) {
+        while let Some(msg) = socket.recv().await {
+            match msg {
+                Ok(Message::Text(text)) => {
+                    debug!("New http message received: {:?}", text);
+
+                    let value = if let Ok(payload) = serde_json::from_str::<Value>(&text) {
+                        Self::transform_to_value(payload)
+                    } else{
+                        let value = json!({"d": text});
+                        Self::transform_to_value(value.get("d").unwrap().clone())
+                    };
+                    let train = Train::new(-1, vec![value::Value::Dict(value)]);
+
+                    debug!("New train created: {:?}", train);
+                    for out in state.source.lock().unwrap().iter_mut() {
+                        if let Err(e) = out.send(train.clone()) {
+                            debug!("Failed to send message: {:?}", e);
+                        }
+                    }
+                }
+                _ => warn!("Error while reading from socket: {:?}", msg)
+            }
+        }
+    }
 }
+
+
+
+
 
 impl Configurable for HttpSource {
     fn get_name(&self) -> String {
@@ -114,7 +171,9 @@ impl Source for HttpSource {
     where
         Self: Sized,
     {
-        Ok(HttpSource::new(String::from(options.get("url").unwrap().as_str().unwrap()), options.get("port").unwrap().as_u64().unwrap() as u16))
+        Ok(HttpSource::new(
+            String::from(options.get("url").map(|url| url.as_str().ok_or("Could not parse url.")).ok_or(format!("Did not provide necessary url {:?}.", options))??),
+            options.get("port").map(|port| port.as_str().ok_or("Could not parse port.").map(|v| v.parse::<u16>().map_err(|err| "Could not parse error"))?).ok_or(format!("Did not provide necessary port {:?}.", options))??))
     }
 
     fn operate(&mut self, _control: Arc<Sender<Command>>) -> Sender<Command> {

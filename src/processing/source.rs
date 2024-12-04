@@ -13,11 +13,13 @@ use crate::ui::ConfigModel;
 use crate::util::Tx;
 use crossbeam::channel::Sender;
 use serde_json::{Map, Value};
+use crate::processing::HttpSource;
 
 pub fn parse_source(type_: &str, options: Map<String, Value>) -> Result<Box<dyn Source>, String> {
     let source: Box<dyn Source> = match type_.to_ascii_lowercase().as_str() {
         "mqtt" => Box::new(MqttSource::parse(options)?),
         "sqlite" => Box::new(LiteSource::parse(options)?),
+        "http" => Box::new(HttpSource::parse(options)?),
         #[cfg(test)]
         "dummy" => Box::new(DummySource::parse(options)?),
         _ => Err(format!("Invalid type: {}", type_))?,
