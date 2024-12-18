@@ -2,7 +2,7 @@ use crate::value::Value;
 use serde::{Deserialize, Serialize};
 use std::fmt::Formatter;
 
-#[derive(Eq, Hash, Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Eq, Hash, Clone, Debug, PartialEq, Serialize, Deserialize, rkyv::Serialize, rkyv::Deserialize, rkyv::Archive)]
 pub struct Array(pub Vec<Value>);
 
 impl Array {

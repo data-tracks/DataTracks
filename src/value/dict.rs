@@ -5,8 +5,9 @@ use std::collections::btree_map::{IntoIter, Keys, Values};
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
+use rkyv::Place;
 
-#[derive(Eq, Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Eq, Clone, Debug, Default, Serialize, Deserialize, rkyv::Serialize, rkyv::Deserialize, rkyv::Archive)]
 pub struct Dict {
     values: BTreeMap<String, Value>,
     alternative: BTreeMap<String, String>, // "alternative_name" -> Value

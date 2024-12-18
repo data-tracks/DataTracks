@@ -1,24 +1,23 @@
-use std::fs::File;
+use crate::value::Value;
 use redb::{Database, Error, TableDefinition, TypeName};
 use tempfile::NamedTempFile;
-use crate::value::Value;
 
 pub struct Storage<'a>{
     file: NamedTempFile,
     table_name: String,
-    table: TableDefinition<'a, &'a str, Value>,
-    database: &'a Database,
+    table: TableDefinition<'a, String, Value>,
+    database: Database,
 }
 
-impl Storage {
-    pub fn new(file: &str, table_name: &str) -> Result<Storage, String> {
+impl<'a> Storage<'a> {
+    pub fn new(file: &'a str, table_name: &'a str) -> Result<Storage<'a>, String> {
         let file = NamedTempFile::new().map_err(|e| e.to_string())?;
         let db = Database::create(file.path()).map_err(|e| e.to_string())?;
         Ok(Storage{
             file,
             table_name: table_name.to_string(),
             table: TableDefinition::new(table_name),
-            database: &db,
+            database: db,
         })
     }
     fn write(&self, key: &str, value: &Value) -> Result<(), Error> {
@@ -26,7 +25,7 @@ impl Storage {
         let write_txn = self.database.begin_write()?;
         {
             let mut table = write_txn.open_table(self.table)?;
-            table.insert(key, value)?;
+            table.insert(key.to_string(), value)?;
         }
         write_txn.commit()?;
 
@@ -36,38 +35,45 @@ impl Storage {
     fn read(&self, key: &str) -> Result<Value, Error> {
         let read_txn = self.database.begin_read()?;
         let table = read_txn.open_table(self.table)?;
-        Ok(table.get(key)?.unwrap().value())
+        Ok(table.get(key.to_string())?.unwrap().value())
     }
 }
 
 impl redb::Value for Value{
-    type SelfType<'a>
-    where
-        Self: 'a = Value;
-    type AsBytes<'a>
-    where
-        Self: 'a = ();
+    type SelfType<'a> = Value where Self: 'a;
+    type AsBytes<'a> = &'a [u8] where Self: 'a;
 
     fn fixed_width() -> Option<usize> {
-        todo!()
+        None
     }
 
     fn from_bytes<'a>(data: &'a [u8]) -> Self::SelfType<'a>
     where
         Self: 'a
     {
-        todo!()
+        rkyv::from_bytes(&data).unwrap()
     }
 
     fn as_bytes<'a, 'b: 'a>(value: &'a Self::SelfType<'b>) -> Self::AsBytes<'a>
     where
         Self: 'b
     {
-        todo!()
+        rkyv::to_bytes(&value).unwrap().as_slice()
     }
 
     fn type_name() -> TypeName {
-        todo!()
+        TypeName::new("value")
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use crate::util::storage::Storage;
+
+    #[test]
+    pub fn test_write() {
+        let storage = Storage::new("test", "table").unwrap();
     }
 }
 
