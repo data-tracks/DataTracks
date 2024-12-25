@@ -204,7 +204,7 @@ impl OperatorMerger<'_> {
             }
             Op::Tuple(TupleOp::Literal(l)) => match &l.literal {
                 Value::Array(a) => {
-                    Operator::literal(a.0.get(index).expect("Index out of bounds").clone())
+                    Operator::literal(a.values.get(index).expect("Index out of bounds").clone())
                 }
                 Value::Dict(d) => Operator::literal(
                     d.values()
@@ -214,7 +214,7 @@ impl OperatorMerger<'_> {
                 ),
                 Value::Wagon(w) => match w.value.as_ref() {
                     Value::Array(a) => {
-                        Operator::literal(a.0.get(index).expect("Index out of bounds").clone())
+                        Operator::literal(a.values.get(index).expect("Index out of bounds").clone())
                     }
                     Value::Dict(d) => Operator::literal(
                         d.values()

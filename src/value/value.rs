@@ -158,7 +158,7 @@ impl Value {
                     _ => Ok(Bool(false))
                 }
             }
-            Value::Array(a) => Ok(Bool(!a.0.is_empty())),
+            Value::Array(a) => Ok(Bool(!a.values.is_empty())),
             Value::Dict(d) => Ok(Bool(!d.is_empty())),
             Value::Null => Ok(Bool(false)),
             Wagon(w) => w.value.as_bool()
@@ -171,7 +171,7 @@ impl Value {
             Value::Float(f) => Ok(Text(f.as_f64().to_string())),
             Value::Bool(b) => Ok(Text(b.0.to_string())),
             Value::Text(t) => Ok(t.clone()),
-            Value::Array(a) => Ok(Text(format!("[{}]", a.0.iter().map(|v| v.as_text().unwrap().0).collect::<Vec<String>>().join(",")))),
+            Value::Array(a) => Ok(Text(format!("[{}]", a.values.iter().map(|v| v.as_text().unwrap().0).collect::<Vec<String>>().join(",")))),
             Value::Dict(d) => Ok(Text(format!("[{}]", d.iter().map(|(k, v)| format!("{}:{}", k, v.as_text().unwrap().0)).collect::<Vec<String>>().join(",")))),
             Value::Null => Ok(Text("null".to_owned())),
             Wagon(w) => w.value.as_text()
@@ -228,7 +228,7 @@ impl PartialEq for Value {
             (Value::Text(t), _) => other.as_text().map(|other| other.0 == t.0).unwrap_or(false),
 
             (Value::Array(a), _) => other.as_array().map(|other| {
-                a.0.len() == other.0.len() && a.0.iter().zip(other.0.iter()).all(|(a, b)| a == b)
+                a.values.len() == other.values.len() && a.values.iter().zip(other.values.iter()).all(|(a, b)| a == b)
             }).unwrap_or(false),
 
             (Value::Dict(d), _) => other.as_dict().map(|other| {
@@ -255,7 +255,7 @@ impl Hash for Value {
                 t.0.hash(state);
             }
             Value::Array(a) => {
-                for val in &a.0 {
+                for val in &(*a.values) {
                     val.hash(state)
                 }
             }
@@ -384,7 +384,7 @@ impl Add for &Value {
             // array
             (Value::Array(a), b) => {
                 let mut a = a.clone();
-                a.0.push(b.clone());
+                a.values.push(b.clone());
                 Value::Array(a)
             }
             // Handle Wagon custom addition
@@ -428,7 +428,7 @@ impl AddAssign for Value {
                 t.0 += &rhs.as_text().unwrap().0
             }
             Value::Array(a) => {
-                a.0.push(rhs)
+                a.values.push(rhs)
             }
             Value::Dict(d) => {
                 d.append(&mut rhs.as_dict().unwrap())

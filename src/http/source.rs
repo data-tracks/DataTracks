@@ -6,28 +6,18 @@ use crate::processing::Train;
 use crate::ui::ConfigModel;
 use crate::util::{Tx, GLOBAL_ID};
 use crate::value;
-use crate::value::Dict;
-use axum::extract::{Path, State, WebSocketUpgrade};
-use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
-use axum::{Json, Router};
+use axum::Router;
 use crossbeam::channel::{unbounded, Receiver, Sender};
-use serde_json::{json, Map, Value};
-use std::collections::{BTreeMap, HashMap};
-use std::net::{IpAddr, SocketAddr};
+use serde_json::{Map, Value};
+use std::collections::{HashMap};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use axum::extract::ws::{Message, WebSocket};
-use futures_util::stream::{SplitSink, SplitStream};
-use futures_util::StreamExt;
-use json::value;
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
 use tower_http::cors::CorsLayer;
-use tracing::{debug, info, warn};
-use tracing_subscriber::fmt::format;
-use crate::http::util::{parse_addr, receive, receive_with_topic, receive_ws, transform_to_value};
+use tracing::info;
+use crate::http::util::{parse_addr, receive, receive_with_topic, receive_ws};
 
 // ws: npx wscat -c ws://127.0.0.1:3666/ws/data
 // messages like: curl --json '{"website": "linuxize.com"}' localhost:5555/data/isabel

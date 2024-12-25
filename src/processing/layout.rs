@@ -589,10 +589,10 @@ impl From<&Value> for OutputType {
             Value::Bool(_) => Boolean,
             Value::Text(_) => Text,
             Value::Array(a) => {
-                let output = if a.0.is_empty() {
+                let output = if a.values.is_empty() {
                     Any
                 } else {
-                    OutputType::from(&a.0.first().unwrap().clone())
+                    OutputType::from(&a.values.first().unwrap().clone())
                 };
                 let layout = Layout { type_: output, ..Default::default() };
 
@@ -625,7 +625,7 @@ impl ArrayType {
         Self { fields, length }
     }
     pub(crate) fn fits(&self, array: &value::Array) -> bool {
-        array.0.iter().all(|a| self.fields.fits(a))
+        array.values.iter().all(|a| self.fields.fits(a))
     }
 }
 
@@ -642,7 +642,7 @@ impl TupleType {
     }
 
     pub(crate) fn fits(&self, array: &value::Array) -> bool {
-        array.0.len() == self.names.len() && array.0.iter().zip(self.fields.iter()).all(|(element, layout)| layout.fits(element))
+        array.values.len() == self.names.len() && array.values.iter().zip(self.fields.iter()).all(|(element, layout)| layout.fits(element))
     }
 }
 

@@ -52,7 +52,7 @@ fn handle_select(query: SqlSelect) -> Result<MaybeAliasAlg, String> {
         }
     };
 
-    let mut function = match projections.len() {
+    let function = match projections.len() {
         1 => {
             let function = projections.pop().unwrap();
             match function.op {

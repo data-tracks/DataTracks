@@ -8,7 +8,6 @@ pub use algebra::ValueIterator;
 pub use dual::Dual;
 pub use filter::Filter;
 pub use function::Operator;
-pub use function::Replaceable;
 pub use join::Join;
 pub use operator::ContextOp;
 pub use operator::Op;

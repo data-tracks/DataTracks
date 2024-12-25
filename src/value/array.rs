@@ -3,11 +3,13 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Formatter;
 
 #[derive(Eq, Hash, Clone, Debug, PartialEq, Serialize, Deserialize, rkyv::Serialize, rkyv::Deserialize, rkyv::Archive)]
-pub struct Array(pub Vec<Value>);
+pub struct Array{
+    pub values: Vec<Value>
+}
 
 impl Array {
     pub fn new(values: Vec<Value>) -> Self {
-        Array(values)
+        Array{values }
     }
 }
 
@@ -21,7 +23,7 @@ impl From<Vec<Value>> for Value {
 
 impl std::fmt::Display for Array {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.0)
+        write!(f, "{:?}", self.values)
     }
 }
 

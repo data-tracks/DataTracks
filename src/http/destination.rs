@@ -2,23 +2,21 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use axum::Router;
-use axum::routing::{get, post};
+use axum::routing::{get};
 use crossbeam::channel::{unbounded, Receiver, Sender};
 use serde_json::{Map, Value};
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
 use tower_http::cors::CorsLayer;
 use tracing::info;
-use crate::http::source::SourceState;
-use crate::http::util::{parse_addr, publish_ws, receive, receive_with_topic, receive_ws};
+use crate::http::util::{parse_addr, publish_ws};
 use crate::processing::destination::Destination;
 use crate::processing::option::Configurable;
 use crate::processing::plan::DestinationModel;
 use crate::processing::station::Command;
-use crate::processing::{HttpSource, Train};
-use crate::sql::LiteDestination;
+use crate::processing::{Train};
 use crate::ui::ConfigModel;
-use crate::util::{new_channel, DynamicQuery, Rx, Tx};
+use crate::util::{new_channel, Rx, Tx};
 
 #[derive(Clone)]
 pub struct HttpDestination {

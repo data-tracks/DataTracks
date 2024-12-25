@@ -1,6 +1,6 @@
 use crate::algebra::aggregate::{AvgOperator, CountOperator, SumOperator};
 use crate::algebra::algebra::{BoxedValueLoader, ValueHandler};
-use crate::algebra::function::{ArgImplementable, Implementable, Operator};
+use crate::algebra::function::{Implementable, Operator};
 use crate::algebra::operator::AggOp::{Avg, Count, Sum};
 use crate::algebra::operator::CollectionOp::Unwind;
 use crate::algebra::operator::TupleOp::{Division, Equal, Minus, Multiplication, Not, Plus};
@@ -138,7 +138,7 @@ impl Iterator for SetProjectIterator {
 
 fn unwind<'a>(value: Value) -> Vec<Value> {
     match value {
-        Array(a) => a.0.clone(),
+        Array(a) => a.values.clone(),
         Dict(d) => d.iter().map(|(_, v)| v.clone()).collect(),
         Wagon(w) => unwind(w.unwrap()),
         v => vec![v],
@@ -277,7 +277,7 @@ impl TupleOp {
                     let mut map = BTreeMap::new();
                     value.iter().for_each(|k| {
                         let pair = k.as_array().unwrap();
-                        map.insert(pair.0[0].as_text().unwrap().0, pair.0[1].clone());
+                        map.insert(pair.values[0].as_text().unwrap().0, pair.values[1].clone());
                     });
                     Value::dict(map)
                 },
@@ -565,7 +565,7 @@ impl IndexOp {
 impl ValueHandler for IndexOp {
     fn process(&self, value: &Value) -> Value {
         match value {
-            Array(a) => a.0.get(self.index).unwrap_or(&Value::null()).clone(),
+            Array(a) => a.values.get(self.index).unwrap_or(&Value::null()).clone(),
             Dict(d) => d
                 .get(&format!("${}", self.index))
                 .unwrap_or(&Value::null())
@@ -639,7 +639,7 @@ impl ValueHandler for ContextOp {
             }
             Array(a) => {
                 let mut array =
-                    a.0.iter()
+                    a.values.iter()
                         .filter(|v| match v {
                             Wagon(w) => w.origin == self.name,
                             _ => false,
@@ -764,7 +764,7 @@ pub struct IndexedRefOperator {
 impl ValueHandler for IndexedRefOperator {
     fn process(&self, value: &Value) -> Value {
         match value {
-            Array(a) => a.0.get(self.index).cloned().unwrap(),
+            Array(a) => a.values.get(self.index).cloned().unwrap(),
             Null => Value::null(),
             _ => panic!(),
         }

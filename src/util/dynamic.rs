@@ -139,7 +139,7 @@ impl DynamicQuery {
             let func: FieldExtractor = match part {
                 Segment::DynamicIndex(i) => Box::new(move |value| {
                     if let Array(array) = value {
-                        array.0.get(i).unwrap().clone()
+                        array.values.get(i).unwrap().clone()
                     } else {
                         panic!()
                     }
