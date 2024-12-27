@@ -18,7 +18,7 @@ use std::hash::{Hash, Hasher};
 use std::ops::{Add, AddAssign, Div, Mul, Sub};
 use tracing::warn;
 
-#[derive(Eq, Clone, Debug, Serialize, Deserialize, rkyv::Serialize, rkyv::Deserialize, rkyv::Archive)]
+#[derive(Eq, Clone, Debug, Serialize, Deserialize)]
 pub enum Value {
     Int(Int),
     Float(Float),

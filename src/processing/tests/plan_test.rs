@@ -67,9 +67,9 @@ pub mod dummy {
 
             let values = match values {
                 Value::Array(a) => {
-                    a.0.into_iter().map(|v| match v {
+                    a.values.into_iter().map(|v| match v {
                         Value::Array(a) => {
-                            a.0
+                            a.values
                         }
                         _ => vec![]
                     }).collect()

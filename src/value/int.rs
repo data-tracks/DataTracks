@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::{Debug, Formatter};
 use std::ops::{Add, Div, Sub};
 
-#[derive(Eq, Hash, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, rkyv::Serialize, rkyv::Deserialize, rkyv::Archive)]
+#[derive(Eq, Hash, PartialEq, Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Int(pub(crate) i64);
 
 impl Add for Int {

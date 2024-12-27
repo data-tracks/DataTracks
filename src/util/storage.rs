@@ -1,25 +1,35 @@
 use crate::value::Value;
 use redb::{Database, Error, TableDefinition, TypeName};
+use std::ops::Deref;
 use tempfile::NamedTempFile;
 
 pub struct Storage<'a>{
-    file: NamedTempFile,
     table_name: String,
     table: TableDefinition<'a, String, Value>,
     database: Database,
 }
 
 impl<'a> Storage<'a> {
-    pub fn new(file: &'a str, table_name: &'a str) -> Result<Storage<'a>, String> {
+
+    pub fn new_temp(table_name: &'a str) -> Result<Storage<'a>, String> {
         let file = NamedTempFile::new().map_err(|e| e.to_string())?;
-        let db = Database::create(file.path()).map_err(|e| e.to_string())?;
+        let db = Database::create(file).map_err(|e| e.to_string())?;
         Ok(Storage{
-            file,
             table_name: table_name.to_string(),
             table: TableDefinition::new(table_name),
             database: db,
         })
     }
+
+    pub fn new_from_path(file: &str, table_name: &'a str) -> Result<Storage<'a>, String> {
+        let db = Database::create(file).map_err(|e| e.to_string())?;
+        Ok(Storage{
+            table_name: table_name.to_string(),
+            table: TableDefinition::new(table_name),
+            database: db,
+        })
+    }
+
     fn write(&self, key: &str, value: &Value) -> Result<(), Error> {
 
         let write_txn = self.database.begin_write()?;
@@ -41,7 +51,7 @@ impl<'a> Storage<'a> {
 
 impl redb::Value for Value{
     type SelfType<'a> = Value where Self: 'a;
-    type AsBytes<'a> = &'a [u8] where Self: 'a;
+    type AsBytes<'a> = Vec<u8> where Self: 'a;
 
     fn fixed_width() -> Option<usize> {
         None
@@ -51,14 +61,14 @@ impl redb::Value for Value{
     where
         Self: 'a
     {
-        rkyv::from_bytes(&data).unwrap()
+        postcard::from_bytes(&data).unwrap()
     }
 
     fn as_bytes<'a, 'b: 'a>(value: &'a Self::SelfType<'b>) -> Self::AsBytes<'a>
     where
         Self: 'b
     {
-        rkyv::to_bytes(&value).unwrap().as_slice()
+        postcard::to_allocvec(value).unwrap()
     }
 
     fn type_name() -> TypeName {
@@ -70,10 +80,16 @@ impl redb::Value for Value{
 #[cfg(test)]
 mod tests {
     use crate::util::storage::Storage;
+    use crate::value::Value;
 
     #[test]
     pub fn test_write() {
-        let storage = Storage::new("test", "table").unwrap();
+        let storage = Storage::new_temp( "table").unwrap();
+        storage.write("test", &Value::text("David")).unwrap();
+        storage.write("test2", &Value::text("Isabel")).unwrap();
+
+        assert_eq!(storage.read("test").unwrap(), Value::text("David"));
+        assert_ne!(storage.read("test").unwrap(), Value::text("David2"));
     }
 }
 

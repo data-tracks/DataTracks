@@ -42,7 +42,7 @@ regex = "1.11.1"
 postgres = "0.19.9"
 redb = "2.3.0"
 tempfile = "3.14.0"
-rkyv = { version = "0.8.9", features = ["std"] }
+postcard = { version = "=1.0.10", features = ["alloc"] }
 
 [dev-dependencies]
 rstest = "0.23.0"

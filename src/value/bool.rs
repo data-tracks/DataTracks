@@ -3,7 +3,7 @@ use crate::value_display;
 use serde::{Deserialize, Serialize};
 use std::fmt::Formatter;
 
-#[derive(Eq, PartialEq, Hash, Clone, Debug, Serialize, Deserialize, rkyv::Serialize, rkyv::Deserialize, rkyv::Archive)]
+#[derive(Eq, PartialEq, Hash, Clone, Debug, Serialize, Deserialize)]
 pub struct Bool(pub bool);
 
 
