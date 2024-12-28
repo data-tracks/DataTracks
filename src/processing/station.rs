@@ -147,7 +147,7 @@ impl Station {
                         station.add_block(last.unwrap_or(-1));
                         num.remove(0);
                     }
-                    station.set_stop(num.parse().map_err(|err|"Could not parse stop number")?)
+                    station.set_stop(num.parse().map_err(|err| format!("Could not parse stop number: {}", err))?)
                 },
             }
         }

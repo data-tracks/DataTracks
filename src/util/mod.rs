@@ -7,8 +7,8 @@ pub use iterator::EmptyIterator;
 pub use logo::logo;
 pub use reader::BufferedReader;
 pub use timeunit::TimeUnit;
-pub use visitor::CreatingVisitor;
 pub use visitor::ChangingVisitor;
+pub use visitor::CreatingVisitor;
 
 mod logo;
 mod id;
@@ -19,5 +19,5 @@ mod dynamic;
 mod builder;
 mod iterator;
 mod visitor;
-mod storage;
+pub(crate) mod storage;
 

@@ -2,7 +2,7 @@ use crate::processing;
 use crate::value::array::Array;
 use crate::value::dict::Dict;
 use crate::value::r#type::ValType;
-use crate::value::string::Text;
+use crate::value::text::Text;
 use crate::value::Value::Wagon;
 use crate::value::{bool, Bool, Float, Int};
 use bytes::{BufMut, BytesMut};
@@ -17,6 +17,7 @@ use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::ops::{Add, AddAssign, Div, Mul, Sub};
 use tracing::warn;
+use crate::value::time::Time;
 
 #[derive(Eq, Clone, Debug, Serialize, Deserialize)]
 pub enum Value {
@@ -24,6 +25,7 @@ pub enum Value {
     Float(Float),
     Bool(Bool),
     Text(Text),
+    Time(Time),
     Array(Array),
     Dict(Dict),
     Null,
@@ -102,7 +104,8 @@ impl Value {
             Value::Array(_) => ValType::Array,
             Value::Dict(_) => ValType::Dict,
             Value::Null => ValType::Null,
-            Wagon(w) => w.value.type_()
+            Wagon(w) => w.value.type_(),
+            Value::Time(_) => ValType::Time,
         }
     }
 
@@ -115,7 +118,8 @@ impl Value {
             Value::Array(_) => Err(()),
             Value::Dict(_) => Err(()),
             Value::Null => Err(()),
-            Wagon(w) => w.value.as_int()
+            Wagon(w) => w.value.as_int(),
+            Value::Time(t) => Ok(Int(t.ms as i64))
         }
     }
 
@@ -128,13 +132,28 @@ impl Value {
             Value::Array(_) => Err(()),
             Value::Dict(_) => Err(()),
             Value::Null => Err(()),
-            Wagon(w) => w.value.as_float()
+            Wagon(w) => w.value.as_float(),
+            Value::Time(t) => Ok(if t.ns != 0 { Float::new(t.ms as f64 + t.ns as f64 / 1e6) } else { Float::new(t.ms as f64) }),
+        }
+    }
+
+    pub fn as_time(&self) -> Result<Time, ()> {
+        match self {
+            Value::Int(i) => Ok(Time::new(i.0 as usize, 0)),
+            Value::Float(f) => Ok(Time::new(f.as_f64() as usize, 0)),
+            Value::Bool(b) => Ok(Time::new(b.0 as usize, 0)),
+            Value::Text(t) => Ok(Time::from(t.clone())),
+            Value::Time(t) => Ok(t.clone()),
+            Value::Array(_) => Err(()),
+            Value::Dict(_) => Err(()),
+            Value::Null => Err(()),
+            Wagon(w) => w.value.as_time(),
         }
     }
 
     pub fn as_dict(&self) -> Result<Dict, ()> {
         match self {
-            Value::Int(_) | Value::Float(_) | Value::Bool(_) | Value::Text(_) | Value::Array(_) | Value::Null => Err(()),
+            Value::Time(_) | Value::Int(_) | Value::Float(_) | Value::Bool(_) | Value::Text(_) | Value::Array(_) | Value::Null => Err(()),
             Value::Dict(d) => Ok(d.clone()),
             Wagon(w) => w.value.as_dict()
         }
@@ -142,7 +161,7 @@ impl Value {
 
     pub fn as_array(&self) -> Result<Array, ()> {
         match self {
-            Value::Int(_) | Value::Float(_) | Value::Bool(_) | Value::Text(_) | Value::Dict(_) | Value::Null => Err(()),
+            Value::Time(_) | Value::Int(_) | Value::Float(_) | Value::Bool(_) | Value::Text(_) | Value::Dict(_) | Value::Null => Err(()),
             Value::Array(a) => Ok(a.clone()),
             Wagon(w) => w.value.as_array()
         }
@@ -158,10 +177,11 @@ impl Value {
                     _ => Ok(Bool(false))
                 }
             }
+            Value::Time(t) => Ok(if t.ms > 0 { Bool(true) } else { Bool(false) }),
             Value::Array(a) => Ok(Bool(!a.values.is_empty())),
             Value::Dict(d) => Ok(Bool(!d.is_empty())),
             Value::Null => Ok(Bool(false)),
-            Wagon(w) => w.value.as_bool()
+            Wagon(w) => w.value.as_bool(),
         }
     }
 
@@ -174,7 +194,8 @@ impl Value {
             Value::Array(a) => Ok(Text(format!("[{}]", a.values.iter().map(|v| v.as_text().unwrap().0).collect::<Vec<String>>().join(",")))),
             Value::Dict(d) => Ok(Text(format!("[{}]", d.iter().map(|(k, v)| format!("{}:{}", k, v.as_text().unwrap().0)).collect::<Vec<String>>().join(",")))),
             Value::Null => Ok(Text("null".to_owned())),
-            Wagon(w) => w.value.as_text()
+            Wagon(w) => w.value.as_text(),
+            Value::Time(t) => Ok(Text(format!("{}", t.to_string()))),
         }
     }
 }
@@ -234,6 +255,8 @@ impl PartialEq for Value {
             (Value::Dict(d), _) => other.as_dict().map(|other| {
                 d.len() == other.len() && d.keys().eq(other.keys()) && d.values().eq(other.values())
             }).unwrap_or(false),
+            (Value::Time(t1), Value::Time(t2)) => t1 == t2,
+            (Value::Time(t), _) => t == &other.as_time().unwrap()
         }
     }
 }
@@ -271,6 +294,10 @@ impl Hash for Value {
             Wagon(w) => {
                 w.value.hash(state)
             }
+            Value::Time(t) => {
+                t.ms.hash(state);
+                t.ns.hash(state)
+            }
         }
     }
 }
@@ -282,10 +309,11 @@ impl Display for Value {
             Value::Float(float) => float.fmt(f),
             Value::Bool(b) => b.fmt(f),
             Value::Text(t) => t.fmt(f),
+            Value::Time(t) => t.fmt(f),
             Value::Array(a) => a.fmt(f),
             Value::Dict(d) => d.fmt(f),
             Value::Null => write!(f, "null"),
-            Wagon(w) => w.value.fmt(f)
+            Wagon(w) => w.value.fmt(f),
         }
     }
 }
@@ -435,6 +463,11 @@ impl AddAssign for Value {
             }
             Value::Null => {}
             Wagon(w) => w.value.add_assign(rhs),
+            Value::Time(t) => {
+                let time = rhs.as_time().unwrap();
+                t.ms += time.ms;
+                t.ns += time.ns;
+            }
         }
     }
 }
@@ -566,6 +599,7 @@ impl postgres::types::ToSql for Value {
             Value::Array(_) => return Err("Array not supported".into()),
             Value::Dict(_) => return Err("Dict not supported".into()),
             Value::Null => return Ok(IsNull::Yes),
+            Value::Time(t) => out.put_i128(t.ms as i128),
             Wagon(w) => return w.clone().unwrap().to_sql(_ty, out),
         }
         Ok(IsNull::No)
@@ -601,6 +635,7 @@ impl rusqlite::types::ToSql for Value {
             Value::Float(f) => Ok(ToSqlOutput::from(f.as_f64())),
             Value::Bool(b) => Ok(ToSqlOutput::from(b.0)),
             Value::Text(t) => Ok(ToSqlOutput::from(t.0.clone())),
+            Value::Time(t) => Ok(ToSqlOutput::from(t.ms as i64)),
             Value::Array(_) => Err(rusqlite::Error::InvalidQuery),
             Value::Dict(_) => Err(rusqlite::Error::InvalidQuery),
             Value::Null => Ok(ToSqlOutput::from(rusqlite::types::Null)),

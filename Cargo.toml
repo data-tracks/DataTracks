@@ -43,6 +43,7 @@ postgres = "0.19.9"
 redb = "2.3.0"
 tempfile = "3.14.0"
 postcard = { version = "=1.0.10", features = ["alloc"] }
+thiserror = "1.0.69"
 
 [dev-dependencies]
 rstest = "0.23.0"

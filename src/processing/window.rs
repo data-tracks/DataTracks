@@ -1,12 +1,14 @@
 use std::collections::VecDeque;
 use std::time::Instant;
 
-use chrono::{Duration, NaiveTime};
-
+use chrono::{DateTime, Duration, NaiveTime, Utc};
+use crate::management::Storage;
 use crate::processing::transform::Taker;
 use crate::processing::window::Window::{Back, Interval, Non};
 use crate::processing::Train;
+use crate::{util, value};
 use crate::util::TimeUnit;
+use crate::value::Value::Time;
 
 #[derive(Clone)]
 pub enum Window {
@@ -61,16 +63,18 @@ impl Taker for NonWindow {
 
 
 #[derive(Clone)]
-pub struct BackWindow {
+pub struct BackWindow<'a> {
     duration: Duration,
     time: i64,
     time_unit: TimeUnit,
-    buffer: VecDeque<(Instant, Vec<Train>)>,
+    buffer: VecDeque<DateTime<Utc>>,
+    storage: util::storage::Storage<'a>
 }
 
 impl BackWindow {
     pub fn new(time: i64, time_unit: TimeUnit) -> Self {
-        BackWindow { time, time_unit: time_unit.clone(), duration: get_duration(time, time_unit), buffer: VecDeque::new() }
+        let now = value::Time::now();
+        BackWindow { time, time_unit: time_unit.clone(), duration: get_duration(time, time_unit), buffer: VecDeque::new(), storage: util::storage::Storage::new_from_path("DB", &now).unwrap() }
     }
     fn parse(stencil: String) -> Result<Self, String> {
         let (digit, time_unit) = parse_interval(stencil.as_str())?;
@@ -89,13 +93,15 @@ impl BackWindow {
 
 impl Taker for BackWindow {
     fn take(&mut self, trains: &mut Vec<Train>) -> Vec<Train> {
-        let instant = Instant::now();
-        self.buffer.push_back((instant, trains.clone()));
+        let time = Utc::now();
+        self.buffer.push_back(time);
+        self.storage.write(time.to_rfc3339(), trains);
 
         let mut values = vec![];
         let mut new_buffer = VecDeque::new();
-        for (i, value) in self.buffer.clone() {
-            if instant.checked_duration_since(i).unwrap().as_millis() <= self.duration.num_milliseconds() as u128 {
+        for i in &self.buffer {
+            if time - i.timestamp_millis() <= self.duration {
+                let value = self.storage.read(time.to_rfc3339()).unwrap();
                 values.append(value.clone().as_mut());
                 new_buffer.push_back((i, value))
             }
