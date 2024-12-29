@@ -1,8 +1,8 @@
-use std::fmt::Formatter;
-use crate::value::Text;
+use crate::value::{Text, Value};
 use chrono::{DateTime, TimeZone, Timelike, Utc};
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
+use std::fmt::Formatter;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub struct Time {
@@ -27,9 +27,12 @@ impl Time {
         string
     }
 
-    pub fn now() -> String {
+    pub fn now() -> Time {
         let now_utc = Utc::now();
-        now_utc.to_rfc3339() // ISO 8601 format
+
+        let ms = now_utc.timestamp_millis();
+        let ns = now_utc.timestamp_nanos_opt().unwrap_or_default();
+        Value::time(ms as usize, ns as u32)
     }
 }
 
@@ -50,8 +53,6 @@ impl From<&Instant> for Time {
 
         Time::new(total_millis, nanos)
     }
-
-
 }
 
 impl From<Text> for Time {
@@ -66,6 +67,12 @@ impl<T:TimeZone> From<DateTime<T>> for Time {
         let ns = value.time().nanosecond();
         let ms = value.timestamp_millis() as usize;
         Time::new(ms, ns)
+    }
+}
+
+impl From<Time> for Value {
+    fn from(time: Time) -> Self {
+        Value::Time(time)
     }
 }
 

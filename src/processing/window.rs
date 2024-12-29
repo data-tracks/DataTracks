@@ -1,14 +1,12 @@
 use std::collections::VecDeque;
-use std::time::Instant;
 
-use chrono::{DateTime, Duration, NaiveTime, Utc};
-use crate::management::Storage;
 use crate::processing::transform::Taker;
 use crate::processing::window::Window::{Back, Interval, Non};
 use crate::processing::Train;
-use crate::{util, value};
 use crate::util::TimeUnit;
-use crate::value::Value::Time;
+use crate::value::{Time, Value};
+use crate::util;
+use chrono::{Duration, NaiveTime};
 
 #[derive(Clone)]
 pub enum Window {
@@ -63,18 +61,18 @@ impl Taker for NonWindow {
 
 
 #[derive(Clone)]
-pub struct BackWindow<'a> {
+pub struct BackWindow {
     duration: Duration,
     time: i64,
     time_unit: TimeUnit,
-    buffer: VecDeque<DateTime<Utc>>,
-    storage: util::storage::Storage<'a>
+    buffer: VecDeque<Time>,
+    storage: util::storage::Storage<Vec<Train>>
 }
 
 impl BackWindow {
     pub fn new(time: i64, time_unit: TimeUnit) -> Self {
-        let now = value::Time::now();
-        BackWindow { time, time_unit: time_unit.clone(), duration: get_duration(time, time_unit), buffer: VecDeque::new(), storage: util::storage::Storage::new_from_path("DB", &now).unwrap() }
+        let now = Time::now();
+        BackWindow { time, time_unit: time_unit.clone(), duration: get_duration(time, time_unit), buffer: VecDeque::new(), storage: util::storage::Storage::new_from_path("DB".to_string(), &now.ms.to_string()).unwrap() }
     }
     fn parse(stencil: String) -> Result<Self, String> {
         let (digit, time_unit) = parse_interval(stencil.as_str())?;
@@ -93,17 +91,19 @@ impl BackWindow {
 
 impl Taker for BackWindow {
     fn take(&mut self, trains: &mut Vec<Train>) -> Vec<Train> {
-        let time = Utc::now();
-        self.buffer.push_back(time);
-        self.storage.write(time.to_rfc3339(), trains);
+        let time = Time::now();
+        self.buffer.push_back(time.clone());
+        self.storage.write(time.clone().into(), trains.clone()).unwrap();
+        let ms = time.ms;
+        let time: Value = time.into();
 
         let mut values = vec![];
         let mut new_buffer = VecDeque::new();
         for i in &self.buffer {
-            if time - i.timestamp_millis() <= self.duration {
-                let value = self.storage.read(time.to_rfc3339()).unwrap();
-                values.append(value.clone().as_mut());
-                new_buffer.push_back((i, value))
+            if ms - i.ms <= self.duration.num_milliseconds() as usize {
+                let value = self.storage.read(time.clone()).unwrap();
+                values.append(&mut value.clone());
+                new_buffer.push_back(i.clone());
             }
         }
         self.buffer = new_buffer;

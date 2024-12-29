@@ -75,7 +75,7 @@ impl Source for HttpSource {
     {
         Ok(HttpSource::new(
             String::from(options.get("url").map(|url| url.as_str().ok_or("Could not parse url.")).ok_or(format!("Did not provide necessary url {:?}.", options))??),
-            options.get("port").map(|port| port.as_str().ok_or("Could not parse port.").map(|v| v.parse::<u16>().map_err(|err| "Could not parse error"))?).ok_or(format!("Did not provide necessary port {:?}.", options))??))
+            options.get("port").map(|port| port.as_str().ok_or("Could not parse port.").map(|v| v.parse::<u16>().map_err(|_err| "Could not parse error"))?).ok_or(format!("Did not provide necessary port {:?}.", options))??))
     }
 
     fn operate(&mut self, _control: Arc<Sender<Command>>) -> Sender<Command> {

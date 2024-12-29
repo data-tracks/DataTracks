@@ -19,7 +19,7 @@ use std::ops::{Add, AddAssign, Div, Mul, Sub};
 use tracing::warn;
 use crate::value::time::Time;
 
-#[derive(Eq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Eq, Clone, Debug, Serialize, Deserialize, Ord, PartialOrd)]
 pub enum Value {
     Int(Int),
     Float(Float),
@@ -31,6 +31,7 @@ pub enum Value {
     Null,
     Wagon(processing::Wagon),
 }
+
 
 impl Value {
     pub fn text(string: &str) -> Value {
@@ -50,6 +51,10 @@ impl Value {
 
     pub fn bool(bool: bool) -> Value {
         Value::Bool(Bool(bool))
+    }
+
+    pub(crate) fn time(ms: usize, ns: u32) -> Time {
+        Time::new(ms, ns)
     }
 
     pub fn array(tuple: Vec<Value>) -> Value {

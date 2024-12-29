@@ -5,7 +5,7 @@ use std::cmp::min;
 use std::fmt::{Display, Formatter};
 use std::ops::{Add, Div, Sub};
 
-#[derive(Eq, Hash, Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
+#[derive(Eq, Hash, Debug, PartialEq, Clone, Copy, Serialize, Deserialize, Ord, PartialOrd)]
 pub struct Float {
     pub number: i64,
     pub shift: u8,

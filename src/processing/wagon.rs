@@ -2,7 +2,7 @@ use crate::value::Value;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 // wagon holds context information
-#[derive(Clone, Debug, Eq)]
+#[derive(Clone, Debug, Eq, Ord, PartialOrd)]
 pub struct Wagon {
     pub topic: Vec<String>,
     pub origin: String,

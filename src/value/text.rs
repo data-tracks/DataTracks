@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::cmp::PartialEq;
 use std::fmt::Formatter;
 
-#[derive(Eq, Hash, Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Eq, Hash, Debug, PartialEq, Clone, Serialize, Deserialize, Ord, PartialOrd)]
 pub struct Text(pub String);
 
 impl PartialEq<Int> for Text {
