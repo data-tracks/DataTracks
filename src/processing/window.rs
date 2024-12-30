@@ -1,12 +1,12 @@
-use std::collections::VecDeque;
-
 use crate::processing::transform::Taker;
 use crate::processing::window::Window::{Back, Interval, Non};
 use crate::processing::Train;
-use crate::util::TimeUnit;
-use crate::value::{Time, Value};
 use crate::util;
+use crate::util::{Cache, TimeUnit};
+use crate::value::Time;
 use chrono::{Duration, NaiveTime};
+use std::collections::VecDeque;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub enum Window {
@@ -66,13 +66,14 @@ pub struct BackWindow {
     time: i64,
     time_unit: TimeUnit,
     buffer: VecDeque<Time>,
-    storage: util::storage::Storage<Vec<Train>>
+    cache: Cache<Time, Vec<Train>>,
+    storage: Arc<util::storage::Storage>
 }
 
 impl BackWindow {
     pub fn new(time: i64, time_unit: TimeUnit) -> Self {
         let now = Time::now();
-        BackWindow { time, time_unit: time_unit.clone(), duration: get_duration(time, time_unit), buffer: VecDeque::new(), storage: util::storage::Storage::new_from_path("DB".to_string(), &now.ms.to_string()).unwrap() }
+        BackWindow { time, time_unit: time_unit.clone(), duration: get_duration(time, time_unit), buffer: VecDeque::new(), cache: Cache::new(100), storage: Arc::new(util::storage::Storage::new_from_path("DB.db".to_string(), now.ms.to_string()).unwrap()) }
     }
     fn parse(stencil: String) -> Result<Self, String> {
         let (digit, time_unit) = parse_interval(stencil.as_str())?;
@@ -92,21 +93,26 @@ impl BackWindow {
 impl Taker for BackWindow {
     fn take(&mut self, trains: &mut Vec<Train>) -> Vec<Train> {
         let time = Time::now();
-        self.buffer.push_back(time.clone());
+        self.cache.put(time.clone(), trains.clone());
         self.storage.write(time.clone().into(), trains.clone()).unwrap();
         let ms = time.ms;
-        let time: Value = time.into();
 
         let mut values = vec![];
-        let mut new_buffer = VecDeque::new();
+
         for i in &self.buffer {
             if ms - i.ms <= self.duration.num_milliseconds() as usize {
-                let value = self.storage.read(time.clone()).unwrap();
+                let value = if let Some(val) = self.cache.get((&i.clone()).into()){
+                    val.clone()
+                }else {
+                    self.storage.read::<Vec<Train>>(i.clone().into()).unwrap()
+                };
+
                 values.append(&mut value.clone());
-                new_buffer.push_back(i.clone());
             }
         }
-        self.buffer = new_buffer;
+        values.append(trains);
+        self.buffer.push_back(time);
+
 
         values
     }
@@ -235,7 +241,7 @@ mod test {
     fn back_behavior() {
         let mut station = Station::new(0);
 
-        station.window = Window::Back(BackWindow::new(3, TimeUnit::Millis));
+        station.window = Window::Back(BackWindow::new(5, TimeUnit::Millis));
 
         let control = unbounded();
 
@@ -253,7 +259,7 @@ mod test {
         for value in &values {
             station.send(Train::new(0, vec![value.clone()])).unwrap();
         }
-        sleep(Duration::from_millis(20));
+        sleep(Duration::from_millis(50));
 
         let mut results = vec![];
         station.send(Train::new(0, after.clone())).unwrap();

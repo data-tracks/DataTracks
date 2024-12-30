@@ -1,10 +1,12 @@
 use crate::processing::Train;
 use crate::value::Value;
 use redb::{Database, Key, TableDefinition, TypeName};
+use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::fs;
 use tempfile::NamedTempFile;
 use thiserror::Error;
+use tracing::error;
 
 /// Error type for storage operations
 #[derive(Error, Debug)]
@@ -17,88 +19,110 @@ pub enum StorageError {
     KeyNotFound,
 }
 
-pub struct Storage< Val>
-where Val:redb::Value + 'static{
+
+pub struct Storage {
     path: Option<String>,
     table_name: String,
-    table: TableDefinition<'static, Value, Val >,
     database: Database,
 }
 
-
-impl<Val: redb::Value> Storage<Val> {
+impl Storage {
     /// Create a new storage instance with a temporary file.
-    pub fn new_temp(table_name: &str) -> Result<Storage<Val>, StorageError> {
+    pub fn new_temp(table_name: String) -> Result<Storage, StorageError> {
         let file = NamedTempFile::new().map_err(|e| StorageError::FileError(e.to_string()))?;
         let db = Database::create(file).map_err(|e| StorageError::DatabaseError(e.to_string()))?;
         Ok(Storage {
             path: None,
-            table_name: table_name.to_string(),
-            table: TableDefinition::new(table_name.clone()),
+            table_name,
             database: db,
         })
     }
 
     /// Create a new storage instance from a specified file path.
-    pub fn new_from_path(file: String, table_name: &str) -> Result<Storage<Val>, StorageError> {
-        let db = Database::create(file.clone()).map_err(|e| StorageError::DatabaseError(e.to_string()))?;
+    pub fn new_from_path(file: String, table_name: String) -> Result<Storage, StorageError> {
+        let db = Database::create(file.clone())
+            .map_err(|e| StorageError::DatabaseError(e.to_string()))?;
 
         let storage = Storage {
             path: Some(file),
             table_name: table_name.to_string(),
-            table: TableDefinition::new(table_name.clone()),
             database: db,
         };
         Ok(storage)
     }
 
-
     /// Write a key-value pair to the storage.
-    pub fn write(&self, key: Value, value: Val) -> Result<(), StorageError> {
-        let write_txn = self.database.begin_write().map_err(|e| StorageError::DatabaseError(e.to_string()))?;
+    pub fn write<T>(&self, key: Value, value: T) -> Result<(), StorageError> where T: Serialize + std::fmt::Debug {
+        self.write_u8(key, postcard::to_allocvec(&value).unwrap())
+    }
+
+    pub fn write_u8(&self, key: Value, value: Vec<u8>) -> Result<(), StorageError> {
+        let write_txn = self
+            .database
+            .begin_write()
+            .map_err(|e| StorageError::DatabaseError(e.to_string()))?;
         {
-            let mut table = write_txn.open_table(self.table).map_err(|e| StorageError::DatabaseError(e.to_string()))?;
-            table.insert(key, value).map_err(|e| StorageError::DatabaseError(e.to_string()))?;
+            let mut table = write_txn
+                .open_table(self.table())
+                .map_err(|e| StorageError::DatabaseError(e.to_string()))?;
+            table
+                .insert(key, value)
+                .map_err(|e| StorageError::DatabaseError(e.to_string()))?;
         }
-        write_txn.commit().map_err(|e| StorageError::DatabaseError(e.to_string()))?;
+        write_txn
+            .commit()
+            .map_err(|e| StorageError::DatabaseError(e.to_string()))?;
         Ok(())
     }
 
     /// Read a value by its key from the storage.
-    pub fn read(&self, key: Value) -> Result<Val, StorageError> {
-        let read_txn = self.database.begin_read().map_err(|e| StorageError::DatabaseError(e.to_string()))?;
-        let table = read_txn.open_table(self.table).map_err(|e| StorageError::DatabaseError(e.to_string()))?;
-        table
-            .get(key)
+    pub fn read<T>(&self, key: Value) -> Result<T, StorageError> where T: for<'a> Deserialize<'a> {
+        self.read_u8(key).map(|v| postcard::from_bytes(&v).unwrap())
+    }
+
+    pub fn read_u8(&self, key: Value) -> Result<Vec<u8>, StorageError> {
+        let read_txn = self
+            .database
+            .begin_read()
+            .map_err(|e| StorageError::DatabaseError(e.to_string()))?;
+        let table = read_txn
+            .open_table(self.table())
+            .map_err(|e| StorageError::DatabaseError(e.to_string()))?;
+
+        let value = table.get(key);
+        let value = value
             .map_err(|e| StorageError::DatabaseError(e.to_string()))?
-            .map(|entry| Ok(entry.value()))
-            .unwrap_or_else(|| Err(StorageError::KeyNotFound))
+            .map(|entry| entry.value().clone());
+        let value = value.ok_or_else(|| StorageError::KeyNotFound);
+        Ok(value?)
     }
 
     /// Delete a key-value pair from the storage.
     pub fn delete(&self, key: Value) -> Result<(), StorageError> {
-        let delete_txn = self.database.begin_write().map_err(|e| StorageError::DatabaseError(e.to_string()))?;
+        let delete_txn = self
+            .database
+            .begin_write()
+            .map_err(|e| StorageError::DatabaseError(e.to_string()))?;
         {
-            let mut table = delete_txn.open_table(self.table).map_err(|e| StorageError::DatabaseError(e.to_string()))?;
-            table.remove(key).map_err(|e| StorageError::DatabaseError(e.to_string()))?;
+            let mut table = delete_txn
+                .open_table(self.table())
+                .map_err(|e| StorageError::DatabaseError(e.to_string()))?;
+            table
+                .remove(key)
+                .map_err(|e| StorageError::DatabaseError(e.to_string()))?;
         }
-        delete_txn.commit().map_err(|e| StorageError::DatabaseError(e.to_string()))
+        delete_txn
+            .commit()
+            .map_err(|e| StorageError::DatabaseError(e.to_string()))
     }
 
-}
-
-impl<Val: redb::Value> Clone for Storage<Val> {
-    fn clone(&self) -> Self {
-        if let Some(path) = self.path.clone() {
-            Storage::new_from_path(path.clone(), &self.table_name).unwrap()
-        }else {
-            Storage::new_temp(&self.table_name).unwrap()
-        }
+    fn table(&self) -> TableDefinition<Value, Vec<u8>> {
+        TableDefinition::new(&self.table_name)
     }
 }
 
 
-impl<Val: redb::Value> Drop for Storage<Val> {
+impl Drop for Storage {
     fn drop(&mut self) {
         if let Some(path) = self.path.take() {
             if let Err(e) = fs::remove_file(path) {
@@ -109,8 +133,14 @@ impl<Val: redb::Value> Drop for Storage<Val> {
 }
 
 impl redb::Value for Value {
-    type SelfType<'a> = Value where Self: 'a;
-    type AsBytes<'a> = Vec<u8> where Self: 'a;
+    type SelfType<'a>
+        = Value
+    where
+        Self: 'a;
+    type AsBytes<'a>
+        = Vec<u8>
+    where
+        Self: 'a;
 
     fn fixed_width() -> Option<usize> {
         None
@@ -137,15 +167,21 @@ impl redb::Value for Value {
 
 impl Key for Value {
     fn compare(data1: &[u8], data2: &[u8]) -> Ordering {
-        let val1:Value = postcard::from_bytes(data1).expect("Failed to deserialize Value");
-        let val2:Value = postcard::from_bytes(data2).expect("Failed to deserialize Value");
+        let val1: Value = postcard::from_bytes(data1).expect("Failed to deserialize Value");
+        let val2: Value = postcard::from_bytes(data2).expect("Failed to deserialize Value");
         val1.cmp(&val2)
     }
 }
 
-impl redb::Value for Train  {
-    type SelfType<'a> = Value where Self: 'a;
-    type AsBytes<'a> = Vec<u8> where Self: 'a;
+impl redb::Value for Train {
+    type SelfType<'a>
+        = Value
+    where
+        Self: 'a;
+    type AsBytes<'a>
+        = Vec<u8>
+    where
+        Self: 'a;
 
     fn fixed_width() -> Option<usize> {
         None
@@ -153,14 +189,14 @@ impl redb::Value for Train  {
 
     fn from_bytes<'a>(data: &'a [u8]) -> Self::SelfType<'a>
     where
-        Self: 'a
+        Self: 'a,
     {
         postcard::from_bytes(data).expect("Failed to deserialize Train")
     }
 
     fn as_bytes<'a, 'b: 'a>(value: &'a Self::SelfType<'b>) -> Self::AsBytes<'a>
     where
-        Self: 'b
+        Self: 'b,
     {
         postcard::to_allocvec(value).expect("Failed to serialize Value")
     }
@@ -170,7 +206,6 @@ impl redb::Value for Train  {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -178,17 +213,20 @@ mod tests {
 
     #[test]
     fn test_write_read() {
-        let storage:Storage<Value> = Storage::new_temp("table").unwrap();
+        let storage = Storage::new_temp("table".to_string()).unwrap();
         storage.write("test".into(), Value::text("David")).unwrap();
-        assert_eq!(storage.read("test".into()).unwrap(), Value::text("David"));
-        assert!(storage.read("nonexistent".into()).is_err());
+        assert_eq!(
+            storage.read::<Value>("test".into()).unwrap(),
+            Value::text("David")
+        );
+        assert!(storage.read_u8("nonexistent".into()).is_err());
     }
 
     #[test]
     fn test_write_permanently() {
         let path = "db_test";
         {
-            let storage = Storage::new_from_path(path.to_string(), "table").unwrap();
+            let storage = Storage::new_from_path(path.to_string(), "table".to_string()).unwrap();
             storage.write("test".into(), Value::text("David")).unwrap();
         }
         assert!(!fs::exists(path).unwrap());
