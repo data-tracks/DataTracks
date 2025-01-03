@@ -7,7 +7,7 @@ use crate::value;
 use crate::value::{ValType, Value};
 use std::cmp::min;
 use std::collections::HashMap;
-use std::hash::Hash;
+use std::hash::{Hash, Hasher};
 use std::iter::zip;
 use tracing::warn;
 use OutputType::{And, Or};
@@ -660,7 +660,7 @@ impl From<Vec<Layout>> for TupleType {
 }
 
 
-#[derive(Debug, Clone, Default, Hash)]
+#[derive(Debug, Clone, Default)]
 pub struct DictType {
     pub fields: Vec<Layout>, // "name" -> Value // we do not know if name is dynamically assigned or static
 }
@@ -668,6 +668,12 @@ pub struct DictType {
 impl PartialEq for DictType {
     fn eq(&self, other: &Self) -> bool {
         self.fields == other.fields
+    }
+}
+
+impl Hash for DictType {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.fields.hash(state);
     }
 }
 
@@ -687,7 +693,7 @@ impl DictType {
     }
 
     pub fn names(&self) -> Vec<&str> {
-        self.fields.iter().filter_map(|l| l.name.as_ref().map(|n| n.as_str())).collect()
+        self.fields.iter().filter_map(|l| l.name.as_deref()).collect()
     }
 
 

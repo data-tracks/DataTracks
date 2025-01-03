@@ -93,8 +93,7 @@ impl Storage {
         let value = value
             .map_err(|e| StorageError::DatabaseError(e.to_string()))?
             .map(|entry| entry.value().clone());
-        let value = value.ok_or_else(|| StorageError::KeyNotFound);
-        Ok(value?)
+        value.ok_or(StorageError::KeyNotFound)
     }
 
     /// Delete a key-value pair from the storage.

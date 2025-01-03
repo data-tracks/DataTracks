@@ -262,7 +262,7 @@ impl Value {
             ))),
             Value::Null => Ok(Text("null".to_owned())),
             Wagon(w) => w.value.as_text(),
-            Value::Time(t) => Ok(Text(format!("{}", t.to_string()))),
+            Value::Time(t) => Ok(Text(t.to_string())),
             Value::Date(d) => Ok(Text(d.to_string())),
         }
     }

@@ -16,7 +16,7 @@ pub(crate) fn translate(query: SqlStatement) -> Result<AlgebraType, String> {
 }
 
 fn handle_select(query: SqlSelect) -> Result<MaybeAliasAlg, String> {
-    let mut sources: Vec<MaybeAliasAlg> = query.froms.into_iter().map(|from| handle_from(from)).collect::<Result<Vec<_>, _>>()?;
+    let mut sources: Vec<MaybeAliasAlg> = query.froms.into_iter().map(handle_from).collect::<Result<Vec<_>, _>>()?;
     let aliases = sources.iter().filter(|s| matches!(s, MaybeAliasAlg::Aliased(_))).map(|s| match s {
         MaybeAliasAlg::Aliased(name) => name.name.clone(),
         MaybeAliasAlg::Raw(_) => unreachable!()

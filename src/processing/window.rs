@@ -101,7 +101,7 @@ impl Taker for BackWindow {
 
         for i in &self.buffer {
             if ms - i.ms <= self.duration.num_milliseconds() as usize {
-                let value = if let Some(val) = self.cache.get((&i.clone()).into()){
+                let value = if let Some(val) = self.cache.get(&i.clone()){
                     val.clone()
                 }else {
                     self.storage.read::<Vec<Train>>(i.clone().into()).unwrap()

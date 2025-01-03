@@ -19,11 +19,6 @@ impl Date {
         self.days
     }
 
-    pub fn as_string(&self) -> String {
-        let target_date = EPOCH_DATE + Duration::days(self.days);
-        format!("{}", target_date.format("%Y-%m-%d"))
-    }
-
 }
 
 
@@ -35,7 +30,8 @@ pub struct TimeContainer {
 
 impl std::fmt::Display for Date {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.to_string())
+        let target_date = EPOCH_DATE + Duration::days(self.days);
+        write!(f, "{}", target_date.format("%Y-%m-%d"))
     }
 }
 

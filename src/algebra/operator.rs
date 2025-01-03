@@ -310,7 +310,7 @@ impl TupleOp {
             Input(_) => Layout::default(),
             TupleOp::Split(_) => Layout::array(None),
             TupleOp::Name(n) => {
-                let mut map = Vec::new();
+                let mut map = vec![];
                 map.push(Layout::from(n.name.as_str()));
                 let dict = OutputType::Dict(Box::new(DictType::new(map)));
 

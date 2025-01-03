@@ -195,8 +195,7 @@ impl OperatorMerger<'_> {
                 let child = self.child.operands.get(index).expect("Index out of bounds");
                 match &child.op {
                     Op::Tuple(TupleOp::KeyValue(_)) => child
-                        .operands
-                        .get(0)
+                        .operands.first()
                         .expect("KeyValue missing child")
                         .clone(),
                     _ => panic!("Unexpected child operator for TupleOp::Doc"),
