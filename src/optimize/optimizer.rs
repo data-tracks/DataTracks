@@ -12,7 +12,6 @@ pub enum OptimizeStrategy {
 impl OptimizeStrategy {
     pub(crate) fn apply(&mut self, raw: AlgebraType) -> AlgebraType {
         let expandable = AlgebraType::Set(add_set(raw));
-        println!("alg {:?}", expandable);
         let optimized = match self {
             OptimizeStrategy::RuleBased(o) => {
                 o.optimize(expandable.clone())}

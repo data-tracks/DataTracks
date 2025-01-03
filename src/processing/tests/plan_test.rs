@@ -848,7 +848,7 @@ pub mod tests {
         drop(lock);
 
         let mut expected = res.get(0).unwrap().clone();
-        println!("values {:?}", train.values.clone().unwrap() );
+
         assert_eq!(train.values.clone().unwrap().len(), expected.len());
         if ordered {
             for (i, value) in train.values.take().unwrap().into_iter().enumerate() {
