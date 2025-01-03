@@ -1,3 +1,4 @@
+use tracing::{info};
 use crate::algebra::{AlgSet, AlgebraType};
 use crate::optimize::rule::Rule::{Impossible, Merge};
 use crate::optimize::rule::{Rule, RuleBehavior};
@@ -11,8 +12,10 @@ pub enum OptimizeStrategy {
 impl OptimizeStrategy {
     pub(crate) fn apply(&mut self, raw: AlgebraType) -> AlgebraType {
         let expandable = AlgebraType::Set(add_set(raw));
+        println!("alg {:?}", expandable);
         let optimized = match self {
-            OptimizeStrategy::RuleBased(o) => o.optimize(expandable.clone()),
+            OptimizeStrategy::RuleBased(o) => {
+                o.optimize(expandable.clone())}
         };
         remove_set(optimized.unwrap_or(expandable))
     }
@@ -53,7 +56,7 @@ impl Optimizer for RuleBasedOptimizer {
         let mut uneventful_rounds = 0;
 
         while uneventful_rounds < 2 {
-            if round < rules.len() * 100 {
+            if round > rules.len() * 100 {
                 return Err("Infinite loop detected".to_string());
             }
 
@@ -72,7 +75,7 @@ impl Optimizer for RuleBasedOptimizer {
 
             round += 1;
         }
-        println!("Used {} rounds for optimization.", round);
+        info!("Used {} rounds for optimization.", round);
         Ok(alg)
     }
 }
@@ -222,9 +225,9 @@ mod tests {
         let optimized = OptimizeStrategy::RuleBased(optimizer).apply(scan);
 
         match optimized {
-            AlgebraType::Filter(p) => match p.input.as_ref() {
+            AlgebraType::Filter(ref p) => match p.input.as_ref() {
                 AlgebraType::TableScan(_) => {}
-                a => panic!("Expected filter but got {:?}", a),
+                a => panic!("Expected filter but got {:?} in {:?}", a, optimized),
             },
             a => panic!("wrong algebra type {:?}", a),
         }

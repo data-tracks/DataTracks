@@ -67,7 +67,7 @@ fn handle_select(query: SqlSelect) -> Result<MaybeAliasAlg, String> {
         }
     };
 
-    if function.contains_agg() {
+    if function.contains_agg() || groups.len() > 0 {
         let group = match groups.len() {
             1 => Some(groups.pop().unwrap()),
             0 => None,

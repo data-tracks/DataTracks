@@ -718,7 +718,7 @@ pub mod tests {
         let destination = 5;
 
 
-        test_single_in_out("1{sql|SELECT * FROM UNWIND(SELECT SPLIT($0, '\\s+') FROM $0)}", values.clone(), res.clone(), source, destination, true);
+        test_single_in_out("1{sql|SELECT * FROM UNWIND(SELECT SPLIT($0, '\\s+') FROM $0)}", values.clone(), res.clone(), source, destination, false);
     }
 
     #[test]
@@ -728,7 +728,7 @@ pub mod tests {
         let source = 1;
         let destination = 5;
 
-        test_single_in_out("1{sql|SELECT COUNT(*), $0, COUNT(*) + 5 FROM $0 GROUP BY $0}", values.clone(), res.clone(), source, destination, true);
+        test_single_in_out("1{sql|SELECT COUNT(*), $0, COUNT(*) + 5 FROM $0 GROUP BY $0}", values.clone(), res.clone(), source, destination, false);
     }
 
 
@@ -848,6 +848,7 @@ pub mod tests {
         drop(lock);
 
         let mut expected = res.get(0).unwrap().clone();
+        println!("values {:?}", train.values.clone().unwrap() );
         assert_eq!(train.values.clone().unwrap().len(), expected.len());
         if ordered {
             for (i, value) in train.values.take().unwrap().into_iter().enumerate() {

@@ -37,10 +37,20 @@ impl RuleBehavior for MergeRule {
 fn match_rule_with_child(rule: &MergeRule, algebra: &AlgebraType) -> bool {
     match (rule, algebra) {
         (MergeRule::Filter, AlgebraType::Filter(f)) => {
-            matches!(f.input.as_ref(), AlgebraType::Set(s) if matches!(*s.initial, AlgebraType::Filter(..)))
+            matches!(f.input.as_ref(), AlgebraType::Set(s) if match &(*s.initial) {
+                AlgebraType::Filter(other) => {
+                    f.condition.can_merge(&other.condition)
+                },
+                _ => false
+            })
         }
         (MergeRule::Project, AlgebraType::Project(p)) => {
-            matches!(p.input.as_ref(), AlgebraType::Set(s) if matches!(*s.initial, AlgebraType::Project(..)))
+            matches!(p.input.as_ref(), AlgebraType::Set(s) if match &(*s.initial) {
+                AlgebraType::Project(other) => {
+                    p.project.can_merge(&other.project)
+                },
+                _ => false
+            })
         }
         _ => false,
     }
@@ -55,16 +65,13 @@ fn apply_rule_to_child(rule: &MergeRule, algebra: &AlgebraType) -> Option<Algebr
                     .set
                     .iter()
                     .filter_map(|b| match b {
-                        AlgebraType::Filter(f_child) => {
-
-                            Some(AlgebraType::Filter(Filter::new(
-                                (*f_child.input).clone(),
-                                Operator::new(
-                                    Op::and(),
-                                    vec![f.condition.clone(), f_child.condition.clone()],
-                                ),
-                            )))
-                        },
+                        AlgebraType::Filter(f_child) => Some(AlgebraType::Filter(Filter::new(
+                            (*f_child.input).clone(),
+                            Operator::new(
+                                Op::and(),
+                                vec![f.condition.clone(), f_child.condition.clone()],
+                            ),
+                        ))),
                         _ => None,
                     })
                     .next()
@@ -78,12 +85,10 @@ fn apply_rule_to_child(rule: &MergeRule, algebra: &AlgebraType) -> Option<Algebr
                     .set
                     .iter()
                     .filter_map(|b| match b {
-                        AlgebraType::Project(p_child) => {
-                            Some(AlgebraType::Project(Project::new(
-                                OperatorMerger::merge(&p_child.project, &mut p.project.clone()),
-                                (*p_child.input).clone(),
-                            )))
-                        },
+                        AlgebraType::Project(p_child) => Some(AlgebraType::Project(Project::new(
+                            OperatorMerger::merge(&p_child.project, &mut p.project.clone()),
+                            (*p_child.input).clone(),
+                        ))),
                         _ => None,
                     })
                     .next()
@@ -119,7 +124,12 @@ impl CreatingVisitor<&mut Operator, Operator> for OperatorMerger<'_> {
                 parent.clone()
             }
             Op::Collection(_) => {
-                parent.operands = parent.operands.iter().cloned().map(|mut o| self.visit(&mut o)).collect();
+                parent.operands = parent
+                    .operands
+                    .iter()
+                    .cloned()
+                    .map(|mut o| self.visit(&mut o))
+                    .collect();
                 parent.clone()
             }
             Op::Tuple(t) => match t {
@@ -195,7 +205,8 @@ impl OperatorMerger<'_> {
                 let child = self.child.operands.get(index).expect("Index out of bounds");
                 match &child.op {
                     Op::Tuple(TupleOp::KeyValue(_)) => child
-                        .operands.first()
+                        .operands
+                        .first()
                         .expect("KeyValue missing child")
                         .clone(),
                     _ => panic!("Unexpected child operator for TupleOp::Doc"),

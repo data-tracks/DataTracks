@@ -50,6 +50,10 @@ impl Operator {
         self.operands.iter().any(|o| o.contains_agg())
     }
 
+    pub(crate) fn can_merge(&self, operator: &Operator) -> bool {
+        !matches!(self.op, Op::Collection(_)) && !matches!(operator.op, Op::Collection(_))
+    }
+
     pub(crate) fn calc_cost(&self) -> Cost {
         match &self.op {
             Op::Agg(a) => match a {

@@ -327,7 +327,7 @@ impl AvgOperator {
 
 impl ValueLoader for AvgOperator {
     fn clone(&self) -> BoxedValueLoader {
-        Box::new(SumOperator::new())
+        Box::new(AvgOperator::new())
     }
 
     fn load(&mut self, value: &Value) {
