@@ -7,6 +7,12 @@ use std::ops::{Add, Div, Sub};
 #[derive(Eq, Hash, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Ord, PartialOrd)]
 pub struct Int(pub(crate) i64);
 
+impl Int{
+    pub fn new(value: i64) -> Int{
+        Int(value)
+    }
+}
+
 impl Add for Int {
     type Output = Self;
 

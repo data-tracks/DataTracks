@@ -6,6 +6,11 @@ use std::fmt::Formatter;
 #[derive(Eq, PartialEq, Hash, Clone, Debug, Serialize, Deserialize, Ord, PartialOrd)]
 pub struct Bool(pub bool);
 
+impl Bool {
+    pub(crate) fn new(bool: bool) -> Bool {
+        Bool(bool)
+    }
+}
 
 impl PartialEq<&Int> for &Bool {
     fn eq(&self, other: &&Int) -> bool {

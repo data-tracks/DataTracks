@@ -5,6 +5,7 @@ pub enum ValType {
     Text,
     Bool,
     Time,
+    Date,
     Array,
     Dict,
     Null,

@@ -32,7 +32,7 @@ impl Time {
 
         let ms = now_utc.timestamp_millis();
         let ns = now_utc.timestamp_nanos_opt().unwrap_or_default();
-        Value::time(ms as usize, ns as u32)
+        Value::time(ms as usize, ns as u32).as_time().unwrap()
     }
 }
 

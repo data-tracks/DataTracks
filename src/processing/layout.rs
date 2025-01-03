@@ -363,6 +363,7 @@ pub enum OutputType {
     Text,
     Boolean,
     Time,
+    Date,
     Any,
     Array(Box<ArrayType>), // variable length same type
     Tuple(Box<TupleType>), // fixed length different type
@@ -400,8 +401,8 @@ impl OutputType {
 
     pub(crate) fn accepts(&self, other: &OutputType) -> Result<(), String> {
         match self {
-            Integer | Float | Text | Boolean | OutputType::Time => match other {
-                OutputType::Time | Integer | Float | Text | Boolean => Ok(()),
+            Integer | Float | Text | Boolean | OutputType::Time | OutputType::Date => match other {
+                OutputType::Time | Integer | Float | Text | Boolean | OutputType::Date => Ok(()),
                 Any | Array(_) | Dict(_) | Tuple(_) => self.type_mismatch_error(other),
                 And(a) => {
                     if a.iter().all(|v| self.accepts(v).is_ok()) {
@@ -566,6 +567,7 @@ impl OutputType {
             And(a) => a.first().unwrap().value_type(),
             Or(o) => o.first().unwrap().value_type(),
             OutputType::Time => ValType::Time,
+            OutputType::Date => ValType::Date,
         }
     }
 }
@@ -611,7 +613,8 @@ impl From<&Value> for OutputType {
                 Any
             }
             Value::Wagon(w) => OutputType::from(&(*w.value).clone()),
-            &Value::Time(_) => OutputType::Time,
+            Value::Time(_) => OutputType::Time,
+            Value::Date(_) => OutputType::Date
         }
     }
 }

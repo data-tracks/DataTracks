@@ -9,8 +9,8 @@ use crate::algebra::TupleOp::{And, Combine, Index, Input, Or};
 use crate::algebra::{BoxedIterator, BoxedValueHandler, ValueIterator};
 use crate::processing::transform::Transform;
 use crate::processing::{ArrayType, DictType, Layout, OutputType, Train, TupleType};
-use crate::value::Value;
-use crate::value::Value::{Array, Bool, Dict, Float, Int, Null, Text, Time, Wagon};
+use crate::value::{Value};
+use crate::value::Value::{Array, Bool, Date, Dict, Float, Int, Null, Text, Time, Wagon};
 use regex::Regex;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::Debug;
@@ -240,6 +240,7 @@ impl TupleOp {
                         Null => Value::null(),
                         Wagon(_) => panic!(),
                         Time(_) => Time(value.as_time().unwrap()),
+                        Date(d) => Value::date(-d.days),
                     }
                 },
                 operands,
