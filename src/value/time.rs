@@ -12,6 +12,11 @@ pub struct Time {
 
 impl Time {
     pub fn new(ms: usize, ns: u32) -> Time {
+        if ns >= 1000000 {
+            let ms = ms + (ns/1000000) as usize;
+            let ns = ns % 1000000;
+            return Time { ns, ms };
+        }
         Time { ms, ns }
     }
 

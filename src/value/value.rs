@@ -161,7 +161,12 @@ impl Value {
     pub fn as_time(&self) -> Result<Time, ()> {
         match self {
             Value::Int(i) => Ok(Time::new(i.0 as usize, 0)),
-            Value::Float(f) => Ok(Time::new(f.as_f64() as usize, 0)),
+            Value::Float(f) => {
+                let num = f.number.to_string();
+                let (ms, partial_ns) = num.split_at(num.len()  - f.shift as usize);
+                let ns = format!("{:0<6}", partial_ns.chars().take(6).collect::<String>());
+                Ok(Time::new( ms.parse().unwrap(), ns.parse().unwrap() ))
+            },
             Value::Bool(b) => Ok(Time::new(b.0 as usize, 0)),
             Value::Text(t) => Ok(Time::from(t.clone())),
             Value::Time(t) => Ok(t.clone()),
@@ -442,7 +447,7 @@ impl From<Dict> for Value {
 }
 
 impl Value {
-    pub(crate) fn from_json(value: &str) -> Self {
+    pub(crate) fn from_json(value: &str) -> Result<Self, String>  {
         let json = parse(value);
         let mut values = BTreeMap::new();
         match json {
@@ -451,9 +456,9 @@ impl Value {
                     values.insert(key.into(), value.into());
                 }
             }
-            Err(_) => panic!("Could not parse Dict"),
+            Err(_) => return Err("Could not parse Dict".to_string()),
         }
-        Value::dict(values)
+        Ok(Value::dict(values))
     }
 }
 
@@ -898,6 +903,13 @@ mod tests {
 
         let value = add(Value::date(305), 5.into());
         assert_eq!(value, Value::date(310));
+
+        let value = add(Value::time(305, 5), 5.into());
+        assert_eq!(value, Value::time(310, 5));
+
+        let value = add(Value::time(305,  500000), 5.5.into());
+        assert_eq!(value, Value::time(311, 0));
+
 
         let value = add(vec![1.into(), 2.into()].into(), 3.into());
         assert_eq!(value, vec![1.into(), 2.into(), 3.into()].into());

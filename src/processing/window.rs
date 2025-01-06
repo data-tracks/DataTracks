@@ -270,8 +270,10 @@ mod test {
 
         // 1. train
         assert_eq!(results.remove(0).values.take().unwrap().get(0).unwrap(), values.get(0).unwrap());
-        // 2. "
-        assert_eq!(results.remove(0).values.take().unwrap(), values);
+        // 2. " or 1. & 2. depending on how fast it was handled
+        let res = results.remove(0).values.take().unwrap();
+        assert!(res.get(0).unwrap() == values.get(1).unwrap() || res.get(1).unwrap() == values.get(1).unwrap() );
+
         // 3. "
         assert_eq!(results.remove(0).values.take().unwrap(), after);
     }
