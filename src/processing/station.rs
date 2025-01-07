@@ -42,7 +42,7 @@ impl Station {
         let incoming = new_channel();
         let control = unbounded();
         Station {
-            id: GLOBAL_ID.new_id(),
+            id: (*GLOBAL_ID).new_id(),
             stop,
             incoming: (incoming.0, incoming.1, incoming.2),
             outgoing: Sender::default(),
@@ -454,7 +454,9 @@ pub mod tests {
 
             let mut trains = vec![];
 
-            for _ in 0..1_000 {
+            let amount = 1_000;
+
+            for _ in 0..amount{
                 trains.push(Train::new(0, values.clone()));
             }
 
@@ -464,16 +466,16 @@ pub mod tests {
             }
             let time = Instant::now();
 
-        for train in trains {
-            train_sender.send(train).unwrap();
-        }
+            for train in trains {
+                train_sender.send(train).unwrap();
+            }
 
-            for _ in 0..1_000 {
+            for _ in 0..amount {
                 let _ = rx.recv();
             }
 
             let elapsed = time.elapsed().as_nanos();
-            println!("time {}: {} nanos, per entry {}ns", name, elapsed, elapsed/1_000 );
+            println!("time {}: {} nanos, per entry {}ns", name, elapsed, elapsed/amount );
         }
     }
 

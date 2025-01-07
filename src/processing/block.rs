@@ -6,7 +6,7 @@ use std::collections::hash_map::Drain;
 use std::collections::HashMap;
 use tracing::log::debug;
 
-pub(crate) enum Block {
+pub enum Block {
     Non(NonBlock),
     Specific(SpecificBlock),
     All(AllBlock),
@@ -16,7 +16,7 @@ pub(crate) enum Block {
 
 
 impl Block {
-    pub(crate) fn new(inputs: Vec<i64>, blocks: Vec<i64>, next: MutWagonsFunc) -> Self {
+    pub fn new(inputs: Vec<i64>, blocks: Vec<i64>, next: MutWagonsFunc) -> Self {
         if blocks.is_empty() {
             return Non(NonBlock { func: next });
         } else if same_vecs(&blocks, &inputs) {
@@ -25,7 +25,7 @@ impl Block {
         Specific(SpecificBlock::new( inputs, blocks, next ))
     }
 
-    pub(crate) fn next(&mut self, train: Train) {
+    pub fn next(&mut self, train: Train) {
         match self {
             Non(n) => n.next(train),
             Specific(s) => s.next(train),
@@ -141,7 +141,6 @@ mod test {
     use crate::value::{Dict, Value};
     use std::sync::mpsc::channel;
     use std::time::Instant;
-    use tracing::debug;
 
     #[test]
     fn overhead() {
@@ -153,7 +152,8 @@ mod test {
         let mut block = Block::new(vec![], vec![], process);
 
         let mut trains = vec![];
-        for _ in 0..1000 {
+        let amount = 1000;
+        for _ in 0..amount {
             trains.push(Train::new(0, vec![Value::Dict(Dict::from(Value::int(3)))]))
         }
 
@@ -162,11 +162,11 @@ mod test {
             block.next(train)
         }
 
-        for _ in 0..1000 {
+        for _ in 0..amount {
             rx.recv().unwrap();
         }
         let elapsed = instant.elapsed();
 
-        debug!("time {}ms", elapsed.as_millis())
+        println!("time total for {} data points, all {:?}, single {:?}", amount, elapsed, elapsed/amount);
     }
 }

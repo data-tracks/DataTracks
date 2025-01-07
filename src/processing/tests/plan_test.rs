@@ -36,7 +36,7 @@ pub mod dummy {
         }
 
         pub(crate) fn new_with_delay(values: Vec<Vec<Value>>, initial_delay: Duration, delay: Duration) -> (Self, i64) {
-            let id = GLOBAL_ID.new_id();
+            let id = (*GLOBAL_ID).new_id();
             (DummySource { id, values: Some(values), initial_delay, delay, senders: vec![] }, id)
         }
     }
@@ -166,7 +166,7 @@ pub mod dummy {
         pub(crate) fn new(result_size: usize) -> Self {
             let (tx, _num, rx) = new_channel();
             DummyDestination {
-                id: GLOBAL_ID.new_id(),
+                id: (*GLOBAL_ID).new_id(),
                 result_size,
                 results: Arc::new(Mutex::new(vec![])),
                 receiver: Some(rx),

@@ -14,7 +14,6 @@ mod ui;
 mod util;
 mod processing;
 mod language;
-mod simulation;
 mod algebra;
 mod management;
 mod http;

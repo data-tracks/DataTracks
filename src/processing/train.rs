@@ -11,7 +11,7 @@ pub struct Train {
 }
 
 impl Train {
-    pub(crate) fn new(stop: i64, values: Vec<Value>) -> Self {
+    pub fn new(stop: i64, values: Vec<Value>) -> Self {
         Train { last: stop, values: Some(values) }
     }
 
