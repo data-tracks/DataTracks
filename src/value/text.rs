@@ -3,8 +3,9 @@ use crate::value_display;
 use serde::{Deserialize, Serialize};
 use std::cmp::PartialEq;
 use std::fmt::Formatter;
+use speedy::{Readable, Writable};
 
-#[derive(Eq, Hash, Debug, PartialEq, Clone, Serialize, Deserialize, Ord, PartialOrd)]
+#[derive(Eq, Hash, Debug, PartialEq, Clone, Serialize, Deserialize, Ord, PartialOrd, Readable, Writable)]
 pub struct Text(pub String);
 
 impl PartialEq<Int> for Text {

@@ -12,6 +12,7 @@ use json::{parse, JsonValue};
 use postgres::types::{IsNull, Type};
 use rusqlite::types::{FromSqlResult, ToSqlOutput, ValueRef};
 use serde::{Deserialize, Serialize};
+use speedy::{Readable, Writable};
 use std::cmp::PartialEq;
 use std::collections::BTreeMap;
 use std::error::Error;
@@ -20,7 +21,7 @@ use std::hash::{Hash, Hasher};
 use std::ops::{Add, AddAssign, Div, Mul, Sub};
 use tracing::warn;
 
-#[derive(Eq, Clone, Debug, Serialize, Deserialize, Ord, PartialOrd)]
+#[derive(Eq, Clone, Debug, Serialize, Deserialize, Ord, PartialOrd, Readable, Writable)]
 pub enum Value {
     Int(Int),
     Float(Float),
@@ -54,11 +55,11 @@ impl Value {
         Value::Bool(Bool(bool))
     }
 
-    pub(crate) fn time(ms: usize, ns: u32) -> Value {
+    pub fn time(ms: usize, ns: u32) -> Value {
         Value::Time(Time::new(ms, ns))
     }
 
-    pub(crate) fn date(days: i64) -> Value {
+    pub fn date(days: i64) -> Value {
         Value::Date(Date::new(days))
     }
 
@@ -163,10 +164,10 @@ impl Value {
             Value::Int(i) => Ok(Time::new(i.0 as usize, 0)),
             Value::Float(f) => {
                 let num = f.number.to_string();
-                let (ms, partial_ns) = num.split_at(num.len()  - f.shift as usize);
+                let (ms, partial_ns) = num.split_at(num.len() - f.shift as usize);
                 let ns = format!("{:0<6}", partial_ns.chars().take(6).collect::<String>());
-                Ok(Time::new( ms.parse().unwrap(), ns.parse().unwrap() ))
-            },
+                Ok(Time::new(ms.parse().unwrap(), ns.parse().unwrap()))
+            }
             Value::Bool(b) => Ok(Time::new(b.0 as usize, 0)),
             Value::Text(t) => Ok(Time::from(t.clone())),
             Value::Time(t) => Ok(t.clone()),
@@ -329,9 +330,9 @@ impl PartialEq for Value {
                 .map(|other| {
                     a.values.len() == other.values.len()
                         && a.values
-                            .iter()
-                            .zip(other.values.iter())
-                            .all(|(a, b)| a == b)
+                        .iter()
+                        .zip(other.values.iter())
+                        .all(|(a, b)| a == b)
                 })
                 .unwrap_or(false),
 
@@ -447,7 +448,7 @@ impl From<Dict> for Value {
 }
 
 impl Value {
-    pub(crate) fn from_json(value: &str) -> Result<Self, String>  {
+    pub(crate) fn from_json(value: &str) -> Result<Self, String> {
         let json = parse(value);
         let mut values = BTreeMap::new();
         match json {
@@ -510,9 +511,7 @@ impl Add for &Value {
                 let ns = a.ns + b.as_time().unwrap().ns;
                 Value::time(ms, ns)
             }
-            (Value::Date(a), b) => {
-                Value::date(a.days + b.as_date().unwrap().days)
-            }
+            (Value::Date(a), b) => Value::date(a.days + b.as_date().unwrap().days),
             // array
             (Value::Array(a), b) => {
                 let mut a = a.clone();
@@ -759,6 +758,7 @@ mod tests {
     use std::collections::hash_map::DefaultHasher;
     use std::collections::HashMap;
     use std::hash::{Hash, Hasher};
+    use std::vec;
 
     #[test]
     fn value_equality() {
@@ -907,9 +907,8 @@ mod tests {
         let value = add(Value::time(305, 5), 5.into());
         assert_eq!(value, Value::time(310, 5));
 
-        let value = add(Value::time(305,  500000), 5.5.into());
+        let value = add(Value::time(305, 500000), 5.5.into());
         assert_eq!(value, Value::time(311, 0));
-
 
         let value = add(vec![1.into(), 2.into()].into(), 3.into());
         assert_eq!(value, vec![1.into(), 2.into(), 3.into()].into());
@@ -953,6 +952,7 @@ mod tests {
         let value = div(2.5.into(), 5.into());
         assert_eq!(value, 0.5.into());
     }
+
 
     fn add(a: Value, b: Value) -> Value {
         &a + &b

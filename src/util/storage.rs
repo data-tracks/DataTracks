@@ -1,9 +1,9 @@
 use crate::processing::Train;
 use crate::value::Value;
 use redb::{Database, Key, TableDefinition, TypeName};
-use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::fs;
+use speedy::{Readable, Writable};
 use tempfile::NamedTempFile;
 use thiserror::Error;
 use tracing::error;
@@ -52,11 +52,7 @@ impl Storage {
     }
 
     /// Write a key-value pair to the storage.
-    pub fn write<T>(&self, key: Value, value: T) -> Result<(), StorageError> where T: Serialize + std::fmt::Debug {
-        self.write_u8(key, postcard::to_allocvec(&value).unwrap())
-    }
-
-    pub fn write_u8(&self, key: Value, value: Vec<u8>) -> Result<(), StorageError> {
+    pub fn write(&self, key: Value, value: Vec<u8>) -> Result<(), StorageError> {
         let write_txn = self
             .database
             .begin_write()
@@ -76,10 +72,6 @@ impl Storage {
     }
 
     /// Read a value by its key from the storage.
-    pub fn read<T>(&self, key: Value) -> Result<T, StorageError> where T: for<'a> Deserialize<'a> {
-        self.read_u8(key).map(|v| postcard::from_bytes(&v).unwrap())
-    }
-
     pub fn read_u8(&self, key: Value) -> Result<Vec<u8>, StorageError> {
         let read_txn = self
             .database
@@ -149,14 +141,14 @@ impl redb::Value for Value {
     where
         Self: 'a,
     {
-        postcard::from_bytes(data).expect("Failed to deserialize Value")
+        Value::read_from_buffer(data).expect("Failed to deserialize Value")
     }
 
     fn as_bytes<'a, 'b: 'a>(value: &'a Self::SelfType<'b>) -> Self::AsBytes<'a>
     where
         Self: 'b,
     {
-        postcard::to_allocvec(value).expect("Failed to serialize Value")
+        value.write_to_vec().expect("Failed to serialize Value")
     }
 
     fn type_name() -> TypeName {
@@ -166,8 +158,8 @@ impl redb::Value for Value {
 
 impl Key for Value {
     fn compare(data1: &[u8], data2: &[u8]) -> Ordering {
-        let val1: Value = postcard::from_bytes(data1).expect("Failed to deserialize Value");
-        let val2: Value = postcard::from_bytes(data2).expect("Failed to deserialize Value");
+        let val1: Value = Value::read_from_buffer(data1).expect("Failed to deserialize Value");
+        let val2: Value = Value::read_from_buffer(data2).expect("Failed to deserialize Value");
         val1.cmp(&val2)
     }
 }
@@ -190,14 +182,14 @@ impl redb::Value for Train {
     where
         Self: 'a,
     {
-        postcard::from_bytes(data).expect("Failed to deserialize Train")
+        Value::read_from_buffer(data).expect("Failed to deserialize Train")
     }
 
     fn as_bytes<'a, 'b: 'a>(value: &'a Self::SelfType<'b>) -> Self::AsBytes<'a>
     where
         Self: 'b,
     {
-        postcard::to_allocvec(value).expect("Failed to serialize Value")
+        value.write_to_vec().expect("Failed to serialize Value")
     }
 
     fn type_name() -> TypeName {
@@ -213,9 +205,9 @@ mod tests {
     #[test]
     fn test_write_read() {
         let storage = Storage::new_temp("table".to_string()).unwrap();
-        storage.write("test".into(), Value::text("David")).unwrap();
+        storage.write("test".into(), Value::text("David").write_to_vec().unwrap()).unwrap();
         assert_eq!(
-            storage.read::<Value>("test".into()).unwrap(),
+            Value::read_from_buffer(&storage.read_u8("test".into()).unwrap()).unwrap(),
             Value::text("David")
         );
         assert!(storage.read_u8("nonexistent".into()).is_err());
@@ -226,7 +218,7 @@ mod tests {
         let path = "db_test";
         {
             let storage = Storage::new_from_path(path.to_string(), "table".to_string()).unwrap();
-            storage.write("test".into(), Value::text("David")).unwrap();
+            storage.write("test".into(), Value::text("David").write_to_vec().unwrap()).unwrap();
         }
         assert!(!fs::exists(path).unwrap());
     }

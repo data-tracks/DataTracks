@@ -108,7 +108,7 @@ async fn handle_publish_socket(mut socket: WebSocket, state: DestinationState) {
                             value::Value::Wagon(w) => w.unwrap(),
                             value => value
                         };
-                        match socket.send(Message::Text(serde_json::to_string(&value).unwrap())).await {
+                        match socket.send(Message::Text(serde_json::to_string(&value).unwrap().into())).await {
                             Ok(_) => {}
                             Err(err) => {
                                 warn!("Failed to send message: {}", err);
@@ -137,7 +137,7 @@ async fn handle_receive_socket(mut socket: WebSocket, state: SourceState) {
                 let value = if let Ok(payload) = serde_json::from_str::<Value>(&text) {
                     transform_to_value(payload)
                 } else{
-                    let value = json!({"d": text});
+                    let value = json!({"d": *text});
                     transform_to_value(value.get("d").unwrap().clone())
                 };
                 let train = Train::new(-1, vec![value::Value::Dict(value)]);

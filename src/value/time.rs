@@ -3,8 +3,9 @@ use chrono::{DateTime, TimeZone, Timelike, Utc};
 use serde::{Deserialize, Serialize};
 use std::fmt::Formatter;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use speedy::{Readable, Writable};
 
-#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize, Readable, Writable)]
 pub struct Time {
     pub ns: u32,
     pub ms: usize,

@@ -1,10 +1,11 @@
 use chrono::{Duration, NaiveDate};
 use serde::{Deserialize, Serialize};
 use std::fmt::Formatter;
+use speedy::{Readable, Writable};
 
 const EPOCH_DATE: NaiveDate = NaiveDate::from_ymd_opt(1970, 1, 1).unwrap();
 
-#[derive(Clone, Debug, Eq, Ord, PartialOrd, PartialEq, Serialize, Deserialize,)]
+#[derive(Clone, Debug, Eq, Ord, PartialOrd, PartialEq, Serialize, Deserialize, Readable, Writable)]
 pub struct Date {
     pub days: i64
 }

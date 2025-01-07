@@ -7,6 +7,7 @@ use crate::value::Time;
 use chrono::{Duration, NaiveTime};
 use std::collections::VecDeque;
 use std::sync::Arc;
+use speedy::{Readable, Writable};
 
 #[derive(Clone)]
 pub enum Window {
@@ -94,7 +95,7 @@ impl Taker for BackWindow {
     fn take(&mut self, trains: &mut Vec<Train>) -> Vec<Train> {
         let time = Time::now();
         self.cache.put(time.clone(), trains.clone());
-        self.storage.write(time.clone().into(), trains.clone()).unwrap();
+        self.storage.write(time.clone().into(), trains.write_to_vec().unwrap()).unwrap();
         let ms = time.ms;
 
         let mut values = vec![];
@@ -104,7 +105,7 @@ impl Taker for BackWindow {
                 let value = if let Some(val) = self.cache.get(&i.clone()){
                     val.clone()
                 }else {
-                    self.storage.read::<Vec<Train>>(i.clone().into()).unwrap()
+                    Readable::read_from_buffer(&self.storage.read_u8(i.clone().into()).unwrap()).unwrap()
                 };
 
                 values.append(&mut value.clone());

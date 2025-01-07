@@ -1,9 +1,10 @@
 use serde::{Deserialize, Serialize};
+use speedy::{Readable, Writable};
 use crate::value::Value;
 
 pub type MutWagonsFunc = Box<dyn FnMut(&mut Vec<Train>)>;
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, Writable, Readable)]
 pub struct Train {
     pub last: i64,
     pub values: Option<Vec<Value>>,

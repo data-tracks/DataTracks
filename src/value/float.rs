@@ -4,8 +4,9 @@ use serde::{Deserialize, Serialize};
 use std::cmp::min;
 use std::fmt::{Display, Formatter};
 use std::ops::{Add, Div, Sub};
+use speedy::{Readable, Writable};
 
-#[derive(Eq, Hash, Debug, PartialEq, Clone, Copy, Serialize, Deserialize, Ord, PartialOrd)]
+#[derive(Eq, Hash, Debug, PartialEq, Clone, Copy, Serialize, Deserialize, Ord, PartialOrd, Readable, Writable)]
 pub struct Float {
     pub number: i64,
     pub shift: u8,

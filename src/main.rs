@@ -7,6 +7,7 @@ use std::thread;
 use std::time::Duration;
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
+use value::Value;
 
 mod value;
 mod ui;

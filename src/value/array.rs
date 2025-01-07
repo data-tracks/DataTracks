@@ -1,8 +1,9 @@
 use crate::value::Value;
 use serde::{Deserialize, Serialize};
 use std::fmt::Formatter;
+use speedy::{Readable, Writable};
 
-#[derive(Eq, Hash, Clone, Debug, PartialEq, Serialize, Deserialize, Ord, PartialOrd)]
+#[derive(Eq, Hash, Clone, Debug, PartialEq, Serialize, Deserialize, Ord, PartialOrd, Readable, Writable)]
 pub struct Array{
     pub values: Vec<Value>
 }

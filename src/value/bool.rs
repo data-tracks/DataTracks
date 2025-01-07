@@ -2,8 +2,9 @@ use crate::value::{Float, Int, Text};
 use crate::value_display;
 use serde::{Deserialize, Serialize};
 use std::fmt::Formatter;
+use speedy::{Readable, Writable};
 
-#[derive(Eq, PartialEq, Hash, Clone, Debug, Serialize, Deserialize, Ord, PartialOrd)]
+#[derive(Eq, PartialEq, Hash, Clone, Debug, Serialize, Deserialize, Ord, PartialOrd, Readable, Writable)]
 pub struct Bool(pub bool);
 
 impl Bool {

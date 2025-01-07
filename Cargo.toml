@@ -16,17 +16,16 @@ eula = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-axum = { version = "0.7.5", features = ["ws"] }
+axum = { version = "0.8.1", features = ["ws"] }
 ctrlc = "3.4.4"
-futures-util = "0.3.31"
 tokio = { version = "1.38.0", features = ["full"] }
 tower = "0.5.0"
-tower-http = { version = "0.5.2", features = ["full"] }
+tower-http = { version = "0.6.2", features = ["full"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 lazy_static = "1.4.0"
 chrono = "0.4.38"
-logos = "0.14.0"
+logos = "0.15.0"
 serde_json = "1.0.117"
 serde = { version = "1.0.203", features = ["derive"] }
 crossbeam = "0.8.4"
@@ -42,11 +41,12 @@ regex = "1.11.1"
 postgres = "0.19.9"
 redb = "2.3.0"
 tempfile = "3.14.0"
-postcard = { version = "=1.0.10", features = ["alloc"] }
-thiserror = "1.0.69"
+thiserror = "2.0.9"
+speedy = "0.8.7"
+criterion = "0.5.1"
 
 [dev-dependencies]
-rstest = "0.23.0"
+rstest = "0.24.0"
 
 # The profile that 'cargo dist' will build with
 [profile.dist]
@@ -60,6 +60,11 @@ opt-level = 3
 opt-level = 3    # Maximum optimization level
 lto = true       # Enable Link Time Optimization
 codegen-units = 1 # Use a single codegen unit for better optimization (slower compile)
+
+
+[[bench]]
+name = "value_bench"
+harness = false
 
 # Config for 'cargo dist'
 [workspace.metadata.dist]

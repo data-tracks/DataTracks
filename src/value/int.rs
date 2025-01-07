@@ -3,8 +3,9 @@ use crate::value_display;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Debug, Formatter};
 use std::ops::{Add, Div, Sub};
+use speedy::{Readable, Writable};
 
-#[derive(Eq, Hash, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Ord, PartialOrd)]
+#[derive(Eq, Hash, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Ord, PartialOrd, Readable, Writable)]
 pub struct Int(pub(crate) i64);
 
 impl Int{
