@@ -13,7 +13,7 @@ use crate::processing::train::MutWagonsFunc;
 use crate::processing::transform::{Taker, Transform};
 use crate::processing::window::Window;
 use crate::processing::Train;
-use crate::util::{Rx, GLOBAL_ID};
+use crate::util::{new_id, Rx};
 use crossbeam::channel;
 use crossbeam::channel::{unbounded, Receiver};
 use tracing::debug;
@@ -22,16 +22,16 @@ use crate::optimize::{OptimizeStrategy};
 const IDLE_TIMEOUT: Duration = Duration::from_nanos(10);
 
 pub(crate) struct Platform {
-    id: i64,
+    id: usize,
     control: Receiver<Command>,
     receiver: Rx<Train>,
     sender: Option<Sender>,
     transform: Option<Transform>,
     layout: Layout,
     window: Window,
-    stop: i64,
-    blocks: Vec<i64>,
-    inputs: Vec<i64>,
+    stop: usize,
+    blocks: Vec<usize>,
+    inputs: Vec<usize>,
     incoming: Arc<AtomicU64>,
     transforms: HashMap<String, Transform>,
 }
@@ -50,7 +50,7 @@ impl Platform {
         let layout = station.layout.clone();
 
         (Platform {
-            id: GLOBAL_ID.new_id(),
+            id: new_id(),
             control: control.1,
             receiver,
             sender: Some(sender),
@@ -114,7 +114,7 @@ impl Platform {
     }
 }
 
-fn optimize(stop: i64, transform: Option<Transform>, mut window: Box<dyn Taker>, sender: Sender, transforms: HashMap<String, Transform>) -> MutWagonsFunc {
+fn optimize(stop: usize, transform: Option<Transform>, mut window: Box<dyn Taker>, sender: Sender, transforms: HashMap<String, Transform>) -> MutWagonsFunc {
     if let Some(transform) = transform {
         let mut enumerator = transform.optimize(transforms, Some(OptimizeStrategy::rule_based()));
         Box::new(move |train| {

@@ -6,17 +6,17 @@ pub type MutWagonsFunc = Box<dyn FnMut(&mut Vec<Train>)>;
 
 #[derive(Clone, Debug, Deserialize, Serialize, Writable, Readable)]
 pub struct Train {
-    pub last: i64,
+    pub last: usize,
     pub values: Option<Vec<Value>>,
 }
 
 impl Train {
-    pub fn new(stop: i64, values: Vec<Value>) -> Self {
+    pub fn new(stop: usize, values: Vec<Value>) -> Self {
         Train { last: stop, values: Some(values) }
     }
 
 
-    pub(crate) fn set_last(&mut self, stop: i64) {
+    pub(crate) fn set_last(&mut self, stop: usize) {
         self.last = stop;
     }
 }

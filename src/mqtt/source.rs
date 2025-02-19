@@ -6,7 +6,7 @@ use crate::processing::station::Command;
 use crate::processing::station::Command::Ready;
 use crate::processing::{plan, Train};
 use crate::ui::{ConfigModel, StringModel};
-use crate::util::{Tx, GLOBAL_ID};
+use crate::util::{new_id, Tx};
 use crate::value::{Dict, Value};
 use crossbeam::channel::{unbounded, Sender};
 use rumqttc::{Event, Incoming};
@@ -22,7 +22,7 @@ use tokio::runtime::Runtime;
 use tracing::{debug, warn};
 
 pub struct MqttSource {
-    id: i64,
+    id: usize,
     url: String,
     port: u16,
     outs: Vec<Tx<Train>>,
@@ -44,7 +44,7 @@ impl Configurable for MqttSource {
 
 impl MqttSource {
     pub fn new(url: String, port: u16) -> Self {
-        MqttSource { port, url, id: GLOBAL_ID.new_id(), outs: Vec::new() }
+        MqttSource { port, url, id: new_id(), outs: Vec::new() }
     }
 }
 
@@ -109,7 +109,7 @@ impl Source for MqttSource {
         &mut self.outs
     }
 
-    fn get_id(&self) -> i64 {
+    fn get_id(&self) -> usize {
         self.id
     }
 
@@ -140,7 +140,7 @@ impl Source for MqttSource {
 }
 
 pub fn send_message(dict: Dict, outs: &Vec<Tx<Train>>) {
-    let train = Train::new(-1, vec![Value::Dict(dict)]);
+    let train = Train::new(usize::MAX, vec![Value::Dict(dict)]);
     for tx in outs {
         tx.send(train.clone()).unwrap();
     }

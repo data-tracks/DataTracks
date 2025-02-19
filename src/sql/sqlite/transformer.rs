@@ -5,7 +5,7 @@ use crate::processing::option::Configurable;
 use crate::processing::transform::{Transform, Transformer};
 use crate::processing::{Layout, Train};
 use crate::sql::sqlite::connection::SqliteConnector;
-use crate::util::{DynamicQuery, GLOBAL_ID};
+use crate::util::{new_id, DynamicQuery};
 use crate::value::Value;
 use rusqlite::{params_from_iter, ToSql};
 use serde_json::Map;
@@ -14,7 +14,7 @@ use tokio::runtime::Runtime;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct SqliteTransformer {
-    id: i64,
+    id: usize,
     pub query: DynamicQuery,
     pub connector: SqliteConnector,
     output_derivation_strategy: OutputDerivationStrategy
@@ -22,7 +22,7 @@ pub struct SqliteTransformer {
 
 impl SqliteTransformer {
     fn new(query: String, path: String) -> SqliteTransformer {
-        let id = GLOBAL_ID.new_id();
+        let id = new_id();
         let connector = SqliteConnector::new(&path);
         let query = DynamicQuery::build_dynamic_query(query);
         let output_derivation_strategy = OutputDerivationStrategy::query_based(query.get_query(), Language::Sql).unwrap_or_default();

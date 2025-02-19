@@ -13,10 +13,8 @@ pub enum Block {
 }
 
 
-
-
 impl Block {
-    pub fn new(inputs: Vec<i64>, blocks: Vec<i64>, next: MutWagonsFunc) -> Self {
+    pub fn new(inputs: Vec<usize>, blocks: Vec<usize>, next: MutWagonsFunc) -> Self {
         if blocks.is_empty() {
             return Non(NonBlock { func: next });
         } else if same_vecs(&blocks, &inputs) {
@@ -34,7 +32,7 @@ impl Block {
     }
 }
 
-fn same_vecs(a: &Vec<i64>, b: &Vec<i64>) -> bool {
+fn same_vecs(a: &Vec<usize>, b: &Vec<usize>) -> bool {
     for entry in a {
         if !b.contains(entry) {
             return false;
@@ -51,7 +49,7 @@ fn same_vecs(a: &Vec<i64>, b: &Vec<i64>) -> bool {
 
 
 
-pub(crate) struct NonBlock {
+pub struct NonBlock {
     func: MutWagonsFunc,
 }
 
@@ -61,16 +59,16 @@ impl NonBlock {
     }
 }
 
-pub(crate) struct SpecificBlock {
-    input: Vec<i64>,
-    blocks: Vec<i64>,
+pub struct SpecificBlock {
+    input: Vec<usize>,
+    blocks: Vec<usize>,
     func: MutWagonsFunc,
-    buffer: HashMap<i64, Vec<Value>>,
+    buffer: HashMap<usize, Vec<Value>>,
 }
 
 impl SpecificBlock {
 
-    fn new(input: Vec<i64>, blocks: Vec<i64>, func: MutWagonsFunc) -> Self{
+    fn new(input: Vec<usize>, blocks: Vec<usize>, func: MutWagonsFunc) -> Self{
         let mut buffer = HashMap::new();
         blocks.iter().for_each(|b| {
             buffer.insert(*b, vec![]);
@@ -91,7 +89,7 @@ impl SpecificBlock {
 
 }
 
-fn merge_buffer(drain: Drain<i64, Vec<Value>>) -> Vec<Train> {
+fn merge_buffer(drain: Drain<usize, Vec<Value>>) -> Vec<Train> {
     let mut trains = vec![];
     for (last, values) in drain {
         trains.push(Train::new(last, values));
@@ -99,18 +97,18 @@ fn merge_buffer(drain: Drain<i64, Vec<Value>>) -> Vec<Train> {
     trains
 }
 
-pub(crate) struct AllBlock {
-    input: Vec<i64>,
+pub struct AllBlock {
+    input: Vec<usize>,
     func: MutWagonsFunc,
-    buffer: HashMap<i64, Vec<Value>>,
-    switch: HashMap<i64, bool>
+    buffer: HashMap<usize, Vec<Value>>,
+    switch: HashMap<usize, bool>
 }
 
 
 
 impl AllBlock {
 
-    fn new(input: Vec<i64>, func: MutWagonsFunc) -> Self{
+    fn new(input: Vec<usize>, func: MutWagonsFunc) -> Self{
         let mut buffer = HashMap::new();
         let mut switch = HashMap::new();
         input.iter().for_each(|i|{

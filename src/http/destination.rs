@@ -20,7 +20,7 @@ use crate::util::{new_channel, Rx, Tx};
 
 #[derive(Clone)]
 pub struct HttpDestination {
-    id: i64,
+    id: usize,
     url: String,
     port: u16,
     receiver: Rx<Train>,
@@ -109,7 +109,7 @@ impl Destination for HttpDestination {
         self.sender.clone()
     }
 
-    fn get_id(&self) -> i64 {
+    fn get_id(&self) -> usize {
         self.id
     }
 

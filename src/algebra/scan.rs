@@ -10,18 +10,18 @@ use crate::util::EmptyIterator;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct IndexScan {
-    index: i64,
+    index: usize,
 }
 
 impl IndexScan {
-    pub(crate) fn new(index: i64) -> Self {
+    pub(crate) fn new(index: usize) -> Self {
         IndexScan { index }
     }
 }
 
 #[derive(Clone)]
 pub struct ScanIterator {
-    index: i64,
+    index: usize,
     values: Vec<Value>,
     trains: Vec<Train>,
 }
@@ -85,7 +85,7 @@ impl ValueIterator for ScanIterator {
 }
 
 impl RefHandler for ScanIterator {
-    fn process(&self, _stop: i64, wagons: Vec<Train>) -> Vec<Train> {
+    fn process(&self, _stop: usize, wagons: Vec<Train>) -> Vec<Train> {
         let mut values = vec![];
         wagons.into_iter().filter(|w| w.last == self.index).for_each(|mut t| values.append(t.values.take().unwrap().as_mut()));
         vec![Train::new(self.index, values)]

@@ -3,10 +3,10 @@ use std::collections::HashMap;
 #[derive(Default)]
 pub struct Summery{
     status: Status,
-    stops: HashMap<i64, Status>,
-    ins: HashMap<i64, Status>,
-    outs: HashMap<i64, Status>,
-    complex: Vec<(Status, Vec<i64>)>,
+    stops: HashMap<usize, Status>,
+    ins: HashMap<usize, Status>,
+    outs: HashMap<usize, Status>,
+    complex: Vec<(Status, Vec<usize>)>,
 }
 
 impl Summery{
@@ -53,19 +53,19 @@ impl Summery{
         self.status = status;
     }
 
-    pub fn add_stop_status(&mut self, id: i64,  status: Status){
+    pub fn add_stop_status(&mut self, id: usize,  status: Status){
         self.stops.insert(id, status);
     }
 
-    pub fn add_in_status(&mut self, id: i64, status: Status){
+    pub fn add_in_status(&mut self, id: usize, status: Status){
         self.ins.insert(id, status);
     }
 
-    pub fn add_out_status(&mut self, id: i64, status: Status){
+    pub fn add_out_status(&mut self, id: usize, status: Status){
         self.outs.insert(id, status);
     }
 
-    pub fn add_complex_status(&mut self, status: Status, ids: Vec<i64>){
+    pub fn add_complex_status(&mut self, status: Status, ids: Vec<usize>){
         self.complex.push((status, ids));
     }
 }

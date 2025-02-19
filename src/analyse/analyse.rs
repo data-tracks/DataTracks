@@ -48,7 +48,7 @@ impl<'plan> Analyser<'plan> {
         Ok(summery)
     }
 
-    fn check_in_and_out(&self, summery: &mut Summery, station: i64, error: String) {
+    fn check_in_and_out(&self, summery: &mut Summery, station: usize, error: String) {
         let between_stops = self.plan.lines.values().cloned().flat_map(|mut stops| {
             if stops.is_empty() {
                 vec![]
@@ -61,7 +61,7 @@ impl<'plan> Analyser<'plan> {
                     stops
                 }
             }
-        }).collect::<Vec<i64>>();
+        }).collect::<Vec<usize>>();
 
         if (!self.plan.stations_to_in_outs.contains_key(&station) || self.plan.stations_to_in_outs.get(&station).unwrap().is_empty()) && !between_stops.contains(&station) {
             summery.add_stop_status(station, Status::Warning(Islands, error));

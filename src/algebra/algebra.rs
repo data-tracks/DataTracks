@@ -159,7 +159,7 @@ pub fn build_iterator(mut algebra: AlgebraType) -> Result<BoxedIterator, String>
 }
 
 pub trait RefHandler: Send {
-    fn process(&self, stop: i64, wagons: Vec<Train>) -> Vec<Train>;
+    fn process(&self, stop: usize, wagons: Vec<Train>) -> Vec<Train>;
 
     fn clone(&self) -> Box<dyn RefHandler + Send + 'static>;
 }
@@ -197,7 +197,7 @@ pub trait ValueIterator: Iterator<Item=Value> + Send + 'static {
         self.into_iter().collect()
     }
 
-    fn drain_to_train(&mut self, stop: i64) -> Train {
+    fn drain_to_train(&mut self, stop: usize) -> Train {
         Train::new(stop, self.drain())
     }
 

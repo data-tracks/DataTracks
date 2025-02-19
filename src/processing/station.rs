@@ -10,21 +10,21 @@ use crate::processing::sender::Sender;
 use crate::processing::train::Train;
 use crate::processing::transform::Transform;
 use crate::processing::window::Window;
-use crate::util::{new_channel, Rx, Tx, GLOBAL_ID};
+use crate::util::{new_channel, new_id, Rx, Tx};
 use crossbeam::channel;
 use crossbeam::channel::{unbounded, Receiver};
 use tracing::info;
 
 #[derive(Clone)]
 pub struct Station {
-    pub id: i64,
-    pub stop: i64,
+    pub id: usize,
+    pub stop: usize,
     pub incoming: (Tx<Train>, Arc<AtomicU64>, Rx<Train>),
     pub outgoing: Sender,
     pub window: Window,
     pub transform: Option<Transform>,
-    pub block: Vec<i64>,
-    pub inputs: Vec<i64>,
+    pub block: Vec<usize>,
+    pub inputs: Vec<usize>,
     pub layout: Layout,
     control: (channel::Sender<Command>, Receiver<Command>),
 }
@@ -32,17 +32,17 @@ pub struct Station {
 
 impl Default for Station {
     fn default() -> Self {
-        Self::new(-1)
+        Self::new(usize::MAX)
     }
 }
 
 
 impl Station {
-    pub(crate) fn new(stop: i64) -> Self {
+    pub(crate) fn new(stop: usize) -> Self {
         let incoming = new_channel();
         let control = unbounded();
         Station {
-            id: (*GLOBAL_ID).new_id(),
+            id: new_id(),
             stop,
             incoming: (incoming.0, incoming.1, incoming.2),
             outgoing: Sender::default(),
@@ -56,7 +56,7 @@ impl Station {
     }
 
     // |1 or <1 or -1
-    pub(crate) fn parse(stencil: String, last: Option<i64>) -> Result<Self, String> {
+    pub(crate) fn parse(stencil: String, last: Option<usize>) -> Result<Self, String> {
         let mut stencil = stencil;
         if stencil.starts_with('-') {
             stencil = stencil[1..].to_string()
@@ -133,18 +133,18 @@ impl Station {
         Self::parse_parts(last, stages)
     }
 
-    pub(crate) fn parse_parts(last: Option<i64>, parts: Vec<(PlanStage, String)>) -> Result<Self, String> {
+    pub(crate) fn parse_parts(last: Option<usize>, parts: Vec<(PlanStage, String)>) -> Result<Self, String> {
         let mut station: Station = Station::default();
         for stage in parts {
             match stage.0 {
                 PlanStage::Window => station.set_window(Window::parse(stage.1)?),
-                PlanStage::Transform => station.set_transform(Transform::parse(&stage.1).unwrap()),
+                PlanStage::Transform => station.set_transform(Transform::parse(&stage.1)?),
                 PlanStage::Layout => station.add_explicit_layout(Layout::parse(&stage.1)),
                 PlanStage::Num => {
                     let mut num = stage.1;
                     // test for blocks
                     if num.starts_with('|'){
-                        station.add_block(last.unwrap_or(-1));
+                        station.add_block(last.unwrap_or(0));
                         num.remove(0);
                     }
                     station.set_stop(num.parse().map_err(|err| format!("Could not parse stop number: {}", err))?)
@@ -154,7 +154,7 @@ impl Station {
         Ok(station)
     }
 
-    pub(crate) fn add_insert(&mut self, input: i64) {
+    pub(crate) fn add_insert(&mut self, input: usize) {
         self.inputs.push(input);
     }
 
@@ -181,7 +181,7 @@ impl Station {
         self.control.0.send(Command::Stop(0)).expect("TODO: panic message");
     }
 
-    pub(crate) fn set_stop(&mut self, stop: i64) {
+    pub(crate) fn set_stop(&mut self, stop: usize) {
         self.stop = stop
     }
 
@@ -193,11 +193,11 @@ impl Station {
         self.transform = Some(transform);
     }
 
-    pub(crate) fn add_block(&mut self, line: i64) {
+    pub(crate) fn add_block(&mut self, line: usize) {
         self.block.push(line);
     }
 
-    pub(crate) fn add_out(&mut self, id: i64, out: Tx<Train>) -> Result<(), String> {
+    pub(crate) fn add_out(&mut self, id: usize, out: Tx<Train>) -> Result<(), String> {
         self.outgoing.add(id, out);
         Ok(())
     }
@@ -243,11 +243,11 @@ impl Station {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Command {
-    Stop(i64),
-    Ready(i64),
-    Overflow(i64),
-    Threshold(i64),
-    Okay(i64),
+    Stop(usize),
+    Ready(usize),
+    Overflow(usize),
+    Threshold(usize),
+    Okay(usize),
 }
 
 

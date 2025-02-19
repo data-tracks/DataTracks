@@ -1,10 +1,7 @@
-use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
 
-use lazy_static::lazy_static;
 
-lazy_static! {
-    pub static ref GLOBAL_ID: IdBuilder = IdBuilder::new(0);
-}
+static GLOBAL_ID: AtomicUsize = AtomicUsize::new(0);
 
 
 pub struct IdBuilder {
@@ -19,6 +16,11 @@ impl IdBuilder {
     pub fn new_id(&self) -> i64 {
         self.id.fetch_add(1, Ordering::SeqCst) + 1
     }
+}
+
+
+pub fn new_id() -> usize{
+    GLOBAL_ID.fetch_add(1, Ordering::Relaxed)
 }
 
 #[cfg(test)]

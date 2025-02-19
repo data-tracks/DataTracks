@@ -6,7 +6,7 @@ use crate::processing::station::Command::{Ready, Stop};
 use crate::processing::{plan, Train};
 use crate::sql::sqlite::connection::SqliteConnector;
 use crate::ui::ConfigModel;
-use crate::util::{Tx, GLOBAL_ID};
+use crate::util::{new_id, Tx};
 use crossbeam::channel::{unbounded, Sender};
 use rusqlite::params;
 use serde_json::{Map, Value};
@@ -15,7 +15,7 @@ use std::sync::Arc;
 use tokio::runtime::Runtime;
 
 pub struct LiteSource {
-    id: i64,
+    id: usize,
     connector: SqliteConnector,
     outs: Vec<Tx<Train>>,
     query: String,
@@ -23,7 +23,7 @@ pub struct LiteSource {
 
 impl LiteSource {
     pub fn new(path: String, query: String) -> LiteSource {
-        let id = GLOBAL_ID.new_id();
+        let id = new_id();
         let connection = SqliteConnector::new(path.as_str());
         LiteSource { id, connector: connection, outs: Vec::new(), query }
     }
@@ -73,7 +73,7 @@ impl Source for LiteSource {
                 while let Ok(Some(row)) = iter.next() {
                     values.push((row, count).try_into().unwrap());
                 }
-                let train = Train::new(-1, values);
+                let train = Train::new(usize::MAX, values);
 
                 for sender in &sender {
                     sender.send(train.clone()).unwrap();
@@ -90,7 +90,7 @@ impl Source for LiteSource {
     }
 
 
-    fn get_id(&self) -> i64 {
+    fn get_id(&self) -> usize {
         self.id
     }
 

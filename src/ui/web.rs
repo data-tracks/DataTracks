@@ -79,7 +79,7 @@ pub async fn startup(storage: Arc<Mutex<Storage>>) {
         .route("/inouts/create", post(create_in_outs))
         .route("/options", get(get_options))
         .route("/status", get(get_status))
-        .route("/*path", get(|path: Path<String>| serve_embedded_file(path.to_string())))
+        .route("/{*path}", get(|path: Path<String>| serve_embedded_file(path.to_string())))
         .route("/", get(|| serve_embedded_file(String::from("/"))))
         .with_state(state)
         .layer(CorsLayer::permissive());
@@ -192,8 +192,8 @@ struct CreatePlanPayload {
 
 #[derive(Deserialize, Debug)]
 struct CreateInOutsPayload {
-    plan_id: i64,
-    stop_id: i64,
+    plan_id: usize,
+    stop_id: usize,
     type_name: String,
     category: String,
     configs: HashMap<String, ConfigModel>,

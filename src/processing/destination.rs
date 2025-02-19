@@ -35,7 +35,7 @@ pub trait Destination: Send + Configurable + Sync {
     fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command>;
     fn get_in(&self) -> Tx<Train>;
 
-    fn get_id(&self) -> i64;
+    fn get_id(&self) -> usize;
 
     fn dump_destination(&self) -> String {
         Configurable::dump(self)

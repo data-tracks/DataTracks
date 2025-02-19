@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::net::{SocketAddr, SocketAddrV4};
 
 
-pub(crate) fn create_broker(port: u16, url: String, id: i64) -> (Broker, LinkTx, LinkRx) {
+pub(crate) fn create_broker(port: u16, url: String, id: usize) -> (Broker, LinkTx, LinkRx) {
     let mut config = Config::default();
 
     config.router = RouterConfig {

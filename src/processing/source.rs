@@ -40,7 +40,7 @@ pub trait Source: Send + Sync + Configurable {
 
     fn get_outs(&mut self) -> &mut Vec<Tx<Train>>;
 
-    fn get_id(&self) -> i64;
+    fn get_id(&self) -> usize;
 
     fn dump_source(&self) -> String {
         Configurable::dump(self).to_string()

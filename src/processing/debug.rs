@@ -3,7 +3,7 @@ use crate::processing::option::Configurable;
 use crate::processing::plan::DestinationModel;
 use crate::processing::station::Command;
 use crate::processing::Train;
-use crate::util::{new_channel, Rx, Tx, GLOBAL_ID};
+use crate::util::{new_channel, new_id, Rx, Tx};
 use crossbeam::channel::{unbounded, Sender};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
@@ -14,7 +14,7 @@ use std::thread;
 use tracing::{debug, error};
 
 pub struct DebugDestination {
-    id: i64,
+    id: usize,
     receiver: Option<Rx<Train>>,
     sender: Tx<Train>,
 }
@@ -22,7 +22,7 @@ pub struct DebugDestination {
 impl DebugDestination {
     pub fn new() -> Self {
         let (tx, _num, rx) = new_channel();
-        DebugDestination { id: GLOBAL_ID.new_id(), receiver: Some(rx), sender: tx }
+        DebugDestination { id: new_id(), receiver: Some(rx), sender: tx }
     }
 }
 
@@ -82,7 +82,7 @@ impl Destination for DebugDestination {
     }
 
 
-    fn get_id(&self) -> i64 {
+    fn get_id(&self) -> usize {
         self.id
     }
 

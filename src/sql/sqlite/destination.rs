@@ -5,7 +5,7 @@ use crate::processing::station::Command;
 use crate::processing::station::Command::Ready;
 use crate::processing::{plan, Train};
 use crate::sql::sqlite::connection::SqliteConnector;
-use crate::util::{new_channel, DynamicQuery, Rx, Tx, GLOBAL_ID};
+use crate::util::{new_channel, new_id, DynamicQuery, Rx, Tx};
 use crossbeam::channel::{unbounded, Sender};
 use rusqlite::params_from_iter;
 use serde_json::Map;
@@ -16,7 +16,7 @@ use std::time::Duration;
 use tokio::runtime::Runtime;
 
 pub struct LiteDestination {
-    id: i64,
+    id: usize,
     receiver: Rx<Train>,
     sender: Tx<Train>,
     connector: SqliteConnector,
@@ -28,7 +28,7 @@ impl LiteDestination {
         let (tx, _num, rx) = new_channel();
         let connection = SqliteConnector::new(&path);
         let query = DynamicQuery::build_dynamic_query(query);
-        LiteDestination { id: GLOBAL_ID.new_id(), receiver: rx, sender: tx, connector: connection, query }
+        LiteDestination { id: new_id(), receiver: rx, sender: tx, connector: connection, query }
     }
 }
 
@@ -99,7 +99,7 @@ impl Destination for LiteDestination {
         self.sender.clone()
     }
 
-    fn get_id(&self) -> i64 {
+    fn get_id(&self) -> usize {
         self.id
     }
 

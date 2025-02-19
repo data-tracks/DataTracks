@@ -4,7 +4,7 @@ use crate::processing::source::Source;
 use crate::processing::station::Command;
 use crate::processing::Train;
 use crate::ui::ConfigModel;
-use crate::util::{Tx, GLOBAL_ID};
+use crate::util::{new_id, Tx};
 use crate::value;
 use axum::routing::{get, post};
 use axum::Router;
@@ -23,7 +23,7 @@ use crate::http::util::{parse_addr, receive, receive_with_topic, receive_ws};
 // messages like: curl --json '{"website": "linuxize.com"}' localhost:5555/data/isabel
 #[derive(Clone)]
 pub struct HttpSource {
-    id: i64,
+    id: usize,
     url: String,
     port: u16,
     outs: Vec<Tx<Train>>,
@@ -31,7 +31,7 @@ pub struct HttpSource {
 
 impl HttpSource {
     pub(crate) fn new(url: String, port: u16) -> Self {
-        HttpSource { id: GLOBAL_ID.new_id(), url, port, outs: Default::default() }
+        HttpSource { id: new_id(), url, port, outs: Default::default() }
     }
 
 }
@@ -45,7 +45,7 @@ async fn start_source(http: HttpSource, _rx: Receiver<Command>){
 
     let app = Router::new()
         .route("/data", post(receive))
-        .route("/data/*topic", post(receive_with_topic))
+        .route("/data/{*topic}", post(receive_with_topic))
         .route("/ws", get(receive_ws))
         .layer(CorsLayer::permissive())
         .with_state(state);
@@ -98,7 +98,7 @@ impl Source for HttpSource {
         &mut self.outs
     }
 
-    fn get_id(&self) -> i64 {
+    fn get_id(&self) -> usize {
         self.id
     }
 

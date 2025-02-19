@@ -5,17 +5,17 @@ use crate::util::Tx;
 
 #[derive(Clone, Default)]
 pub struct Sender {
-    outs: HashMap<i64, Tx<Train>>,
+    outs: HashMap<usize, Tx<Train>>,
 }
 
 impl Sender {
-    pub(crate) fn send_to(&self, num: i64, train: Train) {
+    pub(crate) fn send_to(&self, num: usize, train: Train) {
         self.outs.get(&num).unwrap().send(train).unwrap();
     }
 }
 
 impl Sender {
-    pub(crate) fn add(&mut self, id: i64, sender: Tx<Train>) {
+    pub(crate) fn add(&mut self, id: usize, sender: Tx<Train>) {
         self.outs.insert(id, sender);
     }
 

@@ -7,7 +7,7 @@ use std::sync::Mutex;
 
 #[derive(Default)]
 pub struct Storage {
-    pub plans: Mutex<HashMap<i64, Plan>>,
+    pub plans: Mutex<HashMap<usize, Plan>>,
     pub ins: Mutex<HashMap<String, fn(Map<String, Value>) -> Box<dyn Source>>>,
     pub outs: Mutex<HashMap<String, fn(Map<String, Value>) -> Box<dyn Destination>>>,
     pub transforms: Mutex<HashMap<String, fn(String, Value) -> Box<transform::Transform>>>
@@ -24,7 +24,7 @@ impl Storage {
         plans.insert(plan.id, plan);
     }
 
-    pub fn add_source(&mut self, plan_id: i64, stop_id: i64, source: Box<dyn Source>) {
+    pub fn add_source(&mut self, plan_id: usize, stop_id: usize, source: Box<dyn Source>) {
         let mut plans = self.plans.lock().unwrap();
         let id = source.get_id();
         if let Some(p) = plans.get_mut(&plan_id) {
@@ -33,7 +33,7 @@ impl Storage {
         }
     }
 
-    pub fn add_destination(&mut self, plan_id: i64, stop_id: i64, destination: Box<dyn Destination>) {
+    pub fn add_destination(&mut self, plan_id: usize, stop_id: usize, destination: Box<dyn Destination>) {
         let mut plans = self.plans.lock().unwrap();
         let id = destination.get_id();
         if let Some(p) = plans.get_mut(&plan_id) {
@@ -53,7 +53,7 @@ impl Storage {
         }
     }
 
-    pub fn start_plan(&mut self, id: i64) {
+    pub fn start_plan(&mut self, id: usize) {
         let mut lock = self.plans.lock().unwrap();
         let plan = lock.get_mut(&id);
         match plan {

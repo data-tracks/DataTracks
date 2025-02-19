@@ -7,7 +7,6 @@ use crate::processing::station::{Command, Station};
 use crate::processing::Train;
 use crate::processing::transform;
 use crate::ui::{ConfigContainer, ConfigModel};
-use crate::util::GLOBAL_ID;
 use core::default::Default;
 use crossbeam::channel::{unbounded, Receiver, Sender};
 use serde::ser::SerializeStruct;
@@ -20,16 +19,17 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
+use crate::util::new_id;
 
 pub struct Plan {
-    pub id: i64,
+    pub id: usize,
     pub name: String,
-    pub lines: HashMap<i64, Vec<i64>>,
-    pub stations: HashMap<i64, Station>,
-    pub stations_to_in_outs: HashMap<i64, Vec<i64>>,
-    pub sources: HashMap<i64, Box<dyn Source>>,
-    pub destinations: HashMap<i64, Box<dyn Destination>>,
-    pub controls: HashMap<i64, Vec<Sender<Command>>>,
+    pub lines: HashMap<usize, Vec<usize>>,
+    pub stations: HashMap<usize, Station>,
+    pub stations_to_in_outs: HashMap<usize, Vec<usize>>,
+    pub sources: HashMap<usize, Box<dyn Source>>,
+    pub destinations: HashMap<usize, Box<dyn Destination>>,
+    pub controls: HashMap<usize, Vec<Sender<Command>>>,
     pub control_receiver: (Arc<Sender<Command>>, Receiver<Command>),
     pub status: Status,
     pub transforms: HashMap<String, transform::Transform>,
@@ -37,7 +37,7 @@ pub struct Plan {
 
 #[cfg(test)]
 impl Plan {
-    pub(crate) fn get_result(&self, id: i64) -> Arc<Mutex<Vec<Train>>> {
+    pub(crate) fn get_result(&self, id: usize) -> Arc<Mutex<Vec<Train>>> {
         self.destinations.get(&id).unwrap().get_result_handle()
     }
 }
@@ -46,7 +46,7 @@ impl Default for Plan {
     fn default() -> Self {
         let (tx, rx) = unbounded();
         Plan {
-            id: GLOBAL_ID.new_id(),
+            id: new_id(),
             name: "".to_string(),
             lines: Default::default(),
             stations: Default::default(),
@@ -70,7 +70,7 @@ pub enum Status {
 
 
 impl Plan {
-    pub fn new(id: i64) -> Self {
+    pub fn new(id: usize) -> Self {
         Plan {
             id,
             name: id.to_string(),
@@ -139,14 +139,14 @@ impl Plan {
         let mut dump = "".to_string();
         let mut dumped_stations = vec![];
 
-        let mut lines: Vec<(&i64, &Vec<i64>)> = self.lines.iter().collect();
+        let mut lines: Vec<(&usize, &Vec<usize>)> = self.lines.iter().collect();
         lines.sort_by_key(|&(key, _)| key);
         for line in lines {
             if *line.0 != 0 {
                 dump += "\n"
             }
 
-            let mut last = -1;
+            let mut last = usize::MAX;
             for (index, stop_number) in line.1.iter().enumerate() {
                 if index != 0 {
                     dump += match &self.stations[stop_number] {
@@ -162,7 +162,7 @@ impl Plan {
         dump
     }
 
-    pub(crate) fn send_control(&mut self, num: &i64, command: Command) {
+    pub(crate) fn send_control(&mut self, num: &usize, command: Command) {
         self.controls.get_mut(num).unwrap_or(&mut Vec::new()).iter().for_each(|c| c.send(command.clone()).unwrap())
     }
 
@@ -211,7 +211,7 @@ impl Plan {
         Ok(())
     }
 
-    pub(crate) fn clone_platform(&mut self, num: i64) {
+    pub(crate) fn clone_platform(&mut self, num: usize) {
         let station = self.stations.get_mut(&num).unwrap();
         self.controls.entry(num).or_default().push(station.operate(Arc::clone(&self.control_receiver.0), self.transforms.clone()))
     }
@@ -278,7 +278,7 @@ impl Plan {
                     plan.parse_transform(line)?;
                 }
                 _ => {
-                    let _ = plan.parse_line(line_number as i64, line);
+                    let _ = plan.parse_line(line_number, line);
                 }
             }
             
@@ -286,7 +286,7 @@ impl Plan {
 
         Ok(plan)
     }
-    fn parse_line(&mut self, line: i64, stencil: &str) -> Result<(), String> {
+    fn parse_line(&mut self, line: usize, stencil: &str) -> Result<(), String> {
         let mut temp = String::default();
         let mut is_text = false;
 
@@ -335,7 +335,7 @@ impl Plan {
         }
         Ok(())
     }
-    pub(crate) fn build(&mut self, line_num: i64, station: Station) {
+    pub(crate) fn build(&mut self, line_num: usize, station: Station) {
         self.lines.entry(line_num).or_default().push(station.stop);
         let stop = station.stop;
         let station = match self.stations.remove(&stop) {
@@ -348,7 +348,7 @@ impl Plan {
         self.stations.insert(station.stop, station);
     }
 
-    pub(crate) fn build_split(&mut self, line_num: i64, stop_num: i64) -> Result<(), String> {
+    pub(crate) fn build_split(&mut self, line_num: usize, stop_num: usize) -> Result<(), String> {
         self.lines.entry(line_num).or_default().push(stop_num);
         Ok(())
     }
@@ -363,7 +363,7 @@ impl Plan {
             let targets = map.get(&destination.get_id()).unwrap();
             for target in targets {
                 if let Some(station) = self.stations.get_mut(target) {
-                    station.add_out(-destination.get_id(), destination.get_in())?; // maybe change negative approach
+                    station.add_out(usize::MAX, destination.get_in())?; // maybe change negative approach
                 } else {
                     Err(String::from("Could not find target station"))?;
                 }
@@ -391,18 +391,18 @@ impl Plan {
         Ok(())
     }
 
-    fn get_connected_stations(&self, in_out: i64) -> Vec<i64> {
+    fn get_connected_stations(&self, in_out: usize) -> Vec<usize> {
         let targets = self.stations_to_in_outs.iter().flat_map(|(stop, in_outs)| {
             if in_outs.contains(&in_out) {
                 vec![*stop]
             } else {
                 vec![]
             }
-        }).collect::<Vec<i64>>();
+        }).collect::<Vec<usize>>();
         targets
     }
 
-    pub fn connect_in_out(&mut self, stop: i64, in_out: i64) {
+    pub fn connect_in_out(&mut self, stop: usize, in_out: usize) {
         self.stations_to_in_outs.entry(stop).or_default().push(in_out);
     }
 
@@ -430,9 +430,9 @@ impl Plan {
         Ok(())
     }
 
-    fn split_name_options(stencil: &str) -> Result<(Vec<i64>, &str, Map<String, Value>), String> {
+    fn split_name_options(stencil: &str) -> Result<(Vec<usize>, &str, Map<String, Value>), String> {
         let (stencil, stops) = stencil.rsplit_once("}:").unwrap();
-        let stops = stops.split(',').map(|num| num.parse::<i64>()).collect::<Result<Vec<_>, _>>().map_err(|err| err.to_string())?;
+        let stops = stops.split(',').map(|num| num.parse::<usize>()).collect::<Result<Vec<_>, _>>().map_err(|err| err.to_string())?;
 
         let (type_name, template) = stencil.split_once('{').ok_or(format!("Invalid template: {}", stencil))?;
         let json = format!("{{ {} }}", template.trim());
@@ -470,7 +470,7 @@ impl Plan {
         self.transforms.get_mut(name).ok_or("No transform found".to_string())
     }
 
-    fn get_station(&self, stop_num: &i64) -> Result<&Station, String> {
+    fn get_station(&self, stop_num: &usize) -> Result<&Station, String> {
         self.stations.get(stop_num).ok_or_else(|| format!("Station {} not found", stop_num))
     }
 
@@ -520,7 +520,7 @@ impl Plan {
         Ok(())
     }
 
-    fn get_previous_stations(&self, station: &i64) -> HashMap<i64, &Station> {
+    fn get_previous_stations(&self, station: &usize) -> HashMap<usize, &Station> {
         let mut befores = HashMap::new();
         for stations in self.lines.values() {
             if stations.is_empty() {
@@ -644,13 +644,13 @@ impl Serialize for &Plan {
 
 #[derive(Serialize)]
 struct Line {
-    num: i64,
-    stops: Vec<i64>,
+    num: usize,
+    stops: Vec<usize>,
 }
 
 #[derive(Serialize, Deserialize)]
 struct Stop {
-    num: i64,
+    num: usize,
     transform: Option<ConfigContainer>,
     sources: Vec<SourceModel>,
     destinations: Vec<DestinationModel>,

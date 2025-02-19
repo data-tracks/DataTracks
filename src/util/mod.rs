@@ -2,7 +2,7 @@ pub use builder::StringBuilder;
 pub use channel::{new_channel, Rx, Tx};
 pub use dynamic::DynamicQuery;
 pub use dynamic::ValueExtractor;
-pub use id::GLOBAL_ID;
+pub use id::new_id;
 pub use iterator::EmptyIterator;
 pub use logo::logo;
 pub use reader::BufferedReader;
