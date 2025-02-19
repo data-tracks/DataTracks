@@ -514,7 +514,7 @@ mod tests {
         match transform {
             Ok(mut t) => {
                 for (i, input) in inputs.into_iter().enumerate() {
-                    t.dynamically_load(vec![Train::new(i as i64, input)]);
+                    t.dynamically_load(vec![Train::new(i, input)]);
                 }
 
                 let result = t.drain_to_train(0);

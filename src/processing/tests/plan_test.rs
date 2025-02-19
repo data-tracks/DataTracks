@@ -17,13 +17,13 @@ pub mod dummy {
     use crate::processing::transform::{Transform, Transformer};
     use crate::processing::Layout;
     use crate::ui::ConfigModel;
-    use crate::util::{new_channel, Rx, Tx, GLOBAL_ID};
+    use crate::util::{new_channel, new_id, Rx, Tx};
     use crate::value::Value;
     use crossbeam::channel::{unbounded, Sender};
     use serde_json::Map;
 
     pub struct DummySource {
-        id: i64,
+        id: usize,
         values: Option<Vec<Vec<Value>>>,
         delay: Duration,
         initial_delay: Duration,
@@ -31,12 +31,12 @@ pub mod dummy {
     }
 
     impl DummySource {
-        pub(crate) fn new(values: Vec<Vec<Value>>, delay: Duration) -> (Self, i64) {
+        pub(crate) fn new(values: Vec<Vec<Value>>, delay: Duration) -> (Self, usize) {
             Self::new_with_delay(values, Duration::from_millis(0), delay)
         }
 
-        pub(crate) fn new_with_delay(values: Vec<Vec<Value>>, initial_delay: Duration, delay: Duration) -> (Self, i64) {
-            let id = (*GLOBAL_ID).new_id();
+        pub(crate) fn new_with_delay(values: Vec<Vec<Value>>, initial_delay: Duration, delay: Duration) -> (Self, usize) {
+            let id = new_id();
             (DummySource { id, values: Some(values), initial_delay, delay, senders: vec![] }, id)
         }
     }
@@ -88,7 +88,7 @@ pub mod dummy {
             match options.get("id") {
                 None => {},
                 Some(id) => {
-                    source.id = id.as_i64().unwrap();
+                    source.id = id.as_u64().unwrap() as usize;
                 }
             };
             Ok(source)
@@ -134,7 +134,7 @@ pub mod dummy {
             &mut self.senders
         }
 
-        fn get_id(&self) -> i64 {
+        fn get_id(&self) -> usize {
             self.id
         }
 
@@ -155,7 +155,7 @@ pub mod dummy {
     }
 
     pub struct DummyDestination {
-        id: i64,
+        id: usize,
         result_size: usize,
         pub(crate) results: Arc<Mutex<Vec<Train>>>,
         receiver: Option<Rx<Train>>,
@@ -166,7 +166,7 @@ pub mod dummy {
         pub(crate) fn new(result_size: usize) -> Self {
             let (tx, _num, rx) = new_channel();
             DummyDestination {
-                id: (*GLOBAL_ID).new_id(),
+                id: new_id(),
                 result_size,
                 results: Arc::new(Mutex::new(vec![])),
                 receiver: Some(rx),
@@ -198,7 +198,7 @@ pub mod dummy {
             let mut destination = DummyDestination::new(result_size);
 
             if let Some(id) = options.get("id") {
-                destination.id = id.as_i64().unwrap();
+                destination.id = id.as_i64().unwrap() as usize;
             }
 
             Ok(destination)
@@ -242,7 +242,7 @@ pub mod dummy {
             self.sender.clone()
         }
 
-        fn get_id(&self) -> i64 {
+        fn get_id(&self) -> usize {
             self.id
         }
 
@@ -811,7 +811,7 @@ pub mod tests {
         test_single_in_out("1{sql|SELECT {'key': $0, 'key2': $0 } FROM $0}", values.clone(), res.clone(), source, destination, true);
     }
 
-    fn test_single_in_out(query: &str, values: Vec<Vec<Value>>, res: Vec<Vec<Value>>, source: i64, destination: i64, ordered: bool) {
+    fn test_single_in_out(query: &str, values: Vec<Vec<Value>>, res: Vec<Vec<Value>>, source: usize, destination: usize, ordered: bool) {
         let mut plan = Plan::parse(
             &format!("\
             0--{query}--2\n\
