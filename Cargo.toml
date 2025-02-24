@@ -45,6 +45,7 @@ speedy = "0.8.7"
 criterion = "0.5.1"
 flatbuffers = "25.2.10"
 mio = "1.0.3"
+url = "2.5.4"
 
 [dev-dependencies]
 rstest = "0.24.0"

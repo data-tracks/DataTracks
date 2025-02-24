@@ -10,7 +10,7 @@ pub use train::Train;
 pub use wagon::Wagon;
 pub use block::Block;
 
-pub(crate) mod station;
+pub mod station;
 mod window;
 pub mod transform;
 pub(crate) mod train;

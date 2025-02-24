@@ -11,4 +11,6 @@ pub mod sql;
 pub mod ui;
 pub mod management;
 
+pub mod tpc;
+
 pub use util::*;

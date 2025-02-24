@@ -1,3 +1,4 @@
+use crate::tpc::Server;
 use crate::management::storage::Storage;
 use crate::mqtt::{MqttDestination, MqttSource};
 use crate::processing::destination::Destination;
@@ -6,17 +7,20 @@ use crate::processing::{DebugDestination, HttpSource, Plan};
 use crate::ui::start_web;
 use std::sync::{Arc, Mutex};
 use std::thread;
+use crossbeam::channel::Sender;
 use tracing::info;
+use crate::processing::station::Command;
 
 pub struct Manager {
     storage: Arc<Mutex<Storage>>,
     handles: Vec<thread::JoinHandle<()>>,
+    server: Option<Sender<Command>>,
 }
 
 
 impl Manager {
     pub fn new() -> Manager {
-        Manager { storage: Arc::new(Mutex::new(Storage::new())), handles: vec![] }
+        Manager { storage: Arc::new(Mutex::new(Storage::new())), handles: vec![], server: None }
     }
 
     fn get_storage(&self) -> Arc<Mutex<Storage>> {
@@ -30,6 +34,15 @@ impl Manager {
 
         let handle = thread::spawn(|| start_web(web_storage));
         self.handles.push(handle);
+
+        match Server::start("http://localhost:9999".to_string()) {
+            Ok(tx) => {
+                self.server = Some(tx)
+            }
+            Err(err) => {
+                tracing::error!("{}", format!("{}", err));
+            }
+        }
     }
 
     pub fn shutdown(&mut self) {
@@ -39,6 +52,7 @@ impl Manager {
                 handle.join().unwrap();
             }
         }
+
     }
 }
 
