@@ -43,9 +43,16 @@ tempfile = "3.14.0"
 thiserror = "2.0.9"
 speedy = "0.8.7"
 criterion = "0.5.1"
+flatbuffers = "25.2.10"
+mio = "1.0.3"
 
 [dev-dependencies]
 rstest = "0.24.0"
+
+[dependencies.schemas]
+git = "https://github.com/data-tracks/DataTracks-Protocol.git"
+branch = "generated"
+
 
 # The profile that 'cargo dist' will build with
 [profile.dist]

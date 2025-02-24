@@ -6,4 +6,3 @@ mod optimizer;
 mod rule;
 mod cost;
 mod rules;
-mod tree;
