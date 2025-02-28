@@ -1,4 +1,4 @@
-use crate::tpc::Server;
+use crate::tpc::{Server, TpcSource};
 use crate::management::storage::Storage;
 use crate::mqtt::{MqttDestination, MqttSource};
 use crate::processing::destination::Destination;
@@ -35,14 +35,6 @@ impl Manager {
         let handle = thread::spawn(|| start_web(web_storage));
         self.handles.push(handle);
 
-        match Server::start("http://localhost:9999".to_string()) {
-            Ok(tx) => {
-                self.server = Some(tx)
-            }
-            Err(err) => {
-                tracing::error!("{}", format!("{}", err));
-            }
-        }
     }
 
     pub fn shutdown(&mut self) {
@@ -66,6 +58,11 @@ fn add_default(storage: Arc<Mutex<Storage>>) {
         plan.connect_in_out(1, source_id);
 
         let source = Box::new(MqttSource::new(String::from("127.0.0.1"), 6666));
+        let source_id = source.get_id();
+        plan.add_source(source);
+        plan.connect_in_out(1, source_id);
+
+        let source = Box::new(TpcSource::new(String::from("127.0.0.1"), 9999));
         let source_id = source.get_id();
         plan.add_source(source);
         plan.connect_in_out(1, source_id);

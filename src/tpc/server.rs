@@ -3,15 +3,16 @@ use crate::processing::station::Command;
 use crossbeam::channel::{unbounded, Receiver, Sender};
 use mio::net::{TcpListener, TcpStream};
 use mio::{Events, Interest, Poll, Registry, Token};
-use schemas::message_generated::protocol::root_as_message;
-use std::io::{Error, Read, Write};
-use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4, ToSocketAddrs};
+use std::io::{Error, Read};
+use std::net::{SocketAddr, ToSocketAddrs};
 use std::{io, thread};
 use std::str::from_utf8;
-use std::time::Duration;
+use std::sync::Arc;
 use mio::event::Event;
-use tracing::{error, info};
+use tracing::{info};
 use url::Url;
+use crate::processing::Train;
+use crate::util::Tx;
 
 const SERVER: Token = Token(0);
 const CLIENT: Token = Token(1);
@@ -29,20 +30,22 @@ impl Server {
         Server { addr }
     }
 
-    pub fn start(url: String) -> Result<Sender<Command>, Error> {
-        let (tx, rx) = unbounded();
+    pub fn start(id: usize, url: String, rx: Receiver<Command>, outs: Vec<Tx<Train>>) -> Result<(), Error> {
         let server = Server::new(url);
 
-        thread::spawn(move || match server.run(rx) {
+        thread::spawn(move || match server.run(id, rx, outs) {
             Ok(_) => {}
-            Err(_) => {}
+            Err(err) => {
+                tracing::error!("{}", format!("{}", err));
+            }
         });
 
-        Ok(tx)
+        Ok(())
     }
 
-    fn run(&self, rx: Receiver<Command>) -> Result<(), Error> {
+    fn run(&self, id: usize, rx: Receiver<Command>, outs: Vec<Tx<Train>>) -> Result<(), Error> {
         let mut server = TcpListener::bind(self.addr)?;
+        let outs = Arc::new(outs);
 
         let mut poll = Poll::new()?;
         let mut events = Events::with_capacity(128);
@@ -109,7 +112,7 @@ impl Server {
                     token => {
                         // Maybe received an event for a TCP connection.
                         let done = if let Some(connection) = connections.get_mut(&token) {
-                            Server::handle_connection_event(poll.registry(), connection, event)?
+                            Server::handle_connection_event(id, outs.clone(), poll.registry(), connection, event)?
                         } else {
                             // Sporadic events happen, we can safely ignore them.
                             false
@@ -133,7 +136,9 @@ impl Server {
 
     /// Returns `true` if the connection is done.
     fn handle_connection_event(
-        registry: &Registry,
+        id: usize,
+        outs: Vec<Tx<Train>>,
+        _registry: &Registry,
         connection: &mut TcpStream,
         event: &Event,
     ) -> io::Result<bool> {
@@ -193,6 +198,7 @@ impl Server {
                 let received_data = &received_data[..bytes_read];
                 if let Ok(str_buf) = from_utf8(received_data) {
                     info!("Received data: {}", str_buf.trim_end());
+
                 } else {
                     info!("Received (none UTF-8) data: {:?}", received_data);
                 }
