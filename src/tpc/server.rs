@@ -1,18 +1,19 @@
-use std::collections::HashMap;
 use crate::processing::station::Command;
-use crossbeam::channel::{unbounded, Receiver, Sender};
-use mio::net::{TcpListener, TcpStream};
-use mio::{Events, Interest, Poll, Registry, Token};
-use std::io::{Error, Read};
-use std::net::{SocketAddr, ToSocketAddrs};
-use std::{io, thread};
-use std::str::from_utf8;
-use std::sync::Arc;
-use mio::event::Event;
-use tracing::{info};
-use url::Url;
 use crate::processing::Train;
 use crate::util::Tx;
+use crate::value::Value;
+use crossbeam::channel::{unbounded, Receiver, Sender};
+use mio::event::Event;
+use mio::net::{TcpListener, TcpStream};
+use mio::{Events, Interest, Poll, Registry, Token};
+use std::collections::HashMap;
+use std::io::{Error, Read};
+use std::net::{SocketAddr, ToSocketAddrs};
+use std::str::from_utf8;
+use std::sync::Arc;
+use std::{io, thread};
+use tracing::info;
+use url::Url;
 
 const SERVER: Token = Token(0);
 const CLIENT: Token = Token(1);
@@ -22,18 +23,22 @@ pub struct Server {
 }
 
 impl Server {
-    fn new(url: String) -> Server {
-        let addr = Url::parse(&url).ok().unwrap();
-        let host = addr.host_str().unwrap();
-        let port = addr.port_or_known_default().unwrap();
-        let addr = (host, port).to_socket_addrs().ok().unwrap().next().unwrap();
+    fn new(url: String, port: u16) -> Server {
+        let addr = (url, port).to_socket_addrs().ok().unwrap().next().unwrap();
         Server { addr }
     }
 
-    pub fn start(id: usize, url: String, rx: Receiver<Command>, outs: Vec<Tx<Train>>) -> Result<(), Error> {
-        let server = Server::new(url);
+    pub fn start(
+        id: usize,
+        url: String,
+        port: u16,
+        rx: Receiver<Command>,
+        outs: Vec<Tx<Train>>,
+        control: Arc<Sender<Command>>,
+    ) -> Result<(), Error> {
+        let server = Server::new(url, port);
 
-        thread::spawn(move || match server.run(id, rx, outs) {
+        thread::spawn(move || match server.run(id, rx, outs, control) {
             Ok(_) => {}
             Err(err) => {
                 tracing::error!("{}", format!("{}", err));
@@ -43,7 +48,7 @@ impl Server {
         Ok(())
     }
 
-    fn run(&self, id: usize, rx: Receiver<Command>, outs: Vec<Tx<Train>>) -> Result<(), Error> {
+    fn run(&self, id: usize, rx: Receiver<Command>, outs: Vec<Tx<Train>>, control: Arc<Sender<Command>>) -> Result<(), Error> {
         let mut server = TcpListener::bind(self.addr)?;
         let outs = Arc::new(outs);
 
@@ -54,6 +59,8 @@ impl Server {
             .register(&mut server, SERVER, Interest::READABLE)?;
 
         info!("TPC server listening on {}", self.addr);
+
+        control.send(Command::Okay(id)).unwrap();
 
         // Map of `Token` -> `TcpStream`.
         let mut connections = HashMap::new();
@@ -112,7 +119,13 @@ impl Server {
                     token => {
                         // Maybe received an event for a TCP connection.
                         let done = if let Some(connection) = connections.get_mut(&token) {
-                            Server::handle_connection_event(id, outs.clone(), poll.registry(), connection, event)?
+                            Server::handle_connection_event(
+                                id,
+                                outs.clone(),
+                                poll.registry(),
+                                connection,
+                                event,
+                            )?
                         } else {
                             // Sporadic events happen, we can safely ignore them.
                             false
@@ -137,7 +150,7 @@ impl Server {
     /// Returns `true` if the connection is done.
     fn handle_connection_event(
         id: usize,
-        outs: Vec<Tx<Train>>,
+        outs: Arc<Vec<Tx<Train>>>,
         _registry: &Registry,
         connection: &mut TcpStream,
         event: &Event,
@@ -196,11 +209,15 @@ impl Server {
 
             if bytes_read != 0 {
                 let received_data = &received_data[..bytes_read];
-                if let Ok(str_buf) = from_utf8(received_data) {
+                let value:Value = if let Ok(str_buf) = from_utf8(received_data) {
                     info!("Received data: {}", str_buf.trim_end());
-
+                    str_buf.trim_end().into()
                 } else {
-                    info!("Received (none UTF-8) data: {:?}", received_data);
+                    String::from_utf8(Vec::from(received_data)).unwrap().into()
+                };
+
+                for out in outs.iter() {
+                    out.send(Train::new(id, vec![value.clone()])).unwrap();
                 }
             }
 
