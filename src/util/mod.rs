@@ -10,6 +10,7 @@ pub use timeunit::TimeUnit;
 pub use visitor::ChangingVisitor;
 pub use visitor::CreatingVisitor;
 pub use cache::Cache;
+pub use message::*;
 
 mod logo;
 mod id;
@@ -22,4 +23,5 @@ mod iterator;
 mod visitor;
 pub(crate) mod storage;
 mod cache;
+mod message;
 

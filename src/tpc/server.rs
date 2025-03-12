@@ -1,22 +1,17 @@
 use crate::processing::station::Command;
 use crate::processing::Train;
-use crate::util::Tx;
-use crate::value::Value;
-use crossbeam::channel::{unbounded, Receiver, Sender};
-use mio::event::Event;
-use mio::net::{TcpListener, TcpStream};
-use mio::{Events, Interest, Poll, Registry, Token};
-use std::collections::HashMap;
-use std::io::{Error, Read};
-use std::net::{SocketAddr, ToSocketAddrs};
-use std::str::from_utf8;
-use std::sync::Arc;
-use std::{io, thread};
-use tracing::info;
-use url::Url;
+use crate::util::{deserialize_message, serialize_message, Tx};
+use crossbeam::channel::{Receiver, Sender};
 
-const SERVER: Token = Token(0);
-const CLIENT: Token = Token(1);
+use std::io::Error;
+use std::net::{SocketAddr, ToSocketAddrs};
+use std::sync::Arc;
+use std::io;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::{TcpListener, TcpStream};
+use tokio::runtime::Runtime;
+use tracing::debug;
+
 
 pub struct Server {
     addr: SocketAddr,
@@ -29,6 +24,7 @@ impl Server {
     }
 
     pub fn start(
+        &self,
         id: usize,
         url: String,
         port: u16,
@@ -36,198 +32,54 @@ impl Server {
         outs: Vec<Tx<Train>>,
         control: Arc<Sender<Command>>,
     ) -> Result<(), Error> {
-        let server = Server::new(url, port);
+        let rt = Runtime::new()?;
+        rt.block_on(async {
+            let addr = (url, port).to_socket_addrs().ok().unwrap().next().unwrap();
+            let listener = TcpListener::bind(addr).await?;
+            println!("Server listening...");
 
-        thread::spawn(move || match server.run(id, rx, outs, control) {
-            Ok(_) => {}
-            Err(err) => {
-                tracing::error!("{}", format!("{}", err));
+            loop {
+                let (stream, _) = listener.accept().await?;
+                tokio::spawn(self.handle_client(stream, outs.clone(), control.clone()));
             }
-        });
+        })
 
-        Ok(())
+
     }
 
-    fn run(&self, id: usize, rx: Receiver<Command>, outs: Vec<Tx<Train>>, control: Arc<Sender<Command>>) -> Result<(), Error> {
-        let mut server = TcpListener::bind(self.addr)?;
-        let outs = Arc::new(outs);
+    async fn handle_client(&self, mut stream: TcpStream) {
+        let mut buffer = [0; 1024]; // Buffer for incoming data
 
-        let mut poll = Poll::new()?;
-        let mut events = Events::with_capacity(128);
+        match stream.read(&mut buffer).await {
+            Ok(size) if size > 0 => {
+                // Deserialize FlatBuffers message
+                let message = deserialize_message(&buffer[..size]);
+                println!("Received message: id={}, text={}", message.action(), message.data().unwrap());
 
-        poll.registry()
-            .register(&mut server, SERVER, Interest::READABLE)?;
-
-        info!("TPC server listening on {}", self.addr);
-
-        control.send(Command::Okay(id)).unwrap();
-
-        // Map of `Token` -> `TcpStream`.
-        let mut connections = HashMap::new();
-        // Unique token for each incoming connection.
-        let mut unique_token = Token(SERVER.0 + 1);
-
-        loop {
-            if let Some(msg) = rx.try_recv().ok() {
-                match msg {
-                    Command::Stop(_) => {
-                        return Ok(());
-                    }
-                    _ => {}
-                }
+                // Prepare response
+                let response = serialize_message(2, "Hello from Rust Server!");
+                stream.write_all(&response).await.unwrap();
             }
-
-            if let Err(err) = poll.poll(&mut events, None) {
-                if Server::interrupted(&err) {
-                    continue;
-                }
-                return Err(err);
-            }
-
-            for event in events.iter() {
-                match event.token() {
-                    SERVER => loop {
-                        // Received an event for the TCP server socket, which
-                        // indicates we can accept an connection.
-                        let (mut connection, address) = match server.accept() {
-                            Ok((connection, address)) => (connection, address),
-                            Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
-                                // If we get a `WouldBlock` error we know our
-                                // listener has no more incoming connections queued,
-                                // so we can return to polling and wait for some
-                                // more.
-                                break;
-                            }
-                            Err(e) => {
-                                // If it was any other kind of error, something went
-                                // wrong and we terminate with an error.
-                                return Err(e);
-                            }
-                        };
-
-                        info!("Accepted connection from: {}", address);
-
-                        let token = Server::next(&mut unique_token);
-                        poll.registry().register(
-                            &mut connection,
-                            token,
-                            Interest::READABLE.add(Interest::WRITABLE),
-                        )?;
-
-                        connections.insert(token, connection);
-                    },
-                    token => {
-                        // Maybe received an event for a TCP connection.
-                        let done = if let Some(connection) = connections.get_mut(&token) {
-                            Server::handle_connection_event(
-                                id,
-                                outs.clone(),
-                                poll.registry(),
-                                connection,
-                                event,
-                            )?
-                        } else {
-                            // Sporadic events happen, we can safely ignore them.
-                            false
-                        };
-                        if done {
-                            if let Some(mut connection) = connections.remove(&token) {
-                                poll.registry().deregister(&mut connection)?;
-                            }
-                        }
-                    }
-                }
+            _ => {
+                println!("Client disconnected or error occurred");
             }
         }
     }
 
-    fn next(current: &mut Token) -> Token {
-        let next = current.0;
-        current.0 += 1;
-        Token(next)
+    fn run(&self, id: usize, rx: Receiver<Command>, outs: Vec<Tx<Train>>, control: Arc<Sender<Command>>) -> Result<(), Error> {
+
     }
+
 
     /// Returns `true` if the connection is done.
     fn handle_connection_event(
         id: usize,
         outs: Arc<Vec<Tx<Train>>>,
-        _registry: &Registry,
+        registry: &Registry,
         connection: &mut TcpStream,
         event: &Event,
     ) -> io::Result<bool> {
-        /*if event.is_writable() {
-            // We can (maybe) write to the connection.
-            match connection.write(DATA) {
-                // We want to write the entire `DATA` buffer in a single go. If we
-                // write less we'll return a short write error (same as
-                // `io::Write::write_all` does).
-                Ok(n) if n < DATA.len() => return Err(io::ErrorKind::WriteZero.into()),
-                Ok(_) => {
-                    // After we've written something we'll reregister the connection
-                    // to only respond to readable events.
-                    registry.reregister(connection, event.token(), Interest::READABLE)?
-                }
-                // Would block "errors" are the OS's way of saying that the
-                // connection is not actually ready to perform this I/O operation.
-                Err(ref err) if Server::would_block(err) => {}
-                // Got interrupted (how rude!), we'll try again.
-                Err(ref err) if Server::interrupted(err) => {
-                    return Server::handle_connection_event(registry, connection, event)
-                }
-                // Other errors we'll consider fatal.
-                Err(err) => return Err(err),
-            }
-        }*/
 
-        if event.is_readable() {
-            let mut connection_closed = false;
-            let mut received_data = vec![0; 4096];
-            let mut bytes_read = 0;
-            // We can (maybe) read from the connection.
-            loop {
-                match connection.read(&mut received_data[bytes_read..]) {
-                    Ok(0) => {
-                        // Reading 0 bytes means the other side has closed the
-                        // connection or is done writing, then so are we.
-                        connection_closed = true;
-                        break;
-                    }
-                    Ok(n) => {
-                        bytes_read += n;
-                        if bytes_read == received_data.len() {
-                            received_data.resize(received_data.len() + 1024, 0);
-                        }
-                    }
-                    // Would block "errors" are the OS's way of saying that the
-                    // connection is not actually ready to perform this I/O operation.
-                    Err(ref err) if Server::would_block(err) => break,
-                    Err(ref err) if Server::interrupted(err) => continue,
-                    // Other errors we'll consider fatal.
-                    Err(err) => return Err(err),
-                }
-            }
-
-            if bytes_read != 0 {
-                let received_data = &received_data[..bytes_read];
-                let value:Value = if let Ok(str_buf) = from_utf8(received_data) {
-                    info!("Received data: {}", str_buf.trim_end());
-                    str_buf.trim_end().into()
-                } else {
-                    String::from_utf8(Vec::from(received_data)).unwrap().into()
-                };
-
-                for out in outs.iter() {
-                    out.send(Train::new(id, vec![value.clone()])).unwrap();
-                }
-            }
-
-            if connection_closed {
-                info!("Connection closed");
-                return Ok(true);
-            }
-        }
-
-        Ok(false)
     }
 
     fn would_block(err: &Error) -> bool {
@@ -238,3 +90,5 @@ impl Server {
         err.kind() == io::ErrorKind::Interrupted
     }
 }
+
+

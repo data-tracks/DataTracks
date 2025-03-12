@@ -17,30 +17,30 @@ eula = false
 
 [dependencies]
 axum = { version = "0.8.1", features = ["ws"] }
-ctrlc = "3.4.4"
+ctrlc = "3.4.5"
 tokio = { version = "1.38.0", features = ["full"] }
-tower = "0.5.0"
+tower = "0.5.2"
 tower-http = { version = "0.6.2", features = ["full"] }
-tracing = "0.1.40"
-tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
-chrono = "0.4.38"
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+chrono = "0.4.40"
 logos = "0.15.0"
-serde_json = "1.0.117"
-serde = { version = "1.0.203", features = ["derive"] }
+serde_json = "1.0.140"
+serde = { version = "1.0.219", features = ["derive"] }
 crossbeam = "0.8.4"
-rand = "0.9.0-alpha.2"
+rand = "0.9.0"
 json = "0.12.4"
 include_dir = "0.7.4"
-mime_guess = "2.0.4"
-bytes = "1.6.0"
+mime_guess = "2.0.5"
+bytes = "1.10.1"
 rumqttc = "0.24.0"
 rumqttd = "0.19.0"
-rusqlite = { version = "0.33.0", features = ["bundled"] }
+rusqlite = { version = "0.34.0", features = ["bundled"] }
 regex = "1.11.1"
-postgres = "0.19.9"
-redb = "2.3.0"
-tempfile = "3.14.0"
-thiserror = "2.0.9"
+postgres = "0.19.10"
+redb = "2.4.0"
+tempfile = "3.18.0"
+thiserror = "2.0.12"
 speedy = "0.8.7"
 criterion = "0.5.1"
 flatbuffers = "25.2.10"
@@ -48,7 +48,7 @@ mio = "1.0.3"
 url = "2.5.4"
 
 [dev-dependencies]
-rstest = "0.24.0"
+rstest = "0.25.0"
 
 [dependencies.schemas]
 git = "https://github.com/data-tracks/DataTracks-Protocol.git"
