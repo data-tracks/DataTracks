@@ -30,11 +30,11 @@ pub struct MqttSource {
 
 
 impl Configurable for MqttSource {
-    fn get_name(&self) -> String {
+    fn name(&self) -> String {
         String::from("Mqtt")
     }
 
-    fn get_options(&self) -> Map<String, serde_json::Value> {
+    fn options(&self) -> Map<String, serde_json::Value> {
         let mut options = serde_json::map::Map::new();
         options.insert("url".to_string(), serde_json::Value::String(self.url.clone()));
         options.insert("port".to_string(), serde_json::Value::Number(self.port.into()));
@@ -105,11 +105,11 @@ impl Source for MqttSource {
         tx
     }
 
-    fn get_outs(&mut self) -> &mut Vec<Tx<Train>> {
+    fn outs(&mut self) -> &mut Vec<Tx<Train>> {
         &mut self.outs
     }
 
-    fn get_id(&self) -> usize {
+    fn id(&self) -> usize {
         self.id
     }
 

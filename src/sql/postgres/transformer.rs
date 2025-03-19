@@ -29,11 +29,11 @@ impl PostgresTransformer {
 }
 
 impl Configurable for PostgresTransformer {
-    fn get_name(&self) -> String {
+    fn name(&self) -> String {
         "Postgres".to_owned()
     }
 
-    fn get_options(&self) -> Map<String, Value> {
+    fn options(&self) -> Map<String, Value> {
         let mut options = Map::new();
         self.connector.add_options(&mut options);
         options.insert(String::from("query"), Value::String(self.query.get_query()));

@@ -26,7 +26,7 @@ impl Storage {
 
     pub fn add_source(&mut self, plan_id: usize, stop_id: usize, source: Box<dyn Source>) {
         let mut plans = self.plans.lock().unwrap();
-        let id = source.get_id();
+        let id = source.id();
         if let Some(p) = plans.get_mut(&plan_id) {
             p.add_source(source);
             p.connect_in_out(stop_id, id);

@@ -94,9 +94,9 @@ impl Plan {
         if !self.sources.is_empty() {
             dump += "\nIn\n";
             let mut sorted = self.sources.values().collect::<Vec<&Box<dyn Source>>>();
-            sorted.sort_by_key(|s| s.get_name());
+            sorted.sort_by_key(|s| s.name());
             dump += &sorted.into_iter().map(|s| {
-                let mut stops = self.get_connected_stations(s.get_id());
+                let mut stops = self.get_connected_stations(s.id());
                 stops.sort();
                 if stops.is_empty() {
                     s.dump_source().to_string()
@@ -110,7 +110,7 @@ impl Plan {
         if !self.destinations.is_empty() {
             dump += "\nOut\n";
             let mut sorted = self.destinations.values().collect::<Vec<&Box<dyn Destination>>>();
-            sorted.sort_by_key(|s| s.get_name());
+            sorted.sort_by_key(|s| s.name());
             dump += &sorted.into_iter().map(|s| {
 
                 let stops = self.get_connected_stations(s.get_id());
@@ -204,7 +204,7 @@ impl Plan {
         }
 
         for source in self.sources.values_mut() {
-            self.controls.entry(source.get_id()).or_default().push(source.operate(Arc::clone(&self.control_receiver.0)));
+            self.controls.entry(source.id()).or_default().push(source.operate(Arc::clone(&self.control_receiver.0)));
         }
 
         self.status = Status::Running;
@@ -375,11 +375,11 @@ impl Plan {
     fn connect_sources(&mut self) -> Result<(), String> {
         let mut map = HashMap::new();
         self.sources.iter().for_each(|source| {
-            map.insert(source.1.get_id(), self.get_connected_stations(source.1.get_id()));
+            map.insert(source.1.id(), self.get_connected_stations(source.1.id()));
         });
 
         for source in self.sources.values_mut() {
-            let targets = map.get(&source.get_id()).unwrap();
+            let targets = map.get(&source.id()).unwrap();
             for target in targets {
                 if let Some(station) = self.stations.get_mut(target) {
                     let tx = station.get_in();
@@ -408,7 +408,7 @@ impl Plan {
 
 
     pub(crate) fn add_source(&mut self, source: Box<dyn Source>) {
-        let id = source.get_id();
+        let id = source.id();
         self.sources.insert(id, source);
     }
 
@@ -421,7 +421,7 @@ impl Plan {
         let (stops, type_, options) = Self::split_name_options(stencil)?;
 
         let source = parse_source(type_, options)?;
-        let id = source.get_id();
+        let id = source.id();
         self.add_source(source);
         for stop in stops {
             self.connect_in_out(stop, id);
@@ -698,7 +698,7 @@ impl From<transform::Transform> for ConfigContainer {
                 let mut map = HashMap::new();
                 map.insert(String::from("query"), l.query.get_query().into());
                 map.insert(String::from("path"), l.connector.path.clone().into());
-                ConfigContainer::new(l.get_name(), map)
+                ConfigContainer::new(l.name(), map)
             }
             transform::Transform::Postgres(p) => {
                 let mut map = HashMap::new();
@@ -706,7 +706,7 @@ impl From<transform::Transform> for ConfigContainer {
                 map.insert(String::from("url"), p.connector.url.clone().into());
                 map.insert(String::from("port"), p.connector.port.into());
                 map.insert(String::from("db"), p.connector.db.clone().into());
-                ConfigContainer::new(p.get_name(), map)
+                ConfigContainer::new(p.name(), map)
             }
             #[cfg(test)]
             transform::Transform::DummyDB(_) => {

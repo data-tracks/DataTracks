@@ -56,11 +56,11 @@ async fn start_source(http: HttpSource, _rx: Receiver<Command>){
 
 
 impl Configurable for HttpSource {
-    fn get_name(&self) -> String {
+    fn name(&self) -> String {
         String::from("Http")
     }
 
-    fn get_options(&self) -> Map<String, Value> {
+    fn options(&self) -> Map<String, Value> {
         let mut options = Map::new();
         options.insert(String::from("url"), Value::String(self.url.clone()));
         options.insert(String::from("port"), Value::Number(self.port.into()));
@@ -94,11 +94,11 @@ impl Source for HttpSource {
         tx
     }
 
-    fn get_outs(&mut self) -> &mut Vec<Tx<Train>> {
+    fn outs(&mut self) -> &mut Vec<Tx<Train>> {
         &mut self.outs
     }
 
-    fn get_id(&self) -> usize {
+    fn id(&self) -> usize {
         self.id
     }
 

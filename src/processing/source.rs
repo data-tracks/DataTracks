@@ -35,12 +35,12 @@ pub trait Source: Send + Sync + Configurable {
     fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command>;
 
     fn add_out(&mut self, out: Tx<Train>) {
-        self.get_outs().push(out);
+        self.outs().push(out);
     }
 
-    fn get_outs(&mut self) -> &mut Vec<Tx<Train>>;
+    fn outs(&mut self) -> &mut Vec<Tx<Train>>;
 
-    fn get_id(&self) -> usize;
+    fn id(&self) -> usize;
 
     fn dump_source(&self) -> String {
         Configurable::dump(self).to_string()

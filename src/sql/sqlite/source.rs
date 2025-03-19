@@ -30,11 +30,11 @@ impl LiteSource {
 }
 
 impl Configurable for LiteSource {
-    fn get_name(&self) -> String {
+    fn name(&self) -> String {
         "SQLite".to_string()
     }
 
-    fn get_options(&self) -> Map<String, Value> {
+    fn options(&self) -> Map<String, Value> {
         let mut options = Map::new();
         options.insert(String::from("query"), Value::String(self.query.clone()));
         self.connector.add_options(&mut options);
@@ -85,12 +85,12 @@ impl Source for LiteSource {
         tx
     }
 
-    fn get_outs(&mut self) -> &mut Vec<Tx<Train>> {
+    fn outs(&mut self) -> &mut Vec<Tx<Train>> {
         &mut self.outs
     }
 
 
-    fn get_id(&self) -> usize {
+    fn id(&self) -> usize {
         self.id
     }
 

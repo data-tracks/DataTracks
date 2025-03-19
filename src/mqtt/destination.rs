@@ -33,11 +33,11 @@ impl MqttDestination {
 }
 
 impl Configurable for MqttDestination {
-    fn get_name(&self) -> String {
+    fn name(&self) -> String {
         String::from("Mqtt")
     }
 
-    fn get_options(&self) -> Map<String, Value> {
+    fn options(&self) -> Map<String, Value> {
         let mut options = Map::new();
         options.insert(String::from("url"), Value::String(self.url.clone()));
         options.insert(String::from("port"), Value::Number(self.port.into()));
@@ -117,7 +117,7 @@ impl Destination for MqttDestination {
         let mut configs = HashMap::new();
         configs.insert("url".to_string(), ConfigModel::String(StringModel::new(&self.url)));
         configs.insert("port".to_string(), ConfigModel::Number(NumberModel::new(self.port as i64)));
-        DestinationModel { type_name: self.get_name(), id: self.id.to_string(), configs }
+        DestinationModel { type_name: self.name(), id: self.id.to_string(), configs }
     }
 
     fn serialize_default() -> Option<DestinationModel>

@@ -27,11 +27,11 @@ impl DebugDestination {
 }
 
 impl Configurable for DebugDestination {
-    fn get_options(&self) -> Map<String, Value> {
+    fn options(&self) -> Map<String, Value> {
         Map::new()
     }
 
-    fn get_name(&self) -> String {
+    fn name(&self) -> String {
         String::from("Debug")
     }
 }

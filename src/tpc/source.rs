@@ -35,14 +35,14 @@ impl TpcSource {
 }
 
 impl Configurable for TpcSource {
-    fn get_name(&self) -> String {
+    fn name(&self) -> String {
         "TpcSource".to_string()
     }
 
-    fn get_options(&self) -> Map<String, Value> {
+    fn options(&self) -> Map<String, Value> {
         let mut options = serde_json::map::Map::new();
-        options.insert("url".to_string(), serde_json::Value::String(self.url.clone()));
-        options.insert("port".to_string(), serde_json::Value::Number(self.port.into()));
+        options.insert("url".to_string(), Value::String(self.url.clone()));
+        options.insert("port".to_string(), Value::Number(self.port.into()));
         options
     }
 }
@@ -58,7 +58,6 @@ impl Source for TpcSource{
     }
 
     fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command> {
-        let runtime = Runtime::new().unwrap();
         debug!("starting tpc source...");
 
         let (tx, rx) = unbounded();
@@ -69,7 +68,8 @@ impl Source for TpcSource{
 
 
         spawn(move || {
-            match Server::start(id, url, port, rx, outs, control) {
+            let server = Server::new(id, url.clone(), port);
+            match server.start(rx, outs, control) {
                 Ok(_) => {}
                 Err(_) => {}
             }
@@ -77,11 +77,11 @@ impl Source for TpcSource{
         tx
     }
 
-    fn get_outs(&mut self) -> &mut Vec<Tx<Train>> {
+    fn outs(&mut self) -> &mut Vec<Tx<Train>> {
         &mut self.outs
     }
 
-    fn get_id(&self) -> usize {
+    fn id(&self) -> usize {
         self.id
     }
 

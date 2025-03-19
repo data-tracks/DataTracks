@@ -105,10 +105,10 @@ impl Transform {
         match self {
             Func(_) => "Func".to_string(),
             Lang(_) => "Lang".to_string(),
-            SQLite(c) => c.get_name(),
-            Postgres(p) => p.get_name(),
+            SQLite(c) => c.name(),
+            Postgres(p) => p.name(),
             #[cfg(test)]
-            DummyDB(d) => d.get_name()
+            DummyDB(d) => d.name()
         }
     }
 
@@ -157,23 +157,23 @@ fn parse_function(stencil: &str) -> Result<Transform, String> {
 }
 
 impl Configurable for Transform {
-    fn get_name(&self) -> String {
+    fn name(&self) -> String {
         match self {
             Func(_) => "Func".to_string(),
             Lang(l) => l.language.to_string(),
-            SQLite(c) => c.get_name(),
-            Postgres(p) => p.get_name(),
+            SQLite(c) => c.name(),
+            Postgres(p) => p.name(),
             #[cfg(test)]
             DummyDB(_) => todo!()
         }
     }
 
-    fn get_options(&self) -> Map<String, serde_json::Value> {
+    fn options(&self) -> Map<String, serde_json::Value> {
         match self {
             Func(_) => Map::new(),
             Lang(_) => Map::new(),
-            SQLite(c) => c.get_options(),
-            Postgres(p) => p.get_options(),
+            SQLite(c) => c.options(),
+            Postgres(p) => p.options(),
             #[cfg(test)]
             DummyDB(_) => todo!()
         }

@@ -42,11 +42,11 @@ pub mod dummy {
     }
 
     impl Configurable for DummySource {
-        fn get_name(&self) -> String {
+        fn name(&self) -> String {
             String::from("Dummy")
         }
 
-        fn get_options(&self) -> Map<String, serde_json::Value> {
+        fn options(&self) -> Map<String, serde_json::Value> {
             let mut options = serde_json::map::Map::new();
             if self.initial_delay.as_millis() != 0 {
                 options.insert(String::from("initial_delay"), serde_json::Value::from(self.initial_delay.as_millis() as i64));
@@ -130,11 +130,11 @@ pub mod dummy {
             tx
         }
 
-        fn get_outs(&mut self) -> &mut Vec<Tx<Train>> {
+        fn outs(&mut self) -> &mut Vec<Tx<Train>> {
             &mut self.senders
         }
 
-        fn get_id(&self) -> usize {
+        fn id(&self) -> usize {
             self.id
         }
 
@@ -180,11 +180,11 @@ pub mod dummy {
     }
 
     impl Configurable for DummyDestination {
-        fn get_name(&self) -> String {
+        fn name(&self) -> String {
             String::from("Dummy")
         }
 
-        fn get_options(&self) -> Map<String, serde_json::Value> {
+        fn options(&self) -> Map<String, serde_json::Value> {
             let mut options = serde_json::map::Map::new();
             options.insert(String::from("result_size"), serde_json::Value::from(self.result_size));
             options
@@ -280,11 +280,11 @@ pub mod dummy {
     }
 
     impl Configurable for DummyDatabase {
-        fn get_name(&self) -> String {
+        fn name(&self) -> String {
             "DummyDb".to_string()
         }
 
-        fn get_options(&self) -> Map<String, serde_json::Value> {
+        fn options(&self) -> Map<String, serde_json::Value> {
             Map::new()
         }
     }

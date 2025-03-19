@@ -31,11 +31,11 @@ impl SqliteTransformer {
 }
 
 impl Configurable for SqliteTransformer {
-    fn get_name(&self) -> String {
+    fn name(&self) -> String {
         "SQLite".to_owned()
     }
 
-    fn get_options(&self) -> Map<String, serde_json::Value> {
+    fn options(&self) -> Map<String, serde_json::Value> {
         let mut options = Map::new();
         self.connector.add_options(&mut options);
         options.insert(String::from("query"), serde_json::Value::String(self.query.get_query()));

@@ -41,11 +41,11 @@ impl HttpDestination {
 }
 
 impl Configurable for HttpDestination {
-    fn get_name(&self) -> String {
+    fn name(&self) -> String {
         "Http".to_string()
     }
 
-    fn get_options(&self) -> Map<String, Value> {
+    fn options(&self) -> Map<String, Value> {
         let mut options = Map::new();
         options.insert(String::from("url"), Value::String(self.url.clone()));
         options.insert(String::from("port"), Value::Number(self.port.into()));
@@ -117,7 +117,7 @@ impl Destination for HttpDestination {
         let mut configs = HashMap::new();
         configs.insert("url".to_string(), ConfigModel::text(&self.url.clone()));
         configs.insert("port".to_string(), ConfigModel::number(self.port.into()));
-        DestinationModel { type_name: self.get_name(), id: self.id.to_string(), configs }
+        DestinationModel { type_name: self.name(), id: self.id.to_string(), configs }
     }
 
     fn serialize_default() -> Option<DestinationModel>

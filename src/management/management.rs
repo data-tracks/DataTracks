@@ -1,4 +1,4 @@
-use crate::tpc::{Server, TpcSource};
+use crate::tpc::{TpcSource};
 use crate::management::storage::Storage;
 use crate::mqtt::{MqttDestination, MqttSource};
 use crate::processing::destination::Destination;
@@ -8,6 +8,7 @@ use crate::ui::start_web;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use crossbeam::channel::Sender;
+use schemas::message_generated::protocol::Create;
 use tracing::info;
 use crate::processing::station::Command;
 
@@ -17,6 +18,11 @@ pub struct Manager {
     server: Option<Sender<Command>>,
 }
 
+impl Manager {
+    pub(crate) fn create_plan(&self, create: &Create) -> Result<Plan, String> {
+        todo!()
+    }
+}
 
 impl Manager {
     pub fn new() -> Manager {
@@ -53,17 +59,17 @@ fn add_default(storage: Arc<Mutex<Storage>>) {
         let mut plan = Plan::parse("1--2{sql|SELECT $1 FROM $1}--3").unwrap();
 
         let source = Box::new(HttpSource::new(String::from("127.0.0.1"), 5555));
-        let source_id = source.get_id();
+        let source_id = source.id();
         plan.add_source(source);
         plan.connect_in_out(1, source_id);
 
         let source = Box::new(MqttSource::new(String::from("127.0.0.1"), 6666));
-        let source_id = source.get_id();
+        let source_id = source.id();
         plan.add_source(source);
         plan.connect_in_out(1, source_id);
 
         let source = Box::new(TpcSource::new(String::from("127.0.0.1"), 9999));
-        let source_id = source.get_id();
+        let source_id = source.id();
         plan.add_source(source);
         plan.connect_in_out(1, source_id);
 
