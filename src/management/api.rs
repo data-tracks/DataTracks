@@ -1,19 +1,18 @@
-use flatbuffers::{FlatBufferBuilder, Table};
-use redb::Builder;
+use std::sync::{Arc, Mutex};
+use flatbuffers::{FlatBufferBuilder};
 use schemas::message_generated::protocol;
 use schemas::message_generated::protocol::{CreateType, GetType, Message, MessageArgs, MessageBuilder, Payload, Status, StatusArgs, StringArgs};
 use tracing::info;
 use url::quirks::protocol;
-use crate::management::Manager;
+use crate::management::{Manager, Storage};
 use crate::processing::Plan;
 
 pub struct API{
-    management: &'static Manager
 }
 
 
 impl API {
-    fn handle_message<'a>(&self, msg: Message) -> Result<Vec<u8>, Vec<u8>> {
+    pub fn handle_message<'a>( storage: Arc<Mutex<Storage>>, msg: Message) -> Result<Vec<u8>, Vec<u8>> {
         match msg.data_type() {
             Payload::NONE => {
                 info!("Received a NONE");
@@ -31,7 +30,7 @@ impl API {
                     CreateType(2_u8..=u8::MAX) => todo!(),
                     CreateType::CreatePlan => {
                         info!("Received a CREATE PLAN");
-                        match self.management.create_plan(&create) {
+                        match storage.lock().unwrap().create_plan(create) {
                             Ok(p) => Self::build_status_response(format!("Created plan: {:?}", p.name)),
                             Err(err) => Self::build_status_response(err)
                         }

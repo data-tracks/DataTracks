@@ -8,7 +8,6 @@ pub use layout::TupleType;
 pub use plan::Plan;
 pub use train::Train;
 pub use wagon::Wagon;
-pub use block::Block;
 
 pub mod station;
 mod window;

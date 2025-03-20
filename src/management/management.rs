@@ -1,4 +1,4 @@
-use crate::tpc::{TpcSource};
+use crate::tpc::{start_tpc, TpcSource};
 use crate::management::storage::Storage;
 use crate::mqtt::{MqttDestination, MqttSource};
 use crate::processing::destination::Destination;
@@ -37,8 +37,11 @@ impl Manager {
         add_default(self.get_storage());
 
         let web_storage = self.get_storage();
+        let tpc_storage = self.get_storage().clone();
 
         let handle = thread::spawn(|| start_web(web_storage));
+        self.handles.push(handle);
+        let handle = thread::spawn(|| start_tpc("localhost".to_string(), 5679, tpc_storage) );
         self.handles.push(handle);
 
     }

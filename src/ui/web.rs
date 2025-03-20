@@ -1,18 +1,19 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use crate::management::Storage;
+use crate::management::{Storage, API};
 use crate::mqtt::MqttSource;
 use crate::processing::destination::Destination;
 use crate::processing::source::Source;
 use crate::processing::{DebugDestination, HttpSource, Plan};
 use crate::ui::ConfigModel;
 use axum::body::Body;
-use axum::extract::{Path, State};
+use axum::extract::{Path, State, WebSocketUpgrade};
 use axum::http::{header, Response, StatusCode};
 use axum::response::{IntoResponse};
 use axum::routing::{get, post};
 use axum::{Json, Router};
+use axum::extract::ws::{Message, WebSocket};
 use include_dir::{include_dir, Dir};
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -20,7 +21,7 @@ use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
 use tower_http::cors::CorsLayer;
 use tracing::{debug, info};
-
+use crate::util::deserialize_message;
 /*curl --header "Content-Type: application/json" --request POST --json '{"name":"wordcount","plan":"0--1{sql|SELECT * FROM $0}--2\nIn\nHttp{\"url\": \"localhost\", \"port\": \"3666\"}:0\nOut\nHttp{\"url\": \"localhost\", \"port\": \"4666\"}:2"}' http://localhost:2666/plans/create*/
 /*curl --header "Content-Type: application/json" --request POST --json '{"name":"wordcount"}' http://localhost:2666/plans/start*/
 
@@ -72,6 +73,7 @@ pub async fn startup(storage: Arc<Mutex<Storage>>) {
     let state = WebState { storage };
 
     let app = Router::new()
+        .route("/ws", get(websocket_handler))
         .route("/plans", get(get_plans))
         .route("/plans/create", post(create_plan))
         .route("/plans/stop", post(stop_plan))
@@ -90,6 +92,38 @@ pub async fn startup(storage: Arc<Mutex<Storage>>) {
     info!("DataTracks started: http://localhost:{}", port);
     axum::serve(listener, app).await.unwrap();
     debug!("Finished serving.")
+}
+
+// WebSocket handler
+async fn websocket_handler(State(state): State<WebState>, ws: WebSocketUpgrade) -> impl IntoResponse {
+    ws.on_upgrade(move |socket| handle_socket(state, socket))
+}
+
+// Function to handle WebSocket communication
+async fn handle_socket(state:WebState, mut socket: WebSocket) {
+    info!("Client connected!");
+
+    while let Some(Ok(msg)) = socket.recv().await {
+        match msg {
+            Message::Text(text) => {
+                info!("Received: {}", text);
+                //socket.send(Message::Text(response.into())).await.unwrap();
+            }
+            Message::Binary(bin) => {
+                let message = deserialize_message(bin.as_ref());
+                info!("Received message: {:?}", message);
+                let res = match API::handle_message(state.storage.clone(), message.unwrap()) {
+                    Ok(msg) => socket.send(Message::from(msg)),
+                    Err(err) => socket.send(Message::from(err)),
+                }.await;
+            }
+            Message::Close(_) => {
+                info!("Client disconnected");
+                break;
+            }
+            _ => {}
+        };
+    }
 }
 
 async fn get_plans(State(state): State<WebState>) -> impl IntoResponse {
