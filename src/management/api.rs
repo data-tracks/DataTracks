@@ -1,8 +1,8 @@
 use std::sync::{Arc, Mutex};
+use axum::http::StatusCode;
 use flatbuffers::{FlatBufferBuilder};
-use schemas::message_generated::protocol;
 use schemas::message_generated::protocol::{CreateType, GetType, Message, MessageArgs, MessageBuilder, Payload, Status, StatusArgs, StringArgs};
-use tracing::info;
+use tracing::{debug, info};
 use url::quirks::protocol;
 use crate::management::{Manager, Storage};
 use crate::processing::Plan;
@@ -18,7 +18,6 @@ impl API {
                 info!("Received a NONE");
                 Self::empty_msg()
             }
-            Payload(4_u8..=u8::MAX) => todo!(),
             Payload::Create => {
                 info!("Received a CREATE");
                 let create = msg.data_as_create().unwrap();
@@ -31,11 +30,16 @@ impl API {
                     CreateType::CreatePlan => {
                         info!("Received a CREATE PLAN");
                         match storage.lock().unwrap().create_plan(create) {
-                            Ok(p) => Self::build_status_response(format!("Created plan: {:?}", p.name)),
+                            Ok(_) => Self::build_status_response("Created plan".to_string()),
                             Err(err) => Self::build_status_response(err)
                         }
                     }
                 }
+            }
+            Payload::Register => {
+                info!("Received a REGISTER");
+
+                Self::build_status_response("Sent catalog".to_string())
             }
             Payload::Get => {
                 info!("Received a GET");
@@ -59,6 +63,7 @@ impl API {
                 let values = msg.data_as_values().unwrap();
                 todo!()
             }
+            Payload(4_u8..=u8::MAX) => todo!(),
         }
     }
 
@@ -69,10 +74,8 @@ impl API {
     fn build_status_response(status: String) -> Result<Vec<u8>, Vec<u8>> {
         let mut builder = FlatBufferBuilder::new();
         let status = builder.create_string(&status);
-        let msg = protocol::String::create(&mut builder, &StringArgs{
-            data: Some(status)
-        });
-        let status = Status::create(&mut builder, &StatusArgs { msg: Some(msg) });
+
+        let status = Status::create(&mut builder, &StatusArgs { msg: Some(status) });
         let msg = Message::create(&mut builder, &MessageArgs {
             data_type: Default::default(),
             data: None,

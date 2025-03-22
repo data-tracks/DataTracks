@@ -4,6 +4,7 @@ use crate::processing::{transform, Plan};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::sync::Mutex;
+use axum::http::StatusCode;
 use schemas::message_generated::protocol::Create;
 
 #[derive(Default)]
@@ -20,8 +21,22 @@ impl Storage {
         Default::default()
     }
 
-    pub fn create_plan(&self, create: Create) -> Result<Plan, String> {
-        todo!()
+    pub fn create_plan(&mut self, create: Create) -> Result<(), String> {
+        let create_plan = create.create_type_as_create_plan().unwrap();
+        if create_plan.name().is_some() && create_plan.plan().is_some() {
+            let plan = Plan::parse(create_plan.plan().unwrap());
+
+            let mut plan = match plan {
+                Ok(plan) => plan,
+                Err(e) => todo!(),
+            };
+
+            plan.set_name(create_plan.name().unwrap().to_string());
+            self.add_plan(plan);
+            Ok(())
+        }else {
+            Err("No name provided with create plan".to_string())
+        }
     }
 
     pub fn add_plan(&mut self, plan: Plan) {
