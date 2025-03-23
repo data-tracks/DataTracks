@@ -70,7 +70,7 @@ pub async fn startup(storage: Arc<Mutex<Storage>>) {
     let addr = std::net::SocketAddr::from(([0, 0, 0, 0], port));
 
 
-    let state = WebState { storage };
+    let state = WebState { storage, api: Arc::new(Mutex::new(API::default())) };
 
     let app = Router::new()
         .route("/ws", get(websocket_handler))
@@ -112,7 +112,7 @@ async fn handle_socket(state:WebState, mut socket: WebSocket) {
             Message::Binary(bin) => {
                 let message = deserialize_message(bin.as_ref());
                 info!("Received message: {:?}", message);
-                let res = match API::handle_message(state.storage.clone(), message.unwrap()) {
+                let res = match API::handle_message(state.storage.clone(), state.api.clone(), message.unwrap()) {
                     Ok(msg) => socket.send(Message::from(msg)),
                     Err(err) => socket.send(Message::from(err)),
                 }.await;
@@ -236,6 +236,7 @@ struct CreateInOutsPayload {
 #[derive(Clone)]
 struct WebState {
     pub storage: Arc<Mutex<Storage>>,
+    pub api: Arc<Mutex<API>>
 }
 
 

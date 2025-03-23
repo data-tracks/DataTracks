@@ -51,7 +51,7 @@ url = "2.5.4"
 rstest = "0.25.0"
 
 [dependencies.schemas]
-git = "https://github.com/data-tracks/DataTracks-Protocol.git"
+git = "https://github.com/data-tracks/TrackRails.git"
 branch = "generated"
 
 

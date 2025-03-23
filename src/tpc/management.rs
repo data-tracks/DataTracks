@@ -36,7 +36,7 @@ pub struct TpcManagement{
 }
 
 impl StreamUser for TpcManagement {
-    async fn handle(&mut self, mut stream: TcpStream, storage: Arc<Mutex<Storage>>) {
+    async fn handle(&mut self, mut stream: TcpStream, storage: Arc<Mutex<Storage>>, api: Arc<Mutex<API>>) {
         let mut buffer = [0; 1024]; // Buffer for incoming data
 
         match stream.read(&mut buffer).await {
@@ -44,7 +44,7 @@ impl StreamUser for TpcManagement {
                 // Deserialize FlatBuffers message
                 match deserialize_message(&buffer[..size]) {
                     Ok(msg) => {
-                        match API::handle_message(storage, msg) {
+                        match API::handle_message(storage, api, msg) {
                             Ok(res) => stream.write_all(&res).await.unwrap(),
                             Err(err) => stream.write_all(&err).await.unwrap()
                         }

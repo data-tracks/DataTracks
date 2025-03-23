@@ -13,14 +13,14 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::runtime::Runtime;
 use tracing::{debug, info};
-use crate::management::Storage;
+use crate::management::{Storage, API};
 
 pub struct Server {
     addr: SocketAddr,
 }
 
 pub trait StreamUser {
-    fn handle(&mut self, stream: TcpStream, storage: Arc<Mutex<Storage>>) -> impl std::future::Future<Output = ()> + Send;
+    fn handle(&mut self, stream: TcpStream, storage: Arc<Mutex<Storage>>, api: Arc<Mutex<API>>) -> impl std::future::Future<Output = ()> + Send;
 
     fn interrupt(&mut self) -> Receiver<Command>;
 

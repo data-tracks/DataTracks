@@ -16,7 +16,7 @@ use rumqttd::Notification;
 use tokio::net::TcpStream;
 use tokio::runtime::Runtime;
 use tracing::{debug, warn};
-use crate::management::Storage;
+use crate::management::{Storage, API};
 use crate::processing::station::Command::Ready;
 use crate::tpc::Server;
 use crate::tpc::server::StreamUser;
@@ -123,7 +123,7 @@ impl Source for TpcSource{
 }
 
 impl StreamUser for TpcSource {
-    async fn handle(&mut self, stream: TcpStream, storage: Arc<Mutex<Storage>>) {
+    async fn handle(&mut self, stream: TcpStream, storage: Arc<Mutex<Storage>>, api: Arc<Mutex<API>>) {
         todo!()
     }
 

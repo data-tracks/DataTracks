@@ -4,7 +4,6 @@ use crate::processing::{transform, Plan};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::sync::Mutex;
-use axum::http::StatusCode;
 use schemas::message_generated::protocol::Create;
 
 #[derive(Default)]
