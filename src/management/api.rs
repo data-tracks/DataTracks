@@ -19,11 +19,11 @@ impl API {
     pub fn handle_message<'a>( storage: Arc<Mutex<Storage>>, api: Arc<Mutex<API>>, msg: Message) -> Result<Vec<u8>, Vec<u8>> {
         match msg.data_type() {
             Payload::NONE => {
-                info!("Received a NONE");
+                debug!("Received a NONE");
                 Self::empty_msg()
             }
             Payload::Create => {
-                info!("Received a CREATE");
+                debug!("Received a CREATE");
                 let create = msg.data_as_create().unwrap();
                 match create.create_type_type() {
                     CreateType::NONE => {
@@ -41,12 +41,12 @@ impl API {
                 }
             }
             Payload::Register => {
-                info!("Received a REGISTER");
+                debug!("Received a REGISTER");
 
                 handle_register(msg.data_as_register().unwrap(), storage, api)
             }
             Payload::Get => {
-                info!("Received a GET");
+                debug!("Received a GET");
                 let get = msg.data_as_get().unwrap();
 
                 match get.get_type_type() {
@@ -63,7 +63,7 @@ impl API {
                 }
             }
             Payload::Values => {
-                info!("Received a VALUES");
+                debug!("Received a VALUES");
                 let values = msg.data_as_values().unwrap();
                 todo!()
             }
@@ -110,9 +110,11 @@ fn handle_register(_request: Register, mut storage: Arc<Mutex<Storage>>, mut api
     let plans = Plans::create(&mut builder, &PlansArgs { plans: Some(plans) });
     let catalog = Catalog::create(&mut builder, &CatalogArgs { plans: Some(plans), ..Default::default() });
 
-    let register = Register::create(&mut builder, &RegisterArgs { catalog: Some(catalog), ..Default::default() });
+    let register = Register::create(&mut builder, &RegisterArgs { catalog: Some(catalog), ..Default::default() }).as_union_value();
 
-    builder.finish(register, None);
+    let msg = Message::create(&mut builder, &MessageArgs{data_type: Payload::Register, data: Some(register), status: None });
+
+    builder.finish(msg, None);
     Ok(builder.finished_data().to_vec())
 }
 

@@ -101,13 +101,12 @@ async fn websocket_handler(State(state): State<WebState>, ws: WebSocketUpgrade) 
 
 // Function to handle WebSocket communication
 async fn handle_socket(state:WebState, mut socket: WebSocket) {
-    info!("Client connected!");
+    debug!("Client connected!");
 
     while let Some(Ok(msg)) = socket.recv().await {
         match msg {
             Message::Text(text) => {
                 info!("Received: {}", text);
-                //socket.send(Message::Text(response.into())).await.unwrap();
             }
             Message::Binary(bin) => {
                 let message = deserialize_message(bin.as_ref());
