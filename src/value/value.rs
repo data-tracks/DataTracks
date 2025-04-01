@@ -5,7 +5,7 @@ use crate::value::dict::Dict;
 use crate::value::r#type::ValType;
 use crate::value::text::Text;
 use crate::value::time::Time;
-use crate::value::Value::Wagon;
+use crate::value::Value::{Null, Wagon};
 use crate::value::{bool, Bool, Float, Int};
 use bytes::{BufMut, BytesMut};
 use json::{parse, JsonValue};
@@ -34,6 +34,13 @@ pub enum Value {
     Null,
     Wagon(processing::Wagon),
 }
+
+impl Default for Value {
+    fn default() -> Self {
+        Null
+    }
+}
+
 
 impl Value {
     pub fn text(string: &str) -> Value {

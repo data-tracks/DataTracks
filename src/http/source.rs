@@ -16,7 +16,7 @@ use std::thread;
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
 use tower_http::cors::CorsLayer;
-use tracing::info;
+use tracing::log::debug;
 use crate::http::util::{parse_addr, receive, receive_with_topic, receive_ws};
 
 // ws: npx wscat -c ws://127.0.0.1:3666/ws/data
@@ -38,7 +38,7 @@ impl HttpSource {
 
 
 async fn start_source(http: HttpSource, _rx: Receiver<Command>){
-    info!("starting http source on {url}:{port}...", url=http.url, port=http.port);
+    debug!("starting http source on {url}:{port}...", url=http.url, port=http.port);
     let addr = parse_addr(http.url, http.port).await;
 
     let state = SourceState { source: Arc::new(Mutex::new(http.outs.clone())) };

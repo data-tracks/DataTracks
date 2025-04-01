@@ -19,8 +19,10 @@ use std::sync::Arc;
 use std::thread::spawn;
 use std::time::Duration;
 use tokio::runtime::Runtime;
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 
+// mosquitto_sub -h 127.0.0.1 -p 8888 -t "test/topic2" -i "id"
+// mosquitto_pub -h 127.0.0.1 -p 6666 -t "test/topic2" -m "Hello fromtods2" -i "testclient"
 pub struct MqttSource {
     id: usize,
     url: String,
@@ -76,7 +78,7 @@ impl Source for MqttSource {
                     broker.start().expect("Broker failed to start");
                 });
 
-                warn!("Embedded MQTT broker is running...");
+                info!("Embedded MQTT broker for receiving is running...");
                 control.send(Ready(id)).unwrap();
 
                 link_tx.subscribe("#").unwrap(); // all topics
@@ -87,7 +89,7 @@ impl Source for MqttSource {
                         match notification {
                             Notification::Forward(f) => {
                                 let mut dict = BTreeMap::new();
-                                dict.insert("$data".to_string(), Value::text(str::from_utf8(&f.publish.payload).unwrap()));
+                                dict.insert("$".to_string(), Value::text(str::from_utf8(&f.publish.payload).unwrap()));
                                 dict.insert("$topic".to_string(), Value::text(str::from_utf8(&f.publish.topic).unwrap()));
                                 send_message(Value::dict(dict).as_dict().unwrap(), &outs)
                             }
@@ -166,7 +168,7 @@ impl TryFrom<Publish> for Dict {
         let mut dict = BTreeMap::new();
         let value = str::from_utf8(&publish.payload).map_err(|e| e.to_string())?.into();
         let topic = str::from_utf8(&publish.topic).map_err(|e| e.to_string())?.into();
-        dict.insert("$data".to_string(), value);
+        dict.insert("$".to_string(), value);
         dict.insert("$topic".to_string(), topic);
         Ok(Value::dict(dict).into())
     }
@@ -181,7 +183,7 @@ impl TryFrom<Event> for Dict {
                 match i {
                     Incoming::Publish(p) => {
                         let mut map = BTreeMap::new();
-                        map.insert("$data".to_string(), Value::text(str::from_utf8(&p.payload).map_err(|e| e.to_string())?));
+                        map.insert("$".to_string(), Value::text(str::from_utf8(&p.payload).map_err(|e| e.to_string())?));
                         map.insert("$topic".to_string(), Value::text(&p.topic));
                         Ok(Value::dict(map).as_dict().unwrap())
                     }

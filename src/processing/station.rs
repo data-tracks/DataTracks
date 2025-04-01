@@ -13,7 +13,7 @@ use crate::processing::window::Window;
 use crate::util::{new_channel, new_id, Rx, Tx};
 use crossbeam::channel;
 use crossbeam::channel::{unbounded, Receiver};
-use tracing::info;
+use tracing::{debug};
 
 #[derive(Clone)]
 pub struct Station {
@@ -229,7 +229,7 @@ impl Station {
         let stop = self.stop;
 
         thread::spawn(move || {
-            info!("starting station {}", stop );
+            debug!("Starting station {}", stop );
             platform.operate(control)
         });
         sender

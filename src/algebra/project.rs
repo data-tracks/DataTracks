@@ -17,7 +17,6 @@ pub struct Project {
 
 impl Project {
     pub fn new(project: Operator, input: AlgebraType) -> Self {
-        println!("project {:?}", project);
         Project { input: Box::new(input), project }
     }
 }

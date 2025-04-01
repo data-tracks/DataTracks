@@ -8,7 +8,7 @@ use serde_json::{Map, Value};
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
 use tower_http::cors::CorsLayer;
-use tracing::info;
+use tracing::{debug};
 use crate::http::util::{parse_addr, publish_ws};
 use crate::processing::destination::Destination;
 use crate::processing::option::Configurable;
@@ -59,7 +59,7 @@ pub(crate) struct DestinationState {
 }
 
 async fn start_destination(http: HttpDestination, _rx: Receiver<Command>, receiver: Rx<Train>){
-    info!("starting http destination on {url}:{port}...", url=http.url, port=http.port);
+    debug!("starting http destination on {url}:{port}...", url=http.url, port=http.port);
     let addr = parse_addr(http.url, http.port).await;
 
     let state = DestinationState {

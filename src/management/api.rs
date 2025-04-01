@@ -1,11 +1,9 @@
 use std::sync::{Arc, Mutex};
-use axum::http::StatusCode;
-use flatbuffers::{FlatBufferBuilder, ForwardsUOffset, Vector, WIPOffset};
-use json::parse;
+use flatbuffers::{FlatBufferBuilder, ForwardsUOffset};
 use schemas::message_generated;
-use schemas::message_generated::protocol::{Catalog, CatalogArgs, CreateType, GetType, Message, MessageArgs, MessageBuilder, Payload, Plans, PlansArgs, Register, RegisterArgs, Status, StatusArgs, StringArgs, Plan as FlatPlan, PlanArgs};
+use schemas::message_generated::protocol::{Catalog, CatalogArgs, CreateType, GetType, Message, MessageArgs, Payload, Plans, PlansArgs, Register, RegisterArgs, Status, StatusArgs, Plan as FlatPlan, PlanArgs};
 use tracing::{debug, info};
-use crate::management::{Manager, Storage};
+use crate::management::{Storage};
 use crate::processing::Plan;
 
 #[derive(Debug, Default)]

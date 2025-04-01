@@ -14,7 +14,8 @@ use std::sync::Arc;
 use std::thread::spawn;
 use std::time::Duration;
 use tokio::runtime::Runtime;
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
+use crate::value;
 
 pub struct MqttDestination {
     id: usize,
@@ -82,7 +83,7 @@ impl Destination for MqttDestination {
                     broker.start().expect("Broker failed to start");
                 });
 
-                warn!("Embedded MQTT broker for sending is running...");
+                info!("Embedded MQTT broker for sending is running...");
 
                 link_tx.subscribe("#").unwrap(); // all topics
 
@@ -91,10 +92,21 @@ impl Destination for MqttDestination {
                     if plan::check_commands(&rx) { break; }
                     match receiver.try_recv() {
                         Ok(train) => {
-                            warn!("Sending {:?}", train);
-                            if let Some(packet) = train.values {
-                                let payload = serde_json::to_string(&packet).unwrap();
-                                link_tx.publish("test/topic2", payload).map_err(|e| e.to_string()).unwrap();
+                            debug!("Sending {:?}", train);
+                            if let Some(values) = train.values {
+                                for value in values {
+                                    let value = match value {
+                                        value::Value::Dict(v) => {
+                                            v.get_data().cloned().unwrap_or_default()
+                                        }
+                                        _ => {
+                                            value
+                                        }
+                                    };
+                                    let payload = serde_json::to_string(&value.to_string()).unwrap();
+                                    link_tx.publish("test/topic2", payload).map_err(|e| e.to_string()).unwrap();
+                                }
+
                             }
                         }
                         _ => tokio::time::sleep(Duration::from_nanos(100)).await

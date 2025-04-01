@@ -7,9 +7,6 @@ use std::io::Error;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::sync::{Arc, Mutex};
 use std::io;
-use std::thread::spawn;
-use schemas::message_generated::protocol::Message;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::runtime::Runtime;
 use tracing::{debug, info};
@@ -40,7 +37,7 @@ impl Server {
         let rt = Runtime::new()?;
         rt.block_on(async {
             let listener = TcpListener::bind(self.addr).await?;
-            info!("Server listening...");
+            info!("TPC server listening...");
 
             loop {
                 let (stream, _) = listener.accept().await?;

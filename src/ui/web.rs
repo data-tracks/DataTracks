@@ -63,7 +63,7 @@ async fn serve_embedded_file(path: String) -> impl IntoResponse {
 }
 
 pub async fn startup(storage: Arc<Mutex<Storage>>) {
-    info!("initializing router...");
+    debug!("initializing router...");
 
     // We could also read our port in from the environment as well
     let port = 2666_u16;

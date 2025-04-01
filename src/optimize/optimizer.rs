@@ -1,4 +1,4 @@
-use tracing::{info};
+use tracing::{debug};
 use crate::algebra::{AlgSet, AlgebraType};
 use crate::optimize::rule::Rule::{Impossible, Merge};
 use crate::optimize::rule::{Rule, RuleBehavior};
@@ -74,7 +74,7 @@ impl Optimizer for RuleBasedOptimizer {
 
             round += 1;
         }
-        info!("Used {} rounds for optimization.", round);
+        debug!("Used {} rounds for optimization.", round);
         Ok(alg)
     }
 }
