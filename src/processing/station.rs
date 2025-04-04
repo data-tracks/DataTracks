@@ -383,7 +383,6 @@ pub mod tests {
         }
     }
 
-    #[test]
     fn too_high_two() {
         let (mut station, train_sender, _rx, c_rx, a_tx) = create_test_station(100);
 

@@ -86,6 +86,9 @@ impl Operator {
             Op::Collection(_) => {
                 self.operands.iter().map(|o| o.calc_cost()).reduce(|a, b| a + b).unwrap_or(Cost::new(0))
             }
+            Op::Binary(_) => {
+                Cost::new(1)
+            }
         }
     }
 
@@ -167,6 +170,7 @@ impl Replaceable for Operator {
                 .iter_mut()
                 .flat_map(|o| o.replace(replace))
                 .collect(),
+            Op::Binary(_) => replace(self),
         }
     }
 }
@@ -176,7 +180,8 @@ impl Implementable<BoxedValueHandler> for Operator {
         match &self.op {
             Op::Agg(_) => Err(()),
             Tuple(t) => Ok(t.implement(self.operands.clone())),
-            Op::Collection(_) => Err(())
+            Op::Collection(_) => Err(()),
+            Op::Binary(b) => Ok(b.implement(self.operands.clone())?),
         }
     }
 }
@@ -186,7 +191,8 @@ impl Implementable<BoxedValueLoader> for Operator {
         match &self.op {
             Op::Agg(a) => a.implement(),
             Tuple(_) => Err(()),
-            Op::Collection(_) => Err(())
+            Op::Collection(_) => Err(()),
+            Op::Binary(_) => Err(())
         }
     }
 }

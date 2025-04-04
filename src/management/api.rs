@@ -89,14 +89,14 @@ impl API {
     }
 }
 
-fn handle_register(_request: Register, mut storage: Arc<Mutex<Storage>>, mut api: Arc<Mutex<API>>) -> Result<Vec<u8>, Vec<u8>> {
+fn handle_register(_request: Register, storage: Arc<Mutex<Storage>>, api: Arc<Mutex<API>>) -> Result<Vec<u8>, Vec<u8>> {
     let mut api = api.lock().unwrap();
     let id = api.count;
     api.count += 1;
     api.clients.push(id);
     let mut builder = FlatBufferBuilder::new();
 
-    let mut storage = storage.lock().unwrap();
+    let storage = storage.lock().unwrap();
     let plans = storage.plans.lock().unwrap().values().map(|plan| {
         let name = builder.create_string(&plan.name);
 

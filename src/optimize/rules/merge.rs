@@ -114,6 +114,15 @@ impl OperatorMerger<'_> {
 impl CreatingVisitor<&mut Operator, Operator> for OperatorMerger<'_> {
     fn visit(&self, parent: &mut Operator) -> Operator {
         match &parent.op {
+            Op::Binary(b) => {
+                parent.operands = parent
+                    .operands
+                    .iter()
+                    .cloned()
+                    .map(|mut o| self.visit(&mut o))
+                    .collect();
+                parent.clone()
+            },
             Op::Agg(AggOp::Count | AggOp::Sum | AggOp::Avg) => {
                 parent.operands = parent
                     .operands

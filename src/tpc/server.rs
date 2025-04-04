@@ -1,6 +1,4 @@
 use crate::processing::station::Command;
-use crate::processing::Train;
-use crate::util::{deserialize_message, serialize_message, Tx};
 use crossbeam::channel::{Receiver, Sender};
 
 use std::io::Error;
@@ -9,7 +7,7 @@ use std::sync::{Arc, Mutex};
 use std::io;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::runtime::Runtime;
-use tracing::{debug, info};
+use tracing::info;
 use crate::management::{Storage, API};
 
 pub struct Server {
@@ -32,7 +30,7 @@ impl Server {
 
     pub fn start(
         &self,
-        mut user: impl StreamUser,
+        user: impl StreamUser,
     ) -> Result<(), Error> {
         let rt = Runtime::new()?;
         rt.block_on(async {

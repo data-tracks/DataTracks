@@ -1,10 +1,10 @@
 use crate::algebra::aggregate::{AvgOperator, CountOperator, SumOperator};
 use crate::algebra::algebra::{BoxedValueLoader, ValueHandler};
-use crate::algebra::function::{Implementable, Operator};
+use crate::algebra::function::{ArgImplementable, Implementable, Operator};
 use crate::algebra::operator::AggOp::{Avg, Count, Sum};
 use crate::algebra::operator::CollectionOp::Unwind;
 use crate::algebra::operator::TupleOp::{Division, Equal, Minus, Multiplication, Not, Plus};
-use crate::algebra::Op::{Agg, Collection, Tuple};
+use crate::algebra::Op::{Agg, Binary, Collection, Tuple};
 use crate::algebra::TupleOp::{And, Combine, Index, Input, Or};
 use crate::algebra::{BoxedIterator, BoxedValueHandler, ValueIterator};
 use crate::processing::transform::Transform;
@@ -17,9 +17,11 @@ use std::fmt::Debug;
 use std::str::FromStr;
 use std::vec;
 use tracing::warn;
+use crate::analyse::OutputDerivable;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Op {
+    Binary(BinaryOp),
     Agg(AggOp),
     Tuple(TupleOp),
     Collection(CollectionOp),
@@ -28,6 +30,7 @@ pub enum Op {
 impl Op {
     pub(crate) fn dump(&self, as_call: bool) -> String {
         match self {
+            Op::Binary(b) => b.dump(as_call),
             Agg(a) => a.dump(as_call),
             Tuple(t) => t.dump(as_call),
             Collection(e) => e.dump(as_call),
@@ -39,6 +42,7 @@ impl Op {
             Agg(a) => a.derive_input_layout(operands),
             Tuple(t) => t.derive_input_layout(operands),
             Collection(e) => e.derive_input_layout(operands),
+            Op::Binary(b) => b.derive_input_layout(operands),
         }
     }
 
@@ -51,6 +55,7 @@ impl Op {
             Agg(a) => a.derive_output_layout(operands, inputs),
             Tuple(t) => t.derive_output_layout(operands, inputs),
             Collection(e) => e.derive_output_layout(operands, inputs),
+            Op::Binary(b) => b.derive_output_layout(operands, inputs),
         }
     }
 }
@@ -182,6 +187,7 @@ pub enum TupleOp {
     Context(ContextOp),
     KeyValue(Option<String>),
 }
+
 
 impl TupleOp {
     pub fn implement(&self, operators: Vec<Operator>) -> BoxedValueHandler {
@@ -447,6 +453,72 @@ impl TupleOp {
         }
     }
 }
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum BinaryOp {
+    Cast
+}
+
+
+impl BinaryOp {
+    pub(crate) fn dump(&self, _as_call: bool) -> String {
+        match self {
+            BinaryOp::Cast => "CAST".to_string(),
+        }
+    }
+
+    pub(crate) fn derive_input_layout(&self, _operands: Vec<Layout>) -> Layout {
+        match self {
+            BinaryOp::Cast => Layout::from(OutputType::Or(vec![
+                OutputType::Integer,
+                OutputType::Float,
+                OutputType::Boolean,
+                OutputType::Text,
+            ])),
+        }
+    }
+
+    pub(crate) fn derive_output_layout(
+        &self,
+        operands: Vec<Layout>,
+        _inputs: HashMap<String, &Layout>,
+    ) -> Layout {
+        match self {
+            BinaryOp::Cast => {
+                match operands.get(1) {
+                    None => Layout::default(),
+                    Some(o) => o.clone(),
+                }
+            }
+        }
+    }
+
+}
+
+impl ValueHandler for BinaryOp {
+    fn process(&self, value: &Value) -> Value {
+        todo!()
+    }
+
+    fn clone(&self) -> BoxedValueHandler {
+        todo!()
+    }
+}
+
+impl ArgImplementable<BoxedValueHandler, Vec<Operator>> for BinaryOp {
+    fn implement(&self, operators: Vec<Operator>) -> Result<BoxedValueHandler, ()> {
+        let operands = operators
+            .into_iter()
+            .map(|o| o.implement().unwrap())
+            .collect();
+        match self {
+            BinaryOp::Cast => Ok(Box::new(TupleFunction::new(
+                |value| value.iter().fold(Value::int(0), |a, b| &a + b),
+                operands,
+            ))),
+        }
+    }
+}
+
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum AggOp {
@@ -548,6 +620,7 @@ impl FromStr for Op {
             "avg" => Ok(Agg(Avg)),
             "unwind" => Ok(Collection(Unwind)),
             "split" => Ok(Tuple(TupleOp::Split(SplitOp::new()))),
+            "cast" => Ok(Binary(BinaryOp::Cast)),
             _ => Err(()),
         }
     }

@@ -14,7 +14,7 @@ use std::sync::Arc;
 use std::thread::spawn;
 use std::time::Duration;
 use tokio::runtime::Runtime;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 use crate::value;
 
 pub struct MqttDestination {

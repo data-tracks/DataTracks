@@ -8,6 +8,8 @@ pub use layout::TupleType;
 pub use plan::Plan;
 pub use train::Train;
 pub use wagon::Wagon;
+#[cfg(test)]
+pub use block::Block;
 
 pub mod station;
 mod window;

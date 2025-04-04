@@ -1,6 +1,6 @@
 use crate::algebra::{Op, TupleOp};
 use crate::language::statement::Statement;
-use crate::value::Value;
+use crate::value::{ValType, Value};
 
 pub trait Sql: Statement {}
 
@@ -11,6 +11,7 @@ pub(crate) enum SqlStatement {
     Symbol(SqlSymbol),
     List(SqlList),
     Value(SqlValue),
+    Type(SqlType),
     Operator(SqlOperator),
     Alias(SqlAlias),
     Variable(SqlVariable)
@@ -28,6 +29,7 @@ impl SqlStatement {
             SqlStatement::Operator(s) => s.dump(quote),
             SqlStatement::Alias(s) => s.dump(quote),
             SqlStatement::Variable(v) => v.dump(quote),
+            SqlStatement::Type(t) => t.dump(quote),
         }
     }
 
@@ -41,6 +43,20 @@ impl SqlStatement {
             }
             _ => None,
         }
+    }
+}
+
+#[derive(Debug)]
+pub struct SqlType {
+    pub sql_type: ValType,
+}
+
+impl SqlType {
+    fn dump(&self, quote: &str) -> String {
+        self.sql_type.dump(quote)
+    }
+    pub(crate) fn new(sql_type: ValType) -> SqlType {
+        SqlType{ sql_type }
     }
 }
 

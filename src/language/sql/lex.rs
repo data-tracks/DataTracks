@@ -8,18 +8,18 @@ use crate::language::sql::lex::Token::{
     As, BracketClose, Comma, From, GroupBy, Identifier, Limit, OrderBy, Select, Semi, Star, Text,
     Where,
 };
-use crate::language::sql::statement::{
-    SqlAlias, SqlIdentifier, SqlList, SqlOperator, SqlSelect, SqlStatement, SqlSymbol, SqlValue,
-    SqlVariable,
-};
+use crate::language::sql::statement::{SqlAlias, SqlIdentifier, SqlList, SqlOperator, SqlSelect, SqlStatement, SqlSymbol, SqlType, SqlValue, SqlVariable};
 use crate::value;
 use logos::{Lexer, Logos};
+use crate::value::ValType;
 
 #[derive(Logos, Debug, PartialEq, Clone)]
 #[logos(skip r"[ \t\n\f]+")] // Ignore this regex pattern between tokens
 pub(crate) enum Token {
     #[regex(r"[a-zA-Z_$][a-zA-Z_$0-9]*\(", | lex | lex.slice().to_owned())]
     Function(String),
+    #[regex(r"(?i)text|number", | lex | lex.slice().to_lowercase().to_owned())]
+    Type(String),
     #[regex(r#"'[^']*'"#, | lex | trim_quotes(lex.slice()))]
     Text(String),
     #[token("false", | _ | false)]
@@ -55,7 +55,7 @@ pub(crate) enum Token {
     Semi,
     #[token(":")]
     Colon,
-    #[token("null")]
+    #[token("null", ignore(case))]
     Null,
     #[token("(")]
     BracketOpen,
@@ -197,7 +197,9 @@ fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> Result<Sql
             t if t == Star && expressions.is_empty() => {
                 expressions.push(SqlStatement::Symbol(SqlSymbol::new("*")))
             }
+            Token::Type(t) => expressions.push(SqlStatement::Type(SqlType::new(ValType::parse(&t)))),
             Text(t) => expressions.push(SqlStatement::Value(SqlValue::new(value::Value::text(&t)))),
+            Token::Null => expressions.push(SqlStatement::Value(SqlValue::new(value::Value::null()))),
             Token::Number(number) => expressions.push(SqlStatement::Value(SqlValue::new(
                 value::Value::int(number),
             ))),
@@ -267,7 +269,6 @@ fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> Result<Sql
                     expressions.push(subquery);
                     break // this might require changing
                 } else {
-
                     return Err(format!("Invalid Token {:?} stops are: {:?}", t, stops));
                 }
             }
@@ -464,6 +465,18 @@ mod test {
     }
 
     #[test]
+    fn test_scalar_null() {
+        let query = "SELECT null";
+        test_query_diff(query, query);
+    }
+
+    #[test]
+    fn test_cast() {
+        let query = "SELECT CAST(null AS TEXT)";
+        test_query_diff(query, query);
+    }
+
+    #[test]
     fn test_single() {
         let query = &select(&quote_identifier("name"), "$0", None, None);
         test_query_diff(query, query);
@@ -547,7 +560,7 @@ mod test {
     fn test_calculators_add_no_space() {
         let query = &select(
             &format!(
-                "{}+1, {}",
+                "{} + 1, {}",
                 quote_identifier("name"),
                 quote_identifier("age")
             ),
