@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter};
 
-#[derive( Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum TimeUnit {
     Millis,
     Seconds,
@@ -9,9 +9,21 @@ pub enum TimeUnit {
     Days,
 }
 
+impl TimeUnit {
+    pub(crate) fn dump_full(&self, quote: &str) -> String {
+        match self {
+            TimeUnit::Millis => "MILLISECONDS".to_string(),
+            TimeUnit::Seconds => "SECONDS".to_string(),
+            TimeUnit::Minutes => "MINUTES".to_string(),
+            TimeUnit::Hours => "HOURS".to_string(),
+            TimeUnit::Days => "DAYS".to_string()
+        }
+    }
+}
+
 impl Display for TimeUnit{
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.into()).unwrap();
+        f.write_str(self.into())?;
         Ok(())
     }
 }

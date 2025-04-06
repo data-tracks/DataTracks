@@ -1,5 +1,6 @@
 use crate::algebra::{Op, TupleOp};
 use crate::language::statement::Statement;
+use crate::util::{TimeUnit, WindowType};
 use crate::value::{ValType, Value};
 
 pub trait Sql: Statement {}
@@ -14,7 +15,8 @@ pub(crate) enum SqlStatement {
     Type(SqlType),
     Operator(SqlOperator),
     Alias(SqlAlias),
-    Variable(SqlVariable)
+    Variable(SqlVariable),
+    Window(SqlWindow)
 }
 
 
@@ -30,6 +32,7 @@ impl SqlStatement {
             SqlStatement::Alias(s) => s.dump(quote),
             SqlStatement::Variable(v) => v.dump(quote),
             SqlStatement::Type(t) => t.dump(quote),
+            SqlStatement::Window(t) => t.dump(quote),
         }
     }
 
@@ -44,6 +47,28 @@ impl SqlStatement {
             _ => None,
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct SqlWindow {
+    _type: WindowType,
+    size: usize,
+    unit: TimeUnit
+}
+
+impl SqlWindow {
+    pub fn new(_type: WindowType, size: usize, unit: TimeUnit) -> Self {
+        SqlWindow{
+            _type,
+            size,
+            unit,
+        }
+    }
+
+    fn dump(&self, quote: &str) -> String {
+        format!("{} (SIZE {} {})", self._type, self.size, self.unit.dump_full(quote))
+    }
+
 }
 
 #[derive(Debug)]
@@ -193,6 +218,7 @@ impl Statement for SqlValue {
 pub(crate) struct SqlSelect {
     pub(crate) columns: Vec<SqlStatement>,
     pub(crate) froms: Vec<SqlStatement>,
+    pub(crate) window: Option<SqlWindow>,
     pub(crate) wheres: Vec<SqlStatement>,
     pub(crate) orders: Vec<SqlStatement>,
     pub(crate) groups: Vec<SqlStatement>,
@@ -236,8 +262,8 @@ impl Sql for SqlSymbol {}
 
 
 impl SqlSelect {
-    pub(crate) fn new(columns: Vec<SqlStatement>, froms: Vec<SqlStatement>, wheres: Vec<SqlStatement>, groups: Vec<SqlStatement>) -> SqlSelect {
-        SqlSelect { columns, froms, wheres, orders: vec![], groups }
+    pub(crate) fn new(columns: Vec<SqlStatement>, froms: Vec<SqlStatement>, window: Option<SqlWindow>,wheres: Vec<SqlStatement>, groups: Vec<SqlStatement>) -> SqlSelect {
+        SqlSelect { columns, froms, window, wheres, orders: vec![], groups }
     }
 }
 
@@ -251,6 +277,10 @@ impl Statement for SqlSelect {
 
         if let Some(froms) = self.froms.iter().map(|el| el.dump("")).reduce(|a, b| a + ", " + &b) {
             select += format!(" FROM {}", &froms).as_str();
+        }
+
+        if let Some( window ) = self.window.clone() {
+            select += format!(" WINDOW {}", window.dump(quote)).as_str();
         }
 
         if !self.wheres.is_empty() {

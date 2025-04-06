@@ -11,6 +11,7 @@ pub use visitor::ChangingVisitor;
 pub use visitor::CreatingVisitor;
 pub use cache::Cache;
 pub use message::*;
+pub use window::WindowType;
 
 mod logo;
 mod id;
@@ -24,4 +25,5 @@ mod visitor;
 pub(crate) mod storage;
 mod cache;
 mod message;
+mod window;
 

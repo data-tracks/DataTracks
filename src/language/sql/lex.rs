@@ -4,14 +4,13 @@ use std::{mem, vec};
 use crate::algebra::Op::Tuple;
 use crate::algebra::{Op, TupleOp};
 use crate::language::sql::buffer::BufferedLexer;
-use crate::language::sql::lex::Token::{
-    As, BracketClose, Comma, From, GroupBy, Identifier, Limit, OrderBy, Select, Semi, Star, Text,
-    Where,
-};
-use crate::language::sql::statement::{SqlAlias, SqlIdentifier, SqlList, SqlOperator, SqlSelect, SqlStatement, SqlSymbol, SqlType, SqlValue, SqlVariable};
+use crate::language::sql::lex::Token::{As, BracketClose, Comma, From, GroupBy, Identifier, Limit, OrderBy, Select, Semi, Star, Text, Time, Where, Window};
+use crate::language::sql::statement::{SqlAlias, SqlIdentifier, SqlList, SqlOperator, SqlSelect, SqlStatement, SqlSymbol, SqlType, SqlValue, SqlVariable, SqlWindow};
 use crate::value;
-use logos::{Lexer, Logos};
 use crate::value::ValType;
+use logos::{Lexer, Logos};
+use crate::util::{TimeUnit, WindowType};
+use crate::util::TimeUnit::*;
 
 #[derive(Logos, Debug, PartialEq, Clone)]
 #[logos(skip r"[ \t\n\f]+")] // Ignore this regex pattern between tokens
@@ -47,6 +46,17 @@ pub(crate) enum Token {
     Limit,
     #[regex("ORDER BY", ignore(case))]
     OrderBy,
+    #[regex("WINDOW", ignore(case))]
+    Window,
+    #[regex("THUMBLING", ignore(case))]
+    Thumbling,
+    #[regex("SIZE", ignore(case))]
+    Size,
+    #[regex(r"(?i)milis|miliseconds|milisecond", | _ | Millis)]
+    #[regex(r"(?i)seconds|second", | _ | Seconds)]
+    #[regex(r"(?i)minutes|minute|min", | _ | Minutes)]
+    #[regex(r"(?i)hours|hour", | _ | Hours)]
+    Time(TimeUnit),
     #[token(",")]
     Comma,
     #[token(".")]
@@ -122,6 +132,7 @@ fn parse_select(lexer: &mut BufferedLexer, stops: &[Token]) -> Result<SqlStateme
         return Ok(SqlStatement::Select(SqlSelect::new(
             fields,
             vec![],
+            None,
             vec![],
             vec![],
         )));
@@ -129,13 +140,19 @@ fn parse_select(lexer: &mut BufferedLexer, stops: &[Token]) -> Result<SqlStateme
 
     let froms = parse_expressions(
         lexer,
-        &[&[Semi, Where, GroupBy, Limit, OrderBy], stops].concat(),
+        &[&[Semi, Where, GroupBy, Limit, OrderBy, Window], stops].concat(),
     )?;
 
     let mut last_end = lexer.consume_buffer();
     let mut wheres = vec![];
     if last_end == Ok(Where) {
-        wheres = parse_expressions(lexer, &[&[Semi, GroupBy, Limit, OrderBy], stops].concat())?;
+        wheres = parse_expressions(lexer, &[&[Semi, GroupBy, Limit, OrderBy, Window], stops].concat())?;
+
+        last_end = lexer.consume_buffer();
+    }
+    let mut window = None;
+    if last_end == Ok(Window) {
+        window = Some(parse_window(lexer, &[&[Semi, GroupBy, Limit, OrderBy], stops].concat())?);
 
         last_end = lexer.consume_buffer();
     }
@@ -146,8 +163,27 @@ fn parse_select(lexer: &mut BufferedLexer, stops: &[Token]) -> Result<SqlStateme
     }
 
     Ok(SqlStatement::Select(SqlSelect::new(
-        fields, froms, wheres, groups,
+        fields, froms, window, wheres, groups,
     )))
+}
+
+fn parse_window(lexer: &mut BufferedLexer, stops: &[Token]) -> Result<SqlWindow, String> {
+    let _type = match lexer.next()? {
+        Token::Thumbling => WindowType::Thumbling,
+        _ => return Err(format!("Unexpected token {:?}", lexer.next()?)),
+    };
+    lexer.next()?;// bracket open
+    lexer.next()?;// SIZE
+    let size = match lexer.next()? {
+        Token::Number(size) => size as usize,
+        _ => return Err("Invalid window size".to_string()),
+    };
+    let unit = match lexer.next()? {
+        Time(time) => time,
+        _ => return Err("Invalid window unit".to_string()),
+    };// bracket close
+    lexer.next()?;
+    Ok(SqlWindow::new(_type, size, unit ))
 }
 
 fn parse_expressions(
@@ -197,9 +233,13 @@ fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> Result<Sql
             t if t == Star && expressions.is_empty() => {
                 expressions.push(SqlStatement::Symbol(SqlSymbol::new("*")))
             }
-            Token::Type(t) => expressions.push(SqlStatement::Type(SqlType::new(ValType::parse(&t)))),
+            Token::Type(t) => {
+                expressions.push(SqlStatement::Type(SqlType::new(ValType::parse(&t))))
+            }
             Text(t) => expressions.push(SqlStatement::Value(SqlValue::new(value::Value::text(&t)))),
-            Token::Null => expressions.push(SqlStatement::Value(SqlValue::new(value::Value::null()))),
+            Token::Null => {
+                expressions.push(SqlStatement::Value(SqlValue::new(value::Value::null())))
+            }
             Token::Number(number) => expressions.push(SqlStatement::Value(SqlValue::new(
                 value::Value::int(number),
             ))),
@@ -267,9 +307,9 @@ fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> Result<Sql
                 } else if t == Select {
                     let subquery = parse_select(lexer, stops)?;
                     expressions.push(subquery);
-                    break // this might require changing
+                    break; // this might require changing
                 } else {
-                    return Err(format!("Invalid Token {:?} stops are: {:?}", t, stops));
+                    return Err(format!("Invalid token {:?} stops are: {:?}", t, stops));
                 }
             }
         }
@@ -435,14 +475,14 @@ mod test {
 
     #[test]
     fn test_star() {
-        let query = &select("*", "$0", None, None);
+        let query = &select("*", "$0", None, None, None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_table() {
-        let query = &select("name", "table", None, None);
-        let query_res = &select(&quote_identifier("name"), "table", None, None);
+        let query = &select("name", "table", None, None, None);
+        let query_res = &select(&quote_identifier("name"), "table", None, None, None);
         test_query_diff(query, query_res);
     }
 
@@ -478,7 +518,7 @@ mod test {
 
     #[test]
     fn test_single() {
-        let query = &select(&quote_identifier("name"), "$0", None, None);
+        let query = &select(&quote_identifier("name"), "$0", None, None, None);
         test_query_diff(query, query);
     }
 
@@ -487,6 +527,7 @@ mod test {
         let query = &select(
             &format!("{}, {}", quote_identifier("name"), quote_identifier("age")),
             "$0",
+            None,
             None,
             None,
         );
@@ -505,6 +546,7 @@ mod test {
             "$0",
             None,
             None,
+            None,
         );
         test_query_diff(query, query);
     }
@@ -519,6 +561,7 @@ mod test {
                 quote_identifier("age")
             ),
             "$0, $1",
+            None,
             None,
             None,
         );
@@ -537,6 +580,7 @@ mod test {
             "$0",
             None,
             None,
+            None,
         );
         test_query_diff(query, query);
     }
@@ -550,6 +594,7 @@ mod test {
                 quote_identifier("age")
             ),
             "$0",
+            None,
             None,
             None,
         );
@@ -567,6 +612,7 @@ mod test {
             "$0",
             None,
             None,
+            None,
         );
         let res = &select(
             &format!(
@@ -575,6 +621,7 @@ mod test {
                 quote_identifier("age")
             ),
             "$0",
+            None,
             None,
             None,
         );
@@ -592,6 +639,7 @@ mod test {
             "$0",
             None,
             None,
+            None,
         );
         test_query_diff(query, query);
     }
@@ -605,6 +653,7 @@ mod test {
                 quote_identifier("age")
             ),
             "$0",
+            None,
             None,
             None,
         );
@@ -622,6 +671,7 @@ mod test {
             "$0",
             None,
             None,
+            None,
         );
         test_query_diff(query, query);
     }
@@ -635,6 +685,7 @@ mod test {
                 quote_identifier("age")
             ),
             "$0",
+            None,
             None,
             None,
         );
@@ -652,6 +703,7 @@ mod test {
             "$0",
             None,
             None,
+            None,
         );
         test_query_diff(query, query);
     }
@@ -665,6 +717,7 @@ mod test {
                 quote_identifier("age")
             ),
             "$0",
+            None,
             None,
             None,
         );
@@ -683,6 +736,7 @@ mod test {
             "$0",
             None,
             None,
+            None,
         );
         test_query_diff(query, query);
     }
@@ -694,6 +748,7 @@ mod test {
             "$0",
             Some(&format!("{} = 3", quote_identifier("$0"))),
             None,
+            None
         );
         test_query_diff(query, query);
     }
@@ -709,6 +764,7 @@ mod test {
                 quote_identifier("name")
             )),
             None,
+            None
         );
         let res = &select(
             &format!("{}", quote_identifier("name")),
@@ -719,6 +775,7 @@ mod test {
                 quote_identifier("name")
             )),
             None,
+            None
         );
         test_query_diff(query, res);
     }
@@ -734,6 +791,7 @@ mod test {
                 quote_identifier("name")
             )),
             None,
+            None
         );
         test_query_diff(query, query);
     }
@@ -745,12 +803,28 @@ mod test {
             "$0",
             None,
             None,
+            None,
         );
         test_query_diff(query, query);
     }
 
-    fn select(selects: &str, from: &str, wheres: Option<&str>, group_by: Option<&str>) -> String {
+    #[test]
+    fn test_window() {
+        let query = &select("COUNT(*)", "$0", None, None, Some("THUMBLING (SIZE 5 SECONDS)"));
+        test_query_diff(query, query);
+    }
+
+    fn select(
+        selects: &str,
+        from: &str,
+        wheres: Option<&str>,
+        group_by: Option<&str>,
+        window: Option<&str>,
+    ) -> String {
         let mut select = format!("SELECT {} FROM {}", selects, from);
+        if let Some(window) = window {
+            select += &format!(" WINDOW {}", window);
+        }
         if let Some(wheres) = wheres {
             select += &format!(" WHERE {}", wheres);
         }
