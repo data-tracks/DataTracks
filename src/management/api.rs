@@ -14,7 +14,7 @@ pub struct API{
 
 
 impl API {
-    pub fn handle_message<'a>( storage: Arc<Mutex<Storage>>, api: Arc<Mutex<API>>, msg: Message) -> Result<Vec<u8>, Vec<u8>> {
+    pub fn handle_message( storage: Arc<Mutex<Storage>>, api: Arc<Mutex<API>>, msg: Message) -> Result<Vec<u8>, Vec<u8>> {
         match msg.data_type() {
             Payload::NONE => {
                 debug!("Received a NONE");
@@ -108,7 +108,7 @@ fn handle_register(_request: Register, storage: Arc<Mutex<Storage>>, api: Arc<Mu
     let plans = Plans::create(&mut builder, &PlansArgs { plans: Some(plans) });
     let catalog = Catalog::create(&mut builder, &CatalogArgs { plans: Some(plans), ..Default::default() });
 
-    let register = Register::create(&mut builder, &RegisterArgs { catalog: Some(catalog), ..Default::default() }).as_union_value();
+    let register = Register::create(&mut builder, &RegisterArgs { id: Some(id as i64), catalog: Some(catalog), ..Default::default() }).as_union_value();
 
     let msg = Message::create(&mut builder, &MessageArgs{data_type: Payload::Register, data: Some(register), status: None });
 

@@ -35,20 +35,18 @@ mime_guess = "2.0.5"
 bytes = "1.10.0"
 rumqttc = "0.24.0"
 rumqttd = "0.19.0"
-rusqlite = { version = "0.34.0", features = ["bundled"] }
+rusqlite = { version = "0.35.0", features = ["bundled"] }
 regex = "1.11.1"
 postgres = "0.19.10"
 redb = "2.4.0"
 tempfile = "3.18.0"
 thiserror = "2.0.12"
 speedy = "0.8.7"
-criterion = "0.5.1"
 flatbuffers = "25.2.10"
-mio = "1.0.3"
-url = "2.5.4"
 
 [dev-dependencies]
 rstest = "0.25.0"
+criterion = "0.5.1"
 
 [dependencies.schemas]
 git = "https://github.com/data-tracks/TrackRails.git"
