@@ -17,7 +17,7 @@ pub async fn receive(State(state): State<SourceState>, Json(payload): Json<Value
     debug!("New http message received: {:?}", payload);
 
     let value = transform_to_value(payload);
-    let train = Train::new(usize::MAX, vec![value::Value::Dict(value)]);
+    let train = Train::new(vec![value::Value::Dict(value)]);
 
     for out in state.source.lock().unwrap().iter() {
         out.send(train.clone()).unwrap();
@@ -44,7 +44,7 @@ pub async fn receive_with_topic(Path(topic): Path<String>, State(state): State<c
     let mut dict = transform_to_value(payload);
     dict.insert(String::from("topic"), value::Value::text(topic.as_str()));
 
-    let train = Train::new(usize::MAX, vec![value::Value::Dict(dict)]);
+    let train = Train::new(vec![value::Value::Dict(dict)]);
     for out in state.source.lock().unwrap().iter() {
         out.send(train.clone()).unwrap();
     }
@@ -140,7 +140,7 @@ async fn handle_receive_socket(mut socket: WebSocket, state: SourceState) {
                     let value = json!({"d": *text});
                     transform_to_value(value.get("d").unwrap().clone())
                 };
-                let train = Train::new(usize::MAX, vec![value::Value::Dict(value)]);
+                let train = Train::new(vec![value::Value::Dict(value)]);
 
                 debug!("New train created: {:?}", train);
                 for out in state.source.lock().unwrap().iter_mut() {

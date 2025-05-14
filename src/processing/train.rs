@@ -1,29 +1,41 @@
+use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
-use crate::value::Value;
+use crate::value::{Time, Value};
 
 pub type MutWagonsFunc = Box<dyn FnMut(&mut Vec<Train>)>;
 
 #[derive(Clone, Debug, Deserialize, Serialize, Writable, Readable)]
 pub struct Train {
-    pub last: usize,
+    pub marks: HashMap<usize, Time>,
     pub values: Option<Vec<Value>>,
 }
 
 impl Train {
-    pub fn new(stop: usize, values: Vec<Value>) -> Self {
-        Train { last: stop, values: Some(values) }
+    pub fn new(values: Vec<Value>) -> Self {
+        Train { marks: HashMap::new(), values: Some(values) }
     }
-
-
-    pub(crate) fn set_last(&mut self, stop: usize) {
-        self.last = stop;
+    
+    pub fn mark(mut self, stop: usize) -> Self {
+        self.mark_timed(stop, Time::now())
     }
+    
+    pub fn mark_timed(mut self, stop: usize, time: Time) -> Self {
+        self.marks.insert(stop, time);
+        self
+    }
+    
+    pub fn last(&self) -> usize {
+        self.marks.iter().last().map(|(key,_)| *key).unwrap_or_default()
+    }
+    
 }
 
 impl From<&mut Train> for Train {
     fn from(train: &mut Train) -> Self {
-        Train::new(train.last, train.values.take().unwrap())
+        let mut train = Train::new(train.values.take().unwrap());
+        train.marks = train.marks.iter().map(|(k, v)| (*k, v.clone())).collect();
+        train
     }
 }
 
@@ -38,6 +50,7 @@ impl From<Vec<Train>> for Train {
             values.append(train.values.take().unwrap().as_mut());
         }
 
-        Train::new(0, values)
+        let train = Train::new( values);
+        train
     }
 }

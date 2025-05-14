@@ -3,10 +3,11 @@ use crate::processing::option::Configurable;
 use crate::processing::plan::Status::Stopped;
 use crate::processing::source::{parse_source, Source};
 use crate::processing::station::{Command, Station};
+use crate::processing::transform;
 #[cfg(test)]
 use crate::processing::Train;
-use crate::processing::transform;
 use crate::ui::{ConfigContainer, ConfigModel};
+use crate::util::new_id;
 use core::default::Default;
 use crossbeam::channel::{unbounded, Receiver, Sender};
 use serde::ser::SerializeStruct;
@@ -19,7 +20,6 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
-use crate::util::new_id;
 
 pub struct Plan {
     pub id: usize,
@@ -34,6 +34,7 @@ pub struct Plan {
     pub status: Status,
     pub transforms: HashMap<String, transform::Transform>,
 }
+
 
 #[cfg(test)]
 impl Plan {
@@ -88,8 +89,8 @@ impl Plan {
         }
     }
 
-    pub(crate) fn dump(&self) -> String {
-        let mut dump = self.dump_network();
+    pub(crate) fn dump(&self, include_ids: bool) -> String {
+        let mut dump = self.dump_network(include_ids);
 
         if !self.sources.is_empty() {
             dump += "\nIn\n";
@@ -99,9 +100,9 @@ impl Plan {
                 let mut stops = self.get_connected_stations(s.id());
                 stops.sort();
                 if stops.is_empty() {
-                    s.dump_source().to_string()
+                    s.dump_source(include_ids).to_string()
                 }else {
-                    format!("{}:{}", s.dump_source(), stops.iter().map(|s|s.to_string()).collect::<Vec<String>>().join(",") )
+                    format!("{}:{}", s.dump_source(include_ids), stops.iter().map(|s|s.to_string()).collect::<Vec<String>>().join(",") )
                 }
 
             }).collect::<Vec<_>>().join("\n")
@@ -115,9 +116,9 @@ impl Plan {
 
                 let stops = self.get_connected_stations(s.get_id());
                 if stops.is_empty() {
-                    s.dump_destination().to_string()
+                    s.dump_destination(include_ids).to_string()
                 }else {
-                    format!("{}:{}", s.dump_destination(), stops.iter().map(|s|s.to_string()).collect::<Vec<String>>().join(",") )
+                    format!("{}:{}", s.dump_destination(include_ids), stops.iter().map(|s|s.to_string()).collect::<Vec<String>>().join(",") )
                 }
             }).collect::<Vec<_>>().join("\n")
         }
@@ -127,7 +128,7 @@ impl Plan {
             let mut sorted = self.transforms.keys().collect::<Vec<_>>();
             sorted.sort();
             dump += &sorted.into_iter().map(|name| {
-                let dump = self.transforms.get(name).unwrap().dump();
+                let dump = self.transforms.get(name).unwrap().dump(include_ids);
                 format!("${}:{}", name, dump)
             }).collect::<Vec<_>>().join("\n")
         }
@@ -135,7 +136,7 @@ impl Plan {
         dump
     }
 
-    fn dump_network(&self) -> String {
+    fn dump_network(&self, include_ids: bool) -> String {
         let mut dump = "".to_string();
         let mut dumped_stations = vec![];
 
@@ -731,7 +732,7 @@ mod test {
 
         for stencil in stencils {
             let plan = Plan::parse(stencil).unwrap();
-            assert_eq!(plan.dump(), stencil)
+            assert_eq!(plan.dump(false), stencil)
         }
     }
 
@@ -745,7 +746,7 @@ mod test {
 
         for stencil in stencils {
             let plan = Plan::parse(stencil).unwrap();
-            assert_eq!(plan.dump(), stencil)
+            assert_eq!(plan.dump(false), stencil)
         }
     }
 
@@ -760,7 +761,7 @@ mod test {
 
         for stencil in stencils {
             let plan = Plan::parse(stencil).unwrap();
-            assert_eq!(plan.dump(), stencil)
+            assert_eq!(plan.dump(false), stencil)
         }
     }
 
@@ -772,7 +773,7 @@ mod test {
 
         for stencil in stencils {
             let plan = Plan::parse(stencil).unwrap();
-            assert_eq!(plan.dump(), stencil)
+            assert_eq!(plan.dump(false), stencil)
         }
     }
 
@@ -784,7 +785,7 @@ mod test {
 
         for stencil in stencils {
             let plan = Plan::parse(stencil).unwrap();
-            assert_eq!(plan.dump(), stencil)
+            assert_eq!(plan.dump(false), stencil)
         }
     }
 
@@ -798,7 +799,7 @@ mod test {
 
         for stencil in stencils {
             let plan = Plan::parse(stencil).unwrap();
-            assert_eq!(plan.dump(), stencil)
+            assert_eq!(plan.dump(false), stencil)
         }
     }
 
@@ -813,7 +814,7 @@ mod test {
 
         for stencil in stencils {
             let plan = Plan::parse(stencil).unwrap();
-            assert_eq!(plan.dump(), stencil)
+            assert_eq!(plan.dump(false), stencil)
         }
     }
 
@@ -830,7 +831,7 @@ mod test {
 
         for stencil in stencils {
             let plan = Plan::parse(stencil).unwrap();
-            assert_eq!(plan.dump(), stencil)
+            assert_eq!(plan.dump(false), stencil)
         }
     }
 
@@ -846,7 +847,7 @@ mod test {
 
         for stencil in stencils {
             let plan = Plan::parse(stencil).unwrap();
-            assert_eq!(plan.dump(), stencil)
+            assert_eq!(plan.dump(false), stencil)
         }
     }
 
@@ -864,7 +865,7 @@ mod test {
 
         for stencil in stencils {
             let plan = Plan::parse(stencil).unwrap();
-            assert_eq!(plan.dump(), stencil)
+            assert_eq!(plan.dump(false), stencil)
         }
     }
 
@@ -880,7 +881,7 @@ mod test {
 
         for stencil in stencils {
             let plan = Plan::parse(stencil).unwrap();
-            assert_eq!(plan.dump(), stencil)
+            assert_eq!(plan.dump(false), stencil)
         }
     }
 
@@ -896,7 +897,7 @@ mod test {
 
         for stencil in stencils {
             let plan = Plan::parse(stencil).unwrap();
-            assert_eq!(plan.dump().trim(), stencil.trim())
+            assert_eq!(plan.dump(false).trim(), stencil.trim())
         }
     }
 }

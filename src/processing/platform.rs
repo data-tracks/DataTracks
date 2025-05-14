@@ -18,6 +18,7 @@ use crossbeam::channel;
 use crossbeam::channel::{unbounded, Receiver};
 use tracing::debug;
 use crate::optimize::{OptimizeStrategy};
+use crate::value::Time;
 
 const IDLE_TIMEOUT: Duration = Duration::from_nanos(10);
 
@@ -125,9 +126,8 @@ fn optimize(stop: usize, transform: Option<Transform>, mut window: Box<dyn Taker
     } else {
         Box::new(move |trains| {
             let windowed = window.take(trains);
-            let mut train: Train = windowed.into();
-            train.last = stop;
-            sender.send(train);
+            let train: Train = windowed.into();
+            sender.send(train.mark(stop));
         })
     }
 }

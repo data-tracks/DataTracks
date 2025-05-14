@@ -12,7 +12,7 @@ pub fn benchmark_overhead(c: &mut Criterion) {
         });
         let mut block = Block::new(vec![], vec![], process);
 
-        let train = Train::new(0, vec![Value::Dict(Dict::from(Value::int(3)))]);
+        let train = Train::new( vec![Value::Dict(Dict::from(Value::int(3)))]);
 
         b.iter(|| {
             block.next(train.clone());

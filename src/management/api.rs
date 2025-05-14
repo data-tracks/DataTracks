@@ -99,8 +99,9 @@ fn handle_register(_request: Register, storage: Arc<Mutex<Storage>>, api: Arc<Mu
     let storage = storage.lock().unwrap();
     let plans = storage.plans.lock().unwrap().values().map(|plan| {
         let name = builder.create_string(&plan.name);
+        let template = builder.create_string(&plan.dump(false));
 
-        FlatPlan::create(&mut builder, &PlanArgs { name: Some(name), template: None })
+        FlatPlan::create(&mut builder, &PlanArgs { name: Some(name), template: Some(template) })
     }).collect::<Vec<_>>();
 
     let plans = builder.create_vector(&plans);

@@ -142,7 +142,7 @@ impl Source for MqttSource {
 }
 
 pub fn send_message(dict: Dict, outs: &Vec<Tx<Train>>) {
-    let train = Train::new(usize::MAX, vec![Value::Dict(dict)]);
+    let train = Train::new(vec![Value::Dict(dict)]);
     for tx in outs {
         tx.send(train.clone()).unwrap();
     }

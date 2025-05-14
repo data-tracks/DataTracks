@@ -101,7 +101,7 @@ impl Iterator for VariableIterator {
             }
             let values = values.iter().map(|v| v.clone().unwrap()).collect();
 
-            self.transform.dynamically_load(vec![Train::new(0, values)]);
+            self.transform.dynamically_load(vec![Train::new(values)]);
             self.transform.next()
         };
         // we annotate it

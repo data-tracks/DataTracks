@@ -223,7 +223,7 @@ mod test {
 
         station.add_out(0, tx).unwrap();
         station.operate(Arc::new(control.0), HashMap::new());
-        station.send(Train::new(0, values.clone())).unwrap();
+        station.send(Train::new(values.clone())).unwrap();
 
         let res = rx.recv();
         match res {
@@ -258,12 +258,12 @@ mod test {
         assert_eq!(Ready(0), control.1.recv().unwrap());
 
         for value in &values {
-            station.send(Train::new(0, vec![value.clone()])).unwrap();
+            station.send(Train::new(vec![value.clone()])).unwrap();
         }
         sleep(Duration::from_millis(50));
 
         let mut results = vec![];
-        station.send(Train::new(0, after.clone())).unwrap();
+        station.send(Train::new(after.clone())).unwrap();
 
         for _ in 0..3 {
             results.push(rx.recv().unwrap())

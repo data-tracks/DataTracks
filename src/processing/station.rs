@@ -213,7 +213,7 @@ impl Station {
         dump += &self.window.dump();
         if !already_dumped {
             if let Some(transform) = self.transform.clone() {
-                dump += &transform.dump();
+                dump += &transform.dump(false);
             }
         }
 
@@ -285,7 +285,7 @@ pub mod tests {
 
         station.add_out(0, tx).unwrap();
         station.operate(Arc::new(control.0), HashMap::new());
-        station.send(Train::new(0, values.clone())).unwrap();
+        station.send(Train::new(values.clone())).unwrap();
 
         let res = rx.recv();
         match res {
@@ -321,7 +321,7 @@ pub mod tests {
         first.operate(Arc::clone(&control), HashMap::new());
         second.operate(Arc::clone(&control), HashMap::new());
 
-        input.send(Train::new(0, values.clone())).unwrap();
+        input.send(Train::new(values.clone())).unwrap();
 
         let res = output_rx.recv().unwrap();
         assert_eq!(res.values.clone().unwrap(), values);
@@ -374,7 +374,7 @@ pub mod tests {
         sender.send(Threshold(3)).unwrap();
 
         for _ in 0..1_000 {
-            train_sender.send(Train::new(0, dict_values(vec![Value::int(3)]))).unwrap();
+            train_sender.send(Train::new(dict_values(vec![Value::int(3)]))).unwrap();
         }
 
         // the station should start, the threshold should be reached and after some time be balanced
@@ -392,7 +392,7 @@ pub mod tests {
         station.operate(Arc::clone(&a_tx), HashMap::new());
 
         for _ in 0..1_000 {
-            train_sender.send(Train::new(0, dict_values(vec![Value::int(3)]))).unwrap();
+            train_sender.send(Train::new(dict_values(vec![Value::int(3)]))).unwrap();
         }
 
         // the station should open a platform, the station starts another platform,  the threshold should be reached and after some time be balanced
@@ -407,11 +407,11 @@ pub mod tests {
         let _sender = station.operate(Arc::clone(&a_tx), HashMap::new());
 
         for _ in 0..500 {
-            train_sender.send(Train::new(0, dict_values(vec![Value::int(3)]))).unwrap();
+            train_sender.send(Train::new(dict_values(vec![Value::int(3)]))).unwrap();
         }
         station.operate(Arc::clone(&a_tx), HashMap::new());
         for _ in 0..500 {
-            train_sender.send(Train::new(0, dict_values(vec![Value::int(3)]))).unwrap();
+            train_sender.send(Train::new(dict_values(vec![Value::int(3)]))).unwrap();
         }
 
         // the station should open a platform, the station starts another platform,  the threshold should be reached and after some time be balanced
@@ -456,7 +456,7 @@ pub mod tests {
             let amount = 1_000;
 
             for _ in 0..amount{
-                trains.push(Train::new(0, values.clone()));
+                trains.push(Train::new(values.clone()));
             }
 
             // the station should open a platform

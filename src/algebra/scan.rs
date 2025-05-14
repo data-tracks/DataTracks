@@ -58,7 +58,7 @@ impl Iterator for ScanIterator {
 impl ValueIterator for ScanIterator {
     fn dynamically_load(&mut self, trains: Vec<Train>) {
         for mut train in trains {
-            if train.last == self.index {
+            if train.last() == self.index {
                 train.values = Some(train.values.unwrap().into_iter().map(|d| {
                     let value = match d {
                         Value::Wagon(w) => {
@@ -87,8 +87,8 @@ impl ValueIterator for ScanIterator {
 impl RefHandler for ScanIterator {
     fn process(&self, _stop: usize, wagons: Vec<Train>) -> Vec<Train> {
         let mut values = vec![];
-        wagons.into_iter().filter(|w| w.last == self.index).for_each(|mut t| values.append(t.values.take().unwrap().as_mut()));
-        vec![Train::new(self.index, values)]
+        wagons.into_iter().filter(|w| w.last() == self.index).for_each(|mut t| values.append(t.values.take().unwrap().as_mut()));
+        vec![Train::new(values).mark(self.index)]
     }
 
     fn clone(&self) -> Box<dyn RefHandler + Send + 'static> {
@@ -165,7 +165,7 @@ mod test {
 
     #[test]
     fn simple_scan() {
-        let train = Train::new(0, Dict::transform(vec![3.into(), "test".into()]));
+        let train = Train::new(Dict::transform(vec![3.into(), "test".into()]));
 
         let mut scan = IndexScan::new(0);
 

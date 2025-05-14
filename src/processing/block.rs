@@ -77,8 +77,9 @@ impl SpecificBlock {
     }
     fn next(&mut self, train: Train) {
 
-        self.buffer.entry(train.last).or_default().append(&mut train.values.unwrap());
-        if !self.blocks.contains(&train.last) {
+        let mark = train.last();
+        self.buffer.entry(mark).or_default().append(&mut train.values.unwrap());
+        if !self.blocks.contains(&mark) {
             debug!("block{:?}", self.buffer.clone());
             let mut trains = merge_buffer(self.buffer.drain());
 
@@ -92,7 +93,7 @@ impl SpecificBlock {
 fn merge_buffer(drain: Drain<usize, Vec<Value>>) -> Vec<Train> {
     let mut trains = vec![];
     for (last, values) in drain {
-        trains.push(Train::new(last, values));
+        trains.push(Train::new(values));
     }
     trains
 }
@@ -119,8 +120,9 @@ impl AllBlock {
         AllBlock{input, func, buffer, switch}
     }
     fn next(&mut self, train: Train) {
-        self.buffer.entry(train.last).or_default().append(&mut train.values.unwrap());
-        self.switch.insert(train.last, true);
+        let watermark = train.last();
+        self.buffer.entry(watermark).or_default().append(&mut train.values.unwrap());
+        self.switch.insert(watermark, true);
         if self.switch.iter().all(|(_i,s)| *s) {
             (self.func)(&mut merge_buffer(self.buffer.drain()));
 

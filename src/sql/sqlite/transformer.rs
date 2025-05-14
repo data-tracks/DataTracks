@@ -143,7 +143,7 @@ mod tests {
     #[test]
     fn test_simple_parse() {
         let plan = Plan::parse(PLAN).unwrap();
-        assert_eq!(plan.dump().replace("\n", ""), PLAN.replace("\n", ""));
+        assert_eq!(plan.dump(false).replace("\n", ""), PLAN.replace("\n", ""));
     }
 
     #[test]

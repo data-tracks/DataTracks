@@ -61,7 +61,7 @@ impl Destination for DebugDestination {
                             writeln!(w, "{:?}", train).expect("Could not write to debug file.");
                         }
 
-                        debug!("last: {}, {:?}", train.last, train.values.unwrap_or(vec![]));
+                        debug!("last: {}, {:?}", train.last(), train.values.unwrap_or(vec![]));
                     }
                     Err(e) => {
                         error!("{}", e)

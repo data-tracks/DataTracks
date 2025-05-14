@@ -42,7 +42,7 @@ pub trait Source: Send + Sync + Configurable {
 
     fn id(&self) -> usize;
 
-    fn dump_source(&self) -> String {
+    fn dump_source(&self, include_id: bool) -> String {
         Configurable::dump(self).to_string()
     }
 

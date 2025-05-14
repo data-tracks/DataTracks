@@ -86,11 +86,11 @@ impl Transform {
             SQLite(c) => c.derive_output_layout(inputs),
             Postgres(p) => p.derive_output_layout(inputs),
             #[cfg(test)]
-            Transform::DummyDB(_) => todo!()
+            DummyDB(_) => todo!()
         }
     }
 
-    pub fn dump(&self) -> String {
+    pub fn dump(&self, include_ids: bool) -> String {
         match self {
             Func(f) => f.dump(),
             Lang(f) => f.dump(),
@@ -382,7 +382,7 @@ mod tests {
 
         station.add_out(0, tx).unwrap();
         station.operate(Arc::new(control.0), HashMap::new());
-        station.send(Train::new(0, values.clone())).unwrap();
+        station.send(Train::new(values.clone())).unwrap();
 
         let res = rx.recv();
         match res {
@@ -415,7 +415,7 @@ mod tests {
 
         station.add_out(0, tx).unwrap();
         station.operate(Arc::new(control.0), HashMap::new());
-        station.send(Train::new(0, values.clone())).unwrap();
+        station.send(Train::new(values.clone())).unwrap();
 
         let res = rx.recv();
         match res {
@@ -514,7 +514,7 @@ mod tests {
         match transform {
             Ok(mut t) => {
                 for (i, input) in inputs.into_iter().enumerate() {
-                    t.dynamically_load(vec![Train::new(i, input)]);
+                    t.dynamically_load(vec![Train::new(input)]);
                 }
 
                 let result = t.drain_to_train(0);
@@ -529,7 +529,7 @@ mod tests {
         let transform = build_iterator(transform.unwrap());
         match transform {
             Ok(mut t) => {
-                t.dynamically_load(input.into_iter().map(|v| Train::new(0, vec![v])).collect());
+                t.dynamically_load(input.into_iter().map(|v| Train::new(vec![v])).collect());
                 let result = t.drain_to_train(0);
                 assert_eq!(result.values.unwrap(), output);
             }
@@ -543,7 +543,7 @@ mod tests {
 
         match transform {
             Ok(mut t) => {
-                t.dynamically_load(input.into_iter().map(|v| Train::new(0, vec![v])).collect());
+                t.dynamically_load(input.into_iter().map(|v| Train::new( vec![v])).collect());
                 let result = t.drain_to_train(0);
                 let result = result.values.unwrap();
                 for result in &result {

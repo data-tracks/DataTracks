@@ -73,7 +73,7 @@ impl Source for LiteSource {
                 while let Ok(Some(row)) = iter.next() {
                     values.push((row, count).try_into().unwrap());
                 }
-                let train = Train::new(usize::MAX, values);
+                let train = Train::new(values);
 
                 for sender in &sender {
                     sender.send(train.clone()).unwrap();

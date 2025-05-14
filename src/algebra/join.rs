@@ -190,12 +190,14 @@ mod test {
     use crate::algebra::scan::IndexScan;
     use crate::algebra::{AlgebraType, ValueIterator};
     use crate::processing::Train;
-    use crate::value::{Dict, Value};
+    use crate::value::{Dict, Time, Value};
 
     #[test]
     fn one_match() {
-        let left = Train::new(0, Dict::transform(vec![3.into(), 5.5.into()]));
-        let right = Train::new(1, Dict::transform(vec![5.5.into(), "test".into()]));
+        let left = Train::new(Dict::transform(vec![3.into(), 5.5.into()]));
+        let right = Train::new(Dict::transform(vec![5.5.into(), "test".into()]));
+        let left = left.mark(0);
+        let right = right.mark(1);
 
         let left_scan = IndexScan::new(0);
 
@@ -215,9 +217,11 @@ mod test {
 
     #[test]
     fn multi_match() {
-        let train0 = Train::new(0, Dict::transform(vec![3.into(), 5.5.into()]));
-        let train1 = Train::new(1, Dict::transform(vec![5.5.into(), 5.5.into()]));
-
+        let train0 = Train::new(Dict::transform(vec![3.into(), 5.5.into()]));
+        let train1 = Train::new(Dict::transform(vec![5.5.into(), 5.5.into()]));
+        let train0 = train0.mark(0);
+        let train1 = train1.mark(1);
+        
         let left = IndexScan::new(0);
         let right = IndexScan::new(1);
 

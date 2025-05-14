@@ -11,6 +11,12 @@ pub struct Time {
     pub ms: usize,
 }
 
+impl Default for Time {
+    fn default() -> Self {
+        Time::now()
+    }
+}
+
 impl Time {
     pub fn new(ms: usize, ns: u32) -> Time {
         if ns >= 1000000 {
