@@ -8,8 +8,9 @@ use crate::ui::start_web;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use crossbeam::channel::Sender;
+use reqwest::blocking::Client;
 use schemas::message_generated::protocol::Create;
-use tracing::info;
+use tracing::{error, info};
 use crate::processing::station::Command;
 
 pub struct Manager {
@@ -18,11 +19,6 @@ pub struct Manager {
     server: Option<Sender<Command>>,
 }
 
-impl Manager {
-    pub(crate) fn create_plan(&self, create: &Create) -> Result<Plan, String> {
-        todo!()
-    }
-}
 
 impl Manager {
     pub fn new() -> Manager {
@@ -41,7 +37,7 @@ impl Manager {
 
         let handle = thread::spawn(|| start_web(web_storage));
         self.handles.push(handle);
-        let handle = thread::spawn(|| start_tpc("localhost".to_string(), 5679, tpc_storage) );
+        let handle = thread::spawn(|| start_tpc("localhost".to_string(), 5959, tpc_storage) );
         self.handles.push(handle);
 
     }
@@ -92,6 +88,28 @@ fn add_default(storage: Arc<Mutex<Storage>>) {
         lock.add_plan(plan);
         lock.start_plan(id);
         drop(lock);
+
+        add_producer();
+    });
+}
+
+fn add_producer() {
+    thread::spawn(move || {
+        loop {
+            let client = Client::new();
+
+            let message = "Hello from Rust!";
+
+            let response = client
+                .post(format!("http://127.0.0.1:{}/producer", 5555))
+                .json(&message)
+                .send();
+
+            match response {
+                Ok(_) => {}
+                Err(err) => error!("{}", err)
+            }
+        }
     });
 }
 

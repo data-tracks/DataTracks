@@ -16,7 +16,7 @@ impl Train {
         Train { marks: HashMap::new(), values: Some(values) }
     }
     
-    pub fn mark(mut self, stop: usize) -> Self {
+    pub fn mark(self, stop: usize) -> Self {
         self.mark_timed(stop, Time::now())
     }
     
