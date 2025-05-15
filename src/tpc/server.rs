@@ -14,8 +14,8 @@ pub struct Server {
     addr: SocketAddr,
 }
 
-pub trait StreamUser {
-    fn handle(&mut self, stream: TcpStream, storage: Arc<Mutex<Storage>>, api: Arc<Mutex<API>>) -> impl std::future::Future<Output = ()> + Send;
+pub trait StreamUser:Clone {
+    fn handle(&mut self, stream: TcpStream) -> impl std::future::Future<Output = ()> + Send;
 
     fn interrupt(&mut self) -> Receiver<Command>;
 
@@ -39,7 +39,7 @@ impl Server {
 
             loop {
                 let (stream, _) = listener.accept().await?;
-                //user.handle(stream).await;
+                user.clone().handle(stream).await;
             }
         })
     }

@@ -69,7 +69,7 @@ impl Source for TpcSource{
 
         spawn(move || {
             let server = Server::new(url.clone(), port);
-            match server.start(clone) {
+            match server.start(clone,  ) {
                 Ok(_) => {}
                 Err(_) => {}
             }
@@ -118,7 +118,7 @@ impl Source for TpcSource{
 }
 
 impl StreamUser for TpcSource {
-    async fn handle(&mut self, stream: TcpStream, storage: Arc<Mutex<Storage>>, api: Arc<Mutex<API>>) {
+    async fn handle(&mut self, stream: TcpStream) {
         todo!()
     }
 

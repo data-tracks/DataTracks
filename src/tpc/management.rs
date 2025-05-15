@@ -21,6 +21,8 @@ fn startup(url: String, port: u16, storage: Arc<Mutex<Storage>>) {
     let management = TpcManagement{
         interrupt: tx,
         control: rx,
+        api: Arc::new(Mutex::new(API::default())),
+        storage: Arc::clone(&storage),
     };
     match server.start(management) {
         Ok(_) => {}
@@ -28,13 +30,16 @@ fn startup(url: String, port: u16, storage: Arc<Mutex<Storage>>) {
     }
 }
 
+#[derive(Clone)]
 pub struct TpcManagement{
     interrupt: Sender<Command>,
     control: Receiver<Command>,
+    storage: Arc<Mutex<Storage>>,
+    api: Arc<Mutex<API>>,
 }
 
 impl StreamUser for TpcManagement {
-    async fn handle(&mut self, mut stream: TcpStream, storage: Arc<Mutex<Storage>>, api: Arc<Mutex<API>>) {
+    async fn handle(&mut self, mut stream: TcpStream) {
         let mut buffer = [0; 1024]; // Buffer for incoming data
 
         match stream.read(&mut buffer).await {
@@ -42,7 +47,7 @@ impl StreamUser for TpcManagement {
                 // Deserialize FlatBuffers message
                 match deserialize_message(&buffer[..size]) {
                     Ok(msg) => {
-                        match API::handle_message(storage, api, msg) {
+                        match API::handle_message(self.storage.clone(), self.api.clone(), msg) {
                             Ok(res) => stream.write_all(&res).await.unwrap(),
                             Err(err) => stream.write_all(&err).await.unwrap()
                         }
@@ -60,7 +65,7 @@ impl StreamUser for TpcManagement {
         todo!()
     }
 
-    fn control(&mut self) -> crossbeam::channel::Sender<Command> {
+    fn control(&mut self) -> Sender<Command> {
         todo!()
     }
 }
