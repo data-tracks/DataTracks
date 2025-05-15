@@ -26,4 +26,3 @@ mod debug;
 mod depot;
 pub(crate) mod option;
 mod wagon;
-mod cache;

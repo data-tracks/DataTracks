@@ -9,7 +9,7 @@ pub use reader::BufferedReader;
 pub use timeunit::TimeUnit;
 pub use visitor::ChangingVisitor;
 pub use visitor::CreatingVisitor;
-pub use cache::Storage;
+pub use cache::Cache;
 pub use message::*;
 pub use window::WindowType;
 

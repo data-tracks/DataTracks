@@ -2,7 +2,7 @@ use crate::processing::transform::Taker;
 use crate::processing::window::Window::{Back, Interval, Non};
 use crate::processing::Train;
 use crate::util;
-use crate::util::{Storage, TimeUnit};
+use crate::util::{Cache, TimeUnit};
 use crate::value::Time;
 use chrono::{Duration, NaiveTime};
 use std::collections::VecDeque;
@@ -67,14 +67,14 @@ pub struct BackWindow {
     time: i64,
     time_unit: TimeUnit,
     buffer: VecDeque<Time>,
-    cache: Storage<Time, Vec<Train>>,
+    cache: Cache<Time, Vec<Train>>,
     storage: Arc<util::storage::Storage>
 }
 
 impl BackWindow {
     pub fn new(time: i64, time_unit: TimeUnit) -> Self {
         let now = Time::now();
-        BackWindow { time, time_unit: time_unit.clone(), duration: get_duration(time, time_unit), buffer: VecDeque::new(), cache: Storage::new(100), storage: Arc::new(util::storage::Storage::new_from_path("DB.db".to_string(), now.ms.to_string()).unwrap()) }
+        BackWindow { time, time_unit: time_unit.clone(), duration: get_duration(time, time_unit), buffer: VecDeque::new(), cache: Cache::new(100), storage: Arc::new(util::storage::Storage::new_from_path("DB.db".to_string(), now.ms.to_string()).unwrap()) }
     }
     fn parse(stencil: String) -> Result<Self, String> {
         let (digit, time_unit) = parse_interval(stencil.as_str())?;
@@ -94,7 +94,7 @@ impl BackWindow {
 impl Taker for BackWindow {
     fn take(&mut self, trains: &mut Vec<Train>) -> Vec<Train> {
         let time = Time::now();
-        self.cache.set(time.clone(), trains.clone());
+        self.cache.put(time.clone(), trains.clone());
         self.storage.write(time.clone().into(), trains.write_to_vec().unwrap()).unwrap();
         let ms = time.ms;
 

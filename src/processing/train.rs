@@ -8,17 +8,12 @@ pub type MutWagonsFunc = Box<dyn FnMut(&mut Vec<Train>)>;
 #[derive(Clone, Debug, Deserialize, Serialize, Writable, Readable)]
 pub struct Train {
     pub marks: HashMap<usize, Time>,
-    pub event_time: Time,
     pub values: Option<Vec<Value>>,
 }
 
 impl Train {
     pub fn new(values: Vec<Value>) -> Self {
-        Train { marks: HashMap::new(), event_time: Default::default(), values: Some(values) }
-    }
-
-    pub fn new_with_event_time(values: Vec<Value>, event_time: Time) -> Self {
-        Train { marks: HashMap::new(), values: Some(values), event_time }
+        Train { marks: HashMap::new(), values: Some(values) }
     }
     
     pub fn mark(mut self, stop: usize) -> Self {
