@@ -1,19 +1,45 @@
 use crate::processing::station::Command;
 use crossbeam::channel::{Receiver, Sender};
 
-use std::io::Error;
+use std::io::{Error, Read};
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::sync::{Arc, Mutex};
 use std::io;
-use tokio::net::{TcpListener, TcpStream};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::{TcpListener};
 use tokio::runtime::Runtime;
 use tracing::info;
 use crate::management::{Storage, API};
+use crate::tpc::TpcSource;
 
 pub struct Server {
     addr: SocketAddr,
 }
 
+pub struct TcpStream(tokio::net::TcpStream);
+
+
+impl TcpStream {
+    pub async fn write_all<'a>(&'a mut self, msg: &'a [u8]) -> Result<(), String> {
+        let length = (msg.len() as u32).to_be_bytes();
+        // we write length first
+        self.0.write_all(&length).await.unwrap();
+        // then msg
+        self.0.write_all(msg).await.map_err(|err| err.to_string())
+    }
+    pub async fn read<'a>(&'a mut self, buf: &'a mut [u8]) -> Result<usize, String> {
+        match self.0.read(buf).await{
+            Ok(size) => Ok(size),
+            Err(err) => Err(err.to_string())
+        }
+    }
+}
+
+impl From<tokio::net::TcpStream> for TcpStream {
+    fn from(stream: tokio::net::TcpStream) -> Self {
+        TcpStream(stream)
+    }
+}
 pub trait StreamUser:Clone {
     fn handle(&mut self, stream: TcpStream) -> impl std::future::Future<Output = ()> + Send;
 
@@ -39,7 +65,7 @@ impl Server {
 
             loop {
                 let (stream, _) = listener.accept().await?;
-                user.clone().handle(stream).await;
+                user.clone().handle(stream.into()).await;
             }
         })
     }

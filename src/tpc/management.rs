@@ -2,12 +2,11 @@ use std::sync::{Arc, Mutex};
 use std::thread::spawn;
 use crossbeam::channel::{unbounded, Receiver, Sender};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpStream;
 use tracing::{debug, info};
 use crate::management::{Storage, API};
 use crate::processing::station::Command;
 use crate::tpc::Server;
-use crate::tpc::server::StreamUser;
+use crate::tpc::server::{StreamUser, TcpStream};
 use crate::util::deserialize_message;
 
 pub fn start_tpc(url: String, port: u16, storage: Arc<Mutex<Storage>>){
@@ -24,8 +23,9 @@ fn startup(url: String, port: u16, storage: Arc<Mutex<Storage>>) {
         api: Arc::new(Mutex::new(API::default())),
         storage: Arc::clone(&storage),
     };
+    info!("DataTracks (TrackRails) protocol listening on: http://localhost:{}", port);
     match server.start(management) {
-        Ok(_) => {}
+        Ok(_) => {},
         Err(_) => {}
     }
 }
@@ -48,7 +48,9 @@ impl StreamUser for TpcManagement {
                 match deserialize_message(&buffer[..size]) {
                     Ok(msg) => {
                         match API::handle_message(self.storage.clone(), self.api.clone(), msg) {
-                            Ok(res) => stream.write_all(&res).await.unwrap(),
+                            Ok(res) => {
+                                stream.write_all(&res).await.unwrap()
+                            },
                             Err(err) => stream.write_all(&err).await.unwrap()
                         }
                     },

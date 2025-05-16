@@ -89,7 +89,7 @@ pub async fn startup(storage: Arc<Mutex<Storage>>) {
 
     let listener = TcpListener::bind(&addr).await.unwrap();
     debug!("router initialized, now listening on port {}", port);
-    info!("DataTracks started: http://localhost:{}", port);
+    info!("DataTracks (TrackView) started: http://localhost:{}", port);
     axum::serve(listener, app).await.unwrap();
     debug!("Finished serving.")
 }

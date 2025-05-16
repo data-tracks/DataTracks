@@ -4,17 +4,18 @@ use crate::processing::source::Source;
 use crate::processing::station::Command;
 use crate::processing::{Train};
 use crate::ui::{ConfigModel, StringModel};
-use crate::util::{new_id, Tx};
+use crate::util::{deserialize_message, new_id, Tx};
 use crossbeam::channel::{unbounded, Receiver, Sender};
 use serde_json::{Map, Value};
 use std::collections::{HashMap};
 use std::sync::{Arc, Mutex};
 use std::thread::spawn;
-use tokio::net::TcpStream;
-use tracing::{debug};
+use flatbuffers::FlatBufferBuilder;
+use schemas::message_generated::protocol::{Message, MessageArgs, Payload, Register, RegisterArgs};
+use tracing::{debug, info};
 use crate::management::{Storage, API};
 use crate::tpc::Server;
-use crate::tpc::server::StreamUser;
+use crate::tpc::server::{StreamUser, TcpStream};
 
 #[derive(Clone)]
 pub struct TpcSource {
@@ -30,6 +31,18 @@ impl TpcSource {
         Self {
             id: new_id(), url, port, outs: Vec::new(),
         }
+    }
+
+    fn handle_register(&self) -> Result<Vec<u8>, String> {
+        let mut builder = FlatBufferBuilder::new();
+
+
+        let register = Register::create(&mut builder, &RegisterArgs { id: None, catalog: None, ..Default::default() }).as_union_value();
+
+        let msg = Message::create(&mut builder, &MessageArgs{data_type: Payload::Register, data: Some(register), status: None });
+
+        builder.finish(msg, None);
+        Ok(builder.finished_data().to_vec())
     }
 }
 
@@ -118,8 +131,35 @@ impl Source for TpcSource{
 }
 
 impl StreamUser for TpcSource {
-    async fn handle(&mut self, stream: TcpStream) {
-        todo!()
+    async fn handle(&mut self, mut stream: TcpStream) {
+        let mut buffer = [0; 1024]; // Buffer for incoming data
+
+        match stream.read(&mut buffer).await {
+            Ok(size) if size > 0 => {
+                // Deserialize FlatBuffers message
+                match deserialize_message(&buffer[..size]) {
+                    Ok(msg) => {
+                        match msg.data_type() {
+                            Payload::Register => {
+                                info!("tpc registration");
+                                stream.write_all(&self.handle_register().unwrap()).await.unwrap();
+                            },
+                            Payload::Values => {
+                                info!("tpc values");
+                                println!("tpc values {:?}", msg.data_as_values());
+                            }
+                            _ => {
+                                todo!("other tpc payloads")
+                            }
+                        }
+                    },
+                    Err(_) => (),
+                };
+            }
+            _ => {
+                info!("Client disconnected or error occurred");
+            }
+        }
     }
 
     fn interrupt(&mut self) -> Receiver<Command> {
@@ -130,3 +170,4 @@ impl StreamUser for TpcSource {
         todo!()
     }
 }
+

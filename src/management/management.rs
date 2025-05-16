@@ -7,6 +7,7 @@ use crate::processing::{DebugDestination, HttpSource, Plan};
 use crate::ui::start_web;
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::time::Duration;
 use crossbeam::channel::Sender;
 use reqwest::blocking::Client;
 use schemas::message_generated::protocol::Create;
@@ -101,7 +102,7 @@ fn add_producer() {
             let message = "Hello from Rust!";
 
             let response = client
-                .post(format!("http://127.0.0.1:{}/producer", 5555))
+                .post(format!("http://127.0.0.1:{}/data", 5555))
                 .json(&message)
                 .send();
 
@@ -109,6 +110,7 @@ fn add_producer() {
                 Ok(_) => {}
                 Err(err) => error!("{}", err)
             }
+            thread::sleep(Duration::from_secs(5));
         }
     });
 }
