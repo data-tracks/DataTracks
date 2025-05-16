@@ -12,7 +12,7 @@ use crate::analyse::{InputDerivable, OutputDerivable};
 use crate::optimize::Cost;
 use crate::processing::transform::Transform;
 use crate::processing::{Layout, Train};
-use crate::value::{Time, Value};
+use crate::value::Value;
 use std::collections::HashMap;
 
 pub type BoxedIterator = Box<dyn ValueIterator<Item=Value> + Send + 'static>;

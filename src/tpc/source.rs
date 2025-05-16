@@ -8,12 +8,13 @@ use crate::util::{deserialize_message, new_id, Tx};
 use crossbeam::channel::{unbounded, Receiver, Sender};
 use serde_json::{Map, Value};
 use std::collections::{HashMap};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc};
 use std::thread::spawn;
+use std::time::Duration;
 use flatbuffers::FlatBufferBuilder;
 use schemas::message_generated::protocol::{Message, MessageArgs, Payload, Register, RegisterArgs};
-use tracing::{debug, info};
-use crate::management::{Storage, API};
+use tokio::time::sleep;
+use tracing::{debug, info, warn};
 use crate::tpc::Server;
 use crate::tpc::server::{StreamUser, TcpStream};
 
@@ -44,6 +45,10 @@ impl TpcSource {
         builder.finish(msg, None);
         Ok(builder.finished_data().to_vec())
     }
+
+    fn send(&self, train: Train) {
+        self.outs.iter().for_each(|out| out.send(train.clone()).unwrap())
+    }
 }
 
 impl Configurable for TpcSource {
@@ -68,6 +73,7 @@ impl Source for TpcSource{
         let url = options.get("url").unwrap().as_str().unwrap().parse().unwrap();
         Ok(TpcSource::new(url, port as u16))
     }
+    
 
     fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command> {
         debug!("starting tpc source...");
@@ -149,8 +155,12 @@ impl StreamUser for TpcSource {
                                     stream.write_all(&self.handle_register().unwrap()).await.unwrap();
                                 },
                                 Payload::Train => {
-                                    info!("tpc values");
-                                    println!("tpc values {:?}", msg.data_as_train());
+                                    let msg = msg.data_as_train().unwrap();
+                                    println!("tpc values {:?}", msg);
+                                    match msg.try_into() {
+                                        Ok(train) => self.send(train),
+                                        Err(err) => warn!("error transformation {}", err)
+                                    }
                                 }
                                 _ => {
                                     todo!("other tpc payloads")
@@ -161,7 +171,7 @@ impl StreamUser for TpcSource {
                     };
                 }
                 _ => {
-                    info!("Client disconnected or error occurred");
+                    sleep(Duration::from_millis(10)).await;
                 }
             }
         }

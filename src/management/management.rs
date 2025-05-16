@@ -1,4 +1,4 @@
-use crate::tpc::{start_tpc, TpcSource};
+use crate::tpc::{start_tpc, TpcDestination, TpcSource};
 use crate::management::storage::Storage;
 use crate::mqtt::{MqttDestination, MqttSource};
 use crate::processing::destination::Destination;
@@ -10,7 +10,6 @@ use std::thread;
 use std::time::Duration;
 use crossbeam::channel::Sender;
 use reqwest::blocking::Client;
-use schemas::message_generated::protocol::Create;
 use tracing::{error, info};
 use crate::processing::station::Command;
 
@@ -79,6 +78,11 @@ fn add_default(storage: Arc<Mutex<Storage>>) {
         plan.connect_in_out(3, destination_id);
 
         let destination = Box::new(MqttDestination::new(String::from("127.0.0.1"), 8888));
+        let destination_id = destination.get_id();
+        plan.add_destination(destination);
+        plan.connect_in_out(3, destination_id);
+
+        let destination = Box::new(TpcDestination::new(String::from("127.0.0.1"), 8686));
         let destination_id = destination.get_id();
         plan.add_destination(destination);
         plan.connect_in_out(3, destination_id);

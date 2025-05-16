@@ -1,7 +1,8 @@
-use std::collections::HashMap;
+use crate::value::{Time, Value};
+use schemas::message_generated::protocol::{Value as Val, ValueWrapper};
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
-use crate::value::{Time, Value};
+use std::collections::HashMap;
 
 pub type MutWagonsFunc = Box<dyn FnMut(&mut Vec<Train>)>;
 
@@ -30,6 +31,59 @@ impl Train {
     }
     
 }
+
+impl TryFrom<schemas::message_generated::protocol::Train<'_>> for Train {
+    type Error = String;
+
+    fn try_from(value: schemas::message_generated::protocol::Train<'_>) -> Result<Self, Self::Error> {
+        let topic = value.topic();
+
+        match value.values() {
+            None => {
+                Ok(Train::new(vec![]))
+            }
+            Some(values) => {
+                Ok(Train::new(values.iter().map(|v| v.try_into()).collect::<Result<_, _>>()?))
+            }
+        }
+    }
+}
+
+impl TryFrom<ValueWrapper<'_>> for Value {
+    type Error = String;
+
+    fn try_from(value: ValueWrapper) -> Result<Self, Self::Error> {
+        match value.data_type() {
+            Val::Time => {
+                let time = value.data_as_time().ok_or("Could not find time")?;
+                Ok(Value::time(time.data() as usize, 0))
+            }
+            Val::Text => {
+                let string = value.data_as_text().ok_or("Could not find string")?;
+                Ok(string.data().ok_or("Could not find string")?.into())
+            }
+            Val::Float => {
+                let float = value.data_as_float().ok_or("Could not find float")?;
+                Ok(Value::float(float.data() as _))
+            }
+            Val::Null => Ok(Value::null()),
+            Val::Integer => {
+                let integer = value.data_as_integer().ok_or("Could not find integer")?;
+                Ok(Value::int(integer.data() as i64))
+            }
+            Val::List => {
+                let list = value.data_as_list().ok_or("Could not find list")?;
+                let list = list.data().ok_or("Could not find list")?;
+                Ok(Value::array(list.iter().map(|v| v.try_into()).collect::<Result<_, _>>()?))
+            }
+            Val::Document => {
+                todo!()
+            },
+            _ => panic!()
+        }
+    }
+}
+
 
 impl From<&mut Train> for Train {
     fn from(train: &mut Train) -> Self {

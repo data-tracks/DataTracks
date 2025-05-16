@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::net::{IpAddr, SocketAddr};
+use std::ptr::dangling;
 use axum::extract::{Path, State, WebSocketUpgrade};
 use axum::extract::ws::{Message, WebSocket};
 use axum::http::StatusCode;
@@ -32,7 +33,7 @@ pub fn transform_to_value(payload: Value) -> Dict {
         Value::Object(o) => o.into(),
         v => {
             let mut map = BTreeMap::new();
-            map.insert(String::from("data"), v.into());
+            map.insert(String::from("$"), v.into());
             Dict::new(map)
         }
     }

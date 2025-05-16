@@ -104,7 +104,7 @@ impl Destination for MqttDestination {
                                         }
                                     };
                                     let payload = serde_json::to_string(&value.to_string()).unwrap();
-                                    link_tx.publish("test/topic2", payload).map_err(|e| e.to_string()).unwrap();
+                                    link_tx.publish("test", payload).map_err(|e| e.to_string()).unwrap();
                                 }
 
                             }
