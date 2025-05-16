@@ -60,9 +60,9 @@ impl API {
                     }
                 }
             }
-            Payload::Values => {
-                debug!("Received a VALUES");
-                let values = msg.data_as_values().unwrap();
+            Payload::Train => {
+                debug!("Received a Train");
+                let values = msg.data_as_train().unwrap();
                 todo!()
             }
             Payload(4_u8..=u8::MAX) => todo!(),

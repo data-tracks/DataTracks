@@ -132,32 +132,37 @@ impl Source for TpcSource{
 
 impl StreamUser for TpcSource {
     async fn handle(&mut self, mut stream: TcpStream) {
-        let mut buffer = [0; 1024]; // Buffer for incoming data
+        let mut len_buf = [0u8; 4];
 
-        match stream.read(&mut buffer).await {
-            Ok(size) if size > 0 => {
-                // Deserialize FlatBuffers message
-                match deserialize_message(&buffer[..size]) {
-                    Ok(msg) => {
-                        match msg.data_type() {
-                            Payload::Register => {
-                                info!("tpc registration");
-                                stream.write_all(&self.handle_register().unwrap()).await.unwrap();
-                            },
-                            Payload::Values => {
-                                info!("tpc values");
-                                println!("tpc values {:?}", msg.data_as_values());
+        loop {
+            match stream.read_exact(&mut len_buf).await {
+                Ok(_) => {
+                    let size = u32::from_be_bytes(len_buf) as usize;
+                    let mut buffer = vec![0; size];
+                    stream.read(&mut buffer).await.unwrap();
+                    // Deserialize FlatBuffers message
+                    match deserialize_message(&buffer) {
+                        Ok(msg) => {
+                            match msg.data_type() {
+                                Payload::Register => {
+                                    info!("tpc registration");
+                                    stream.write_all(&self.handle_register().unwrap()).await.unwrap();
+                                },
+                                Payload::Train => {
+                                    info!("tpc values");
+                                    println!("tpc values {:?}", msg.data_as_train());
+                                }
+                                _ => {
+                                    todo!("other tpc payloads")
+                                }
                             }
-                            _ => {
-                                todo!("other tpc payloads")
-                            }
-                        }
-                    },
-                    Err(_) => (),
-                };
-            }
-            _ => {
-                info!("Client disconnected or error occurred");
+                        },
+                        Err(_) => (),
+                    };
+                }
+                _ => {
+                    info!("Client disconnected or error occurred");
+                }
             }
         }
     }

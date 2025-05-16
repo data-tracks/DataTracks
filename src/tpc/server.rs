@@ -21,12 +21,19 @@ pub struct TcpStream(tokio::net::TcpStream);
 
 impl TcpStream {
     pub async fn write_all<'a>(&'a mut self, msg: &'a [u8]) -> Result<(), String> {
-        let length = (msg.len() as u32).to_be_bytes();
+        let length: [u8; 4] = (msg.len() as u32).to_be_bytes();
         // we write length first
         self.0.write_all(&length).await.unwrap();
         // then msg
         self.0.write_all(msg).await.map_err(|err| err.to_string())
     }
+
+    pub async fn read_exact<'a>(&'a mut self, buf: &'a mut [u8]) -> Result<(), String> {
+        let length = (buf.len() as u32).to_be_bytes();
+        let read = self.0.read_exact(buf).await.map_err(|err| err.to_string())?;
+        Ok(())
+    }
+
     pub async fn read<'a>(&'a mut self, buf: &'a mut [u8]) -> Result<usize, String> {
         match self.0.read(buf).await{
             Ok(size) => Ok(size),
