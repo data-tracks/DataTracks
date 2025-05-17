@@ -5,6 +5,7 @@ use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::sync::Mutex;
 use schemas::message_generated::protocol::Create;
+use crate::processing::plan::Status;
 
 #[derive(Default)]
 pub struct Storage {
@@ -78,6 +79,7 @@ impl Storage {
         match plan {
             None => {}
             Some(p) => {
+                p.status = Status::Running;
                 p.operate().unwrap();
             }
         }

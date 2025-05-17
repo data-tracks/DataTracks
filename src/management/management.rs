@@ -11,6 +11,7 @@ use std::time::Duration;
 use crossbeam::channel::Sender;
 use reqwest::blocking::Client;
 use tracing::{error, info};
+use crate::http::destination::HttpDestination;
 use crate::processing::station::Command;
 
 pub struct Manager {
@@ -87,6 +88,11 @@ fn add_default(storage: Arc<Mutex<Storage>>) {
         plan.add_destination(destination);
         plan.connect_in_out(3, destination_id);
 
+        let destination = Box::new(HttpDestination::new(String::from("127.0.0.1"), 9696));
+        let destination_id = destination.get_id();
+        plan.add_destination(destination);
+        plan.connect_in_out(3, destination_id);
+
         let id = plan.id;
         plan.set_name("Default".to_string());
         let mut lock = storage.lock().unwrap();
@@ -114,7 +120,7 @@ fn add_producer() {
                 Ok(_) => {}
                 Err(err) => error!("{}", err)
             }
-            thread::sleep(Duration::from_secs(5));
+            thread::sleep(Duration::from_secs(1));
         }
     });
 }

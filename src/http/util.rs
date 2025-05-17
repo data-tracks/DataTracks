@@ -39,7 +39,7 @@ pub fn transform_to_value(payload: Value) -> Dict {
     }
 }
 
-pub async fn receive_with_topic(Path(topic): Path<String>, State(state): State<crate::http::source::SourceState>, Json(payload): Json<Value>) -> impl IntoResponse {
+pub async fn receive_with_topic(Path(topic): Path<String>, State(state): State<SourceState>, Json(payload): Json<Value>) -> impl IntoResponse {
     debug!("New http message received: {:?}", payload);
 
     let mut dict = transform_to_value(payload);
@@ -113,7 +113,7 @@ async fn handle_publish_socket(mut socket: WebSocket, state: DestinationState) {
                             Ok(_) => {}
                             Err(err) => {
                                 warn!("Failed to send message: {}", err);
-                                break;
+                                return;
                             }
                         }
                     }
