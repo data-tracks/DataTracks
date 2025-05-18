@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 use std::collections::HashMap;
 
-pub type MutWagonsFunc = Box<dyn FnMut(&mut Vec<Train>)>;
+pub type MutWagonsFunc = Box<dyn FnMut(&mut Vec<Train>) -> Train>;
 
 #[derive(Clone, Debug, Deserialize, Serialize, Writable, Readable)]
 pub struct Train {

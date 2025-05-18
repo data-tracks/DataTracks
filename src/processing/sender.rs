@@ -9,14 +9,25 @@ pub struct Sender {
 }
 
 impl Sender {
+    pub fn new(num: usize,sender: Tx<Train>) -> Self {
+        Sender{outs: HashMap::from([(num, sender)])}
+    }
+}
+
+impl Sender {
     pub(crate) fn send_to(&self, num: usize, train: Train) {
         self.outs.get(&num).unwrap().send(train).unwrap();
     }
+    
 }
 
 impl Sender {
     pub(crate) fn add(&mut self, id: usize, sender: Tx<Train>) {
         self.outs.insert(id, sender);
+    }
+
+    pub(crate) fn remove(&mut self, id: usize) {
+        self.outs.remove(&id);
     }
 
     pub(crate) fn send(&self, train: Train) {

@@ -6,16 +6,17 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use axum::Router;
 use axum::routing::get;
-use crossbeam::channel::{unbounded, Sender};
-use schemas::message_generated::protocol::{Bind, Create};
+use crossbeam::channel::at;
+use schemas::message_generated::protocol::{Create};
 use tokio::net::TcpListener;
 use tower_http::cors::CorsLayer;
 use tracing::error;
-use crate::http::destination::{DestinationState, HttpDestination};
+use crate::http::destination::{DestinationState};
 use crate::http::util;
-use crate::{new_channel, Tx};
 use crate::processing::plan::Status;
 use crate::processing::station::Command;
+use crate::util::Tx;
+use crate::util::new_channel;
 
 #[derive(Default)]
 pub struct Storage {
@@ -117,7 +118,13 @@ impl Storage {
         }
     }
 
-    pub fn attach(&mut self, source_id:usize, plan_id: usize, stop_id: usize) {
+    pub fn attach(&mut self, source_id:usize, plan_id: usize, stop_id: usize) -> Result<usize, String> {
+        let attach = self.attachments.lock().unwrap();
+        if attach.contains_key(&source_id) {
+           return Err(format!("source id already exists: {}", source_id)); 
+        }
+        drop(attach);
+        
         let tx = self.start_http_attacher(source_id, 3131);
         let mut lock = self.plans.lock().unwrap();
         let plan = lock.get_mut(&plan_id).unwrap();
@@ -127,17 +134,28 @@ impl Storage {
                 station.control.0.send(Command::Attach(source_id, tx)).unwrap();
             }
         }
+        Ok(3131)
     }
 
-    pub fn deattach(&mut self, source_id: usize) {
-        let tx = self.start_http_attacher(source_id, 3131);
+    pub fn detach(&mut self, source_id: usize, plan_id: usize, stop_id: usize) {
+        let attach = self.attachments.lock().unwrap();
+        if !attach.contains_key(&source_id) {
+            return;
+        }
+        drop(attach);
+        
         let mut lock = self.plans.lock().unwrap();
         let plan = lock.get_mut(&plan_id).unwrap();
         match plan.stations.get_mut(&stop_id) {
             None => error!("Could not find plan"),
             Some(station) => {
-                station.control.0.send(Command::Attach(source_id, tx)).unwrap();
+                station.control.0.send(Command::Detach(source_id)).unwrap();
             }
         }
+        let mut lock = self.attachments.lock().unwrap();
+        match lock.remove(&source_id) {
+            None => {}
+            Some(_) => {}
+        };
     }
 }

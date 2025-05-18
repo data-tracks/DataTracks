@@ -249,7 +249,8 @@ pub enum Command {
     Overflow(usize),
     Threshold(usize),
     Okay(usize),
-    Attach(usize, Tx<Train>)
+    Attach(usize, Tx<Train>),
+    Detach(usize),
 }
 
 #[cfg(test)]
@@ -270,6 +271,7 @@ impl Debug for Command {
             Command::Threshold(t) => f.debug_tuple("Threshold").field(t).finish(),
             Command::Okay(o) => f.debug_tuple("Okay").field(o).finish(),
             Command::Attach(id, _) => f.debug_tuple("Attach").field(id).finish(),
+            Command::Detach(id) => f.debug_tuple("Detach").field(id).finish(),
         }
     }
 }

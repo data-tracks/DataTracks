@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 use std::net::{IpAddr, SocketAddr};
-use std::ptr::dangling;
+use std::thread;
 use axum::extract::{Path, State, WebSocketUpgrade};
 use axum::extract::ws::{Message, WebSocket};
 use axum::http::StatusCode;
@@ -72,26 +72,32 @@ impl From<Map<String, Value>> for Dict {
 }
 
 pub fn parse_addr<S: AsRef<str>>(url: S, port: u16) -> SocketAddr {
-    // We could also read our port in from the environment as well
+    // We could read our port in from the environment as well
     let url = match url.as_ref() {
         u if u.to_lowercase() == "localhost" => "127.0.0.1",
         u => u,
-    };
-    let rt = tokio::runtime::Runtime::new().unwrap();
-    rt.block_on(async {
-        match &url {
-            url if url.parse::<IpAddr>().is_ok() => {
-                format!("{url}:{port}", url = url, port = port)
-                    .parse::<SocketAddr>()
-                    .map_err(| e | format!("Failed to parse address: {}", e)).unwrap()
-            }
-            _ => {
-                tokio::net::lookup_host(format!("{url}:{port}", url=url, port=port)).await.unwrap()
-                    .next()
-                    .ok_or("No valid addresses found").unwrap()
-            }
+    }.to_string();
+    thread::spawn(
+        move || {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+
+            rt.block_on(async {
+                match &url {
+                    url if url.parse::<IpAddr>().is_ok() => {
+                        format!("{url}:{port}", url = url, port = port)
+                            .parse::<SocketAddr>()
+                            .map_err(| e | format!("Failed to parse address: {}", e)).unwrap()
+                    }
+                    _ => {
+                        tokio::net::lookup_host(format!("{url}:{port}", url=url, port=port)).await.unwrap()
+                            .next()
+                            .ok_or("No valid addresses found").unwrap()
+                    }
+                }
+            })
         }
-    })
+    ).join().unwrap()
+    
 }
 
 

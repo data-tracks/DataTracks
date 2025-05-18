@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
+use crate::optimize::OptimizeStrategy;
 use crate::processing::block::Block;
 use crate::processing::layout::Layout;
 use crate::processing::sender::Sender;
@@ -17,7 +18,6 @@ use crate::util::{new_id, Rx};
 use crossbeam::channel;
 use crossbeam::channel::{unbounded, Receiver};
 use tracing::debug;
-use crate::optimize::{OptimizeStrategy};
 
 const IDLE_TIMEOUT: Duration = Duration::from_nanos(10);
 
@@ -37,7 +37,10 @@ pub(crate) struct Platform {
 }
 
 impl Platform {
-    pub(crate) fn new(station: &mut Station, transforms: HashMap<String, Transform>) -> (Self, channel::Sender<Command>) {
+    pub(crate) fn new(
+        station: &mut Station,
+        transforms: HashMap<String, Transform>,
+    ) -> (Self, channel::Sender<Command>) {
         let receiver = station.incoming.2.clone();
         let counter = station.incoming.1.clone();
         let sender = station.outgoing.clone();
@@ -49,36 +52,44 @@ impl Platform {
         let control = unbounded();
         let layout = station.layout.clone();
 
-        (Platform {
-            id: new_id(),
-            control: control.1,
-            receiver,
-            sender: Some(sender),
-            transform,
-            window,
-            layout,
-            stop,
-            blocks,
-            inputs,
-            incoming: counter,
-            transforms,
-        }, control.0)
+        (
+            Platform {
+                id: new_id(),
+                control: control.1,
+                receiver,
+                sender: Some(sender),
+                transform,
+                window,
+                layout,
+                stop,
+                blocks,
+                inputs,
+                incoming: counter,
+                transforms,
+            },
+            control.0,
+        )
     }
     pub(crate) fn operate(&mut self, control: Arc<channel::Sender<Command>>) {
-        let process = optimize(self.stop, self.transform.clone(), self.window.windowing(), self.sender.take().unwrap(), self.transforms.clone());
+        let process = optimize(
+            self.stop,
+            self.transform.clone(),
+            self.window.windowing(),
+            self.transforms.clone(),
+        );
+        let sender = self.sender.take().unwrap();
+
         let stop = self.stop;
         let timeout = IDLE_TIMEOUT;
         let mut threshold = 2000;
         let mut too_high = false;
 
-
-        let mut block = Block::new(self.inputs.clone(), self.blocks.clone(), process);
-
+        let mut block = Block::new(self.inputs.clone(), self.blocks.clone(), process, sender);
 
         control.send(Ready(stop)).unwrap();
 
         loop {
-            // are we struggling to handle incoming
+            // are we struggling to handle incoming?
             let current = self.incoming.load(Ordering::SeqCst);
             if current > threshold && !too_high {
                 control.send(Threshold(stop)).unwrap();
@@ -92,6 +103,12 @@ impl Platform {
             if let Ok(command) = self.control.try_recv() {
                 match command {
                     Command::Stop(_) => return,
+                    Command::Attach(num, send) => {
+                        block.add(num, send);
+                    }
+                    Command::Detach(num) => {
+                        block.remove(num);
+                    }
                     Threshold(th) => {
                         threshold = th as u64;
                     }
@@ -114,19 +131,24 @@ impl Platform {
     }
 }
 
-fn optimize(stop: usize, transform: Option<Transform>, mut window: Box<dyn Taker>, sender: Sender, transforms: HashMap<String, Transform>) -> MutWagonsFunc {
+fn optimize(
+    stop: usize,
+    transform: Option<Transform>,
+    mut window: Box<dyn Taker>,
+    transforms: HashMap<String, Transform>,
+) -> MutWagonsFunc {
     if let Some(transform) = transform {
         let mut enumerator = transform.optimize(transforms, Some(OptimizeStrategy::rule_based()));
         Box::new(move |train| {
             let windowed = window.take(train);
             enumerator.dynamically_load(windowed);
-            sender.send(enumerator.drain_to_train(stop));
+            return enumerator.drain_to_train(stop);
         })
     } else {
         Box::new(move |trains| {
             let windowed = window.take(trains);
             let train: Train = windowed.into();
-            sender.send(train.mark(stop));
+            return train.mark(stop);
         })
     }
 }

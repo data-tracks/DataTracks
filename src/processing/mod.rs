@@ -9,6 +9,7 @@ pub use plan::Plan;
 pub use train::Train;
 pub use wagon::Wagon;
 pub use block::Block;
+pub use sender::Sender;
 
 pub mod station;
 mod window;

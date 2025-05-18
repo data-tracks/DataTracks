@@ -41,7 +41,7 @@ impl<F> Rx<F>
 where
     F: Send,
 {
-    pub(crate) fn recv(&self) -> Result<F, String> {
+    pub fn recv(&self) -> Result<F, String> {
         let mut vec = self.channel.buffer.lock().unwrap();
         loop {
             if let Some(element) = vec.pop_front(){

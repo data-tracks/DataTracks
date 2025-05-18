@@ -1,18 +1,20 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use data_tracks::processing::{Block, Train};
+use data_tracks::new_channel;
+use data_tracks::processing::{Block, Sender, Train};
 use data_tracks::value::{Dict, Value};
-use std::sync::mpsc::channel;
 
 pub fn benchmark_overhead(c: &mut Criterion) {
     c.bench_function("block_overhead", |b| {
-        let (tx, rx) = channel();
+        let (tx, _, rx) = new_channel();
+
+        let sender = Sender::new(0, tx);
 
         let process = Box::new(move |trains: &mut Vec<Train>| {
-            tx.send(trains.clone()).unwrap();
+            trains.clone().into()
         });
-        let mut block = Block::new(vec![], vec![], process);
+        let mut block = Block::new(vec![], vec![], process, sender);
 
-        let train = Train::new( vec![Value::Dict(Dict::from(Value::int(3)))]);
+        let train = Train::new(vec![Value::Dict(Dict::from(Value::int(3)))]);
 
         b.iter(|| {
             block.next(train.clone());

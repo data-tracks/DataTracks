@@ -39,7 +39,7 @@ impl HttpSource {
 
 async fn start_source(http: HttpSource, _rx: Receiver<Command>){
     debug!("starting http source on {url}:{port}...", url=http.url, port=http.port);
-    let addr = parse_addr(http.url, http.port).await;
+    let addr = parse_addr(http.url, http.port);
 
     let state = SourceState { source: Arc::new(Mutex::new(http.outs.clone())) };
 

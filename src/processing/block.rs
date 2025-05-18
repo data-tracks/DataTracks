@@ -5,6 +5,8 @@ use crate::value::Value;
 use std::collections::hash_map::Drain;
 use std::collections::HashMap;
 use tracing::log::debug;
+use crate::processing::sender::Sender;
+use crate::util::Tx;
 
 pub enum Block {
     Non(NonBlock),
@@ -14,13 +16,29 @@ pub enum Block {
 
 
 impl Block {
-    pub fn new(inputs: Vec<usize>, blocks: Vec<usize>, next: MutWagonsFunc) -> Self {
+    pub fn new(inputs: Vec<usize>, blocks: Vec<usize>, next: MutWagonsFunc, sender: Sender) -> Self {
         if blocks.is_empty() {
-            return Non(NonBlock { func: next });
+            return Non(NonBlock { func: next, sender });
         } else if same_vecs(&blocks, &inputs) {
-            return All(AllBlock::new(inputs, next));
+            return All(AllBlock::new(inputs, next, sender));
         }
-        Specific(SpecificBlock::new( inputs, blocks, next ))
+        Specific(SpecificBlock::new( inputs, blocks, next, sender ))
+    }
+
+    pub(crate) fn add(&mut self, num: usize, send: Tx<Train>) {
+        match self {
+            Non(n) => n.sender.add(num, send),
+            Specific(s) => s.sender.add(num, send),
+            All(a) => a.sender.add(num, send),
+        }
+    }
+
+    pub(crate) fn remove(&mut self, num: usize) {
+        match self {
+            Non(n) => n.sender.remove(num),
+            Specific(s) => s.sender.remove(num),
+            All(a) => a.sender.remove(num)
+        }
     }
 
     pub fn next(&mut self, train: Train) {
@@ -51,11 +69,12 @@ fn same_vecs(a: &Vec<usize>, b: &Vec<usize>) -> bool {
 
 pub struct NonBlock {
     func: MutWagonsFunc,
+    sender: Sender
 }
 
 impl NonBlock {
     fn next(&mut self, train: Train) {
-        (self.func)(&mut vec![train])
+        self.sender.send((self.func)(&mut vec![train]))
     }
 }
 
@@ -64,16 +83,17 @@ pub struct SpecificBlock {
     blocks: Vec<usize>,
     func: MutWagonsFunc,
     buffer: HashMap<usize, Vec<Value>>,
+    sender: Sender
 }
 
 impl SpecificBlock {
 
-    fn new(input: Vec<usize>, blocks: Vec<usize>, func: MutWagonsFunc) -> Self{
+    fn new(input: Vec<usize>, blocks: Vec<usize>, func: MutWagonsFunc, sender: Sender) -> Self{
         let mut buffer = HashMap::new();
         blocks.iter().for_each(|b| {
             buffer.insert(*b, vec![]);
         });
-        SpecificBlock{input, blocks, func, buffer}
+        SpecificBlock{input, blocks, func, buffer, sender}
     }
     fn next(&mut self, train: Train) {
 
@@ -83,7 +103,7 @@ impl SpecificBlock {
             debug!("block{:?}", self.buffer.clone());
             let mut trains = merge_buffer(self.buffer.drain());
 
-            (self.func)(&mut trains)
+            self.sender.send((self.func)(&mut trains))
         }
     }
 
@@ -102,14 +122,15 @@ pub struct AllBlock {
     input: Vec<usize>,
     func: MutWagonsFunc,
     buffer: HashMap<usize, Vec<Value>>,
-    switch: HashMap<usize, bool>
+    switch: HashMap<usize, bool>,
+    sender: Sender
 }
 
 
 
 impl AllBlock {
 
-    fn new(input: Vec<usize>, func: MutWagonsFunc) -> Self{
+    fn new(input: Vec<usize>, func: MutWagonsFunc, sender: Sender) -> Self{
         let mut buffer = HashMap::new();
         let mut switch = HashMap::new();
         input.iter().for_each(|i|{
@@ -117,7 +138,7 @@ impl AllBlock {
             switch.insert(*i, false);
         });
 
-        AllBlock{input, func, buffer, switch}
+        AllBlock{input, func, buffer, switch, sender}
     }
     fn next(&mut self, train: Train) {
         let watermark = train.last();

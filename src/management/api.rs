@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 use flatbuffers::{FlatBufferBuilder, ForwardsUOffset};
 use schemas::message_generated;
-use schemas::message_generated::protocol::{Catalog, CatalogArgs, CreateType, GetType, Message, MessageArgs, Payload, Plans, PlansArgs, Register, RegisterArgs, Status, StatusArgs, Plan as FlatPlan, PlanArgs, Bind, Unbind};
+use schemas::message_generated::protocol::{Catalog, CatalogArgs, CreateType, GetType, Message, MessageArgs, Payload, Plans, PlansArgs, Register, RegisterArgs, Status, StatusArgs, Plan as FlatPlan, PlanArgs, Bind, Unbind, BindArgs};
 use tracing::{debug, info};
 use crate::management::{Storage};
 use crate::processing::Plan;
@@ -70,9 +70,9 @@ impl API {
                     None => todo!(),
                     Some(b) => {
                         let mut storage = storage.lock().unwrap();
-                        storage.attach(0, b.planId() as usize, b.stopId() as usize);
+                        let port = storage.attach(0, b.planId() as usize, b.stopId() as usize);
                         drop(storage);
-                        Self::empty_msg()
+                        Self::build_bind_response(port?)
                     }
                 }
             },
@@ -81,7 +81,7 @@ impl API {
                     None => todo!(),
                     Some(u) => {
                         let mut storage = storage.lock().unwrap();
-                        storage.detach(0);
+                        storage.detach(0, u.planId() as usize, u.stopId() as usize);
                         drop(storage);
                         Self::empty_msg()
                     }
@@ -104,6 +104,20 @@ impl API {
             data_type: Default::default(),
             data: None,
             status: Some(status),
+        });
+        builder.finish(msg, None);
+        Ok(builder.finished_data().to_vec())
+
+    }
+
+    fn build_bind_response(port: usize) -> Result<Vec<u8>, Vec<u8>> {
+        let mut builder = FlatBufferBuilder::new();
+        
+        let bind = Bind::create(&mut builder, &BindArgs { planId: port as u64, stopId: port as u64 });
+        let msg = Message::create(&mut builder, &MessageArgs {
+            data_type: Payload::Bind,
+            data: Some(bind.as_union_value()),
+            status: None,
         });
         builder.finish(msg, None);
         Ok(builder.finished_data().to_vec())
