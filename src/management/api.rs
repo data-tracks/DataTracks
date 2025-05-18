@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 use flatbuffers::{FlatBufferBuilder, ForwardsUOffset};
 use schemas::message_generated;
-use schemas::message_generated::protocol::{Catalog, CatalogArgs, CreateType, GetType, Message, MessageArgs, Payload, Plans, PlansArgs, Register, RegisterArgs, Status, StatusArgs, Plan as FlatPlan, PlanArgs};
+use schemas::message_generated::protocol::{Catalog, CatalogArgs, CreateType, GetType, Message, MessageArgs, Payload, Plans, PlansArgs, Register, RegisterArgs, Status, StatusArgs, Plan as FlatPlan, PlanArgs, Bind, Unbind};
 use tracing::{debug, info};
 use crate::management::{Storage};
 use crate::processing::Plan;
@@ -64,6 +64,28 @@ impl API {
                 debug!("Received a Train");
                 let values = msg.data_as_train().unwrap();
                 todo!()
+            }
+            Payload::Bind => {
+                match msg.data_as_bind() {
+                    None => todo!(),
+                    Some(b) => {
+                        let mut storage = storage.lock().unwrap();
+                        storage.attach(0, b.planId() as usize, b.stopId() as usize);
+                        drop(storage);
+                        Self::empty_msg()
+                    }
+                }
+            },
+            Payload::Unbind => {
+                match msg.data_as_unbind() {
+                    None => todo!(),
+                    Some(u) => {
+                        let mut storage = storage.lock().unwrap();
+                        storage.detach(0);
+                        drop(storage);
+                        Self::empty_msg()
+                    }
+                }
             }
             Payload(4_u8..=u8::MAX) => todo!(),
         }

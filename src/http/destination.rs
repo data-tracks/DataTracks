@@ -60,7 +60,7 @@ pub(crate) struct DestinationState {
 
 async fn start_destination(http: HttpDestination, _rx: Receiver<Command>, receiver: Rx<Train>){
     debug!("starting http destination on {url}:{port}...", url=http.url, port=http.port);
-    let addr = parse_addr(http.url, http.port).await;
+    let addr = parse_addr(http.url, http.port);
 
     let state = DestinationState {
         rx: Arc::new(Mutex::new(receiver)),

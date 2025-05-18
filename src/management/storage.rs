@@ -1,24 +1,56 @@
 use crate::processing::destination::Destination;
 use crate::processing::source::Source;
-use crate::processing::{transform, Plan};
+use crate::processing::{transform, Plan, Train};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
-use std::sync::Mutex;
-use schemas::message_generated::protocol::Create;
+use std::sync::{Arc, Mutex};
+use axum::Router;
+use axum::routing::get;
+use crossbeam::channel::{unbounded, Sender};
+use schemas::message_generated::protocol::{Bind, Create};
+use tokio::net::TcpListener;
+use tower_http::cors::CorsLayer;
+use tracing::error;
+use crate::http::destination::{DestinationState, HttpDestination};
+use crate::http::util;
+use crate::{new_channel, Tx};
 use crate::processing::plan::Status;
+use crate::processing::station::Command;
 
 #[derive(Default)]
 pub struct Storage {
     pub plans: Mutex<HashMap<usize, Plan>>,
     pub ins: Mutex<HashMap<String, fn(Map<String, Value>) -> Box<dyn Source>>>,
     pub outs: Mutex<HashMap<String, fn(Map<String, Value>) -> Box<dyn Destination>>>,
-    pub transforms: Mutex<HashMap<String, fn(String, Value) -> Box<transform::Transform>>>
+    pub transforms: Mutex<HashMap<String, fn(String, Value) -> Box<transform::Transform>>>,
+    pub attachments: Mutex<HashMap<usize, Tx<Train>>>
 }
 
 
 impl Storage {
     pub(crate) fn new() -> Storage {
         Default::default()
+    }
+    
+    pub fn start_http_attacher(&mut self, id: usize, port: u16) -> Tx<Train> {
+        let addr = util::parse_addr("http://127.0.0.1", port);
+        let (tx,_, rx) = new_channel();
+
+        tokio::spawn(async move {
+            let state = DestinationState {
+                rx: Arc::new(Mutex::new(rx)),
+            };
+
+            let app = Router::new()
+                .route("/ws", get(util::publish_ws))
+                .layer(CorsLayer::permissive())
+                .with_state(state);
+
+            let listener = TcpListener::bind(&addr).await.unwrap();
+            axum::serve(listener, app).await.unwrap();
+        });
+        self.attachments.lock().unwrap().insert(id, tx.clone());
+        tx
     }
 
     pub fn create_plan(&mut self, create: Create) -> Result<(), String> {
@@ -81,6 +113,30 @@ impl Storage {
             Some(p) => {
                 p.status = Status::Running;
                 p.operate().unwrap();
+            }
+        }
+    }
+
+    pub fn attach(&mut self, source_id:usize, plan_id: usize, stop_id: usize) {
+        let tx = self.start_http_attacher(source_id, 3131);
+        let mut lock = self.plans.lock().unwrap();
+        let plan = lock.get_mut(&plan_id).unwrap();
+        match plan.stations.get_mut(&stop_id) {
+            None => error!("Could not find plan"),
+            Some(station) => {
+                station.control.0.send(Command::Attach(source_id, tx)).unwrap();
+            }
+        }
+    }
+
+    pub fn deattach(&mut self, source_id: usize) {
+        let tx = self.start_http_attacher(source_id, 3131);
+        let mut lock = self.plans.lock().unwrap();
+        let plan = lock.get_mut(&plan_id).unwrap();
+        match plan.stations.get_mut(&stop_id) {
+            None => error!("Could not find plan"),
+            Some(station) => {
+                station.control.0.send(Command::Attach(source_id, tx)).unwrap();
             }
         }
     }

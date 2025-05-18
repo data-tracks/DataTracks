@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt::{Debug, Formatter};
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::thread;
@@ -26,7 +27,7 @@ pub struct Station {
     pub block: Vec<usize>,
     pub inputs: Vec<usize>,
     pub layout: Layout,
-    control: (channel::Sender<Command>, Receiver<Command>),
+    pub control: (channel::Sender<Command>, Receiver<Command>),
 }
 
 
@@ -241,13 +242,36 @@ impl Station {
 }
 
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone)]
 pub enum Command {
     Stop(usize),
     Ready(usize),
     Overflow(usize),
     Threshold(usize),
     Okay(usize),
+    Attach(usize, Tx<Train>)
+}
+
+#[cfg(test)]
+impl PartialEq for Command {
+    fn eq(&self, other: &Self) -> bool {
+        match (self,other) {
+            (_, _) => todo!(),
+        }
+    }
+}
+
+impl Debug for Command {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Command::Stop(s) => f.debug_tuple("Stop").field(s).finish(),
+            Command::Ready(r) => f.debug_tuple("Ready").field(r).finish(),
+            Command::Overflow(o) => f.debug_tuple("Overflow").field(o).finish(),
+            Command::Threshold(t) => f.debug_tuple("Threshold").field(t).finish(),
+            Command::Okay(o) => f.debug_tuple("Okay").field(o).finish(),
+            Command::Attach(id, _) => f.debug_tuple("Attach").field(id).finish(),
+        }
+    }
 }
 
 

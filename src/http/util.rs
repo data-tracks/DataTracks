@@ -71,25 +71,27 @@ impl From<Map<String, Value>> for Dict {
     }
 }
 
-pub async fn parse_addr(url: String, port: u16) -> SocketAddr {
+pub fn parse_addr<S: AsRef<str>>(url: S, port: u16) -> SocketAddr {
     // We could also read our port in from the environment as well
-    let url = match &url {
+    let url = match url.as_ref() {
         u if u.to_lowercase() == "localhost" => "127.0.0.1",
-        u => u.as_str(),
+        u => u,
     };
-
-    match &url {
-        url if url.parse::<IpAddr>().is_ok() => {
-            format!("{url}:{port}", url = url, port = port)
-                .parse::<SocketAddr>()
-                .map_err(| e | format!("Failed to parse address: {}", e)).unwrap()
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async {
+        match &url {
+            url if url.parse::<IpAddr>().is_ok() => {
+                format!("{url}:{port}", url = url, port = port)
+                    .parse::<SocketAddr>()
+                    .map_err(| e | format!("Failed to parse address: {}", e)).unwrap()
+            }
+            _ => {
+                tokio::net::lookup_host(format!("{url}:{port}", url=url, port=port)).await.unwrap()
+                    .next()
+                    .ok_or("No valid addresses found").unwrap()
+            }
         }
-        _ => {
-            tokio::net::lookup_host(format!("{url}:{port}", url=url, port=port)).await.unwrap()
-                .next()
-                .ok_or("No valid addresses found").unwrap()
-        }
-    }
+    })
 }
 
 
