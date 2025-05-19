@@ -1,96 +1,37 @@
-use std::collections::VecDeque;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Condvar, Mutex};
+use crossbeam::channel::{unbounded, Receiver, Sender};
 
-pub struct Channel<F>
-where
-    F: Send,
-{
-    size: Arc<AtomicU64>,
-    buffer: Mutex<VecDeque<F>>,
-    condvar: Condvar
+
+pub fn new_channel<Msg: Send>() -> (Tx<Msg>, Rx<Msg>) {
+    let (tx, rx) = unbounded::<Msg>();
+
+    (Tx(tx), Rx(rx))
 }
-
-
-pub fn new_channel<F>() -> (Tx<F>, Arc<AtomicU64>, Rx<F>)
-where
-    F: Send,
-{
-    let channel = Arc::new(
-        Channel {
-            size: Arc::new(AtomicU64::default()),
-            buffer: Mutex::new(VecDeque::new()),
-            condvar: Condvar::new()
-        });
-
-    let rx = Rx { channel: Arc::clone(&channel) };
-    let tx = Tx { channel: Arc::clone(&channel) };
-    (tx, Arc::clone(&channel.size), rx)
-}
-
 
 #[derive(Clone)]
-pub struct Rx<F>
-where
-    F: Send,
-{
-    channel: Arc<Channel<F>>,
-}
+pub struct Rx<D>(Receiver<D>);
 
 impl<F> Rx<F>
 where
     F: Send,
 {
+    pub fn len(&self) -> usize { self.0.len() }
     pub fn recv(&self) -> Result<F, String> {
-        let mut vec = self.channel.buffer.lock().unwrap();
-        loop {
-            if let Some(element) = vec.pop_front(){
-                self.channel.size.fetch_sub(1, Ordering::SeqCst);
-                return Ok(element);
-            }
-            vec = self.channel.condvar.wait(vec).unwrap()
-        }
+        self.0.recv().map_err(|e| e.to_string())
     }
     pub(crate) fn try_recv(&self) -> Result<F, String> {
-        let mut vec = self.channel.buffer.lock().unwrap();
-        if !vec.is_empty() {
-            let element = vec.pop_front();
-            match element {
-                None => Err("Could not get error".to_string()),
-                Some(e) => {
-                    self.channel.size.fetch_sub(1, Ordering::SeqCst);
-                    Ok(e)
-                }
-            }
-        } else {
-            Err("Could not get error".to_string())
-        }
+        self.0.try_recv().map_err(|e| e.to_string())
     }
 }
 
-
 #[derive(Clone)]
-pub struct Tx<F>
-where
-    F: Send,
-{
-    channel: Arc<Channel<F>>,
-}
+pub struct Tx<T>(Sender<T>);
 
 impl<F> Tx<F>
 where
     F: Send,
 {
     pub(crate) fn send(&self, msg: F) -> Result<(), String> {
-        match self.channel.buffer.lock() {
-            Ok(mut b) => {
-                self.channel.size.fetch_add(1, Ordering::SeqCst);
-                b.push_back(msg);
-                self.channel.condvar.notify_one();
-                Ok(())
-            }
-            Err(e) => Err(e.to_string())
-        }
+        self.0.send(msg).map_err(|e| e.to_string())
     }
 }
 
@@ -109,7 +50,7 @@ mod test {
     #[test]
     fn receive() {
         let value = 3i64;
-        let (tx, _counter, rx) = new_channel();
+        let (tx, rx) = new_channel();
 
         tx.send(value.clone()).unwrap();
 
@@ -118,28 +59,27 @@ mod test {
 
     #[test]
     fn keep_track() {
-        let (tx, counter, rx) = new_channel();
+        let (tx, rx) = new_channel();
 
         tx.send(3i64).unwrap();
 
-        assert_eq!(counter.load(Ordering::SeqCst), 1u64);
+        assert_eq!(tx.0.len(), 1);
 
         let _ = rx.recv().unwrap();
 
-        assert_eq!(counter.load(Ordering::SeqCst), 0u64);
+        assert_eq!(tx.0.len(), 0);
     }
 
     #[test]
     fn keep_track_hugh() {
-        let (tx, counter, rx) = new_channel();
+        let (tx, rx) = new_channel();
 
         let num = 1_000_000u64;
-        let mut size = 1_000_000u64;
+        let mut size = 1_000_000;
 
         for _ in 0..num {
             tx.send(3i64).unwrap();
         }
-
 
         for _ in 0..num {
             if random() {
@@ -151,22 +91,21 @@ mod test {
             }
         }
 
-        assert_eq!(counter.load(Ordering::SeqCst), size);
+        assert_eq!(tx.0.len(), size);
     }
 
     #[test]
     fn keep_track_multi_thread() {
-        let (tx, counter, rx) = new_channel();
+        let (tx, rx) = new_channel();
 
-        let num = 1_000_000u64;
-        let size = Arc::new(AtomicU64::new(1_000_000u64));
+        let num = 1_000_000;
+        let size = Arc::new(AtomicU64::new(1_000_000));
 
         for _ in 0..num {
             tx.send(3i64).unwrap();
         }
 
         let mut ths = vec![];
-
 
         for _ in 0..100 {
             let clone_tx = tx.clone();
@@ -187,8 +126,7 @@ mod test {
         }
         ths.into_iter().for_each(|t| t.join().unwrap());
 
-
-        assert_eq!(counter.load(Ordering::SeqCst), size.load(Ordering::SeqCst));
+        assert_eq!(tx.0.len(), size.load(Ordering::SeqCst) as usize);
     }
 
     #[test]
@@ -202,17 +140,20 @@ mod test {
         }
         let std = instant.elapsed();
 
-        let (tx, _counter, rc) = new_channel();
+        let (tx, rx) = new_channel();
 
         instant = Instant::now();
         for _ in 0..1_000_000 {
             tx.send(3).unwrap();
-            rc.recv().unwrap();
+            rx.recv().unwrap();
         }
         let new_time = instant.elapsed();
 
-
-        println!("std: {}ms vs counted: {}ms", std.as_millis(), new_time.as_millis());
+        println!(
+            "std: {}ms vs counted: {}ms",
+            std.as_millis(),
+            new_time.as_millis()
+        );
 
         assert!((8 * std.as_millis()) >= new_time.as_millis())
     }

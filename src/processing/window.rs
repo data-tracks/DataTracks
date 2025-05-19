@@ -218,7 +218,7 @@ mod test {
 
         let values = dict_values(vec![Value::float(3.3), Value::int(3)]);
 
-        let (tx, _num, rx) = new_channel();
+        let (tx, rx) = new_channel();
 
 
         station.add_out(0, tx).unwrap();
@@ -249,7 +249,7 @@ mod test {
         let values = dict_values(vec![Value::float(3.3), Value::int(3)]);
         let after = dict_values(vec!["test".into()]);
 
-        let (tx, _num, rx) = new_channel();
+        let (tx, rx) = new_channel();
 
 
         station.add_out(0, tx).unwrap();

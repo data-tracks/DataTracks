@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
-use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::thread;
 
@@ -20,7 +19,7 @@ use tracing::{debug};
 pub struct Station {
     pub id: usize,
     pub stop: usize,
-    pub incoming: (Tx<Train>, Arc<AtomicU64>, Rx<Train>),
+    pub incoming: (Tx<Train>, Rx<Train>),
     pub outgoing: Sender,
     pub window: Window,
     pub transform: Option<Transform>,
@@ -45,7 +44,7 @@ impl Station {
         Station {
             id: new_id(),
             stop,
-            incoming: (incoming.0, incoming.1, incoming.2),
+            incoming: (incoming.0, incoming.1),
             outgoing: Sender::default(),
             window: Window::default(),
             transform: None,
@@ -75,7 +74,7 @@ impl Station {
                 continue;
             }
 
-            // can we end number
+            // can we end number?
             if let Some(_stage @ PlanStage::Num) = current_stage {
                 if PlanStage::is_open(char) {
                     stages.push((PlanStage::Num, temp.clone()));
@@ -307,7 +306,7 @@ pub mod tests {
         }
 
 
-        let (tx, _num, rx) = new_channel();
+        let (tx, rx) = new_channel();
 
         station.add_out(0, tx).unwrap();
         station.operate(Arc::new(control.0), HashMap::new());
@@ -336,7 +335,7 @@ pub mod tests {
         let mut first = Station::new(0);
         let input = first.get_in();
 
-        let (output_tx, _num, output_rx) = new_channel();
+        let (output_tx, output_rx) = new_channel();
 
         let mut second = Station::new(1);
         second.add_out(0, output_tx).unwrap();
@@ -508,7 +507,7 @@ pub mod tests {
     fn create_test_station(duration: u64) -> (Station, Tx<Train>, Rx<Train>, Receiver<Command>, Arc<Sender<Command>>) {
         let mut station = Station::new(0);
         let train_sender = station.get_in();
-        let (tx, _, rx) = new_channel();
+        let (tx, rx) = new_channel();
         let _train_receiver = station.add_out(0, tx);
         let time = duration.clone();
 

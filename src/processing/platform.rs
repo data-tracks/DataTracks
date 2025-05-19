@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
@@ -17,6 +16,7 @@ use crate::processing::Train;
 use crate::util::{new_id, Rx};
 use crossbeam::channel;
 use crossbeam::channel::{unbounded, Receiver};
+pub use logos::{Source};
 use tracing::debug;
 
 const IDLE_TIMEOUT: Duration = Duration::from_nanos(10);
@@ -32,7 +32,6 @@ pub(crate) struct Platform {
     stop: usize,
     blocks: Vec<usize>,
     inputs: Vec<usize>,
-    incoming: Arc<AtomicU64>,
     transforms: HashMap<String, Transform>,
 }
 
@@ -41,15 +40,14 @@ impl Platform {
         station: &mut Station,
         transforms: HashMap<String, Transform>,
     ) -> (Self, channel::Sender<Command>) {
-        let receiver = station.incoming.2.clone();
-        let counter = station.incoming.1.clone();
+        let receiver = station.incoming.1.clone();
         let sender = station.outgoing.clone();
         let transform = station.transform.clone();
         let window = station.window.clone();
         let stop = station.stop;
         let blocks = station.block.clone();
         let inputs = station.inputs.clone();
-        let control = unbounded();
+        let control = station.control.clone();
         let layout = station.layout.clone();
 
         (
@@ -64,7 +62,6 @@ impl Platform {
                 stop,
                 blocks,
                 inputs,
-                incoming: counter,
                 transforms,
             },
             control.0,
@@ -90,7 +87,7 @@ impl Platform {
 
         loop {
             // are we struggling to handle incoming?
-            let current = self.incoming.load(Ordering::SeqCst);
+            let current = self.receiver.len();
             if current > threshold && !too_high {
                 control.send(Threshold(stop)).unwrap();
                 too_high = true;
@@ -110,7 +107,7 @@ impl Platform {
                         block.remove(num);
                     }
                     Threshold(th) => {
-                        threshold = th as u64;
+                        threshold = th;
                     }
                     _ => {}
                 }

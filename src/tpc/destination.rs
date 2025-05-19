@@ -31,7 +31,7 @@ pub struct TpcDestination {
 
 impl TpcDestination {
     pub fn new(url: String, port: u16) -> Self {
-        let (tx, _num, rx) = new_channel();
+        let (tx, rx) = new_channel();
         let id = new_id();
         
         let (t,r) = unbounded();

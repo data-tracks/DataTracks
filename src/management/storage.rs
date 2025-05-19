@@ -4,19 +4,19 @@ use crate::processing::{transform, Plan, Train};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use std::thread;
 use axum::Router;
 use axum::routing::get;
-use crossbeam::channel::at;
 use schemas::message_generated::protocol::{Create};
 use tokio::net::TcpListener;
 use tower_http::cors::CorsLayer;
-use tracing::error;
+use tracing::{error, info};
 use crate::http::destination::{DestinationState};
 use crate::http::util;
-use crate::processing::plan::Status;
-use crate::processing::station::Command;
 use crate::util::Tx;
 use crate::util::new_channel;
+use crate::processing::plan::Status;
+use crate::processing::station::Command;
 
 #[derive(Default)]
 pub struct Storage {
@@ -24,7 +24,7 @@ pub struct Storage {
     pub ins: Mutex<HashMap<String, fn(Map<String, Value>) -> Box<dyn Source>>>,
     pub outs: Mutex<HashMap<String, fn(Map<String, Value>) -> Box<dyn Destination>>>,
     pub transforms: Mutex<HashMap<String, fn(String, Value) -> Box<transform::Transform>>>,
-    pub attachments: Mutex<HashMap<usize, Tx<Train>>>
+    pub attachments: Mutex<HashMap<usize, (Tx<Train>, u16)>>,
 }
 
 
@@ -34,12 +34,39 @@ impl Storage {
     }
     
     pub fn start_http_attacher(&mut self, id: usize, port: u16) -> Tx<Train> {
-        let addr = util::parse_addr("http://127.0.0.1", port);
-        let (tx,_, rx) = new_channel();
+        let addr = util::parse_addr("127.0.0.1", port);
+        let (tx, rx) = new_channel::<Train>();
+
+        let bus = Arc::new(Mutex::new(HashMap::<usize, Tx<Train>>::new()));
+        let clone = bus.clone();
+
+        thread::spawn(move || {
+            loop {
+                match rx.recv() {
+                    Ok(train) => {
+                        match clone.lock() {
+                            Ok(lock) => {
+                                lock.values().for_each(|l| {
+                                    match l.send(train.clone()) {
+                                        Ok(_) => {}
+                                        Err(err) => error!("{}", err),
+                                    }
+                                });
+                            }
+                            Err(_) => {}
+                        }
+                    }
+                    Err(err) => {
+                        error!(err = ?err, "recv channel error");
+                        return;
+                    },
+                };
+            }
+        });
 
         tokio::spawn(async move {
             let state = DestinationState {
-                rx: Arc::new(Mutex::new(rx)),
+                outs: bus,
             };
 
             let app = Router::new()
@@ -50,7 +77,7 @@ impl Storage {
             let listener = TcpListener::bind(&addr).await.unwrap();
             axum::serve(listener, app).await.unwrap();
         });
-        self.attachments.lock().unwrap().insert(id, tx.clone());
+        self.attachments.lock().unwrap().insert(id, (tx.clone(), port));
         tx
     }
 
@@ -61,7 +88,7 @@ impl Storage {
 
             let mut plan = match plan {
                 Ok(plan) => plan,
-                Err(e) => todo!(),
+                Err(_) => todo!(),
             };
 
             plan.set_name(create_plan.name().unwrap().to_string());
@@ -119,11 +146,14 @@ impl Storage {
     }
 
     pub fn attach(&mut self, source_id:usize, plan_id: usize, stop_id: usize) -> Result<usize, String> {
-        let attach = self.attachments.lock().unwrap();
-        if attach.contains_key(&source_id) {
-           return Err(format!("source id already exists: {}", source_id)); 
+        {
+            let attach = self.attachments.lock().unwrap();
+            let values = attach.get(&source_id);
+            if let Some((_, port)) = values {
+                return Ok(*port as usize);
+            }
         }
-        drop(attach);
+
         
         let tx = self.start_http_attacher(source_id, 3131);
         let mut lock = self.plans.lock().unwrap();

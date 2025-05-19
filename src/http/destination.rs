@@ -1,22 +1,22 @@
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
-use std::thread;
-use axum::Router;
-use axum::routing::{get};
-use crossbeam::channel::{unbounded, Receiver, Sender};
-use serde_json::{Map, Value};
-use tokio::net::TcpListener;
-use tokio::runtime::Runtime;
-use tower_http::cors::CorsLayer;
-use tracing::{debug};
 use crate::http::util::{parse_addr, publish_ws};
 use crate::processing::destination::Destination;
 use crate::processing::option::Configurable;
 use crate::processing::plan::DestinationModel;
 use crate::processing::station::Command;
-use crate::processing::{Train};
+use crate::processing::Train;
 use crate::ui::ConfigModel;
 use crate::util::{new_channel, Rx, Tx};
+use axum::routing::get;
+use axum::Router;
+use crossbeam::channel::{unbounded, Receiver, Sender};
+use serde_json::{Map, Value};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+use std::thread;
+use tokio::net::TcpListener;
+use tokio::runtime::Runtime;
+use tower_http::cors::CorsLayer;
+use tracing::{debug, error};
 
 #[derive(Clone)]
 pub struct HttpDestination {
@@ -29,8 +29,8 @@ pub struct HttpDestination {
 
 impl HttpDestination {
     pub fn new(url: String, port: u16) -> Self {
-        let (sender, _num, receiver) = new_channel();
-        HttpDestination{
+        let (sender, receiver) = new_channel();
+        HttpDestination {
             id: 0,
             url,
             port,
@@ -55,33 +55,71 @@ impl Configurable for HttpDestination {
 
 #[derive(Clone)]
 pub(crate) struct DestinationState {
-    pub rx: Arc<Mutex<Rx<Train>>>,
+    pub outs: Arc<Mutex<HashMap<usize, Tx<Train>>>>,
 }
 
-async fn start_destination(http: HttpDestination, _rx: Receiver<Command>, receiver: Rx<Train>){
-    debug!("starting http destination on {url}:{port}...", url=http.url, port=http.port);
+async fn start_destination(http: HttpDestination, _rx: Receiver<Command>, receiver: Rx<Train>) {
+    debug!(
+        "starting http destination on {url}:{port}...",
+        url = http.url,
+        port = http.port
+    );
     let addr = parse_addr(http.url, http.port);
 
-    let state = DestinationState {
-        rx: Arc::new(Mutex::new(receiver)),
-    };
+    let channels = Arc::new(Mutex::new(HashMap::<usize, Tx<Train>>::new()));
+    let clone = channels.clone();
+
+    thread::spawn(move || {
+        loop {
+            match receiver.recv() {
+                Ok(train) => {
+                    match channels.lock() {
+                        Ok(lock) => {
+                            lock.values().for_each(|l| {
+                                match l.send(train.clone()) {
+                                    Ok(_) => {}
+                                    Err(err) => error!("{}", err),
+                                }
+                            });
+                        }
+                        Err(_) => {}
+                    }
+                }
+                Err(err) => error!(err = ?err, "recv channel error"),
+            };
+        }
+    });
+
+    let state = DestinationState { outs: clone };
 
     let app = Router::new()
         .route("/ws", get(publish_ws))
         .layer(CorsLayer::permissive())
         .with_state(state);
 
-    let listener = TcpListener::bind(&addr).await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+    let listener = match TcpListener::bind(&addr).await {
+        Ok(listener) => listener,
+        Err(err) => panic!("{}", err),
+    };
+    match axum::serve(listener, app).await {
+        Ok(_) => {}
+        Err(err) => error!("{}", err),
+    }
 }
 
 impl Destination for HttpDestination {
     fn parse(options: Map<String, Value>) -> Result<Self, String>
     where
-        Self: Sized
+        Self: Sized,
     {
         let url = options.get("url").unwrap().as_str().unwrap();
-        let port = options.get("port").unwrap().as_str().unwrap().parse::<u16>().unwrap();
+        let port = options
+            .get("port")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .parse::<u16>()
+            .unwrap();
 
         let destination = HttpDestination::new(url.to_string(), port.to_owned());
 
@@ -117,7 +155,11 @@ impl Destination for HttpDestination {
         let mut configs = HashMap::new();
         configs.insert("url".to_string(), ConfigModel::text(&self.url.clone()));
         configs.insert("port".to_string(), ConfigModel::number(self.port.into()));
-        DestinationModel { type_name: self.name(), id: self.id.to_string(), configs }
+        DestinationModel {
+            type_name: self.name(),
+            id: self.id.to_string(),
+            configs,
+        }
     }
 
     fn serialize_default() -> Option<DestinationModel>

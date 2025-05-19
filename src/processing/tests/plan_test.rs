@@ -164,7 +164,7 @@ pub mod dummy {
 
     impl DummyDestination {
         pub(crate) fn new(result_size: usize) -> Self {
-            let (tx, _num, rx) = new_channel();
+            let (tx, rx) = new_channel();
             DummyDestination {
                 id: new_id(),
                 result_size,
@@ -396,7 +396,7 @@ pub mod tests {
         let mut first = Station::new(0);
         let input = first.get_in();
 
-        let (output_tx, _nums, output_rx) = new_channel();
+        let (output_tx, output_rx) = new_channel();
 
         let mut second = Station::new(1);
         second.add_out(0, output_tx).unwrap();
@@ -428,9 +428,9 @@ pub mod tests {
         let first_id = first.stop;
         let input = first.get_in();
 
-        let (output1_tx, _num, output1_rx) = new_channel();
+        let (output1_tx, output1_rx) = new_channel();
 
-        let (output2_tx, _num, output2_rx) = new_channel();
+        let (output2_tx, output2_rx) = new_channel();
 
         let mut second = Station::new(1);
         second.add_out(0, output1_tx).unwrap();

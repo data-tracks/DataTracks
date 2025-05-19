@@ -44,6 +44,7 @@ thiserror = "2.0.12"
 speedy = "0.8.7"
 flatbuffers = "25.2.10"
 reqwest = { version = "0.12.15", features = ["json", "blocking"] }
+bus = "2.4.1"
 
 [dev-dependencies]
 rstest = "0.25.0"

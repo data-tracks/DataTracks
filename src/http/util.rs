@@ -11,7 +11,9 @@ use tracing::{debug, warn};
 use crate::http::destination::DestinationState;
 use crate::http::source::SourceState;
 use crate::processing::Train;
-use crate::value;
+use crate::{value};
+use crate::util::new_id;
+use crate::util::new_channel;
 use crate::value::Dict;
 
 pub async fn receive(State(state): State<SourceState>, Json(payload): Json<Value>) -> impl IntoResponse {
@@ -106,7 +108,13 @@ pub async fn publish_ws(ws: WebSocketUpgrade, State(state): State<DestinationSta
 }
 
 async fn handle_publish_socket(mut socket: WebSocket, state: DestinationState) {
-    let rx = state.rx.lock().unwrap().clone();
+    let (tx, rx) = new_channel();
+    let id = new_id();
+    {
+        // drop after
+        state.outs.lock().unwrap().insert(id, tx);
+    }
+    
     loop {
         if let Ok(train) = rx.recv() {
             match train.values {
@@ -121,6 +129,7 @@ async fn handle_publish_socket(mut socket: WebSocket, state: DestinationState) {
                             Ok(_) => {}
                             Err(err) => {
                                 warn!("Failed to send message: {}", err);
+                                state.outs.lock().unwrap().remove(&id);
                                 return;
                             }
                         }

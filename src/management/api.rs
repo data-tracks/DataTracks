@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 use flatbuffers::{FlatBufferBuilder, ForwardsUOffset};
 use schemas::message_generated;
-use schemas::message_generated::protocol::{Catalog, CatalogArgs, CreateType, GetType, Message, MessageArgs, Payload, Plans, PlansArgs, Register, RegisterArgs, Status, StatusArgs, Plan as FlatPlan, PlanArgs, Bind, Unbind, BindArgs};
+use schemas::message_generated::protocol::{Catalog, CatalogArgs, CreateType, GetType, Message, MessageArgs, Payload, Plans, PlansArgs, Register, RegisterArgs, Status, StatusArgs, Plan as FlatPlan, PlanArgs, Bind, BindArgs};
 use tracing::{debug, info};
 use crate::management::{Storage};
 use crate::processing::Plan;
