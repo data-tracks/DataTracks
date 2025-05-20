@@ -13,7 +13,7 @@ use crate::processing::window::Window;
 use crate::util::{new_channel, new_id, Rx, Tx};
 use crossbeam::channel;
 use crossbeam::channel::{unbounded, Receiver};
-use tracing::{debug};
+use tracing::{debug, error};
 
 #[derive(Clone)]
 pub struct Station {
@@ -29,13 +29,11 @@ pub struct Station {
     pub control: (channel::Sender<Command>, Receiver<Command>),
 }
 
-
 impl Default for Station {
     fn default() -> Self {
         Self::new(usize::MAX)
     }
 }
-
 
 impl Station {
     pub(crate) fn new(stop: usize) -> Self {
@@ -100,21 +98,25 @@ impl Station {
                         PlanStage::LAYOUT_OPEN => PlanStage::Layout,
                         PlanStage::TRANSFORM_OPEN => PlanStage::Transform,
                         PlanStage::WINDOW_OPEN => PlanStage::Window,
-                        _ => current_stage.unwrap()
+                        _ => current_stage.unwrap(),
                     })
                 }
                 c => {
-                    if let Some(stage) = current_stage{
-                        if counter == 0 && (
-                            (c == PlanStage::LAYOUT_CLOSE && stage == PlanStage::Layout)
-                            || (c == PlanStage::TRANSFORM_CLOSE && stage == PlanStage::Transform)
-                            || (c == PlanStage::WINDOW_CLOSE && stage == PlanStage::Window)
-                        ) {
+                    if let Some(stage) = current_stage {
+                        if counter == 0
+                            && ((c == PlanStage::LAYOUT_CLOSE && stage == PlanStage::Layout)
+                                || (c == PlanStage::TRANSFORM_CLOSE
+                                    && stage == PlanStage::Transform)
+                                || (c == PlanStage::WINDOW_CLOSE && stage == PlanStage::Window))
+                        {
                             stages.push((stage, temp.clone()));
                             temp = String::default();
                             current_stage = None;
-                            continue
-                        }else if c == PlanStage::LAYOUT_CLOSE || c == PlanStage::TRANSFORM_CLOSE || c == PlanStage::WINDOW_CLOSE {
+                            continue;
+                        } else if c == PlanStage::LAYOUT_CLOSE
+                            || c == PlanStage::TRANSFORM_CLOSE
+                            || c == PlanStage::WINDOW_CLOSE
+                        {
                             counter -= 1;
                         }
                     }
@@ -125,7 +127,7 @@ impl Station {
         if !temp.is_empty() {
             if let Some(stage @ PlanStage::Num) = current_stage {
                 stages.push((stage, temp))
-            }else {
+            } else {
                 panic!("Not finished parsing")
             }
         }
@@ -133,7 +135,10 @@ impl Station {
         Self::parse_parts(last, stages)
     }
 
-    pub(crate) fn parse_parts(last: Option<usize>, parts: Vec<(PlanStage, String)>) -> Result<Self, String> {
+    pub(crate) fn parse_parts(
+        last: Option<usize>,
+        parts: Vec<(PlanStage, String)>,
+    ) -> Result<Self, String> {
         let mut station: Station = Station::default();
         for stage in parts {
             match stage.0 {
@@ -143,12 +148,15 @@ impl Station {
                 PlanStage::Num => {
                     let mut num = stage.1;
                     // test for blocks
-                    if num.starts_with('|'){
+                    if num.starts_with('|') {
                         station.add_block(last.unwrap_or(0));
                         num.remove(0);
                     }
-                    station.set_stop(num.parse().map_err(|err| format!("Could not parse stop number: {}", err))?)
-                },
+                    station.set_stop(
+                        num.parse()
+                            .map_err(|err| format!("Could not parse stop number: {}", err))?,
+                    )
+                }
             }
         }
         Ok(station)
@@ -174,11 +182,17 @@ impl Station {
     }
 
     pub fn derive_input_layout(&self) -> Layout {
-        self.clone().transform.map(|t| t.derive_input_layout().unwrap_or_default()).unwrap_or_default()
+        self.clone()
+            .transform
+            .map(|t| t.derive_input_layout().unwrap_or_default())
+            .unwrap_or_default()
     }
 
     pub(crate) fn close(&mut self) {
-        self.control.0.send(Command::Stop(0)).expect("TODO: panic message");
+        self.control
+            .0
+            .send(Command::Stop(0))
+            .expect("TODO: panic message");
     }
 
     pub(crate) fn set_stop(&mut self, stop: usize) {
@@ -224,14 +238,23 @@ impl Station {
         self.incoming.0.clone()
     }
 
-    pub(crate) fn operate(&mut self, control: Arc<channel::Sender<Command>>, transforms: HashMap<String, Transform>) -> channel::Sender<Command> {
+    pub(crate) fn operate(
+        &mut self,
+        control: Arc<channel::Sender<Command>>,
+        transforms: HashMap<String, Transform>,
+    ) -> channel::Sender<Command> {
         let (mut platform, sender) = Platform::new(self, transforms);
         let stop = self.stop;
 
-        thread::spawn(move || {
-            debug!("Starting station {}", stop );
-            platform.operate(control)
-        });
+        match thread::Builder::new()
+            .name(format!("Station {}", self.id))
+            .spawn(move || {
+                debug!("Starting station {}", stop);
+                platform.operate(control)
+            }) {
+            Ok(_) => {}
+            Err(err) => error!("Could not spawn thread: {}", err),
+        };
         sender
     }
 
@@ -239,7 +262,6 @@ impl Station {
         self.layout = layout;
     }
 }
-
 
 #[derive(Clone)]
 pub enum Command {
@@ -255,7 +277,7 @@ pub enum Command {
 #[cfg(test)]
 impl PartialEq for Command {
     fn eq(&self, other: &Self) -> bool {
-        match (self,other) {
+        match (self, other) {
             (_, _) => todo!(),
         }
     }
@@ -274,7 +296,6 @@ impl Debug for Command {
         }
     }
 }
-
 
 #[cfg(test)]
 pub mod tests {
@@ -299,12 +320,16 @@ pub mod tests {
 
         let control = unbounded();
 
-        let mut values = dict_values(vec![Value::text("test"), Value::bool(true), Value::float(3.3), Value::null()]);
+        let mut values = dict_values(vec![
+            Value::text("test"),
+            Value::bool(true),
+            Value::float(3.3),
+            Value::null(),
+        ]);
 
         for x in 0..1_000_000 {
             values.push(Value::Dict(Dict::from(Value::int(x))))
         }
-
 
         let (tx, rx) = new_channel();
 
@@ -315,7 +340,10 @@ pub mod tests {
         let res = rx.recv();
         match res {
             Ok(mut t) => {
-                assert_eq!(values.len(), t.values.clone().map_or(usize::MAX, |values| values.len()));
+                assert_eq!(
+                    values.len(),
+                    t.values.clone().map_or(usize::MAX, |values| values.len())
+                );
                 for (i, value) in t.values.take().unwrap().iter().enumerate() {
                     assert_eq!(value, &values[i]);
                     assert_ne!(&Value::text(""), value.as_dict().unwrap().get("$").unwrap())
@@ -324,7 +352,6 @@ pub mod tests {
             Err(..) => assert!(false),
         }
     }
-
 
     #[test]
     fn station_two_train() {
@@ -354,7 +381,6 @@ pub mod tests {
 
         assert!(output_rx.try_recv().is_err());
 
-
         drop(input); // close the channel
         first.close();
         second.close();
@@ -374,13 +400,13 @@ pub mod tests {
     #[test]
     fn sql_parse_layout() {
         let stencils = vec![
-            "1()",// no fixed
-            "1(f)", // fixed unnamed
-            "1({temperature:f})", // fixed float
-            "1({name:t})", // fixed text
-            "1({temp:f, age: i})", // fixed multiple
+            "1()",                      // no fixed
+            "1(f)",                     // fixed unnamed
+            "1({temperature:f})",       // fixed float
+            "1({name:t})",              // fixed text
+            "1({temp:f, age: i})",      // fixed multiple
             "1({address:{number: i}})", // fixed nested document
-            "1({locations:[i]})", // fixed array
+            "1({locations:[i]})",       // fixed array
         ];
 
         for stencil in stencils {
@@ -388,7 +414,6 @@ pub mod tests {
 
             let _station = plan.stations.get(&1).unwrap();
         }
-
     }
 
     #[test]
@@ -399,7 +424,9 @@ pub mod tests {
         sender.send(Threshold(3)).unwrap();
 
         for _ in 0..1_000 {
-            train_sender.send(Train::new(dict_values(vec![Value::int(3)]))).unwrap();
+            train_sender
+                .send(Train::new(dict_values(vec![Value::int(3)])))
+                .unwrap();
         }
 
         // the station should start, the threshold should be reached and after some time be balanced
@@ -417,7 +444,9 @@ pub mod tests {
         station.operate(Arc::clone(&a_tx), HashMap::new());
 
         for _ in 0..1_000 {
-            train_sender.send(Train::new(dict_values(vec![Value::int(3)]))).unwrap();
+            train_sender
+                .send(Train::new(dict_values(vec![Value::int(3)])))
+                .unwrap();
         }
 
         // the station should open a platform, the station starts another platform,  the threshold should be reached and after some time be balanced
@@ -432,11 +461,15 @@ pub mod tests {
         let _sender = station.operate(Arc::clone(&a_tx), HashMap::new());
 
         for _ in 0..500 {
-            train_sender.send(Train::new(dict_values(vec![Value::int(3)]))).unwrap();
+            train_sender
+                .send(Train::new(dict_values(vec![Value::int(3)])))
+                .unwrap();
         }
         station.operate(Arc::clone(&a_tx), HashMap::new());
         for _ in 0..500 {
-            train_sender.send(Train::new(dict_values(vec![Value::int(3)]))).unwrap();
+            train_sender
+                .send(Train::new(dict_values(vec![Value::int(3)])))
+                .unwrap();
         }
 
         // the station should open a platform, the station starts another platform,  the threshold should be reached and after some time be balanced
@@ -463,7 +496,6 @@ pub mod tests {
         use std::sync::Arc;
         use std::time::Instant;
 
-
         #[rstest]
         #[case("Int", dict_values(vec![Value::int(3)]))]
         #[case("Float", dict_values(vec![Value::float(1.2)]))]
@@ -471,7 +503,7 @@ pub mod tests {
         #[case("Bool", dict_values(vec![Value::bool(true)]))]
         #[case("Array", dict_values(vec![Value::array([1.2.into(), 1.2.into()].into())]))]
         #[case("Dict", dict_values(vec![Value::dict_from_kv("age", 25.into())]))]
-        pub fn minimal_overhead( #[case] name: &str, #[case] values: Vec<Value>) {
+        pub fn minimal_overhead(#[case] name: &str, #[case] values: Vec<Value>) {
             let (mut station, train_sender, rx, c_rx, a_tx) = create_test_station(0);
 
             let _sender = station.operate(Arc::clone(&a_tx), HashMap::new());
@@ -480,7 +512,7 @@ pub mod tests {
 
             let amount = 1_000;
 
-            for _ in 0..amount{
+            for _ in 0..amount {
                 trains.push(Train::new(values.clone()));
             }
 
@@ -499,36 +531,41 @@ pub mod tests {
             }
 
             let elapsed = time.elapsed().as_nanos();
-            println!("time {}: {} nanos, per entry {}ns", name, elapsed, elapsed/amount );
+            println!(
+                "time {}: {} nanos, per entry {}ns",
+                name,
+                elapsed,
+                elapsed / amount
+            );
         }
     }
 
-
-    fn create_test_station(duration: u64) -> (Station, Tx<Train>, Rx<Train>, Receiver<Command>, Arc<Sender<Command>>) {
+    fn create_test_station(
+        duration: u64,
+    ) -> (
+        Station,
+        Tx<Train>,
+        Rx<Train>,
+        Receiver<Command>,
+        Arc<Sender<Command>>,
+    ) {
         let mut station = Station::new(0);
         let train_sender = station.get_in();
         let (tx, rx) = new_channel();
         let _train_receiver = station.add_out(0, tx);
         let time = duration.clone();
 
-
         station.set_transform(match duration {
-            0 => {
-                Transform::Func(FuncTransform::new(Arc::new(move |_num, value| {
-                    value
-                })))
-            },
-            _ => {
-                Transform::Func(FuncTransform::new(Arc::new(move |_num, value| {
-                    sleep(Duration::from_millis(time));
-                    value
-                })))
-        } });
+            0 => Transform::Func(FuncTransform::new(Arc::new(move |_num, value| value))),
+            _ => Transform::Func(FuncTransform::new(Arc::new(move |_num, value| {
+                sleep(Duration::from_millis(time));
+                value
+            }))),
+        });
 
         let (c_tx, c_rx) = unbounded();
 
         let a_tx = Arc::new(c_tx);
         (station, train_sender, rx, c_rx, a_tx)
     }
-
 }

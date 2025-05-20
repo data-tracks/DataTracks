@@ -11,10 +11,10 @@ use crossbeam::channel::{unbounded, Sender};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::thread::spawn;
+use std::thread;
 use std::time::Duration;
 use tokio::runtime::Runtime;
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 use crate::value;
 
 pub struct MqttDestination {
@@ -75,7 +75,7 @@ impl Destination for MqttDestination {
 
         let (mut broker, mut link_tx, _link_rx) = broker::create_broker(port, url.clone(), id);
 
-        spawn(move || {
+        let res = thread::Builder::new().name("MQTT Destination".to_string()).spawn(move || {
             runtime.block_on(async move {
 
                 // Start the broker asynchronously
@@ -114,6 +114,12 @@ impl Destination for MqttDestination {
                 }
             });
         });
+
+        match res {
+            Ok(_) => {}
+            Err(err) => error!("{}", err)
+        }
+        
         tx
     }
 

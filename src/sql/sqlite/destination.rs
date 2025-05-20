@@ -14,6 +14,7 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 use tokio::runtime::Runtime;
+use tracing::error;
 
 pub struct LiteDestination {
     id: usize,
@@ -68,7 +69,7 @@ impl Destination for LiteDestination {
         let connection = self.connector.clone();
 
 
-        thread::spawn(move || {
+        let res = thread::Builder::new().name("SQLite Destination".to_string()).spawn(move || {
             runtime.block_on(async {
                 let conn = connection.connect().await.unwrap();
                 let (query, value_functions) = query.prepare_query("$", None);
@@ -92,6 +93,12 @@ impl Destination for LiteDestination {
                 }
             })
         });
+
+        match res {
+            Ok(_) => {}
+            Err(err) => error!("{}", err)
+        }
+        
         tx
     }
 

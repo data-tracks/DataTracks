@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-
+use tracing::warn;
 use crate::processing::train::Train;
 use crate::util::Tx;
 
@@ -32,6 +32,9 @@ impl Sender {
 
     pub(crate) fn send(&self, train: Train) {
         for out in &self.outs {
+            if out.1.len() > 1000 {
+                warn!("too large")
+            }
             out.1.send(train.clone()).expect(&("Error on :".to_owned() + &out.0.to_string()));
         }
     }

@@ -20,7 +20,7 @@ use serde_json::{json, Value};
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
 use tower_http::cors::CorsLayer;
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 use crate::util::deserialize_message;
 /*curl --header "Content-Type: application/json" --request POST --json '{"name":"wordcount","plan":"0--1{sql|SELECT * FROM $0}--2\nIn\nHttp{\"url\": \"localhost\", \"port\": \"3666\"}:0\nOut\nHttp{\"url\": \"localhost\", \"port\": \"4666\"}:2"}' http://localhost:2666/plans/create*/
 /*curl --header "Content-Type: application/json" --request POST --json '{"name":"wordcount"}' http://localhost:2666/plans/start*/
@@ -87,10 +87,16 @@ pub async fn startup(storage: Arc<Mutex<Storage>>) {
         .layer(CorsLayer::permissive());
     //.nest_service("/", serve_dir);
 
-    let listener = TcpListener::bind(&addr).await.unwrap();
+    let listener = match TcpListener::bind(&addr).await {
+        Ok(listener) => listener,
+        Err(error) => panic!("Unable to bind to {}: {}", addr, error),
+    };
     debug!("router initialized, now listening on port {}", port);
     info!("DataTracks (TrackView) started: http://localhost:{}", port);
-    axum::serve(listener, app).await.unwrap();
+    match axum::serve(listener, app).await {
+        Ok(_) => {}
+        Err(err) => error!("Error: {}", err),
+    };
     debug!("Finished serving.")
 }
 
@@ -111,13 +117,13 @@ async fn handle_socket(state:WebState, mut socket: WebSocket) {
             Message::Binary(bin) => {
                 let message = deserialize_message(bin.as_ref());
                 info!("Received message: {:?}", message);
-                let res = match API::handle_message(state.storage.clone(), state.api.clone(), message.unwrap()) {
+                let _res = match API::handle_message(state.storage.clone(), state.api.clone(), message.unwrap()) {
                     Ok(msg) => socket.send(Message::from(msg)),
                     Err(err) => socket.send(Message::from(err)),
                 }.await;
             }
             Message::Close(_) => {
-                info!("Client disconnected");
+                error!("Client disconnected");
                 break;
             }
             _ => {}

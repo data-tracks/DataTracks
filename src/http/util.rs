@@ -79,7 +79,8 @@ pub fn parse_addr<S: AsRef<str>>(url: S, port: u16) -> SocketAddr {
         u if u.to_lowercase() == "localhost" => "127.0.0.1",
         u => u,
     }.to_string();
-    thread::spawn(
+
+    thread::Builder::new().name("Socket Address Lookup".to_string()).spawn(
         move || {
             let rt = tokio::runtime::Runtime::new().unwrap();
 
@@ -98,7 +99,7 @@ pub fn parse_addr<S: AsRef<str>>(url: S, port: u16) -> SocketAddr {
                 }
             })
         }
-    ).join().unwrap()
+    ).unwrap().join().unwrap()
     
 }
 
@@ -128,7 +129,14 @@ async fn handle_publish_socket(mut socket: WebSocket, state: DestinationState) {
                         match socket.send(Message::Text(serde_json::to_string(&value).unwrap().into())).await {
                             Ok(_) => {}
                             Err(err) => {
-                                warn!("Failed to send message: {}", err);
+                                for _ in 0..3 {
+                                    match socket.send(Message::Text(serde_json::to_string(&value).unwrap().into())).await {
+                                        Ok(_) => {continue}
+                                        Err(_) => {}
+                                    }
+                                }
+
+                                warn!("Failed to send message after retry: {}", err);
                                 state.outs.lock().unwrap().remove(&id);
                                 return;
                             }
@@ -138,7 +146,6 @@ async fn handle_publish_socket(mut socket: WebSocket, state: DestinationState) {
             }
         }
     }
-
 }
 
 

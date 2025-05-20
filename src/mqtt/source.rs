@@ -14,12 +14,11 @@ use rumqttd::protocol::Publish;
 use rumqttd::Notification;
 use serde_json::Map;
 use std::collections::{BTreeMap, HashMap};
-use std::str;
+use std::{str, thread};
 use std::sync::Arc;
-use std::thread::spawn;
 use std::time::Duration;
 use tokio::runtime::Runtime;
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
 // mosquitto_sub -h 127.0.0.1 -p 8888 -t "test/topic2" -i "id"
 // mosquitto_pub -h 127.0.0.1 -p 6666 -t "test/topic2" -m "Hello fromtods2" -i "testclient"
@@ -68,7 +67,7 @@ impl Source for MqttSource {
         let id = self.id;
 
 
-        spawn(move || {
+        let res = thread::Builder::new().name("MQTT Source".to_string()).spawn(move || {
             let (mut broker, mut link_tx, mut link_rx) = broker::create_broker(port, url, id);
 
             runtime.block_on(async move {
@@ -104,6 +103,12 @@ impl Source for MqttSource {
                 warn!("MQTT broker has been stopped.");
             });
         });
+
+        match res {
+            Ok(_) => {}
+            Err(err) => error!("{}", err)
+        }
+        
         tx
     }
 

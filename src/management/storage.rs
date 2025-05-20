@@ -4,13 +4,18 @@ use crate::processing::{transform, Plan, Train};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
+use std::time::Duration;
 use axum::Router;
 use axum::routing::get;
+use crossbeam::channel::RecvTimeoutError;
 use schemas::message_generated::protocol::{Create};
 use tokio::net::TcpListener;
+use tokio::sync::oneshot;
+use tokio::sync::oneshot::Sender;
 use tower_http::cors::CorsLayer;
-use tracing::{error, info};
+use tracing::{debug, error};
 use crate::http::destination::{DestinationState};
 use crate::http::util;
 use crate::util::Tx;
@@ -24,7 +29,26 @@ pub struct Storage {
     pub ins: Mutex<HashMap<String, fn(Map<String, Value>) -> Box<dyn Source>>>,
     pub outs: Mutex<HashMap<String, fn(Map<String, Value>) -> Box<dyn Destination>>>,
     pub transforms: Mutex<HashMap<String, fn(String, Value) -> Box<transform::Transform>>>,
-    pub attachments: Mutex<HashMap<usize, (Tx<Train>, u16)>>,
+    pub attachments: Mutex<HashMap<usize, Attachment>>,
+}
+
+pub struct Attachment {
+    port: u16,
+    sender: Tx<Train>,
+    shutdown_flag: Arc<AtomicBool>,
+    shutdown_channel: Sender<bool>
+}
+
+impl Attachment {
+    pub fn new(port: u16, sender: Tx<Train>, shutdown_channel: Sender<bool>) -> Self {
+        let shutdown_flag = Arc::new(AtomicBool::new(false));
+        Attachment{
+            port,
+            sender,
+            shutdown_flag,
+            shutdown_channel,
+        }
+    }
 }
 
 
@@ -40,9 +64,15 @@ impl Storage {
         let bus = Arc::new(Mutex::new(HashMap::<usize, Tx<Train>>::new()));
         let clone = bus.clone();
 
-        thread::spawn(move || {
-            loop {
-                match rx.recv() {
+        let (sh_tx, sh_rx) = oneshot::channel();
+
+        let attachment = Attachment::new(port, tx.clone(), sh_tx, );
+
+        let flag = attachment.shutdown_flag.clone();
+
+        let res = thread::Builder::new().name(format!("HTTP Observer {}", id)).spawn(move || {
+            while !flag.load(Ordering::Relaxed) {
+                match rx.recv_timeout(Duration::from_millis(100)) {
                     Ok(train) => {
                         match clone.lock() {
                             Ok(lock) => {
@@ -57,12 +87,23 @@ impl Storage {
                         }
                     }
                     Err(err) => {
-                        error!(err = ?err, "recv channel error");
-                        return;
+                        match err {
+                            RecvTimeoutError::Timeout => {
+                                debug!("Error {}", err)
+                            }
+                            RecvTimeoutError::Disconnected => {
+                                error!(err = ?err, "recv channel error");
+                            }
+                        }
                     },
                 };
             }
         });
+
+        match res {
+            Ok(_) => {}
+            Err(err) => error!("{}", err),
+        }
 
         tokio::spawn(async move {
             let state = DestinationState {
@@ -74,10 +115,18 @@ impl Storage {
                 .layer(CorsLayer::permissive())
                 .with_state(state);
 
-            let listener = TcpListener::bind(&addr).await.unwrap();
-            axum::serve(listener, app).await.unwrap();
+            let listener = match TcpListener::bind(&addr).await {
+                Ok(listener) => listener,
+                Err(err) => panic!("{}", err),
+            };
+            match axum::serve(listener, app).with_graceful_shutdown(async move {
+                sh_rx.await.ok();
+            }).await {
+                Ok(_) => {}
+                Err(err) => error!("{}", err),
+            }
         });
-        self.attachments.lock().unwrap().insert(id, (tx.clone(), port));
+        self.attachments.lock().unwrap().insert(id, attachment);
         tx
     }
 
@@ -140,7 +189,10 @@ impl Storage {
             None => {}
             Some(p) => {
                 p.status = Status::Running;
-                p.operate().unwrap();
+                match p.operate() {
+                    Ok(_) => {}
+                    Err(err) => error!("{}", err),
+                }
             }
         }
     }
@@ -149,8 +201,8 @@ impl Storage {
         {
             let attach = self.attachments.lock().unwrap();
             let values = attach.get(&source_id);
-            if let Some((_, port)) = values {
-                return Ok(*port as usize);
+            if let Some(attachment) = values {
+                return Ok(attachment.port as usize);
             }
         }
 
@@ -184,7 +236,7 @@ impl Storage {
         }
         let mut lock = self.attachments.lock().unwrap();
         match lock.remove(&source_id) {
-            None => {}
+            None => error!("Could not remove"),
             Some(_) => {}
         };
     }

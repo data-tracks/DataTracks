@@ -15,7 +15,7 @@ use crate::processing::window::Window;
 use crate::processing::Train;
 use crate::util::{new_id, Rx};
 use crossbeam::channel;
-use crossbeam::channel::{unbounded, Receiver};
+use crossbeam::channel::{Receiver};
 pub use logos::{Source};
 use tracing::debug;
 
@@ -115,6 +115,9 @@ impl Platform {
 
             match self.receiver.try_recv() {
                 Ok(train) => {
+                    if stop == 3 {
+                        debug!("Train: {:?}", train);
+                    }
                     debug!("{:?}", train);
                     if self.layout.fits_train(&train) {
                         block.next(train); // window takes precedence to

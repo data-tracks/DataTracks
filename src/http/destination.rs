@@ -69,7 +69,7 @@ async fn start_destination(http: HttpDestination, _rx: Receiver<Command>, receiv
     let channels = Arc::new(Mutex::new(HashMap::<usize, Tx<Train>>::new()));
     let clone = channels.clone();
 
-    thread::spawn(move || {
+    let res = thread::Builder::new().name("HTTP Destination Bus".to_string()).spawn(move || {
         loop {
             match receiver.recv() {
                 Ok(train) => {
@@ -89,6 +89,11 @@ async fn start_destination(http: HttpDestination, _rx: Receiver<Command>, receiv
             };
         }
     });
+
+    match res {
+        Ok(_) => {}
+        Err(err) => error!("{}", err),
+    }
 
     let state = DestinationState { outs: clone };
 
@@ -112,7 +117,10 @@ impl Destination for HttpDestination {
     where
         Self: Sized,
     {
-        let url = options.get("url").unwrap().as_str().unwrap();
+        let url = match options.get("url") {
+            None => panic!("missing url"),
+            Some(url) => url
+        }.as_str().unwrap();
         let port = options
             .get("port")
             .unwrap()
@@ -134,11 +142,15 @@ impl Destination for HttpDestination {
 
         let clone = self.clone();
 
-        thread::spawn(move || {
+        let res = thread::Builder::new().name("HTTP Destination".to_string()).spawn(move || {
             rt.block_on(async {
                 start_destination(clone, rx, receiver).await;
             });
         });
+        match res {
+            Ok(_) => {}
+            Err(err) => error!("{}", err),
+        }
 
         tx
     }

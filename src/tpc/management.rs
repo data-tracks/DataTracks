@@ -5,13 +5,17 @@ use crate::tpc::Server;
 use crate::util::deserialize_message;
 use crossbeam::channel::{unbounded, Receiver, Sender};
 use std::sync::{Arc, Mutex};
-use std::thread::spawn;
+use std::thread;
 use std::time::Duration;
 use tokio::time::sleep;
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 
 pub fn start_tpc(url: String, port: u16, storage: Arc<Mutex<Storage>>) {
-    spawn(move || startup(url, port, storage));
+    let res = thread::Builder::new().name("TPC Interface".to_string()).spawn(move || startup(url, port, storage));
+    match res {
+        Ok(_) => {}
+        Err(err) => error!("{}", err)
+    }
     debug!("Startup done.")
 }
 

@@ -1,3 +1,4 @@
+use crate::http::util::{parse_addr, receive, receive_with_topic, receive_ws};
 use crate::processing::option::Configurable;
 use crate::processing::plan::SourceModel;
 use crate::processing::source::Source;
@@ -10,14 +11,14 @@ use axum::routing::{get, post};
 use axum::Router;
 use crossbeam::channel::{unbounded, Receiver, Sender};
 use serde_json::{Map, Value};
-use std::collections::{HashMap};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
 use tower_http::cors::CorsLayer;
+use tracing::error;
 use tracing::log::debug;
-use crate::http::util::{parse_addr, receive, receive_with_topic, receive_ws};
 
 // ws: npx wscat -c ws://127.0.0.1:3666/ws/data
 // messages like: curl --json '{"website": "linuxize.com"}' localhost:5555/data/isabel
@@ -31,17 +32,26 @@ pub struct HttpSource {
 
 impl HttpSource {
     pub(crate) fn new(url: String, port: u16) -> Self {
-        HttpSource { id: new_id(), url, port, outs: Default::default() }
+        HttpSource {
+            id: new_id(),
+            url,
+            port,
+            outs: Default::default(),
+        }
     }
-
 }
 
-
-async fn start_source(http: HttpSource, _rx: Receiver<Command>){
-    debug!("starting http source on {url}:{port}...", url=http.url, port=http.port);
+async fn start_source(http: HttpSource, _rx: Receiver<Command>) {
+    debug!(
+        "starting http source on {url}:{port}...",
+        url = http.url,
+        port = http.port
+    );
     let addr = parse_addr(http.url, http.port);
 
-    let state = SourceState { source: Arc::new(Mutex::new(http.outs.clone())) };
+    let state = SourceState {
+        source: Arc::new(Mutex::new(http.outs.clone())),
+    };
 
     let app = Router::new()
         .route("/data", post(receive))
@@ -50,10 +60,15 @@ async fn start_source(http: HttpSource, _rx: Receiver<Command>){
         .layer(CorsLayer::permissive())
         .with_state(state);
 
-    let listener = TcpListener::bind(&addr).await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+    let listener = match TcpListener::bind(&addr).await {
+        Ok(msg) => msg,
+        Err(err) => panic!("failed to bind to {}: {}", addr, err),
+    };
+    match axum::serve(listener, app).await {
+        Ok(_) => {}
+        Err(err) => error!("failed to start HTTP server: {}", err),
+    }
 }
-
 
 impl Configurable for HttpSource {
     fn name(&self) -> String {
@@ -74,8 +89,21 @@ impl Source for HttpSource {
         Self: Sized,
     {
         Ok(HttpSource::new(
-            String::from(options.get("url").map(|url| url.as_str().ok_or("Could not parse url.")).ok_or(format!("Did not provide necessary url {:?}.", options))??),
-            options.get("port").map(|port| port.as_str().ok_or("Could not parse port.").map(|v| v.parse::<u16>().map_err(|_err| "Could not parse error"))?).ok_or(format!("Did not provide necessary port {:?}.", options))??))
+            String::from(
+                options
+                    .get("url")
+                    .map(|url| url.as_str().ok_or("Could not parse url."))
+                    .ok_or(format!("Did not provide necessary url {:?}.", options))??,
+            ),
+            options
+                .get("port")
+                .map(|port| {
+                    port.as_str()
+                        .ok_or("Could not parse port.")
+                        .map(|v| v.parse::<u16>().map_err(|_err| "Could not parse error"))?
+                })
+                .ok_or(format!("Did not provide necessary port {:?}.", options))??,
+        ))
     }
 
     fn operate(&mut self, _control: Arc<Sender<Command>>) -> Sender<Command> {
@@ -85,11 +113,18 @@ impl Source for HttpSource {
 
         let clone = self.clone();
 
-        thread::spawn(move || {
-            rt.block_on(async {
-                start_source(clone, rx).await;
+        let res = thread::Builder::new()
+            .name("HTTP Source".to_string())
+            .spawn(move || {
+                rt.block_on(async {
+                    start_source(clone, rx).await;
+                });
             });
-        });
+
+        match res {
+            Ok(_) => {}
+            Err(err) => error!("{}", err),
+        }
 
         tx
     }
@@ -102,37 +137,36 @@ impl Source for HttpSource {
         self.id
     }
 
-
     fn serialize(&self) -> SourceModel {
-        SourceModel { type_name: String::from("Http"), id: self.id.to_string(), configs: HashMap::new() }
+        SourceModel {
+            type_name: String::from("Http"),
+            id: self.id.to_string(),
+            configs: HashMap::new(),
+        }
     }
 
-    fn from( configs: HashMap<String, ConfigModel>) -> Result<Box<dyn Source>, String> {
+    fn from(configs: HashMap<String, ConfigModel>) -> Result<Box<dyn Source>, String> {
         let port = match configs.get("port") {
-            Some(port) => {
-                match port {
-                    ConfigModel::String(port) => {
-                        port.string.parse::<u16>().unwrap()
-                    }
-                    ConfigModel::Number(port) => {
-                        port.number as u16
-                    }
-                    _ => return Err(String::from("Could not create HttpSource."))
-                }
-            }
-            _ => return Err(String::from("Could not create HttpSource."))
+            Some(port) => match port {
+                ConfigModel::String(port) => port.string.parse::<u16>().unwrap(),
+                ConfigModel::Number(port) => port.number as u16,
+                _ => return Err(String::from("Could not create HttpSource.")),
+            },
+            _ => return Err(String::from("Could not create HttpSource.")),
         };
         let url = match configs.get("url") {
-            Some(ConfigModel::String(url)) => {
-                url.string.clone()
-            },
-            _ => return Err(String::from("Could not create HttpSource."))
+            Some(ConfigModel::String(url)) => url.string.clone(),
+            _ => return Err(String::from("Could not create HttpSource.")),
         };
         Ok(Box::new(HttpSource::new(url, port)))
     }
 
     fn serialize_default() -> Result<SourceModel, ()> {
-        Ok(SourceModel { type_name: String::from("Http"), id: String::from("Http"), configs: HashMap::new() })
+        Ok(SourceModel {
+            type_name: String::from("Http"),
+            id: String::from("Http"),
+            configs: HashMap::new(),
+        })
     }
 }
 
@@ -161,10 +195,7 @@ impl From<Value> for value::Value {
                 }
                 value::Value::array(values)
             }
-            Value::Object(o) => {
-                o.into()
-            }
+            Value::Object(o) => o.into(),
         }
     }
 }
-

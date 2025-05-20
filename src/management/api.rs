@@ -70,7 +70,7 @@ impl API {
                     None => todo!(),
                     Some(b) => {
                         let mut storage = storage.lock().unwrap();
-                        let port = storage.attach(0, b.planId() as usize, b.stopId() as usize);
+                        let port = storage.attach(usize::MAX, b.planId() as usize, b.stopId() as usize);
                         drop(storage);
                         Self::build_bind_response(port?)
                     }

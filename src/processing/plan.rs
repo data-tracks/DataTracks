@@ -360,11 +360,13 @@ impl Plan {
             map.insert(destination.1.get_id(), self.get_connected_stations(destination.1.get_id()));
         });
 
+        let mut i = 0;
         for destination in self.destinations.values_mut() {
             let targets = map.get(&destination.get_id()).unwrap();
             for target in targets {
                 if let Some(station) = self.stations.get_mut(target) {
-                    station.add_out(usize::MAX, destination.get_in())?; // maybe change negative approach
+                    station.add_out(usize::MAX - i, destination.get_in())?; // maybe change negative approach
+                    i = i + 1;
                 } else {
                     Err(String::from("Could not find target station"))?;
                 }

@@ -5,7 +5,7 @@ use std::time::Duration;
 use crossbeam::channel::{unbounded, Receiver, Sender};
 use serde_json::{Map, Value};
 use tokio::time::sleep;
-use tracing::{debug};
+use tracing::{debug, error};
 use crate::processing::{Train};
 
 use crate::processing::destination::Destination;
@@ -116,9 +116,15 @@ impl Destination for TpcDestination {
         
         let tx = self.tx.clone();
         let clone = self.clone();
-        thread::spawn(move || {
+        let res = thread::Builder::new().name("TPC Destination".to_string()).spawn(move || {
             server.start(clone).unwrap();
         });
+
+        match res {
+            Ok(_) => {}
+            Err(err) => error!("{}", err)
+        }
+        
         tx
         
     }

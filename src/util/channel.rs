@@ -1,4 +1,5 @@
-use crossbeam::channel::{unbounded, Receiver, Sender};
+use std::time::Duration;
+use crossbeam::channel::{unbounded, Receiver, RecvTimeoutError, Sender};
 
 
 pub fn new_channel<Msg: Send>() -> (Tx<Msg>, Rx<Msg>) {
@@ -10,10 +11,11 @@ pub fn new_channel<Msg: Send>() -> (Tx<Msg>, Rx<Msg>) {
 #[derive(Clone)]
 pub struct Rx<D>(Receiver<D>);
 
-impl<F> Rx<F>
-where
-    F: Send,
-{
+impl<F> Rx<F> {
+    pub fn recv_timeout(&self, duration: Duration) -> Result<F, RecvTimeoutError> {
+        self.0.recv_timeout(duration)
+    }
+
     pub fn len(&self) -> usize { self.0.len() }
     pub fn recv(&self) -> Result<F, String> {
         self.0.recv().map_err(|e| e.to_string())
@@ -26,12 +28,13 @@ where
 #[derive(Clone)]
 pub struct Tx<T>(Sender<T>);
 
-impl<F> Tx<F>
-where
-    F: Send,
-{
+impl<F:Send> Tx<F>{
     pub(crate) fn send(&self, msg: F) -> Result<(), String> {
         self.0.send(msg).map_err(|e| e.to_string())
+    }
+    
+    pub(crate) fn len(&self) -> usize {
+        self.0.len()
     }
 }
 
