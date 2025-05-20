@@ -1,27 +1,27 @@
+use crate::http::destination::DestinationState;
+use crate::http::util;
 use crate::processing::destination::Destination;
+use crate::processing::plan::Status;
 use crate::processing::source::Source;
+use crate::processing::station::Command;
 use crate::processing::{transform, Plan, Train};
+use crate::util::new_channel;
+use crate::util::Tx;
+use axum::routing::get;
+use axum::Router;
+use crossbeam::channel::RecvTimeoutError;
+use schemas::message_generated::protocol::Create;
 use serde_json::{Map, Value};
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
-use axum::Router;
-use axum::routing::get;
-use crossbeam::channel::RecvTimeoutError;
-use schemas::message_generated::protocol::{Create};
 use tokio::net::TcpListener;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::Sender;
 use tower_http::cors::CorsLayer;
 use tracing::{debug, error};
-use crate::http::destination::{DestinationState};
-use crate::http::util;
-use crate::util::Tx;
-use crate::util::new_channel;
-use crate::processing::plan::Status;
-use crate::processing::station::Command;
 
 #[derive(Default)]
 pub struct Storage {
@@ -36,13 +36,13 @@ pub struct Attachment {
     port: u16,
     sender: Tx<Train>,
     shutdown_flag: Arc<AtomicBool>,
-    shutdown_channel: Sender<bool>
+    shutdown_channel: Sender<bool>,
 }
 
 impl Attachment {
     pub fn new(port: u16, sender: Tx<Train>, shutdown_channel: Sender<bool>) -> Self {
         let shutdown_flag = Arc::new(AtomicBool::new(false));
-        Attachment{
+        Attachment {
             port,
             sender,
             shutdown_flag,
@@ -56,7 +56,7 @@ impl Storage {
     pub(crate) fn new() -> Storage {
         Default::default()
     }
-    
+
     pub fn start_http_attacher(&mut self, id: usize, port: u16) -> Tx<Train> {
         let addr = util::parse_addr("127.0.0.1", port);
         let (tx, rx) = new_channel::<Train>();
@@ -66,7 +66,7 @@ impl Storage {
 
         let (sh_tx, sh_rx) = oneshot::channel();
 
-        let attachment = Attachment::new(port, tx.clone(), sh_tx, );
+        let attachment = Attachment::new(port, tx.clone(), sh_tx);
 
         let flag = attachment.shutdown_flag.clone();
 
@@ -95,7 +95,7 @@ impl Storage {
                                 error!(err = ?err, "recv channel error");
                             }
                         }
-                    },
+                    }
                 };
             }
         });
@@ -143,7 +143,7 @@ impl Storage {
             plan.set_name(create_plan.name().unwrap().to_string());
             self.add_plan(plan);
             Ok(())
-        }else {
+        } else {
             Err("No name provided with create plan".to_string())
         }
     }
@@ -173,7 +173,7 @@ impl Storage {
 
     pub fn start_plan_by_name(&mut self, name: String) {
         let mut lock = self.plans.lock().unwrap();
-        let plan = lock.iter_mut().filter(|(_id, plan)| plan.name == name).map(|(_,plan)| plan).next();
+        let plan = lock.iter_mut().filter(|(_id, plan)| plan.name == name).map(|(_, plan)| plan).next();
         match plan {
             None => {}
             Some(p) => {
@@ -197,7 +197,7 @@ impl Storage {
         }
     }
 
-    pub fn attach(&mut self, source_id:usize, plan_id: usize, stop_id: usize) -> Result<usize, String> {
+    pub fn attach(&mut self, source_id: usize, plan_id: usize, stop_id: usize) -> Result<usize, String> {
         {
             let attach = self.attachments.lock().unwrap();
             let values = attach.get(&source_id);
@@ -206,7 +206,7 @@ impl Storage {
             }
         }
 
-        
+
         let tx = self.start_http_attacher(source_id, 3131);
         let mut lock = self.plans.lock().unwrap();
         let plan = lock.get_mut(&plan_id).unwrap();
@@ -221,11 +221,11 @@ impl Storage {
 
     pub fn detach(&mut self, source_id: usize, plan_id: usize, stop_id: usize) {
         let attach = self.attachments.lock().unwrap();
-        if !attach.contains_key(&source_id) {
+        let values = attach.get(&source_id);
+        if values.is_none() {
             return;
         }
-        drop(attach);
-        
+
         let mut lock = self.plans.lock().unwrap();
         let plan = lock.get_mut(&plan_id).unwrap();
         match plan.stations.get_mut(&stop_id) {

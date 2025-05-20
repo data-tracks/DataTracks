@@ -90,7 +90,7 @@ impl Transform {
         }
     }
 
-    pub fn dump(&self, include_ids: bool) -> String {
+    pub fn dump(&self, _include_ids: bool) -> String {
         match self {
             Func(f) => f.dump(),
             Lang(f) => f.dump(),
@@ -514,7 +514,8 @@ mod tests {
         match transform {
             Ok(mut t) => {
                 for (i, input) in inputs.into_iter().enumerate() {
-                    t.dynamically_load(vec![Train::new(input)]);
+                    let train = Train::new(input).mark(i);
+                    t.dynamically_load(vec![train]);
                 }
 
                 let result = t.drain_to_train(0);

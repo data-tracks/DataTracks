@@ -1,7 +1,7 @@
 use crate::processing::station::Command;
 use crossbeam::channel::{Receiver, Sender};
 
-use std::io::{Error, Read};
+use std::io::{Error};
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::io;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -26,8 +26,8 @@ impl TcpStream {
     }
 
     pub async fn read_exact<'a>(&'a mut self, buf: &'a mut [u8]) -> Result<(), String> {
-        let length = (buf.len() as u32).to_be_bytes();
-        let read = self.0.read_exact(buf).await.map_err(|err| err.to_string())?;
+        let _length = (buf.len() as u32).to_be_bytes();
+        let _read = self.0.read_exact(buf).await.map_err(|err| err.to_string())?;
         Ok(())
     }
 

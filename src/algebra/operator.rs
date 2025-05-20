@@ -17,7 +17,6 @@ use std::fmt::Debug;
 use std::str::FromStr;
 use std::vec;
 use tracing::warn;
-use crate::analyse::OutputDerivable;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Op {
@@ -495,7 +494,7 @@ impl BinaryOp {
 }
 
 impl ValueHandler for BinaryOp {
-    fn process(&self, value: &Value) -> Value {
+    fn process(&self, _value: &Value) -> Value {
         todo!()
     }
 

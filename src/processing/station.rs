@@ -278,7 +278,14 @@ pub enum Command {
 impl PartialEq for Command {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (_, _) => todo!(),
+            (Command::Ready(a), Command::Ready(b)) => a.eq(b),
+            (Command::Stop(a), Command::Stop(b)) => a.eq(b),
+            (Command::Overflow(a), Command::Overflow(b)) => a.eq(b),
+            (Command::Threshold(a), Command::Threshold(b)) => a.eq(b),
+            (Command::Okay(a), Command::Okay(b)) => a.eq(b),
+            (Command::Attach(a,_), Command::Attach(b,_)) => a.eq(b),
+            (Command::Detach(a), Command::Detach(b)) => a.eq(b),
+            _ => false,
         }
     }
 }

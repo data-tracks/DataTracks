@@ -136,7 +136,7 @@ impl Plan {
         dump
     }
 
-    fn dump_network(&self, include_ids: bool) -> String {
+    fn dump_network(&self, _include_ids: bool) -> String {
         let mut dump = "".to_string();
         let mut dumped_stations = vec![];
 

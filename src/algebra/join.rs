@@ -47,7 +47,13 @@ pub struct JoinIterator {
 }
 
 impl JoinIterator {
-    pub(crate) fn new(left_hash: fn(&Value) -> Value, right_hash: fn(&Value) -> Value, output: fn(Value, Value) -> Value, left: BoxedIterator, right: BoxedIterator) -> Self {
+    pub(crate) fn new(
+        left_hash: fn(&Value) -> Value,
+        right_hash: fn(&Value) -> Value,
+        output: fn(Value, Value) -> Value,
+        left: BoxedIterator,
+        right: BoxedIterator,
+    ) -> Self {
         JoinIterator {
             left_hash,
             right_hash,
@@ -66,7 +72,6 @@ impl Iterator for JoinIterator {
     type Item = Value;
 
     fn next(&mut self) -> Option<Self::Item> {
-
         // only first time
         if self.cache_left.is_empty() && !self.next_left() {
             return None;
@@ -82,7 +87,6 @@ impl Iterator for JoinIterator {
 
             let left = &self.cache_left.get(self.left_index)?;
             let right = &self.cache_right.get(self.right_index)?;
-
 
             if left.0 == right.0 {
                 return Some((self.out)(left.1.clone(), right.1.clone()));
@@ -117,7 +121,10 @@ impl JoinIterator {
                 self.right_index += 1;
             }
             true
-        } else if self.right_index < self.cache_right.len() - 1 { // index 0 length 1 cannot go further
+        } else if self.cache_right.len() == 0 {
+            false
+        } else if self.right_index < self.cache_right.len() - 1 {
+            // index 0 length 1 cannot go further
             self.right_index += 1;
 
             true
@@ -134,7 +141,13 @@ impl ValueIterator for JoinIterator {
     }
 
     fn clone(&self) -> BoxedIterator {
-        Box::new(JoinIterator::new(self.left_hash, self.right_hash, self.out, self.left.clone(), self.right.clone()))
+        Box::new(JoinIterator::new(
+            self.left_hash,
+            self.right_hash,
+            self.out,
+            self.left.clone(),
+            self.right.clone(),
+        ))
     }
 
     fn enrich(&mut self, transforms: HashMap<String, Transform>) -> Option<BoxedIterator> {
@@ -164,7 +177,10 @@ impl OutputDerivable for Join {
         let left = self.left.derive_output_layout(inputs.clone())?;
         let right = self.right.derive_output_layout(inputs)?;
 
-        Some(Layout { type_: Array(Box::new(ArrayType::new(left.merge(&right), Some(2)))), ..Default::default() })
+        Some(Layout {
+            type_: Array(Box::new(ArrayType::new(left.merge(&right), Some(2)))),
+            ..Default::default()
+        })
     }
 }
 
@@ -180,7 +196,6 @@ impl Algebra for Join {
         let right = self.right.derive_iterator();
         JoinIterator::new(left_hash, right_hash, out, left, right)
     }
-
 }
 
 #[cfg(test)]
@@ -190,7 +205,7 @@ mod test {
     use crate::algebra::scan::IndexScan;
     use crate::algebra::{AlgebraType, ValueIterator};
     use crate::processing::Train;
-    use crate::value::{Dict, Time, Value};
+    use crate::value::{Dict, Value};
 
     #[test]
     fn one_match() {
@@ -203,16 +218,26 @@ mod test {
 
         let right_scan = IndexScan::new(1);
 
-        let mut join = Join::new(AlgebraType::IndexScan(left_scan), AlgebraType::IndexScan(right_scan), |val| val.clone(), |val| val.clone(), |left, right| {
-            Value::Dict(left.as_dict().unwrap().merge(right.as_dict().unwrap()))
-        });
+        let mut join = Join::new(
+            AlgebraType::IndexScan(left_scan),
+            AlgebraType::IndexScan(right_scan),
+            |val| val.clone(),
+            |val| val.clone(),
+            |left, right| Value::Dict(left.as_dict().unwrap().merge(right.as_dict().unwrap())),
+        );
 
         let mut handle = join.derive_iterator();
         handle.dynamically_load(vec![left]);
         handle.dynamically_load(vec![right]);
         let mut res = handle.drain_to_train(3);
-        assert_eq!(res.clone().values.unwrap(), vec![Value::Dict(Dict::from(vec![5.5.into(), 5.5.into()]))]);
-        assert_ne!(res.values.take().unwrap(), vec![Value::Dict(Dict::from(vec![]))]);
+        assert_eq!(
+            res.clone().values.unwrap(),
+            vec![Value::Dict(Dict::from(vec![5.5.into(), 5.5.into()]))]
+        );
+        assert_ne!(
+            res.values.take().unwrap(),
+            vec![Value::Dict(Dict::from(vec![]))]
+        );
     }
 
     #[test]
@@ -221,18 +246,28 @@ mod test {
         let train1 = Train::new(Dict::transform(vec![5.5.into(), 5.5.into()]));
         let train0 = train0.mark(0);
         let train1 = train1.mark(1);
-        
+
         let left = IndexScan::new(0);
         let right = IndexScan::new(1);
 
-        let mut join = Join::new(AlgebraType::IndexScan(left), AlgebraType::IndexScan(right), |val| val.clone(), |val| val.clone(), |left, right| {
-            Value::Dict(left.as_dict().unwrap().merge(right.as_dict().unwrap()))
-        });
+        let mut join = Join::new(
+            AlgebraType::IndexScan(left),
+            AlgebraType::IndexScan(right),
+            |val| val.clone(),
+            |val| val.clone(),
+            |left, right| Value::Dict(left.as_dict().unwrap().merge(right.as_dict().unwrap())),
+        );
 
         let mut handle = join.derive_iterator();
         handle.dynamically_load(vec![train0.clone(), train1.clone()]);
         let mut res = handle.drain_to_train(3);
-        assert_eq!(res.values.clone().unwrap(), vec![Value::Dict(Dict::from(vec![5.5.into(), 5.5.into()])), Value::Dict(Dict::from(vec![5.5.into(), 5.5.into()]))]);
+        assert_eq!(
+            res.values.clone().unwrap(),
+            vec![
+                Value::Dict(Dict::from(vec![5.5.into(), 5.5.into()])),
+                Value::Dict(Dict::from(vec![5.5.into(), 5.5.into()]))
+            ]
+        );
         assert_ne!(res.values.take().unwrap(), vec![vec![].into()]);
     }
 }
