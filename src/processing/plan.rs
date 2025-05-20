@@ -20,6 +20,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
+use tracing::error;
 
 pub struct Plan {
     pub id: usize,
@@ -164,7 +165,7 @@ impl Plan {
     }
 
     pub(crate) fn send_control(&mut self, num: &usize, command: Command) {
-        self.controls.get_mut(num).unwrap_or(&mut Vec::new()).iter().for_each(|c| c.send(command.clone()).unwrap())
+        self.controls.get_mut(num).unwrap_or(&mut Vec::new()).iter().for_each(|c| c.send(command.clone()).unwrap_or_else(|err| error!("error: {}", err)))
     }
 
     pub fn operate(&mut self) -> Result<(), String> {

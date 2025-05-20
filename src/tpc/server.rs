@@ -4,6 +4,7 @@ use crossbeam::channel::{Receiver, Sender};
 use std::io::{Error};
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::io;
+use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener};
 use tokio::runtime::Runtime;
@@ -61,14 +62,35 @@ impl Server {
     pub fn start(
         &self,
         user: impl StreamUser,
-    ) -> Result<(), Error> {
-        let rt = Runtime::new()?;
+        control: Arc<Sender<Command>>,
+        rx: Arc<Receiver<Command>>,
+    ) -> Result<(), String> {
+        let rt = Runtime::new().map_err(|err| err.to_string())?;
         rt.block_on(async {
-            let listener = TcpListener::bind(self.addr).await?;
+            let listener = TcpListener::bind(self.addr).await.map_err(|err| err.to_string())?;
             info!("TPC server listening...");
-
+            let rx = Arc::new(rx);
+            
+            control.send(Command::Ready(0)).unwrap();
+            
             loop {
-                let (stream, _) = listener.accept().await?;
+                let (stream, _) = listener.accept().await.map_err(|err| err.to_string())?;
+
+                match rx.try_recv() {
+                    Ok(cmd) => {
+                        match cmd {
+                            Command::Stop(s) => return Err(format!("Stopped {}", s)),
+                            Command::Ready(_) => {}
+                            Command::Overflow(_) => {}
+                            Command::Threshold(_) => {}
+                            Command::Okay(_) => {}
+                            Command::Attach(_, _) => {}
+                            Command::Detach(_) => {}
+                        }
+                    }
+                    Err(_) => {}
+                }
+                
                 user.clone().handle(stream.into()).await;
             }
         })

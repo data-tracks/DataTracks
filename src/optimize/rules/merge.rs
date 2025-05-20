@@ -114,7 +114,7 @@ impl OperatorMerger<'_> {
 impl CreatingVisitor<&mut Operator, Operator> for OperatorMerger<'_> {
     fn visit(&self, parent: &mut Operator) -> Operator {
         match &parent.op {
-            Op::Binary(b) => {
+            Op::Binary(_b) => {
                 parent.operands = parent
                     .operands
                     .iter()

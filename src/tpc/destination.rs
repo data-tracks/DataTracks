@@ -115,9 +115,12 @@ impl Destination for TpcDestination {
         self.control = Some(control);
         
         let tx = self.tx.clone();
+        let tx_clone = tx.clone();
+        let rx = self.rx.clone();
+        
         let clone = self.clone();
         let res = thread::Builder::new().name("TPC Destination".to_string()).spawn(move || {
-            server.start(clone).unwrap();
+            server.start(clone, Arc::new(tx_clone), Arc::new(rx)).unwrap();
         });
 
         match res {

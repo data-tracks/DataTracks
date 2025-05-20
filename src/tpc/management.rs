@@ -21,10 +21,13 @@ pub fn start_tpc(url: String, port: u16, storage: Arc<Mutex<Storage>>) {
 
 fn startup(url: String, port: u16, storage: Arc<Mutex<Storage>>) {
     let (tx, rx) = unbounded();
+    let tx = Arc::new(tx);
+    let rx = Arc::new(rx);
+    
     let server = Server::new(url.clone(), port);
     let management = TpcManagement {
-        interrupt: tx,
-        control: rx,
+        interrupt: tx.clone(),
+        control: rx.clone(),
         api: Arc::new(Mutex::new(API::default())),
         storage: Arc::clone(&storage),
     };
@@ -32,7 +35,7 @@ fn startup(url: String, port: u16, storage: Arc<Mutex<Storage>>) {
         "DataTracks (TrackRails) protocol listening on: http://localhost:{}",
         port
     );
-    match server.start(management) {
+    match server.start(management, tx, rx ) {
         Ok(_) => {}
         Err(_) => {}
     }
@@ -40,8 +43,8 @@ fn startup(url: String, port: u16, storage: Arc<Mutex<Storage>>) {
 
 #[derive(Clone)]
 pub struct TpcManagement {
-    interrupt: Sender<Command>,
-    control: Receiver<Command>,
+    interrupt: Arc<Sender<Command>>,
+    control: Arc<Receiver<Command>>,
     storage: Arc<Mutex<Storage>>,
     api: Arc<Mutex<API>>,
 }

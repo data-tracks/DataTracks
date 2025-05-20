@@ -167,7 +167,7 @@ fn parse_select(lexer: &mut BufferedLexer, stops: &[Token]) -> Result<SqlStateme
     )))
 }
 
-fn parse_window(lexer: &mut BufferedLexer, stops: &[Token]) -> Result<SqlWindow, String> {
+fn parse_window(lexer: &mut BufferedLexer, _stops: &[Token]) -> Result<SqlWindow, String> {
     let _type = match lexer.next()? {
         Token::Thumbling => WindowType::Thumbling,
         _ => return Err(format!("Unexpected token {:?}", lexer.next()?)),

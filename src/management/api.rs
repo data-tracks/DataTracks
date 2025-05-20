@@ -62,7 +62,7 @@ impl API {
             }
             Payload::Train => {
                 debug!("Received a Train");
-                let values = msg.data_as_train().unwrap();
+                let _values = msg.data_as_train().unwrap();
                 todo!()
             }
             Payload::Bind => {
@@ -153,7 +153,7 @@ fn handle_register(_request: Register, storage: Arc<Mutex<Storage>>, api: Arc<Mu
     Ok(builder.finished_data().to_vec())
 }
 
-fn serialize_plans<'a>(builder: &'a mut FlatBufferBuilder<'a>, plan: &'a Plan) -> ForwardsUOffset<message_generated::protocol::Plan<'a>> {
+fn serialize_plans<'a>(_builder: &'a mut FlatBufferBuilder<'a>, _plan: &'a Plan) -> ForwardsUOffset<message_generated::protocol::Plan<'a>> {
     todo!()
 }
 

@@ -9,12 +9,12 @@ use crossbeam::channel::{unbounded, Receiver, Sender};
 use serde_json::{Map, Value};
 use std::collections::{HashMap};
 use std::sync::{Arc};
-use std::thread::spawn;
+use std::thread;
 use std::time::Duration;
 use flatbuffers::FlatBufferBuilder;
 use schemas::message_generated::protocol::{Message, MessageArgs, Payload, Register, RegisterArgs};
 use tokio::time::sleep;
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 use crate::tpc::Server;
 use crate::tpc::server::{StreamUser, TcpStream};
 
@@ -79,20 +79,25 @@ impl Source for TpcSource{
         debug!("starting tpc source...");
 
         let (tx, rx) = unbounded();
-        let outs = self.outs.clone();
         let port = self.port;
         let url = self.url.clone();
-        let id = self.id;
+        let rx = Arc::new(rx);
 
         let clone = self.clone();
 
-        spawn(move || {
+        let res = thread::Builder::new().name("TPC Source".to_string()).spawn(move || {
             let server = Server::new(url.clone(), port);
-            match server.start(clone,  ) {
+            match server.start(clone, control, rx) {
                 Ok(_) => {}
                 Err(_) => {}
             }
         });
+
+        match res {
+            Ok(_) => {}
+            Err(err) => error!("{:?}", err)
+        }
+        
         tx
     }
 

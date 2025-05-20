@@ -37,7 +37,7 @@ pub trait Destination: Send + Configurable + Sync {
 
     fn get_id(&self) -> usize;
 
-    fn dump_destination(&self, include_id: bool) -> String {
+    fn dump_destination(&self, _include_id: bool) -> String {
         Configurable::dump(self)
     }
 

@@ -36,7 +36,7 @@ impl TryFrom<schemas::message_generated::protocol::Train<'_>> for Train {
     type Error = String;
 
     fn try_from(value: schemas::message_generated::protocol::Train<'_>) -> Result<Self, Self::Error> {
-        let topic = value.topic();
+        let _topic = value.topic();
 
         match value.values() {
             None => {

@@ -113,7 +113,7 @@ impl SpecificBlock {
 fn merge_buffer(drain: Drain<usize, Vec<Value>>) -> Vec<Train> {
     let mut trains = vec![];
     for (last, values) in drain {
-        trains.push(Train::new(values));
+        trains.push(Train::new(values).mark(last));
     }
     trains
 }
