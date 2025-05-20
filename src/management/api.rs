@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 use flatbuffers::{FlatBufferBuilder, ForwardsUOffset};
 use schemas::message_generated;
-use schemas::message_generated::protocol::{Catalog, CatalogArgs, CreateType, GetType, Message, MessageArgs, Payload, Plans, PlansArgs, Register, RegisterArgs, Status, StatusArgs, Plan as FlatPlan, PlanArgs, Bind, BindArgs};
+use schemas::message_generated::protocol::{Catalog, CatalogArgs, CreateType, GetType, Message, MessageArgs, Payload, Plans, PlansArgs, Register, RegisterArgs, Status, StatusArgs, Bind, BindArgs};
 use tracing::{debug, info};
 use crate::management::{Storage};
 use crate::processing::Plan;
@@ -70,7 +70,7 @@ impl API {
                     None => todo!(),
                     Some(b) => {
                         let mut storage = storage.lock().unwrap();
-                        let port = storage.attach(usize::MAX, b.planId() as usize, b.stopId() as usize);
+                        let port = storage.attach(usize::MAX, b.plan_id() as usize, b.stop_id() as usize);
                         drop(storage);
                         Self::build_bind_response(port?)
                     }
@@ -81,7 +81,7 @@ impl API {
                     None => todo!(),
                     Some(u) => {
                         let mut storage = storage.lock().unwrap();
-                        storage.detach(0, u.planId() as usize, u.stopId() as usize);
+                        storage.detach(0, u.plan_id() as usize, u.stop_id() as usize);
                         drop(storage);
                         Self::empty_msg()
                     }
@@ -113,7 +113,7 @@ impl API {
     fn build_bind_response(port: usize) -> Result<Vec<u8>, Vec<u8>> {
         let mut builder = FlatBufferBuilder::new();
         
-        let bind = Bind::create(&mut builder, &BindArgs { planId: port as u64, stopId: port as u64 });
+        let bind = Bind::create(&mut builder, &BindArgs { plan_id: port as u64, stop_id: port as u64 });
         let msg = Message::create(&mut builder, &MessageArgs {
             data_type: Payload::Bind,
             data: Some(bind.as_union_value()),
@@ -133,12 +133,7 @@ fn handle_register(_request: Register, storage: Arc<Mutex<Storage>>, api: Arc<Mu
     let mut builder = FlatBufferBuilder::new();
 
     let storage = storage.lock().unwrap();
-    let plans = storage.plans.lock().unwrap().values().map(|plan| {
-        let name = builder.create_string(&plan.name);
-        let template = builder.create_string(&plan.dump(false));
-
-        FlatPlan::create(&mut builder, &PlanArgs { name: Some(name), template: Some(template) })
-    }).collect::<Vec<_>>();
+    let plans = storage.plans.lock().unwrap().values().map(|plan| plan.flatterize(&mut builder)).collect::<Vec<_>>();
 
     let plans = builder.create_vector(&plans);
 

@@ -242,7 +242,7 @@ pub mod dummy {
             self.sender.clone()
         }
 
-        fn get_id(&self) -> usize {
+        fn id(&self) -> usize {
             self.id
         }
 
@@ -595,7 +595,7 @@ pub mod tests {
         plan.connect_in_out(0, id);
 
         let destination = DummyDestination::new(length);
-        let dest_id = destination.get_id();
+        let dest_id = destination.id();
         plan.add_destination(Box::new(destination));
         plan.connect_in_out(0, dest_id);
 

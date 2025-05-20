@@ -1,3 +1,4 @@
+use schemas::message_generated::protocol::{LanguageTransformArgs, TransformArgs, TransformType};
 use crate::algebra::{Algebra, AlgebraType, BoxedIterator, IndexScan, ValueIterator};
 use crate::analyse::{InputDerivable, OutputDerivable, OutputDerivationStrategy};
 use crate::language::Language;
@@ -12,6 +13,8 @@ use serde_json::Map;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
+use flatbuffers::{FlatBufferBuilder, WIPOffset};
+use schemas::message_generated::protocol::{Transform as FlatTransform, LanguageTransform as FlatLanguageTransform};
 use crate::optimize::OptimizeStrategy;
 #[cfg(test)]
 use crate::processing::tests::DummyDatabase;
@@ -109,6 +112,16 @@ impl Transform {
             Postgres(p) => p.name(),
             #[cfg(test)]
             DummyDB(d) => d.name()
+        }
+    }
+
+    pub fn flatternize<'a>(
+        &self,
+        builder: &mut FlatBufferBuilder<'a>,
+    ) -> WIPOffset<FlatTransform<'a>> {
+        match self {
+            Lang(l) => l.flatternize(builder),
+            _ => todo!()
         }
     }
 
@@ -220,6 +233,23 @@ impl Clone for LanguageTransform {
 }
 
 impl LanguageTransform {
+
+    pub fn flatternize<'a>(
+        &self,
+        builder: &mut FlatBufferBuilder<'a>
+    ) -> WIPOffset<FlatTransform<'a>> {
+        let language = builder.create_string(&self.language.to_string());
+        let query = builder.create_string(&self.query.to_string());
+        let name = builder.create_string("Language");
+        let args = FlatLanguageTransform::create(builder, &LanguageTransformArgs { language: Some(language), query: Some(query) }).as_union_value();
+        FlatTransform::create(builder, &TransformArgs {
+            name: Some(name),
+            // Add fields as needed
+            type_type: TransformType::LanguageTransform,
+            type_: Some(args),
+        })
+    }
+    
     fn parse(language: Language, query: &str) -> LanguageTransform {
         let algebra = build_algebra(&language, query).unwrap();
         LanguageTransform { language, query: query.to_string(), algebra }

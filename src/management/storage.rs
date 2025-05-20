@@ -164,7 +164,7 @@ impl Storage {
 
     pub fn add_destination(&mut self, plan_id: usize, stop_id: usize, destination: Box<dyn Destination>) {
         let mut plans = self.plans.lock().unwrap();
-        let id = destination.get_id();
+        let id = destination.id();
         if let Some(p) = plans.get_mut(&plan_id) {
             p.add_destination(destination);
             p.connect_in_out(stop_id, id);

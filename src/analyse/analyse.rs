@@ -40,8 +40,8 @@ impl<'plan> Analyser<'plan> {
         });
 
         self.plan.destinations.values().for_each(|s| {
-            if !self.plan.stations_to_in_outs.iter().any(|(_, in_outs)|{ in_outs.contains(&s.get_id()) }){
-                summery.add_out_status(s.get_id(), Status::Warning(Islands, format!("Destination {} is not connected to anything.", s.get_id())));
+            if !self.plan.stations_to_in_outs.iter().any(|(_, in_outs)|{ in_outs.contains(&s.id()) }){
+                summery.add_out_status(s.id(), Status::Warning(Islands, format!("Destination {} is not connected to anything.", s.id())));
             }
         });
 

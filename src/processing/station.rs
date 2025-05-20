@@ -1,3 +1,4 @@
+use schemas::message_generated::protocol::StationArgs;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
@@ -13,6 +14,8 @@ use crate::processing::window::Window;
 use crate::util::{new_channel, new_id, Rx, Tx};
 use crossbeam::channel;
 use crossbeam::channel::{unbounded, Receiver};
+use flatbuffers::{FlatBufferBuilder, WIPOffset};
+use schemas::message_generated::protocol::{Station as FlatStation};
 use tracing::{debug, error};
 
 #[derive(Clone)]
@@ -51,6 +54,21 @@ impl Station {
             layout: Layout::default(),
             control: (control.0.clone(), control.1.clone()),
         }
+    }
+
+    pub fn flatternize<'a>(
+        &self,
+        builder: &mut FlatBufferBuilder<'a>,
+    ) -> WIPOffset<FlatStation<'a>> {
+        let blocks = builder.create_vector(&self.block.iter().map(|b| *b as u64).collect::<Vec<_>>());
+        let inputs = builder.create_vector(&self.inputs.iter().map(|b| *b as u64).collect::<Vec<_>>());
+        FlatStation::create(builder, &StationArgs {
+            id: self.id as u64,
+            // Add fields from `Station` as needed
+            stop: self.stop as u64,
+            block: Some(blocks),
+            inputs: Some(inputs),
+        })
     }
 
     // |1 or <1 or -1

@@ -159,7 +159,7 @@ impl Destination for HttpDestination {
         self.sender.clone()
     }
 
-    fn get_id(&self) -> usize {
+    fn id(&self) -> usize {
         self.id
     }
 

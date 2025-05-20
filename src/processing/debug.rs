@@ -82,7 +82,7 @@ impl Destination for DebugDestination {
     }
 
 
-    fn get_id(&self) -> usize {
+    fn id(&self) -> usize {
         self.id
     }
 

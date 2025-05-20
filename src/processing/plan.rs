@@ -1,3 +1,6 @@
+use schemas::message_generated::protocol::{KeyValueStringTransform, KeyValueStringTransformArgs, KeyValueU64Destination, KeyValueU64DestinationArgs, KeyValueU64Source, KeyValueU64SourceArgs, KeyValueU64Station, PlanStatus};
+use schemas::message_generated::protocol::KeyValueU64StationArgs;
+use schemas::message_generated::protocol::{KeyValueU64VecU64, KeyValueU64VecU64Args};
 use crate::processing::destination::{parse_destination, Destination};
 use crate::processing::option::Configurable;
 use crate::processing::plan::Status::Stopped;
@@ -20,6 +23,8 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
+use flatbuffers::{FlatBufferBuilder, WIPOffset};
+use schemas::message_generated::protocol::{PlanArgs, Plan as FlatPlan};
 use tracing::error;
 
 pub struct Plan {
@@ -70,6 +75,15 @@ pub enum Status {
     Error,
 }
 
+impl Status {
+    pub(crate) fn flatternize(&self) -> PlanStatus {
+        match self { 
+            Status::Running => PlanStatus::Running,
+            Status::Stopped => PlanStatus::Stopped,
+            Status::Error => PlanStatus::Error,
+        }
+    }
+}
 
 impl Plan {
     pub fn new(id: usize) -> Self {
@@ -115,7 +129,7 @@ impl Plan {
             sorted.sort_by_key(|s| s.name());
             dump += &sorted.into_iter().map(|s| {
 
-                let stops = self.get_connected_stations(s.get_id());
+                let stops = self.get_connected_stations(s.id());
                 if stops.is_empty() {
                     s.dump_destination(include_ids).to_string()
                 }else {
@@ -202,7 +216,7 @@ impl Plan {
 
 
         for destination in self.destinations.values_mut() {
-            self.controls.entry(destination.get_id()).or_default().push(destination.operate(Arc::clone(&self.control_receiver.0)));
+            self.controls.entry(destination.id()).or_default().push(destination.operate(Arc::clone(&self.control_receiver.0)));
         }
 
         for source in self.sources.values_mut() {
@@ -337,6 +351,83 @@ impl Plan {
         }
         Ok(())
     }
+
+    pub(crate) fn flatterize<'builder>(&self, builder: &mut FlatBufferBuilder<'builder>) -> WIPOffset<schemas::message_generated::protocol::Plan<'builder>> {
+        // Serialize strings
+        let name = builder.create_string(&self.name);
+        let id = self.id as u64;
+
+        // Serialize lines: HashMap<usize, Vec<usize>>
+        let lines: Vec<_> = self.lines.iter().map(|(&k, v)| {
+            let vec = builder.create_vector(v.iter().map(|v| *v as u64).collect::<Vec<u64>>().as_slice());
+            KeyValueU64VecU64::create(builder, &KeyValueU64VecU64Args {
+                key: k as u64,
+                value: Some(vec),
+            })
+        }).collect();
+        let lines_vec = builder.create_vector(&lines);
+
+        // Serialize stations: HashMap<usize, Station>
+        let stations: Vec<_> = self.stations.iter().map(|(&k, station)| {
+            let fb_station = station.flatternize(builder);
+            KeyValueU64Station::create(builder, &KeyValueU64StationArgs {
+                key: k as u64,
+                value: Some(fb_station),
+            })
+        }).collect();
+        let stations_vec = builder.create_vector(&stations);
+
+        // Serialize stations_to_in_outs
+        let in_outs: Vec<_> = self.stations_to_in_outs.iter().map(|(&k, v)| {
+            let vec = builder.create_vector(v.iter().map(|v| *v as u64).collect::<Vec<u64>>().as_slice());
+            KeyValueU64VecU64::create(builder, &KeyValueU64VecU64Args {
+                key: k as u64,
+                value: Some(vec),
+            })
+        }).collect();
+        let in_outs_vec = builder.create_vector(&in_outs);
+
+        // Serialize source 
+        let sources = self.sources.iter().map(|(&k, v)| {
+            let source = v.flatternize(builder);
+            KeyValueU64Source::create(builder, &KeyValueU64SourceArgs { key: k as u64, value: Some(source) })
+        }).collect::<Vec<_>>();
+        let sources_vec = builder.create_vector(&sources);
+        
+        // Serialize destination
+        let destinations = self.destinations.iter().map(|(&k, v)| {
+            let destination = v.flatternize(builder);
+            KeyValueU64Destination::create(builder, &KeyValueU64DestinationArgs { key: k as u64, value: Some(destination) })
+        }).collect::<Vec<_>>();
+        let destination_vec = builder.create_vector(&destinations);
+        
+        
+        // Serialize transforms
+        let transforms: Vec<_> = self.transforms.iter().map(|(k, t)| {
+            let key = builder.create_string(k);
+            let fb_transform = t.flatternize(builder);
+            KeyValueStringTransform::create(builder, &KeyValueStringTransformArgs {
+                key: Some(key),
+                value: Some(fb_transform),
+            })
+        }).collect();
+        let transforms = builder.create_vector(&transforms);
+        let template = builder.create_string(&self.dump(false));
+
+        FlatPlan::create(builder, &PlanArgs {
+            id,
+            name: Some(name),
+            template: Some(template),
+            lines: Some(lines_vec),
+            stations: Some(stations_vec),
+            stations_to_in_outs: Some(in_outs_vec),
+            sources: Some(sources_vec),
+            destinations: Some(destination_vec),
+            status: self.status.flatternize(),
+            transforms: Some(transforms)
+        })
+    }
+    
     pub(crate) fn build(&mut self, line_num: usize, station: Station) {
         self.lines.entry(line_num).or_default().push(station.stop);
         let stop = station.stop;
@@ -358,12 +449,12 @@ impl Plan {
     fn connect_destinations(&mut self) -> Result<(), String> {
         let mut map = HashMap::new();
         self.destinations.iter().for_each(|destination| {
-            map.insert(destination.1.get_id(), self.get_connected_stations(destination.1.get_id()));
+            map.insert(destination.1.id(), self.get_connected_stations(destination.1.id()));
         });
 
         let mut i = 0;
         for destination in self.destinations.values_mut() {
-            let targets = map.get(&destination.get_id()).unwrap();
+            let targets = map.get(&destination.id()).unwrap();
             for target in targets {
                 if let Some(station) = self.stations.get_mut(target) {
                     station.add_out(usize::MAX - i, destination.get_in())?; // maybe change negative approach
@@ -417,7 +508,7 @@ impl Plan {
     }
 
     pub(crate) fn add_destination(&mut self, destination: Box<dyn Destination>) {
-        let id = destination.get_id();
+        let id = destination.id();
         self.destinations.insert(id, destination);
     }
 
@@ -450,7 +541,7 @@ impl Plan {
         let (stops, type_, options) = Self::split_name_options(stencil)?;
 
         let out = parse_destination(type_, options)?;
-        let id = out.get_id();
+        let id = out.id();
         self.add_destination(out);
         stops.iter().for_each(|s| self.connect_in_out(*s, id));
 

@@ -13,6 +13,8 @@ use crossbeam::channel::Sender;
 use serde_json::{Map, Value};
 #[cfg(test)]
 use std::sync::Mutex;
+use flatbuffers::{FlatBufferBuilder, WIPOffset};
+use schemas::message_generated::protocol::{SourceArgs, Destination as FlatDestination, DestinationArgs};
 use crate::http::destination::HttpDestination;
 
 pub fn parse_destination(type_: &str, options: Map<String, Value>) -> Result<Box<dyn Destination>, String> {
@@ -35,13 +37,19 @@ pub trait Destination: Send + Configurable + Sync {
     fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command>;
     fn get_in(&self) -> Tx<Train>;
 
-    fn get_id(&self) -> usize;
+    fn id(&self) -> usize;
 
     fn dump_destination(&self, _include_id: bool) -> String {
         Configurable::dump(self)
     }
 
     fn serialize(&self) -> DestinationModel;
+
+    fn flatternize<'a>(&self, builder: &mut FlatBufferBuilder<'a>) -> WIPOffset<FlatDestination<'a>> {
+        let name = builder.create_string(&self.name().to_string());
+
+        FlatDestination::create(builder, &DestinationArgs{ id: self.id() as u64, name: Some(name) })
+    }
 
     fn serialize_default() -> Option<DestinationModel>
     where

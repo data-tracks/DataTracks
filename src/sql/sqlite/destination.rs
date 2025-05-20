@@ -106,7 +106,7 @@ impl Destination for LiteDestination {
         self.sender.clone()
     }
 
-    fn get_id(&self) -> usize {
+    fn id(&self) -> usize {
         self.id
     }
 
