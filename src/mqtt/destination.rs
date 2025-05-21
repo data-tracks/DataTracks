@@ -131,6 +131,10 @@ impl Destination for MqttDestination {
         self.id
     }
 
+    fn type_(&self) -> String {
+        String::from("MQTT")
+    }
+
     fn serialize(&self) -> DestinationModel {
         let mut configs = HashMap::new();
         configs.insert("url".to_string(), ConfigModel::String(StringModel::new(&self.url)));

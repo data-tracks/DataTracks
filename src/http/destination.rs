@@ -69,26 +69,22 @@ async fn start_destination(http: HttpDestination, _rx: Receiver<Command>, receiv
     let channels = Arc::new(Mutex::new(HashMap::<usize, Tx<Train>>::new()));
     let clone = channels.clone();
 
-    let res = thread::Builder::new().name("HTTP Destination Bus".to_string()).spawn(move || {
-        loop {
+    let res = thread::Builder::new()
+        .name("HTTP Destination Bus".to_string())
+        .spawn(move || loop {
             match receiver.recv() {
-                Ok(train) => {
-                    match channels.lock() {
-                        Ok(lock) => {
-                            lock.values().for_each(|l| {
-                                match l.send(train.clone()) {
-                                    Ok(_) => {}
-                                    Err(err) => error!("{}", err),
-                                }
-                            });
-                        }
-                        Err(_) => {}
+                Ok(train) => match channels.lock() {
+                    Ok(lock) => {
+                        lock.values().for_each(|l| match l.send(train.clone()) {
+                            Ok(_) => {}
+                            Err(err) => error!("{}", err),
+                        });
                     }
-                }
+                    Err(_) => {}
+                },
                 Err(err) => error!(err = ?err, "recv channel error"),
             };
-        }
-    });
+        });
 
     match res {
         Ok(_) => {}
@@ -119,8 +115,10 @@ impl Destination for HttpDestination {
     {
         let url = match options.get("url") {
             None => panic!("missing url"),
-            Some(url) => url
-        }.as_str().unwrap();
+            Some(url) => url,
+        }
+        .as_str()
+        .unwrap();
         let port = options
             .get("port")
             .unwrap()
@@ -142,11 +140,13 @@ impl Destination for HttpDestination {
 
         let clone = self.clone();
 
-        let res = thread::Builder::new().name("HTTP Destination".to_string()).spawn(move || {
-            rt.block_on(async {
-                start_destination(clone, rx, receiver).await;
+        let res = thread::Builder::new()
+            .name("HTTP Destination".to_string())
+            .spawn(move || {
+                rt.block_on(async {
+                    start_destination(clone, rx, receiver).await;
+                });
             });
-        });
         match res {
             Ok(_) => {}
             Err(err) => error!("{}", err),
@@ -161,6 +161,10 @@ impl Destination for HttpDestination {
 
     fn id(&self) -> usize {
         self.id
+    }
+
+    fn type_(&self) -> String {
+        String::from("HTTP")
     }
 
     fn serialize(&self) -> DestinationModel {

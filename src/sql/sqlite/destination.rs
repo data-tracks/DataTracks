@@ -110,6 +110,10 @@ impl Destination for LiteDestination {
         self.id
     }
 
+    fn type_(&self) -> String {
+        String::from("SQLite")
+    }
+
     fn serialize(&self) -> DestinationModel {
         let mut configs = HashMap::new();
         self.connector.serialize(&mut configs);

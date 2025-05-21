@@ -94,6 +94,10 @@ impl Source for LiteSource {
         self.id
     }
 
+    fn type_(&self) -> String {
+        String::from("SQLite")
+    }
+
     fn serialize(&self) -> SourceModel {
         let mut configs = HashMap::new();
         self.connector.serialize(&mut configs);

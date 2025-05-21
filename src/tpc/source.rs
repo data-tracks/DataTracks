@@ -109,6 +109,10 @@ impl Source for TpcSource{
         self.id
     }
 
+    fn type_(&self) -> String {
+        String::from("TPC")
+    }
+
     fn serialize(&self) -> SourceModel {
         SourceModel { type_name: String::from("Tpc"), id: self.id.to_string(), configs: HashMap::new() }
     }

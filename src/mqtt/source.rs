@@ -120,6 +120,10 @@ impl Source for MqttSource {
         self.id
     }
 
+    fn type_(&self) -> String {
+        String::from("MQTT")
+    }
+
     fn serialize(&self) -> SourceModel {
         SourceModel { type_name: String::from("Mqtt"), id: self.id.to_string(), configs: HashMap::new() }
     }

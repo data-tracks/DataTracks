@@ -62,10 +62,11 @@ impl Station {
     ) -> WIPOffset<FlatStation<'a>> {
         let blocks = builder.create_vector(&self.block.iter().map(|b| *b as u64).collect::<Vec<_>>());
         let inputs = builder.create_vector(&self.inputs.iter().map(|b| *b as u64).collect::<Vec<_>>());
+        let transform = self.transform.clone().map(|t| t.flatternize(builder));
         FlatStation::create(builder, &StationArgs {
             id: self.id as u64,
-            // Add fields from `Station` as needed
             stop: self.stop as u64,
+            transform,
             block: Some(blocks),
             inputs: Some(inputs),
         })

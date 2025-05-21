@@ -86,6 +86,10 @@ impl Destination for DebugDestination {
         self.id
     }
 
+    fn type_(&self) -> String {
+        String::from("Debug")
+    }
+
 
     fn serialize(&self) -> DestinationModel {
         DestinationModel { type_name: String::from("Debug"), id: self.id.to_string(), configs: HashMap::new() }

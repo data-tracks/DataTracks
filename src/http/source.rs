@@ -137,6 +137,10 @@ impl Source for HttpSource {
         self.id
     }
 
+    fn type_(&self) -> String {
+        String::from("HTTP")
+    }
+
     fn serialize(&self) -> SourceModel {
         SourceModel {
             type_name: String::from("Http"),

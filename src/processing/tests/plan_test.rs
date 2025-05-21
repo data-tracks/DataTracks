@@ -138,6 +138,9 @@ pub mod dummy {
             self.id
         }
 
+        fn type_(&self) -> String {
+            String::from("Dummy")
+        }
         fn serialize(&self) -> SourceModel {
             SourceModel { type_name: String::from("Dummy"), id: self.id.to_string(), configs: HashMap::new() }
         }
@@ -244,6 +247,10 @@ pub mod dummy {
 
         fn id(&self) -> usize {
             self.id
+        }
+
+        fn type_(&self) -> String {
+            String::from("Dummy")
         }
 
         fn serialize(&self) -> DestinationModel {

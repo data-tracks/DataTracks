@@ -43,15 +43,18 @@ pub trait Source: Send + Sync + Configurable {
     fn outs(&mut self) -> &mut Vec<Tx<Train>>;
 
     fn id(&self) -> usize;
+    
+    fn type_(&self) -> String;
 
     fn dump_source(&self, _include_id: bool) -> String {
         Configurable::dump(self).to_string()
     }
     
     fn flatternize<'a>(&self, builder: &mut FlatBufferBuilder<'a>) -> WIPOffset<FlatSource<'a>> {
-        let name = builder.create_string(&self.name().to_string());
+        let name = Some(builder.create_string(&self.name().to_string()));
+        let type_ = Some(builder.create_string(&self.type_().to_string()));
         
-        FlatSource::create(builder, &SourceArgs{ id: self.id() as u64, name: Some(name) })
+        FlatSource::create(builder, &SourceArgs{ id: self.id() as u64, name, type_ })
     }
 
     fn serialize(&self) -> SourceModel;

@@ -2853,7 +2853,7 @@ dependencies = [
 [[package]]
 name = "schemas"
 version = "0.0.1"
-source = "git+https://github.com/data-tracks/TrackRails.git?branch=generated#d7aaaf04905b1af6feb6646b672a23e29096c08c"
+source = "git+https://github.com/data-tracks/TrackRails.git?branch=generated#a8d80c83d8d2e007e89f0a9a923371f07ed8604d"
 dependencies = [
  "flatbuffers",
 ]
