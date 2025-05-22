@@ -1,14 +1,17 @@
 use crate::processing::station::Command;
 use crossbeam::channel::{Receiver, Sender};
 
-use std::io::{Error};
-use std::net::{SocketAddr, ToSocketAddrs};
 use std::io;
+use std::io::Error;
+use std::net::{SocketAddr, ToSocketAddrs};
 use std::sync::Arc;
+use flatbuffers::FlatBufferBuilder;
+use schemas::message_generated::protocol::{Message, MessageArgs, Payload, Register, RegisterArgs};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener};
+use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
-use tracing::info;
+use tracing::{error, info};
+use crate::util::deserialize_message;
 
 pub struct Server {
     addr: SocketAddr,
@@ -16,26 +19,32 @@ pub struct Server {
 
 pub struct TcpStream(tokio::net::TcpStream);
 
-
 impl TcpStream {
     pub async fn write_all<'a>(&'a mut self, msg: &'a [u8]) -> Result<(), String> {
         let length: [u8; 4] = (msg.len() as u32).to_be_bytes();
         // we write length first
-        self.0.write_all(&length).await.unwrap();
+        match self.0.write_all(&length).await {
+            Ok(_) => {}
+            Err(err) => return Err(err.to_string()),
+        };
         // then msg
         self.0.write_all(msg).await.map_err(|err| err.to_string())
     }
 
     pub async fn read_exact<'a>(&'a mut self, buf: &'a mut [u8]) -> Result<(), String> {
         let _length = (buf.len() as u32).to_be_bytes();
-        let _read = self.0.read_exact(buf).await.map_err(|err| err.to_string())?;
+        let _read = self
+            .0
+            .read_exact(buf)
+            .await
+            .map_err(|err| err.to_string())?;
         Ok(())
     }
 
     pub async fn read<'a>(&'a mut self, buf: &'a mut [u8]) -> Result<usize, String> {
-        match self.0.read(buf).await{
+        match self.0.read(buf).await {
             Ok(size) => Ok(size),
-            Err(err) => Err(err.to_string())
+            Err(err) => Err(err.to_string()),
         }
     }
 }
@@ -45,12 +54,45 @@ impl From<tokio::net::TcpStream> for TcpStream {
         TcpStream(stream)
     }
 }
-pub trait StreamUser:Clone {
+pub trait StreamUser: Clone {
     fn handle(&mut self, stream: TcpStream) -> impl std::future::Future<Output = ()> + Send;
 
     fn interrupt(&mut self) -> Receiver<Command>;
 
     fn control(&mut self) -> Sender<Command>;
+    
+}
+
+pub fn handle_register() -> Result<Vec<u8>, String> {
+    let mut builder = FlatBufferBuilder::new();
+
+    let register = Register::create(&mut builder, &RegisterArgs { id: None, catalog: None, ..Default::default() }).as_union_value();
+
+    let msg = Message::create(&mut builder, &MessageArgs{data_type: Payload::Register, data: Some(register), status: None });
+
+    builder.finish(msg, None);
+    Ok(builder.finished_data().to_vec())
+}
+pub async fn ack(stream: &mut TcpStream) -> Result<(), String> {
+    read(stream).await?;
+
+    stream.write_all(&handle_register().unwrap()).await?;
+    Ok(())
+}
+async fn read<'a>(stream: &mut TcpStream) -> Result<String, String> {
+    let mut len_buf = [0u8; 4];
+
+    match stream.read_exact(&mut len_buf).await {
+        Ok(_) => {}
+        Err(err) => error!("TPC Destination Regist{:?}", err),
+    }
+    let size = u32::from_be_bytes(len_buf) as usize;
+    let mut buffer = vec![0; size];
+    stream.read(&mut buffer).await?;
+    match deserialize_message(&buffer) {
+        Ok(msg) => Ok(format!("{:?}", msg)),
+        Err(err) => Err(format!("Cannot deserialize {:?}", err)),
+    }
 }
 
 impl Server {
@@ -67,30 +109,30 @@ impl Server {
     ) -> Result<(), String> {
         let rt = Runtime::new().map_err(|err| err.to_string())?;
         rt.block_on(async {
-            let listener = TcpListener::bind(self.addr).await.map_err(|err| err.to_string())?;
+            let listener = TcpListener::bind(self.addr)
+                .await
+                .map_err(|err| err.to_string())?;
             info!("TPC server listening...");
             let rx = Arc::new(rx);
-            
+
             control.send(Command::Ready(0)).unwrap();
-            
+
             loop {
                 let (stream, _) = listener.accept().await.map_err(|err| err.to_string())?;
 
                 match rx.try_recv() {
-                    Ok(cmd) => {
-                        match cmd {
-                            Command::Stop(s) => return Err(format!("Stopped {}", s)),
-                            Command::Ready(_) => {}
-                            Command::Overflow(_) => {}
-                            Command::Threshold(_) => {}
-                            Command::Okay(_) => {}
-                            Command::Attach(_, _) => {}
-                            Command::Detach(_) => {}
-                        }
-                    }
+                    Ok(cmd) => match cmd {
+                        Command::Stop(s) => return Err(format!("Stopped {}", s)),
+                        Command::Ready(_) => {}
+                        Command::Overflow(_) => {}
+                        Command::Threshold(_) => {}
+                        Command::Okay(_) => {}
+                        Command::Attach(_, _) => {}
+                        Command::Detach(_) => {}
+                    },
                     Err(_) => {}
                 }
-                
+
                 user.clone().handle(stream.into()).await;
             }
         })
@@ -104,5 +146,3 @@ impl Server {
         err.kind() == io::ErrorKind::Interrupted
     }
 }
-
-

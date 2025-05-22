@@ -1,10 +1,12 @@
 use crate::value::int::Int;
 use crate::value::{Bool, Text};
+use flatbuffers::{FlatBufferBuilder, WIPOffset};
+use schemas::message_generated::protocol::{Float as FlatFloat, FloatArgs};
 use serde::{Deserialize, Serialize};
+use speedy::{Readable, Writable};
 use std::cmp::min;
 use std::fmt::{Display, Formatter};
 use std::ops::{Add, Div, Sub};
-use speedy::{Readable, Writable};
 
 #[derive(Eq, Hash, Debug, PartialEq, Clone, Copy, Serialize, Deserialize, Ord, PartialOrd, Readable, Writable)]
 pub struct Float {
@@ -27,6 +29,10 @@ impl Float {
             None => Float { number: value as i64, shift: 0 },
             Some(i) => Float { number: number.parse().unwrap(), shift: (number.len() - i) as u8 }
         }
+    }
+
+    pub(crate) fn flatternize<'bldr>(&self, builder: &mut FlatBufferBuilder<'bldr>) -> WIPOffset<FlatFloat<'bldr>> {
+        FlatFloat::create(builder, &FloatArgs{ data: self.as_f64() as f32 })
     }
 
     pub(crate) fn normalize(&self) -> Self {

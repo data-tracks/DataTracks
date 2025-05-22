@@ -9,13 +9,14 @@ use crate::util::new_channel;
 use crate::util::Tx;
 use axum::routing::get;
 use axum::Router;
-use crossbeam::channel::RecvTimeoutError;
+use crossbeam::channel::{RecvTimeoutError};
 use schemas::message_generated::protocol::Create;
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::thread::JoinHandle;
 use std::time::Duration;
 use tokio::net::TcpListener;
 use tokio::sync::oneshot;
@@ -37,20 +38,26 @@ pub struct Attachment {
     sender: Tx<Train>,
     shutdown_flag: Arc<AtomicBool>,
     shutdown_channel: Sender<bool>,
+    handles: Vec<thread::JoinHandle<()>>,
 }
 
 impl Attachment {
-    pub fn new(port: u16, sender: Tx<Train>, shutdown_channel: Sender<bool>) -> Self {
-        let shutdown_flag = Arc::new(AtomicBool::new(false));
+    pub fn new(
+        port: u16,
+        sender: Tx<Train>,
+        shutdown_channel: Sender<bool>,
+        shutdown_flag: Arc<AtomicBool>,
+        handles: Vec<thread::JoinHandle<()>>,
+    ) -> Self {
         Attachment {
             port,
             sender,
             shutdown_flag,
             shutdown_channel,
+            handles,
         }
     }
 }
-
 
 impl Storage {
     pub(crate) fn new() -> Storage {
@@ -59,57 +66,54 @@ impl Storage {
 
     pub fn start_http_attacher(&mut self, id: usize, port: u16) -> Tx<Train> {
         let addr = util::parse_addr("127.0.0.1", port);
-        let (tx, rx) = new_channel::<Train>();
+        let (tx, rx) = new_channel::<Train, &str>("HTTP Attacher Bus");
 
         let bus = Arc::new(Mutex::new(HashMap::<usize, Tx<Train>>::new()));
         let clone = bus.clone();
 
         let (sh_tx, sh_rx) = oneshot::channel();
 
-        let attachment = Attachment::new(port, tx.clone(), sh_tx);
+        let shutdown_flag = Arc::new(AtomicBool::new(false));
 
-        let flag = attachment.shutdown_flag.clone();
+        let flag = shutdown_flag.clone();
 
-        let res = thread::Builder::new().name(format!("HTTP Observer {}", id)).spawn(move || {
-            while !flag.load(Ordering::Relaxed) {
-                match rx.recv_timeout(Duration::from_millis(100)) {
-                    Ok(train) => {
-                        match clone.lock() {
+        let mut handles: Vec<JoinHandle<()>> = vec![];
+        
+        let res = thread::Builder::new()
+            .name(format!("HTTP Observer {id}"))
+            .spawn(move || {
+                while !flag.load(Ordering::Relaxed) {
+                    match rx.recv_timeout(Duration::from_millis(10)) {
+                        Ok(train) => match clone.lock() {
                             Ok(lock) => {
-                                lock.values().for_each(|l| {
-                                    match l.send(train.clone()) {
-                                        Ok(_) => {}
-                                        Err(err) => error!("{}", err),
-                                    }
+                                lock.values().for_each(|l| match l.send(train.clone()) {
+                                    Ok(_) => {}
+                                    Err(err) => error!("Bus error: {err}"),
                                 });
                             }
-                            Err(_) => {}
-                        }
-                    }
-                    Err(err) => {
-                        match err {
+                            Err(e) => {
+                                error!("Bus error lock: {e}");
+                            }
+                        },
+                        Err(err) => match err {
                             RecvTimeoutError::Timeout => {
-                                debug!("Error {}", err)
+                                debug!("Error {err}")
                             }
                             RecvTimeoutError::Disconnected => {
                                 error!(err = ?err, "recv channel error");
                             }
-                        }
-                    }
-                };
-            }
-        });
+                        },
+                    };
+                }
+            });
 
         match res {
-            Ok(_) => {}
+            Ok(handle) => handles.push(handle), 
             Err(err) => error!("{}", err),
         }
 
         tokio::spawn(async move {
-            let state = DestinationState {
-                outs: bus,
-            };
-
+            let state = DestinationState { name: "HTTP Attacher".to_string(), outs: bus };
             let app = Router::new()
                 .route("/ws", get(util::publish_ws))
                 .layer(CorsLayer::permissive())
@@ -117,15 +121,21 @@ impl Storage {
 
             let listener = match TcpListener::bind(&addr).await {
                 Ok(listener) => listener,
-                Err(err) => panic!("{}", err),
+                Err(err) => panic!("Error attach {err}"),
             };
-            match axum::serve(listener, app).with_graceful_shutdown(async move {
-                sh_rx.await.ok();
-            }).await {
+            match axum::serve(listener, app)
+                .with_graceful_shutdown(async move {
+                    sh_rx.await.ok();
+                })
+                .await
+            {
                 Ok(_) => {}
                 Err(err) => error!("{}", err),
             }
         });
+
+        let attachment = Attachment::new(port, tx.clone(), sh_tx, shutdown_flag, handles);
+        
         self.attachments.lock().unwrap().insert(id, attachment);
         tx
     }
@@ -162,7 +172,12 @@ impl Storage {
         }
     }
 
-    pub fn add_destination(&mut self, plan_id: usize, stop_id: usize, destination: Box<dyn Destination>) {
+    pub fn add_destination(
+        &mut self,
+        plan_id: usize,
+        stop_id: usize,
+        destination: Box<dyn Destination>,
+    ) {
         let mut plans = self.plans.lock().unwrap();
         let id = destination.id();
         if let Some(p) = plans.get_mut(&plan_id) {
@@ -173,7 +188,11 @@ impl Storage {
 
     pub fn start_plan_by_name(&mut self, name: String) {
         let mut lock = self.plans.lock().unwrap();
-        let plan = lock.iter_mut().filter(|(_id, plan)| plan.name == name).map(|(_, plan)| plan).next();
+        let plan = lock
+            .iter_mut()
+            .filter(|(_id, plan)| plan.name == name)
+            .map(|(_, plan)| plan)
+            .next();
         match plan {
             None => {}
             Some(p) => {
@@ -197,7 +216,12 @@ impl Storage {
         }
     }
 
-    pub fn attach(&mut self, source_id: usize, plan_id: usize, stop_id: usize) -> Result<usize, String> {
+    pub fn attach(
+        &mut self,
+        source_id: usize,
+        plan_id: usize,
+        stop_id: usize,
+    ) -> Result<usize, String> {
         {
             let attach = self.attachments.lock().unwrap();
             let values = attach.get(&source_id);
@@ -206,14 +230,17 @@ impl Storage {
             }
         }
 
-
         let tx = self.start_http_attacher(source_id, 3131);
         let mut lock = self.plans.lock().unwrap();
         let plan = lock.get_mut(&plan_id).unwrap();
         match plan.stations.get_mut(&stop_id) {
             None => error!("Could not find plan"),
             Some(station) => {
-                station.control.0.send(Command::Attach(source_id, tx)).unwrap();
+                station
+                    .control
+                    .0
+                    .send(Command::Attach(source_id, tx))
+                    .unwrap();
             }
         }
         Ok(3131)

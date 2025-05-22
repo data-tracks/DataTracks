@@ -11,12 +11,11 @@ use std::collections::{HashMap};
 use std::sync::{Arc};
 use std::thread;
 use std::time::Duration;
-use flatbuffers::FlatBufferBuilder;
-use schemas::message_generated::protocol::{Message, MessageArgs, Payload, Register, RegisterArgs};
+use schemas::message_generated::protocol::{Payload};
 use tokio::time::sleep;
 use tracing::{debug, error, info, warn};
 use crate::tpc::Server;
-use crate::tpc::server::{StreamUser, TcpStream};
+use crate::tpc::server::{handle_register, StreamUser, TcpStream};
 
 #[derive(Clone)]
 pub struct TpcSource {
@@ -32,18 +31,6 @@ impl TpcSource {
         Self {
             id: new_id(), url, port, outs: Vec::new(),
         }
-    }
-
-    fn handle_register(&self) -> Result<Vec<u8>, String> {
-        let mut builder = FlatBufferBuilder::new();
-
-
-        let register = Register::create(&mut builder, &RegisterArgs { id: None, catalog: None, ..Default::default() }).as_union_value();
-
-        let msg = Message::create(&mut builder, &MessageArgs{data_type: Payload::Register, data: Some(register), status: None });
-
-        builder.finish(msg, None);
-        Ok(builder.finished_data().to_vec())
     }
 
     fn send(&self, train: Train) {
@@ -161,7 +148,7 @@ impl StreamUser for TpcSource {
                             match msg.data_type() {
                                 Payload::Register => {
                                     info!("tpc registration");
-                                    stream.write_all(&self.handle_register().unwrap()).await.unwrap();
+                                    stream.write_all(&handle_register().unwrap()).await.unwrap();
                                 },
                                 Payload::Train => {
                                     let msg = msg.data_as_train().unwrap();

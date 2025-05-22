@@ -109,7 +109,7 @@ pub async fn publish_ws(ws: WebSocketUpgrade, State(state): State<DestinationSta
 }
 
 async fn handle_publish_socket(mut socket: WebSocket, state: DestinationState) {
-    let (tx, rx) = new_channel();
+    let (tx, rx) = new_channel("");
     let id = new_id();
     {
         // drop after
@@ -117,32 +117,37 @@ async fn handle_publish_socket(mut socket: WebSocket, state: DestinationState) {
     }
     
     loop {
-        if let Ok(train) = rx.recv() {
-            match train.values {
-                None => {}
-                Some(values) => {
-                    for value in values {
-                        let value = match value {
-                            value::Value::Wagon(w) => w.unwrap(),
-                            value => value
-                        };
-                        match socket.send(Message::Text(serde_json::to_string(&value).unwrap().into())).await {
-                            Ok(_) => {}
-                            Err(err) => {
-                                for _ in 0..3 {
-                                    match socket.send(Message::Text(serde_json::to_string(&value).unwrap().into())).await {
-                                        Ok(_) => {continue}
-                                        Err(_) => {}
+        match rx.recv() {
+            Ok(train) => {
+                match train.values {
+                    None => {}
+                    Some(values) => {
+                        for value in values {
+                            let value = match value {
+                                value::Value::Wagon(w) => w.unwrap(),
+                                value => value
+                            };
+                            match socket.send(Message::Text(serde_json::to_string(&value).unwrap().into())).await {
+                                Ok(_) => {}
+                                Err(err) => {
+                                    for _ in 0..3 {
+                                        match socket.send(Message::Text(serde_json::to_string(&value).unwrap().into())).await {
+                                            Ok(_) => { continue }
+                                            Err(_) => {}
+                                        }
                                     }
-                                }
 
-                                warn!("Failed to send message after retry: {}", err);
-                                state.outs.lock().unwrap().remove(&id);
-                                return;
+                                    warn!("Failed to send message after retry: {}", err);
+                                    state.outs.lock().unwrap().remove(&id);
+                                    return;
+                                }
                             }
                         }
                     }
                 }
+            }
+            Err(err) => {
+                warn!("Error {err}")
             }
         }
     }

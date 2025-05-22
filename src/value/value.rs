@@ -19,6 +19,8 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::ops::{Add, AddAssign, Div, Mul, Sub};
+use flatbuffers::{FlatBufferBuilder, WIPOffset};
+use schemas::message_generated::protocol::{ValueWrapper, ValueWrapperArgs, Value as FlatValue, Null as FlatNull, NullArgs};
 use tracing::warn;
 
 #[derive(Eq, Clone, Debug, Serialize, Deserialize, Ord, PartialOrd, Readable, Writable)]
@@ -34,6 +36,7 @@ pub enum Value {
     Null,
     Wagon(processing::Wagon),
 }
+
 
 impl Default for Value {
     fn default() -> Self {
@@ -62,7 +65,7 @@ impl Value {
         Value::Bool(Bool(bool))
     }
 
-    pub fn time(ms: usize, ns: u32) -> Value {
+    pub fn time(ms: i64, ns: u32) -> Value {
         Value::Time(Time::new(ms, ns))
     }
 
@@ -72,6 +75,40 @@ impl Value {
 
     pub fn array(tuple: Vec<Value>) -> Value {
         Value::Array(Array::new(tuple))
+    }
+
+    pub(crate) fn flatternize<'bldr>(&self, builder: &mut FlatBufferBuilder<'bldr>) -> WIPOffset<ValueWrapper<'bldr>> {
+        let data_type = self.get_flat_type();
+
+        let data = match self {
+            Value::Int(i) => Some(i.flatternize(builder).as_union_value()),
+            Value::Float(i) => Some(i.flatternize(builder).as_union_value()),
+            Value::Bool(i) => Some(i.flatternize(builder).as_union_value()),
+            Value::Text(i) => Some(i.flatternize(builder).as_union_value()),
+            Value::Time(i) => Some(i.flatternize(builder).as_union_value()),
+            Value::Date(i) => todo!("remove"),
+            Value::Array(i) => Some(i.flatternize(builder).as_union_value()),
+            Value::Dict(i) => Some(i.flatternize(builder).as_union_value()),
+            Null => Some(FlatNull::create(builder, &NullArgs{}).as_union_value()),
+            Wagon(i) => return i.value.flatternize(builder),
+        };
+        
+        ValueWrapper::create(builder, &ValueWrapperArgs{ data_type, data })
+    }
+
+    pub(crate) fn get_flat_type(&self) -> FlatValue {
+        match self {
+            Value::Int(_) => FlatValue::Integer,
+            Value::Float(_) => FlatValue::Float,
+            Value::Bool(_) => FlatValue::Bool,
+            Value::Text(_) => FlatValue::Text,
+            Value::Time(_) => FlatValue::Time,
+            Value::Date(_) => todo!("remove"),
+            Value::Array(_) => FlatValue::List,
+            Value::Dict(_) => FlatValue::Document,
+            Null => FlatValue::Null,
+            Wagon(w) => w.value.get_flat_type()
+        }
     }
 
     pub(crate) fn dict(values: BTreeMap<String, Value>) -> Value {
@@ -168,14 +205,14 @@ impl Value {
 
     pub fn as_time(&self) -> Result<Time, ()> {
         match self {
-            Value::Int(i) => Ok(Time::new(i.0 as usize, 0)),
+            Value::Int(i) => Ok(Time::new(i.0 as i64, 0)),
             Value::Float(f) => {
                 let num = f.number.to_string();
                 let (ms, partial_ns) = num.split_at(num.len() - f.shift as usize);
                 let ns = format!("{:0<6}", partial_ns.chars().take(6).collect::<String>());
                 Ok(Time::new(ms.parse().unwrap(), ns.parse().unwrap()))
             }
-            Value::Bool(b) => Ok(Time::new(b.0 as usize, 0)),
+            Value::Bool(b) => Ok(Time::new(b.0 as i64, 0)),
             Value::Text(t) => Ok(Time::from(t.clone())),
             Value::Time(t) => Ok(t.clone()),
             Value::Array(_) => Err(()),

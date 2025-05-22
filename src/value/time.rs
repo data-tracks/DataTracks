@@ -1,15 +1,18 @@
 use crate::value::{Text, Value};
 use chrono::{DateTime, TimeZone, Timelike, Utc};
+use flatbuffers::{FlatBufferBuilder, WIPOffset};
+use schemas::message_generated::protocol::{Time as FlatTime, TimeArgs};
 use serde::{Deserialize, Serialize};
+use speedy::{Readable, Writable};
 use std::fmt::Formatter;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
-use speedy::{Readable, Writable};
 
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize, Readable, Writable)]
 pub struct Time {
     pub ns: u32,
-    pub ms: usize,
+    pub ms: i64,
 }
+
 
 impl Default for Time {
     fn default() -> Self {
@@ -18,13 +21,17 @@ impl Default for Time {
 }
 
 impl Time {
-    pub fn new(ms: usize, ns: u32) -> Time {
+    pub fn new(ms: i64, ns: u32) -> Time {
         if ns >= 1000000 {
-            let ms = ms + (ns/1000000) as usize;
+            let ms = ms + (ns/1000000) as i64;
             let ns = ns % 1000000;
             return Time { ns, ms };
         }
         Time { ms, ns }
+    }
+
+    pub(crate) fn flatternize<'bldr>(&self, builder: &mut FlatBufferBuilder<'bldr>) -> WIPOffset<FlatTime<'bldr>> {
+        FlatTime::create(builder, &TimeArgs{ data: self.ms as i64 })
     }
 
     pub fn now() -> Time {
@@ -32,7 +39,7 @@ impl Time {
 
         let ms = now_utc.timestamp_millis();
         let ns = now_utc.timestamp_nanos_opt().unwrap_or_default();
-        Value::time(ms as usize, ns as u32).as_time().unwrap()
+        Value::time(ms, ns as u32).as_time().unwrap()
     }
 }
 
@@ -48,7 +55,7 @@ impl From<&Instant> for Time {
             - now_instant.duration_since(*instant);
 
         // Extract seconds and nanoseconds
-        let total_millis = duration_since_epoch.as_millis() as usize;
+        let total_millis = duration_since_epoch.as_millis() as i64;
         let nanos = duration_since_epoch.subsec_nanos();
 
         Time::new(total_millis, nanos)
@@ -65,7 +72,7 @@ impl From<Text> for Time {
 impl<T: TimeZone> From<DateTime<T>> for Time {
     fn from(value: DateTime<T>) -> Self {
         let ns = value.time().nanosecond();
-        let ms = value.timestamp_millis() as usize;
+        let ms = value.timestamp_millis();
         Time::new(ms, ns)
     }
 }

@@ -32,13 +32,13 @@ impl ValType {
 }
 
 impl ValType {
-    pub(crate) fn parse(stencil: &str) -> ValType {
+    pub(crate) fn parse(stencil: &str) -> Result<ValType,String> {
         match stencil.to_lowercase().as_str() {
-            "int" | "integer" | "i" => ValType::Integer,
-            "float" | "f" => ValType::Float,
-            "bool" | "boolean" | "b" => ValType::Bool,
-            "text" | "string" | "s" => ValType::Text,
-            _ => panic!("Could not parse the type of the value.")
+            "int" | "integer" | "i" => Ok(ValType::Integer),
+            "float" | "f" => Ok(ValType::Float),
+            "bool" | "boolean" | "b" => Ok(ValType::Bool),
+            "text" | "string" | "s" => Ok(ValType::Text),
+            _ => Err(String::from("Could not parse the type of the value."))
         }
     }
 }

@@ -29,7 +29,7 @@ pub struct HttpDestination {
 
 impl HttpDestination {
     pub fn new(url: String, port: u16) -> Self {
-        let (sender, receiver) = new_channel();
+        let (sender, receiver) = new_channel("Incoming HTTP Destination");
         HttpDestination {
             id: 0,
             url,
@@ -55,6 +55,7 @@ impl Configurable for HttpDestination {
 
 #[derive(Clone)]
 pub(crate) struct DestinationState {
+    pub name: String,
     pub outs: Arc<Mutex<HashMap<usize, Tx<Train>>>>,
 }
 
@@ -91,7 +92,7 @@ async fn start_destination(http: HttpDestination, _rx: Receiver<Command>, receiv
         Err(err) => error!("{}", err),
     }
 
-    let state = DestinationState { outs: clone };
+    let state = DestinationState { outs: clone, name: String::from("HTTP Destination") };
 
     let app = Router::new()
         .route("/ws", get(publish_ws))

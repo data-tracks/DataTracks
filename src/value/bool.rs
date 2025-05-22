@@ -1,15 +1,22 @@
 use crate::value::{Float, Int, Text};
 use crate::value_display;
+use flatbuffers::{FlatBufferBuilder, WIPOffset};
+use schemas::message_generated::protocol::{Bool as FlatBool, BoolArgs};
 use serde::{Deserialize, Serialize};
-use std::fmt::Formatter;
 use speedy::{Readable, Writable};
+use std::fmt::Formatter;
 
 #[derive(Eq, PartialEq, Hash, Clone, Debug, Serialize, Deserialize, Ord, PartialOrd, Readable, Writable)]
 pub struct Bool(pub bool);
 
+
 impl Bool {
     pub(crate) fn new(bool: bool) -> Bool {
         Bool(bool)
+    }
+
+    pub(crate) fn flatternize<'bldr>(&self, builder: &mut FlatBufferBuilder<'bldr>) -> WIPOffset<FlatBool<'bldr>> {
+        FlatBool::create(builder, &BoolArgs{ data: self.0 })
     }
 }
 

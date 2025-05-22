@@ -234,7 +234,7 @@ fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> Result<Sql
                 expressions.push(SqlStatement::Symbol(SqlSymbol::new("*")))
             }
             Token::Type(t) => {
-                expressions.push(SqlStatement::Type(SqlType::new(ValType::parse(&t))))
+                expressions.push(SqlStatement::Type(SqlType::new(ValType::parse(&t)?)))
             }
             Text(t) => expressions.push(SqlStatement::Value(SqlValue::new(value::Value::text(&t)))),
             Token::Null => {

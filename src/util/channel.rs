@@ -2,14 +2,14 @@ use std::time::Duration;
 use crossbeam::channel::{unbounded, Receiver, RecvTimeoutError, Sender};
 
 
-pub fn new_channel<Msg: Send>() -> (Tx<Msg>, Rx<Msg>) {
+pub fn new_channel<Msg: Send, S: AsRef<str>>(name: S) -> (Tx<Msg>, Rx<Msg>) {
     let (tx, rx) = unbounded::<Msg>();
 
-    (Tx(tx), Rx(rx))
+    (Tx(tx, name.as_ref().to_string()), Rx(rx, name.as_ref().to_string()))
 }
 
 #[derive(Clone)]
-pub struct Rx<D>(Receiver<D>);
+pub struct Rx<D>(Receiver<D>, String);
 
 impl<F> Rx<F> {
     pub fn recv_timeout(&self, duration: Duration) -> Result<F, RecvTimeoutError> {
@@ -23,10 +23,14 @@ impl<F> Rx<F> {
     pub(crate) fn try_recv(&self) -> Result<F, String> {
         self.0.try_recv().map_err(|e| e.to_string())
     }
+
+    pub fn name(&self) -> String {
+        self.1.clone()
+    }
 }
 
 #[derive(Clone)]
-pub struct Tx<T>(Sender<T>);
+pub struct Tx<T>(Sender<T>, String);
 
 impl<F:Send> Tx<F>{
     pub(crate) fn send(&self, msg: F) -> Result<(), String> {
@@ -35,6 +39,10 @@ impl<F:Send> Tx<F>{
     
     pub(crate) fn len(&self) -> usize {
         self.0.len()
+    }
+    
+    pub fn name(&self) -> String {
+        self.1.clone()
     }
 }
 
@@ -53,7 +61,7 @@ mod test {
     #[test]
     fn receive() {
         let value = 3i64;
-        let (tx, rx) = new_channel();
+        let (tx, rx) = new_channel("test");
 
         tx.send(value.clone()).unwrap();
 
@@ -62,7 +70,7 @@ mod test {
 
     #[test]
     fn keep_track() {
-        let (tx, rx) = new_channel();
+        let (tx, rx) = new_channel("test");
 
         tx.send(3i64).unwrap();
 
@@ -75,7 +83,7 @@ mod test {
 
     #[test]
     fn keep_track_hugh() {
-        let (tx, rx) = new_channel();
+        let (tx, rx) = new_channel("test");
 
         let num = 1_000_000u64;
         let mut size = 1_000_000;
@@ -99,7 +107,7 @@ mod test {
 
     #[test]
     fn keep_track_multi_thread() {
-        let (tx, rx) = new_channel();
+        let (tx, rx) = new_channel("test");
 
         let num = 1_000_000;
         let size = Arc::new(AtomicU64::new(1_000_000));
@@ -143,7 +151,7 @@ mod test {
         }
         let std = instant.elapsed();
 
-        let (tx, rx) = new_channel();
+        let (tx, rx) = new_channel("test");
 
         instant = Instant::now();
         for _ in 0..1_000_000 {

@@ -21,7 +21,7 @@ pub struct DebugDestination {
 
 impl DebugDestination {
     pub fn new() -> Self {
-        let (tx, rx) = new_channel();
+        let (tx, rx) = new_channel("Debug Destination");
         DebugDestination { id: new_id(), receiver: Some(rx), sender: tx }
     }
 }

@@ -40,7 +40,7 @@ impl Default for Station {
 
 impl Station {
     pub(crate) fn new(stop: usize) -> Self {
-        let incoming = new_channel();
+        let incoming = new_channel(format!("Incoming {stop}"));
         let control = unbounded();
         Station {
             id: new_id(),
@@ -268,11 +268,11 @@ impl Station {
         match thread::Builder::new()
             .name(format!("Station {}", self.id))
             .spawn(move || {
-                debug!("Starting station {}", stop);
+                debug!("Starting station {stop}");
                 platform.operate(control)
             }) {
             Ok(_) => {}
-            Err(err) => error!("Could not spawn thread: {}", err),
+            Err(err) => error!("Could not spawn thread: {err}"),
         };
         sender
     }
@@ -357,7 +357,7 @@ pub mod tests {
             values.push(Value::Dict(Dict::from(Value::int(x))))
         }
 
-        let (tx, rx) = new_channel();
+        let (tx, rx) = new_channel("test");
 
         station.add_out(0, tx).unwrap();
         station.operate(Arc::new(control.0), HashMap::new());
@@ -388,7 +388,7 @@ pub mod tests {
         let mut first = Station::new(0);
         let input = first.get_in();
 
-        let (output_tx, output_rx) = new_channel();
+        let (output_tx, output_rx) = new_channel("test");
 
         let mut second = Station::new(1);
         second.add_out(0, output_tx).unwrap();
@@ -577,7 +577,7 @@ pub mod tests {
     ) {
         let mut station = Station::new(0);
         let train_sender = station.get_in();
-        let (tx, rx) = new_channel();
+        let (tx, rx) = new_channel("test");
         let _train_receiver = station.add_out(0, tx);
         let time = duration.clone();
 

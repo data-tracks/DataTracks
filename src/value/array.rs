@@ -1,16 +1,25 @@
 use crate::value::Value;
+use flatbuffers::{FlatBufferBuilder, WIPOffset};
+use schemas::message_generated::protocol::{List, ListArgs};
 use serde::{Deserialize, Serialize};
-use std::fmt::Formatter;
 use speedy::{Readable, Writable};
+use std::fmt::Formatter;
 
 #[derive(Eq, Hash, Clone, Debug, PartialEq, Serialize, Deserialize, Ord, PartialOrd, Readable, Writable)]
 pub struct Array{
     pub values: Vec<Value>
 }
 
+
 impl Array {
     pub fn new(values: Vec<Value>) -> Self {
         Array{values }
+    }
+
+    pub(crate) fn flatternize<'bldr>(&self, builder: &mut FlatBufferBuilder<'bldr>) -> WIPOffset<List<'bldr>> {
+        let values = &self.values.iter().map(|v| v.flatternize(builder)).collect::<Vec<_>>();
+        let values = builder.create_vector(values);
+        List::create(builder, &ListArgs{ data: Some(values) })
     }
 }
 

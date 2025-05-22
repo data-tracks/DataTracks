@@ -101,7 +101,7 @@ impl Taker for BackWindow {
         let mut values = vec![];
 
         for i in &self.buffer {
-            if ms - i.ms <= self.duration.num_milliseconds() as usize {
+            if ms - i.ms <= self.duration.num_milliseconds() {
                 let value = if let Some(val) = self.cache.get(&i.clone()){
                     val.clone()
                 }else {
@@ -218,7 +218,7 @@ mod test {
 
         let values = dict_values(vec![Value::float(3.3), Value::int(3)]);
 
-        let (tx, rx) = new_channel();
+        let (tx, rx) = new_channel("test");
 
 
         station.add_out(0, tx).unwrap();
@@ -249,7 +249,7 @@ mod test {
         let values = dict_values(vec![Value::float(3.3), Value::int(3)]);
         let after = dict_values(vec!["test".into()]);
 
-        let (tx, rx) = new_channel();
+        let (tx, rx) = new_channel("test");
 
 
         station.add_out(0, tx).unwrap();

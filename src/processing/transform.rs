@@ -408,7 +408,7 @@ mod tests {
 
         let values = dict_values(vec![Value::float(3.3), Value::int(3)]);
 
-        let (tx, rx) = new_channel();
+        let (tx, rx) = new_channel("test");
 
         station.add_out(0, tx).unwrap();
         station.operate(Arc::new(control.0), HashMap::new());
@@ -441,7 +441,7 @@ mod tests {
 
         let values = dict_values(vec![Value::float(3.3).into(), Value::int(3).into()]);
 
-        let (tx, rx) = new_channel();
+        let (tx, rx) = new_channel("test");
 
         station.add_out(0, tx).unwrap();
         station.operate(Arc::new(control.0), HashMap::new());

@@ -5,6 +5,8 @@ use std::collections::btree_map::{IntoIter, Keys, Values};
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
+use flatbuffers::{FlatBufferBuilder, WIPOffset};
+use schemas::message_generated::protocol::{Document, DocumentArgs, KeyValue, KeyValueArgs, Text, TextArgs, Value as FlatValue};
 use speedy::{Readable, Writable};
 
 #[derive(Eq, Clone, Debug, Default, Serialize, Deserialize, Ord, PartialOrd, Readable, Writable)]
@@ -17,6 +19,26 @@ pub struct Dict {
 impl Dict {
     pub fn new(values: BTreeMap<String, Value>) -> Self{
         Dict { values, alternative: BTreeMap::new() }
+    }
+
+    pub(crate) fn flatternize<'bldr>(&self, builder: &mut FlatBufferBuilder<'bldr>) -> WIPOffset<Document<'bldr>> {
+        let values = self.values.iter().map(|(k,v)| {
+            let key = builder.create_string(k);
+            let key_type = FlatValue::Text;
+            let values_type =  v.get_flat_type();
+            let key = None;//Some(Text::create(builder, &TextArgs{ data: Some(key) }).as_union_value());
+            let values = None;//Some(v.flatternize(builder).as_union_value());
+            
+            KeyValue::create(builder, &KeyValueArgs{
+                key_type,
+                key,
+                values_type,
+                values,
+            })
+        }).collect::<Vec<_>>();
+        
+        let values = builder.create_vector(values.as_slice());
+        Document::create(builder, &DocumentArgs{ data: Some(values) })
     }
 
     pub fn prefix_all(&mut self, prefix: &str) {

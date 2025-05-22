@@ -27,7 +27,7 @@ pub struct MqttDestination {
 
 impl MqttDestination {
     pub fn new(url: String, port: u16) -> Self {
-        let (tx, rx) = new_channel();
+        let (tx, rx) = new_channel("MQTT Destination");
         let id = new_id();
         MqttDestination { id, port, url, receiver: rx, sender: tx }
     }

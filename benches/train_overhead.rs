@@ -5,7 +5,7 @@ use data_tracks::value::{Dict, Value};
 
 pub fn benchmark_overhead(c: &mut Criterion) {
     c.bench_function("block_overhead", |b| {
-        let (tx, rx) = new_channel();
+        let (tx, rx) = new_channel("test");
 
         let sender = Sender::new(0, tx);
 

@@ -32,8 +32,8 @@ impl Sender {
 
     pub(crate) fn send(&self, train: Train) {
         for out in &self.outs {
-            if out.1.len() > 1000 {
-                warn!("too large")
+            if out.1.len() > 100 {
+                warn!("too large {}", out.1.name())
             }
             out.1.send(train.clone()).expect(&("Error on :".to_owned() + &out.0.to_string()));
         }

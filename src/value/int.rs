@@ -3,14 +3,21 @@ use crate::value_display;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Debug, Formatter};
 use std::ops::{Add, Div, Sub};
+use flatbuffers::{FlatBufferBuilder, WIPOffset};
+use schemas::message_generated::protocol::{Integer, IntegerArgs};
 use speedy::{Readable, Writable};
 
 #[derive(Eq, Hash, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Ord, PartialOrd, Readable, Writable)]
 pub struct Int(pub(crate) i64);
 
+
 impl Int{
     pub fn new(value: i64) -> Int{
         Int(value)
+    }
+
+    pub(crate) fn flatternize<'bldr>(&self, builder: &mut FlatBufferBuilder<'bldr>) -> WIPOffset<Integer<'bldr>> {
+        Integer::create(builder, &IntegerArgs{ data: self.0 })
     }
 }
 
