@@ -140,9 +140,15 @@ fn optimize(
     if let Some(transform) = transform {
         let mut enumerator = transform.optimize(transforms, Some(OptimizeStrategy::rule_based()));
         Box::new(move |train| {
+            // merge watermarks for now
+            let mut marks = HashMap::new();
+            train.iter().for_each(|t| t.marks.iter().for_each(|(k,v)| {marks.insert(*k,v.clone());}));
+            
             let windowed = window.take(train);
             enumerator.dynamically_load(windowed);
-            return enumerator.drain_to_train(stop);
+            let mut train = enumerator.drain_to_train(stop);
+            marks.into_iter().for_each(|(k,v)| {train.marks.insert(k,v);});
+            train
         })
     } else {
         Box::new(move |trains| {

@@ -41,6 +41,7 @@ flatbuffers = "25.2.10"
 reqwest = { version = "0.12.15", features = ["json", "blocking"] }
 regex = "1.11.1"
 rstest = "0.25.0"
+criterion = "0.6.0"
 
 [dependencies.schemas]
 git = "https://github.com/data-tracks/TrackRails.git"
@@ -49,32 +50,3 @@ branch = "generated"
 [[bench]]
 name = "train_overhead"
 harness = false
-
-# The profile that 'cargo dist' will build with
-[profile.dist]
-inherits = "release"
-lto = "thin"
-
-[profile.test]
-opt-level = 3
-
-[profile.release]
-opt-level = 3    # Maximum optimization level
-lto = true       # Enable Link Time Optimization
-codegen-units = 1 # Use a single codegen unit for better optimization (slower compile)
-
-
-# Config for 'cargo dist'
-[workspace.metadata.dist]
-# The preferred cargo-dist version to use in CI (Cargo.toml SemVer syntax)
-cargo-dist-version = "0.22.0"
-# CI backends to support
-ci = "github"
-# The installers to generate for each app
-installers = ["shell", "powershell", "msi"]
-# Target platforms to build apps for (Rust target-triple syntax)
-targets = ["aarch64-apple-darwin", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]
-# Path that installers should place binaries in
-install-path = "CARGO_HOME"
-# Whether to install an updater program
-install-updater = false

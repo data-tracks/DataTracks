@@ -19,8 +19,7 @@ use value::Dict;
 pub async fn receive(State(state): State<SourceState>, Json(payload): Json<Value>) -> impl IntoResponse {
     debug!("New http message received: {:?}", payload);
 
-    let value = transform_to_value(payload);
-    let train = Train::new(vec![value::Value::Dict(value)]);
+    let train = transform_to_train(payload);
 
     for out in state.source.lock().unwrap().iter() {
         out.send(train.clone()).unwrap();
@@ -30,26 +29,30 @@ pub async fn receive(State(state): State<SourceState>, Json(payload): Json<Value
     (StatusCode::OK, "Done".to_string())
 }
 
-pub fn transform_to_value(payload: Value) -> Dict {
+pub fn transform_to_train(payload: Value) -> Train {
     match payload {
-        Value::Object(o) => o.into(),
         v => {
-            let mut map = BTreeMap::new();
-            map.insert(String::from("$"), v.into());
-            Dict::new(map)
+            match serde_json::from_str::<Train>(v.as_str().unwrap()) {
+                Ok(msg) => msg,
+                Err(_) => {
+                    let mut map = BTreeMap::new();
+                    map.insert(String::from("$"), v.into());
+                    Train::new(vec![value::Value::Dict(Dict::new(map))])
+                }
+            }
         }
-    }
+    }.mark(0)
 }
 
 pub async fn receive_with_topic(Path(topic): Path<String>, State(state): State<SourceState>, Json(payload): Json<Value>) -> impl IntoResponse {
     debug!("New http message received: {:?}", payload);
 
-    let mut dict = transform_to_value(payload);
-    dict.insert(String::from("topic"), value::Value::text(topic.as_str()));
-
-    let train = Train::new(vec![value::Value::Dict(dict)]);
+    let mut dict = transform_to_train(payload);
+    //dict.insert(String::from("topic"), value::Value::text(topic.as_str()));
+    todo!();
+    //let train = Train::new(vec![value::Value::Dict(dict)]);
     for out in state.source.lock().unwrap().iter() {
-        out.send(train.clone()).unwrap();
+        //out.send(train.clone()).unwrap();
     }
 
     // Return a response
@@ -103,30 +106,19 @@ async fn handle_publish_socket(mut socket: WebSocket, state: DestinationState) {
     loop {
         match rx.recv() {
             Ok(train) => {
-                match train.values {
-                    None => {}
-                    Some(values) => {
-                        for value in values {
-                            let value = match value {
-                                value::Value::Wagon(w) => w.unwrap(),
-                                value => value
-                            };
-                            match socket.send(Message::Text(serde_json::to_string(&value).unwrap().into())).await {
-                                Ok(_) => {}
-                                Err(err) => {
-                                    for _ in 0..3 {
-                                        match socket.send(Message::Text(serde_json::to_string(&value).unwrap().into())).await {
-                                            Ok(_) => { continue }
-                                            Err(_) => {}
-                                        }
-                                    }
-
-                                    warn!("Failed to send message after retry: {}", err);
-                                    state.outs.lock().unwrap().remove(&id);
-                                    return;
-                                }
+                match socket.send(Message::Text(serde_json::to_string(&train).unwrap().into())).await {
+                    Ok(_) => {}
+                    Err(err) => {
+                        for _ in 0..3 {
+                            match socket.send(Message::Text(serde_json::to_string(&train).unwrap().into())).await {
+                                Ok(_) => { continue }
+                                Err(_) => {}
                             }
                         }
+
+                        warn!("Failed to send message after retry: {}", err);
+                        state.outs.lock().unwrap().remove(&id);
+                        return;
                     }
                 }
             }
@@ -148,13 +140,12 @@ async fn handle_receive_socket(mut socket: WebSocket, state: SourceState) {
             Ok(Message::Text(text)) => {
                 debug!("New http message received: {:?}", text);
 
-                let value = if let Ok(payload) = serde_json::from_str::<Value>(&text) {
-                    transform_to_value(payload)
+                let train = if let Ok(payload) = serde_json::from_str::<Value>(&text) {
+                    transform_to_train(payload)
                 } else{
                     let value = json!({"d": *text});
-                    transform_to_value(value.get("d").unwrap().clone())
+                    transform_to_train(text.parse().unwrap())
                 };
-                let train = Train::new(vec![value::Value::Dict(value)]);
 
                 debug!("New train created: {:?}", train);
                 for out in state.source.lock().unwrap().iter_mut() {

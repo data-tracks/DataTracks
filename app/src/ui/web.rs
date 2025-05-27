@@ -27,7 +27,7 @@ use crate::util::deserialize_message;
 
 
 // Embed the entire directory
-static ASSETS_DIR: Dir<'_> = include_dir!("../ui/dist");
+static ASSETS_DIR: Dir<'_> = include_dir!("./ui/dist");
 
 pub fn start_web(storage: Arc<Mutex<Storage>>) {
     // Create a new Tokio runtime

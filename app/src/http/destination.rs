@@ -123,8 +123,7 @@ impl Destination for HttpDestination {
         let port = options
             .get("port")
             .unwrap()
-            .as_str()
-            .unwrap()
+            .to_string()
             .parse::<u16>()
             .unwrap();
 

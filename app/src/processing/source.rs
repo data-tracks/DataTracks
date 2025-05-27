@@ -16,12 +16,14 @@ use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use schemas::message_generated::protocol::{Source as FlatSource, SourceArgs};
 use serde_json::{Map, Value};
 use crate::processing::HttpSource;
+use crate::tpc::TpcSource;
 
 pub fn parse_source(type_: &str, options: Map<String, Value>) -> Result<Box<dyn Source>, String> {
     let source: Box<dyn Source> = match type_.to_ascii_lowercase().as_str() {
         "mqtt" => Box::new(MqttSource::parse(options)?),
         "sqlite" => Box::new(LiteSource::parse(options)?),
         "http" => Box::new(HttpSource::parse(options)?),
+        "tpc" => Box::new(TpcSource::parse(options)?),
         #[cfg(test)]
         "dummy" => Box::new(DummySource::parse(options)?),
         _ => Err(format!("Invalid type: {}", type_))?,

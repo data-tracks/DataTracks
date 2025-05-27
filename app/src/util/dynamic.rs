@@ -9,7 +9,7 @@ type FieldExtractor = Box<dyn Fn(&Value) -> Value + Send + Sync>;
 
 /**
 DynamicQueries can come in two forms, either they access values by keys, which is intended for
-dictionaries or via index, which is intended for arrays. Additionally, both allow to access the full input
+dictionaries or via index, which is intended for arrays. Additionally, both allow accessing the full input
 **/
 
 #[derive(Clone, Debug, PartialEq)]

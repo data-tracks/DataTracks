@@ -1,9 +1,9 @@
 use flatbuffers::FlatBufferBuilder;
-use schemas::message_generated::protocol::{Message, MessageArgs, Payload, Train as FlatTrain, TrainArgs, Value as FlatValue, ValueWrapper};
+use schemas::message_generated::protocol::{Message, MessageArgs, Payload, Train as FlatTrain, TrainArgs};
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 use std::collections::HashMap;
-use value::{Time,Value};
+use value::{Time, Value};
 
 pub type MutWagonsFunc = Box<dyn FnMut(&mut Vec<Train>) -> Train>;
 
@@ -11,12 +11,13 @@ pub type MutWagonsFunc = Box<dyn FnMut(&mut Vec<Train>) -> Train>;
 pub struct Train {
     pub marks: HashMap<usize, Time>,
     pub values: Option<Vec<Value>>,
+    pub event_time: Time,
 }
 
 
 impl Train {
     pub fn new(values: Vec<Value>) -> Self {
-        Train { marks: HashMap::new(), values: Some(values) }
+        Train { marks: HashMap::new(), values: Some(values), event_time: Time::now() }
     }
 
     pub fn mark(self, stop: usize) -> Self {

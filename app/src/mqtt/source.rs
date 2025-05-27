@@ -9,8 +9,6 @@ use crate::ui::{ConfigModel, StringModel};
 use crate::util::{new_id, Tx};
 use value::{Dict, Value};
 use crossbeam::channel::{unbounded, Sender};
-use rumqttc::{Event, Incoming};
-use rumqttd::protocol::Publish;
 use rumqttd::Notification;
 use serde_json::Map;
 use std::collections::{BTreeMap, HashMap};

@@ -1,6 +1,6 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use app::new_channel;
-use app::processing::{Block, Sender, Train};
+use data_tracks::processing::{Block, Sender, Train};
+use data_tracks::new_channel;
 use value::{Dict, Value};
 
 pub fn benchmark_overhead(c: &mut Criterion) {

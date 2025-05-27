@@ -16,12 +16,14 @@ use schemas::message_generated::protocol::{Destination as FlatDestination, Desti
 use serde_json::{Map, Value};
 #[cfg(test)]
 use std::sync::Mutex;
+use crate::tpc::TpcDestination;
 
 pub fn parse_destination(type_: &str, options: Map<String, Value>) -> Result<Box<dyn Destination>, String> {
     let destination: Box<dyn Destination> = match type_.to_ascii_lowercase().as_str() {
         "mqtt" => Box::new(MqttDestination::parse(options)?),
         "sqlite" => Box::new(LiteDestination::parse(options)?),
         "http" => Box::new(HttpDestination::parse(options)?),
+        "tpc" => Box::new(TpcDestination::parse(options)?),
         #[cfg(test)]
         "dummy" => Box::new(DummyDestination::parse(options)?),
         _ => Err(format!("Invalid type: {}", type_))?,

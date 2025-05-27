@@ -63,8 +63,14 @@ impl StreamUser for TpcManagement {
                     match deserialize_message(&buffer) {
                         Ok(msg) => {
                             match API::handle_message(self.storage.clone(), self.api.clone(), msg) {
-                                Ok(res) => stream.write_all(&res).await.unwrap(),
-                                Err(err) => stream.write_all(&err).await.unwrap(),
+                                Ok(res) => match stream.write_all(&res).await {
+                                    Ok(_) => {}
+                                    Err(err) => error!("{}", err),
+                                },
+                                Err(err) => match stream.write_all(&err).await {
+                                    Ok(_) => {}
+                                    Err(err) => error!("{}", err),
+                                },
                             }
                         }
                         Err(_) => (),
