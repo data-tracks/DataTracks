@@ -17,7 +17,7 @@ pub fn benchmark_overhead(c: &mut Criterion) {
         let train = Train::new(vec![Value::Dict(Dict::from(Value::int(3)))]);
 
         b.iter(|| {
-            block.next(train.clone());
+            block.apply(&mut vec![train.clone()]);
 
             rx.recv().unwrap();
         });

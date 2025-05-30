@@ -11,13 +11,17 @@ use crate::processing::station::Command::{Okay, Ready, Threshold};
 use crate::processing::station::{Command, Station};
 use crate::processing::train::MutWagonsFunc;
 use crate::processing::transform::{Taker, Transform};
+use crate::processing::watermark::WatermarkStrategy;
 use crate::processing::window::Window;
-use crate::processing::Train;
+use crate::processing::Block::{All, Non, Specific};
+use crate::processing::{watermark, Train};
 use crate::util::{new_id, Rx};
 use crossbeam::channel;
-use crossbeam::channel::{Receiver};
-pub use logos::{Source};
+use crossbeam::channel::Receiver;
+pub use logos::Source;
 use tracing::debug;
+use value::Time;
+use crate::Tx;
 
 const IDLE_TIMEOUT: Duration = Duration::from_nanos(10);
 
@@ -25,10 +29,11 @@ pub(crate) struct Platform {
     id: usize,
     control: Receiver<Command>,
     receiver: Rx<Train>,
-    sender: Option<Sender>,
+    sender: Sender,
     transform: Option<Transform>,
     layout: Layout,
     window: Window,
+    watermark_strategy: WatermarkStrategy,
     stop: usize,
     blocks: Vec<usize>,
     inputs: Vec<usize>,
@@ -49,13 +54,14 @@ impl Platform {
         let inputs = station.inputs.clone();
         let control = station.control.clone();
         let layout = station.layout.clone();
+        let watermark_strategy = station.watermark_strategy.clone();
 
         (
             Platform {
                 id: new_id(),
                 control: control.1,
                 receiver,
-                sender: Some(sender),
+                sender,
                 transform,
                 window,
                 layout,
@@ -63,6 +69,7 @@ impl Platform {
                 blocks,
                 inputs,
                 transforms,
+                watermark_strategy,
             },
             control.0,
         )
@@ -71,17 +78,20 @@ impl Platform {
         let process = optimize(
             self.stop,
             self.transform.clone(),
-            self.window.windowing(),
             self.transforms.clone(),
+            Box::new(SenderStep {
+                sender: self.sender.clone(),
+            }),
         );
-        let sender = self.sender.take().unwrap();
 
         let stop = self.stop;
         let timeout = IDLE_TIMEOUT;
         let mut threshold = 2000;
         let mut too_high = false;
 
-        let mut block = Block::new(self.inputs.clone(), self.blocks.clone(), process, sender);
+        let watermark_strategy = self.watermark_strategy.clone();
+        let mut block = Block::new(self.inputs.clone(), self.blocks.clone(), process);
+        
 
         control.send(Ready(stop)).unwrap();
 
@@ -100,11 +110,13 @@ impl Platform {
             if let Ok(command) = self.control.try_recv() {
                 match command {
                     Command::Stop(_) => return,
-                    Command::Attach(num, send) => {
-                        block.add(num, send);
+                    Command::Attach(num, (send, watermark)) => {
+                        block.attach(num, send);
+                        self.watermark_strategy.attach(num, watermark);
                     }
                     Command::Detach(num) => {
-                        block.remove(num);
+                        block.detach(num);
+                        self.watermark_strategy.detach(num);
                     }
                     Threshold(th) => {
                         threshold = th;
@@ -115,11 +127,9 @@ impl Platform {
 
             match self.receiver.try_recv() {
                 Ok(train) => {
-                    if stop == 3 {
-                        debug!("Train: {:?}", train);
-                    }
                     debug!("{:?}", train);
                     if self.layout.fits_train(&train) {
+                        self.watermark_strategy.mark(&train);
                         block.next(train); // window takes precedence to
                     }
                 }
@@ -134,27 +144,75 @@ impl Platform {
 fn optimize(
     stop: usize,
     transform: Option<Transform>,
-    mut window: Box<dyn Taker>,
     transforms: HashMap<String, Transform>,
-) -> MutWagonsFunc {
-    if let Some(transform) = transform {
-        let mut enumerator = transform.optimize(transforms, Some(OptimizeStrategy::rule_based()));
-        Box::new(move |train| {
-            // merge watermarks for now
-            let mut marks = HashMap::new();
-            train.iter().for_each(|t| t.marks.iter().for_each(|(k,v)| {marks.insert(*k,v.clone());}));
-            
-            let windowed = window.take(train);
-            enumerator.dynamically_load(windowed);
-            let mut train = enumerator.drain_to_train(stop);
-            marks.into_iter().for_each(|(k,v)| {train.marks.insert(k,v);});
-            train
+    mut next: Box<dyn Step>,
+) -> Box<dyn Step> {
+    match transform {
+        Some(transform) => {
+            let mut enumerator =
+                transform.optimize(transforms, Some(OptimizeStrategy::rule_based()));
+            Box::new(FunctionStep {
+                function: Box::new(move |train| {
+                    enumerator.dynamically_load(train);
+                    next.apply(enumerator.drain_to_train(stop));
+                }),
+            })
+        }
+        None => next,
+    }
+}
+
+fn merge_marks(train: &mut Vec<Train>) -> HashMap<usize, Time> {
+    // merge watermarks for now
+    let mut marks = HashMap::new();
+    train.iter().for_each(|t| {
+        t.marks.iter().for_each(|(k, v)| {
+            marks.insert(*k, v.clone());
         })
-    } else {
-        Box::new(move |trains| {
-            let windowed = window.take(trains);
-            let train: Train = windowed.into();
-            return train.mark(stop);
-        })
+    });
+    marks
+}
+
+pub trait Step {
+    fn apply(&mut self, train: Train);
+
+    fn detach(&mut self, num: usize);
+
+    fn attach(&mut self, num: usize, tx: Tx<Train>);
+}
+
+pub struct FunctionStep {
+    function: Box<dyn FnMut(Train)>,
+}
+
+impl Step for FunctionStep {
+    fn apply(&mut self, train: Train) {
+        (self.function)(train);
+    }
+
+    fn detach(&mut self, _num: usize) {
+        // nothing on purpose
+    }
+
+    fn attach(&mut self, _num: usize, _tx: Tx<Train>) {
+        // nothing on purpose
+    }
+}
+
+pub struct SenderStep {
+    sender: Sender,
+}
+
+impl Step for SenderStep {
+    fn apply(&mut self, train: Train) {
+        self.sender.send(train)
+    }
+
+    fn detach(&mut self, num: usize) {
+        self.sender.remove(num)
+    }
+
+    fn attach(&mut self, num: usize, tx: Tx<Train>) {
+        self.sender.add(num, tx)
     }
 }

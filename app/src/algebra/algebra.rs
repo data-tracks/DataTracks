@@ -191,7 +191,7 @@ impl ValueHandler for IdentityHandler {
 
 
 pub trait ValueIterator: Iterator<Item=Value> + Send + 'static {
-    fn dynamically_load(&mut self, trains: Vec<Train>);
+    fn dynamically_load(&mut self, train: Train);
 
     fn drain(&mut self) -> Vec<Value> {
         self.into_iter().collect()

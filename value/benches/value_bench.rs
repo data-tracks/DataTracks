@@ -9,7 +9,7 @@ fn get_values() -> Vec<Value> {
         Value::float(2.5),
         Value::text("hello"),
         Value::null(),
-        Value::time(350, 5),
+        Value::time(350, 5).into(),
         Value::date(305),
         Value::array(vec![3.into(), 7.into()]),
         Value::dict_from_pairs(vec![

@@ -1,10 +1,11 @@
 use crate::{Text, Value};
-use chrono::{DateTime, TimeZone, Timelike, Utc};
+use chrono::{DateTime, Duration, TimeZone, Timelike, Utc};
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use schemas::message_generated::protocol::{Time as FlatTime, TimeArgs};
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 use std::fmt::Formatter;
+use std::ops::Sub;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize, Readable, Writable)]
@@ -80,6 +81,14 @@ impl<T: TimeZone> From<DateTime<T>> for Time {
 impl From<Time> for Value {
     fn from(time: Time) -> Self {
         Value::Time(time)
+    }
+}
+
+impl Sub<Duration> for &Time {
+    type Output = Time;
+
+    fn sub(self, rhs: Duration) -> Self::Output {
+        Value::time(self.ms - rhs.num_milliseconds(), rhs.num_nanoseconds().map(|ns| self.ns as i64 - ns).unwrap_or(0) as u32).as_time().unwrap()
     }
 }
 

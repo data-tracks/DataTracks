@@ -17,6 +17,8 @@ use crossbeam::channel::{unbounded, Receiver};
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use schemas::message_generated::protocol::{Station as FlatStation};
 use tracing::{debug, error};
+use value::Time;
+use crate::processing::watermark::WatermarkStrategy;
 
 #[derive(Clone)]
 pub struct Station {
@@ -30,6 +32,7 @@ pub struct Station {
     pub inputs: Vec<usize>,
     pub layout: Layout,
     pub control: (channel::Sender<Command>, Receiver<Command>),
+    pub watermark_strategy: WatermarkStrategy
 }
 
 impl Default for Station {
@@ -53,6 +56,7 @@ impl Station {
             inputs: vec![],
             layout: Layout::default(),
             control: (control.0.clone(), control.1.clone()),
+            watermark_strategy: Default::default(),
         }
     }
 
@@ -289,7 +293,7 @@ pub enum Command {
     Overflow(usize),
     Threshold(usize),
     Okay(usize),
-    Attach(usize, Tx<Train>),
+    Attach(usize, (Tx<Train>, Tx<Time>)),
     Detach(usize),
 }
 

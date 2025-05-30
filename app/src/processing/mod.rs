@@ -26,3 +26,4 @@ mod tests;
 mod debug;
 mod depot;
 pub(crate) mod option;
+mod watermark;
