@@ -226,8 +226,8 @@ impl Iterator for AggIterator {
 }
 
 impl ValueIterator for AggIterator {
-    fn dynamically_load(&mut self, trains: Vec<Train>) {
-        self.input.dynamically_load(trains);
+    fn dynamically_load(&mut self, train: Train) {
+        self.input.dynamically_load(train);
         self.reloaded = false;
     }
 

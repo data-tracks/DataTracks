@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use data_tracks::processing::{Block, Sender, Train};
+use data_tracks::processing::{Block, FunctionStep, Sender, Train};
 use data_tracks::new_channel;
 use value::{Dict, Value};
 
@@ -9,15 +9,17 @@ pub fn benchmark_overhead(c: &mut Criterion) {
 
         let sender = Sender::new(0, tx);
 
-        let process = Box::new(move |trains: &mut Vec<Train>| {
-            trains.clone().into()
+        let process = Box::new(move |train: Train| {
+            sender.send(train)
         });
-        let mut block = Block::new(vec![], vec![], process, sender);
+        let func = Box::new(FunctionStep::new(process));
+        
+        let mut block = Block::new(vec![], vec![], func );
 
         let train = Train::new(vec![Value::Dict(Dict::from(Value::int(3)))]);
 
         b.iter(|| {
-            block.apply(&mut vec![train.clone()]);
+            block.next(train.clone());
 
             rx.recv().unwrap();
         });

@@ -1,7 +1,7 @@
 use chrono::Duration;
 use value::Time;
 use crate::processing::Train;
-use crate::Tx;
+use crate::util::Tx;
 
 #[derive(Clone)]
 pub enum WatermarkStrategy {
@@ -42,13 +42,13 @@ impl WatermarkStrategy {
 
     pub(crate) fn detach(&self, num: usize) {
         match self {
-            WatermarkStrategy::Monotonic(m) => m.detach(m),
-            WatermarkStrategy::Periodic(p) => p.detach(p),
-            WatermarkStrategy::Punctuated(p) => p.detach(p),
+            WatermarkStrategy::Monotonic(m) => m.detach(num),
+            WatermarkStrategy::Periodic(p) => p.detach(num),
+            WatermarkStrategy::Punctuated(p) => p.detach(num),
         }
     }
 
-    fn current(&self) -> &Time {
+    pub(crate) fn current(&self) -> &Time {
         match self {
             WatermarkStrategy::Monotonic(m) => {
                 m.current()
@@ -80,6 +80,14 @@ impl MonotonicWatermark {
         }
     }
 
+    pub(crate) fn detach(&self, num: usize) {
+        todo!()
+    }
+
+    pub(crate) fn attach(&self, num: usize, sender: Tx<Time>) {
+        todo!()
+    }
+
     pub(crate) fn current(&self) -> &Time {
         &self.last
     }
@@ -107,6 +115,13 @@ impl PeriodicWatermark {
     pub(crate) fn current(&self) -> &Time {
         &self.mark
     }
+
+    pub(crate) fn detach(&self, num: usize) {
+        todo!()
+    }
+    pub(crate) fn attach(&self, num: usize, sender: Tx<Time>) {
+        todo!()
+    }
 }
 
 #[derive(Clone)]
@@ -130,6 +145,14 @@ pub struct PunctuatedWatermark {
 impl PunctuatedWatermark {
     pub fn new() -> Self {
         PunctuatedWatermark{ mark: Default::default() }
+    }
+
+    pub(crate) fn detach(&self, num: usize) {
+        todo!()
+    }
+
+    pub(crate) fn attach(&self, num: usize, sender: Tx<Time>) {
+        todo!()
     }
 
     pub(crate) fn mark(&self, train: &Train) {

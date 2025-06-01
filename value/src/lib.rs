@@ -23,3 +23,4 @@ mod r#type;
 mod time;
 mod date;
 pub mod wagon;
+pub mod train;

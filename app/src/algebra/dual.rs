@@ -5,6 +5,7 @@ use crate::processing::{Layout, OutputType, Train};
 use value::Value;
 use std::collections::HashMap;
 
+// "Dummy" table to query for constants, one row
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Dual {}
 
@@ -61,7 +62,7 @@ impl Iterator for DualIterator {
 }
 
 impl ValueIterator for DualIterator {
-    fn dynamically_load(&mut self, _trains: Vec<Train>) {
+    fn dynamically_load(&mut self, _train: Train) {
         // nothing on purpose
     }
 

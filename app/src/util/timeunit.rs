@@ -19,6 +19,16 @@ impl TimeUnit {
             TimeUnit::Days => "DAYS".to_string()
         }
     }
+
+    pub fn as_ms(&self) -> i64 {
+        match self {
+            TimeUnit::Millis => 1,
+            TimeUnit::Seconds => 1000,
+            TimeUnit::Minutes => 60 * 1000,
+            TimeUnit::Hours => 60 * 60 * 1000,
+            TimeUnit::Days => 24 * 60 * 60 * 1000,
+        }
+    }
 }
 
 impl Display for TimeUnit{

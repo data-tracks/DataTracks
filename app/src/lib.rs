@@ -1,3 +1,5 @@
+#![feature(unboxed_closures)]
+
 pub mod processing;
 pub mod util;
 pub mod algebra;

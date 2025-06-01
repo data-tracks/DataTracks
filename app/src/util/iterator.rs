@@ -15,7 +15,7 @@ impl Iterator for EmptyIterator {
 }
 
 impl ValueIterator for EmptyIterator {
-    fn dynamically_load(&mut self, _trains: Vec<Train>) {
+    fn dynamically_load(&mut self, _train: Train) {
         // nothing on purpose
     }
 

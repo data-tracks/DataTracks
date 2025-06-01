@@ -13,7 +13,7 @@ pub mod dummy {
     use crate::processing::source::Source;
     use crate::processing::station::Command;
     use crate::processing::station::Command::{Ready, Stop};
-    use crate::processing::train::Train;
+    use value::train::Train;
     use crate::processing::transform::{Transform, Transformer};
     use crate::processing::Layout;
     use crate::ui::ConfigModel;
@@ -345,14 +345,12 @@ pub mod dummy {
     }
 
     impl ValueIterator for MappingIterator {
-        fn dynamically_load(&mut self, trains: Vec<Train>) {
-            for train in trains {
-                if let Some(values) = train.values {
-                    for value in values {
-                        let values = self.get_value(value);
-                        if let Some(values) = values {
-                            self.values.push(values);
-                        }
+        fn dynamically_load(&mut self, train: Train) {
+            if let Some(values) = train.values {
+                for value in values {
+                    let values = self.get_value(value);
+                    if let Some(values) = values {
+                        self.values.push(values);
                     }
                 }
             }

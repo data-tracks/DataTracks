@@ -2,9 +2,8 @@ use crate::algebra::{Algebra, AlgebraType, BoxedIterator, ValueIterator};
 use crate::analyse::{InputDerivable, OutputDerivable};
 use crate::processing::transform::Transform;
 use crate::processing::{Layout, Train};
-use value::Value;
 use std::collections::HashMap;
-use std::vec;
+use value::Value;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct VariableScan {
@@ -58,7 +57,7 @@ impl Iterator for BareVariableIterator {
 }
 
 impl ValueIterator for BareVariableIterator {
-    fn dynamically_load(&mut self, _trains: Vec<Train>) {
+    fn dynamically_load(&mut self, _train: Train) {
         panic!("Not correctly enriched")
     }
     fn clone(&self) -> BoxedIterator {
@@ -101,7 +100,7 @@ impl Iterator for VariableIterator {
             }
             let values = values.iter().map(|v| v.clone().unwrap()).collect();
 
-            self.transform.dynamically_load(vec![Train::new(values)]);
+            self.transform.dynamically_load(Train::new(values));
             self.transform.next()
         };
         // we annotate it
@@ -114,8 +113,8 @@ impl Iterator for VariableIterator {
 }
 
 impl ValueIterator for VariableIterator {
-    fn dynamically_load(&mut self, trains: Vec<Train>) {
-        self.inputs.iter_mut().for_each(|v| v.dynamically_load(trains.clone()));
+    fn dynamically_load(&mut self, train: Train) {
+        self.inputs.iter_mut().for_each(|v| v.dynamically_load(train.clone()));
     }
 
     fn clone(&self) -> BoxedIterator {

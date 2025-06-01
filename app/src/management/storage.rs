@@ -23,6 +23,7 @@ use tokio::sync::oneshot;
 use tokio::sync::oneshot::Sender;
 use tower_http::cors::CorsLayer;
 use tracing::{debug, error};
+use value::Time;
 
 #[derive(Default)]
 pub struct Storage {
@@ -64,9 +65,10 @@ impl Storage {
         Default::default()
     }
 
-    pub fn start_http_attacher(&mut self, id: usize, port: u16) -> Tx<Train> {
+    pub fn start_http_attacher(&mut self, id: usize, port: u16) -> (Tx<Train>, Tx<Time>) {
         let addr = util::parse_addr("127.0.0.1", port);
         let (tx, rx) = new_channel::<Train, &str>("HTTP Attacher Bus");
+        let (water_tx, water_rx) = new_channel::<Time, &str>("HTTP Attacher Watermark");
 
         let bus = Arc::new(Mutex::new(HashMap::<usize, Tx<Train>>::new()));
         let clone = bus.clone();
@@ -137,7 +139,7 @@ impl Storage {
         let attachment = Attachment::new(port, tx.clone(), sh_tx, shutdown_flag, handles);
         
         self.attachments.lock().unwrap().insert(id, attachment);
-        tx
+        (tx, water_tx)
     }
 
     pub fn create_plan(&mut self, create: Create) -> Result<(), String> {

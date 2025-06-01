@@ -150,8 +150,8 @@ fn unwind<'a>(value: Value) -> Vec<Value> {
 }
 
 impl ValueIterator for SetProjectIterator {
-    fn dynamically_load(&mut self, trains: Vec<Train>) {
-        self.input.dynamically_load(trains);
+    fn dynamically_load(&mut self, train: Train) {
+        self.input.dynamically_load(train);
     }
 
     fn clone(&self) -> BoxedIterator {

@@ -5,10 +5,24 @@ use schemas::message_generated::protocol::{Time as FlatTime, TimeArgs};
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 use std::fmt::Formatter;
+use std::ops;
 use std::ops::Sub;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize, Readable, Writable)]
+#[derive(
+    Clone,
+    Debug,
+    Eq,
+    Hash,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Serialize,
+    Deserialize,
+    Readable,
+    Writable,
+    Copy
+)]
 pub struct Time {
     pub ns: u32,
     pub ms: i64,
@@ -104,5 +118,20 @@ impl std::fmt::Display for Time {
         }
 
         write!(f, "{}", string)
+    }
+}
+
+impl ops::AddAssign<i64> for Time {
+    fn add_assign(&mut self, rhs: i64) {
+        self.ms += rhs;
+    }
+}
+
+impl ops::Add<i64> for Time {
+    type Output = Time;
+
+    fn add(mut self, rhs: i64) -> Self::Output {
+        self.ms = rhs;
+        self
     }
 }

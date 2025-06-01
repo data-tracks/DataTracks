@@ -6,18 +6,18 @@ use crate::processing::transform::{Transform, Transformer};
 use crate::processing::{Layout, Train};
 use crate::sql::sqlite::connection::SqliteConnector;
 use crate::util::{new_id, DynamicQuery};
-use value::Value;
 use rusqlite::{params_from_iter, ToSql};
 use serde_json::Map;
 use std::collections::HashMap;
 use tokio::runtime::Runtime;
+use value::Value;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct SqliteTransformer {
     id: usize,
     pub query: DynamicQuery,
     pub connector: SqliteConnector,
-    output_derivation_strategy: OutputDerivationStrategy
+    output_derivation_strategy: OutputDerivationStrategy,
 }
 
 impl SqliteTransformer {
@@ -25,8 +25,15 @@ impl SqliteTransformer {
         let id = new_id();
         let connector = SqliteConnector::new(&path);
         let query = DynamicQuery::build_dynamic_query(query);
-        let output_derivation_strategy = OutputDerivationStrategy::query_based(query.get_query(), Language::Sql).unwrap_or_default();
-        SqliteTransformer { id, connector, query, output_derivation_strategy }
+        let output_derivation_strategy =
+            OutputDerivationStrategy::query_based(query.get_query(), Language::Sql)
+                .unwrap_or_default();
+        SqliteTransformer {
+            id,
+            connector,
+            query,
+            output_derivation_strategy,
+        }
     }
 }
 
@@ -38,7 +45,10 @@ impl Configurable for SqliteTransformer {
     fn options(&self) -> Map<String, serde_json::Value> {
         let mut options = Map::new();
         self.connector.add_options(&mut options);
-        options.insert(String::from("query"), serde_json::Value::String(self.query.get_query()));
+        options.insert(
+            String::from("query"),
+            serde_json::Value::String(self.query.get_query()),
+        );
         options
     }
 }
@@ -47,17 +57,27 @@ impl InputDerivable for SqliteTransformer {
     fn derive_input_layout(&self) -> Option<Layout> {
         Some(self.query.derive_input_layout())
     }
-
 }
 
 impl Transformer for SqliteTransformer {
     fn parse(options: Map<String, serde_json::Value>) -> Result<Self, String> {
-        let query = options.get("query").unwrap().as_str().ok_or("Could not find query option.")?;
-        let path = options.get("path").unwrap().as_str().ok_or("Could not find path option.".to_string())?;
+        let query = options
+            .get("query")
+            .unwrap()
+            .as_str()
+            .ok_or("Could not find query option.")?;
+        let path = options
+            .get("path")
+            .unwrap()
+            .as_str()
+            .ok_or("Could not find path option.".to_string())?;
         Ok(SqliteTransformer::new(query.to_owned(), path.to_owned()))
     }
 
-    fn optimize(&self, _transforms: HashMap<String, Transform>) -> Box<dyn ValueIterator<Item=Value> + Send> {
+    fn optimize(
+        &self,
+        _transforms: HashMap<String, Transform>,
+    ) -> Box<dyn ValueIterator<Item = Value> + Send> {
         let iter = SqliteIterator::new(self.query.clone(), self.connector.clone());
 
         Box::new(iter)
@@ -71,12 +91,16 @@ impl Transformer for SqliteTransformer {
 pub struct SqliteIterator {
     query: DynamicQuery,
     connector: SqliteConnector,
-    values: Vec<Value>
+    values: Vec<Value>,
 }
 
 impl SqliteIterator {
     pub fn new(query: DynamicQuery, connector: SqliteConnector) -> SqliteIterator {
-        SqliteIterator { query, connector, values: Vec::new() }
+        SqliteIterator {
+            query,
+            connector,
+            values: Vec::new(),
+        }
     }
 
     fn query_values(&self, value: Value) -> Vec<Value> {
@@ -87,7 +111,11 @@ impl SqliteIterator {
             let (query, value_function) = query.prepare_query("$", None);
             let mut prepared = connection.prepare_cached(&query).unwrap();
             let count = prepared.column_count();
-            let mut iter = prepared.query(params_from_iter(value_function(&value).iter().map(|v| v.to_sql().unwrap()))).unwrap();
+            let mut iter = prepared
+                .query(params_from_iter(
+                    value_function(&value).iter().map(|v| v.to_sql().unwrap()),
+                ))
+                .unwrap();
             let mut values = vec![];
             while let Ok(Some(row)) = iter.next() {
                 values.push((row, count).try_into().unwrap());
@@ -110,25 +138,25 @@ impl Iterator for SqliteIterator {
 }
 
 impl ValueIterator for SqliteIterator {
-    fn dynamically_load(&mut self, trains: Vec<Train>) {
-        for train in trains {
-            if let Some(values) = train.values {
-                for value in values {
-                    self.values.append(&mut self.query_values(value));
-                }
+    fn dynamically_load(&mut self, train: Train) {
+        if let Some(values) = train.values {
+            for value in values {
+                self.values.append(&mut self.query_values(value));
             }
         }
     }
 
     fn clone(&self) -> BoxedIterator {
-        Box::new(SqliteIterator::new(self.query.clone(), self.connector.clone()))
+        Box::new(SqliteIterator::new(
+            self.query.clone(),
+            self.connector.clone(),
+        ))
     }
 
     fn enrich(&mut self, _transforms: HashMap<String, Transform>) -> Option<BoxedIterator> {
         None
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -151,5 +179,4 @@ mod tests {
         let mut plan = Plan::parse(PLAN).unwrap();
         plan.operate().unwrap()
     }
-
 }

@@ -135,9 +135,9 @@ impl JoinIterator {
 }
 
 impl ValueIterator for JoinIterator {
-    fn dynamically_load(&mut self, trains: Vec<Train>) {
-        self.left.dynamically_load(trains.clone());
-        self.right.dynamically_load(trains);
+    fn dynamically_load(&mut self, train: Train) {
+        self.left.dynamically_load(train.clone());
+        self.right.dynamically_load(train);
     }
 
     fn clone(&self) -> BoxedIterator {
@@ -227,8 +227,8 @@ mod test {
         );
 
         let mut handle = join.derive_iterator();
-        handle.dynamically_load(vec![left]);
-        handle.dynamically_load(vec![right]);
+        handle.dynamically_load(left);
+        handle.dynamically_load(right);
         let mut res = handle.drain_to_train(3);
         assert_eq!(
             res.clone().values.unwrap(),
@@ -259,7 +259,8 @@ mod test {
         );
 
         let mut handle = join.derive_iterator();
-        handle.dynamically_load(vec![train0.clone(), train1.clone()]);
+        handle.dynamically_load(train0.clone());
+        handle.dynamically_load(train1.clone());
         let mut res = handle.drain_to_train(3);
         assert_eq!(
             res.values.clone().unwrap(),

@@ -3,7 +3,9 @@ use schemas::message_generated::protocol::{Message, MessageArgs, Payload, Train 
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 use std::collections::HashMap;
-use value::{Time, Value};
+use std::ops;
+use redb::TypeName;
+use crate::{Time, Value};
 
 pub type MutWagonsFunc = Box<dyn FnMut(&mut Vec<Train>) -> Train>;
 
@@ -34,6 +36,27 @@ impl Train {
         self.marks.iter().last().map(|(key, _)| *key).unwrap_or_default()
     }
 }
+
+impl ops::Add<Train> for Train {
+    type Output = Train;
+
+    fn add(mut self, rhs: Train) -> Self::Output {
+        self.values = match self.values {
+            None => None,
+            Some(mut values) => {
+                match rhs.values {
+                    None => None,
+                    Some(mut b) => {
+                        values.append(&mut b);
+                        Some(values)
+                    }
+                }
+            }
+        };
+        self
+    }
+}
+
 
 impl<'a> Into<Vec<u8>> for Train {
     fn into(self) -> Vec<u8> {
@@ -104,5 +127,38 @@ impl From<Vec<Train>> for Train {
 
         let train = Train::new(values);
         train
+    }
+}
+
+impl redb::Value for Train {
+    type SelfType<'a>
+    = Value
+    where
+        Self: 'a;
+    type AsBytes<'a>
+    = Vec<u8>
+    where
+        Self: 'a;
+
+    fn fixed_width() -> Option<usize> {
+        None
+    }
+
+    fn from_bytes<'a>(data: &'a [u8]) -> Self::SelfType<'a>
+    where
+        Self: 'a,
+    {
+        Value::read_from_buffer(data).expect("Failed to deserialize Train")
+    }
+
+    fn as_bytes<'a, 'b: 'a>(value: &'a Self::SelfType<'b>) -> Self::AsBytes<'a>
+    where
+        Self: 'b,
+    {
+        value.write_to_vec().expect("Failed to serialize Value")
+    }
+
+    fn type_name() -> TypeName {
+        TypeName::new("train")
     }
 }

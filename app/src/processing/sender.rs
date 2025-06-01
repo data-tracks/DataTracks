@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use tracing::warn;
-use crate::processing::train::Train;
+use value::train::Train;
 use crate::util::Tx;
 
 #[derive(Clone, Default)]
@@ -30,7 +30,7 @@ impl Sender {
         self.outs.remove(&id);
     }
 
-    pub(crate) fn send(&self, train: Train) {
+    pub fn send(&self, train: Train) {
         for out in &self.outs {
             if out.1.len() > 100 {
                 warn!("too large {}", out.1.name())

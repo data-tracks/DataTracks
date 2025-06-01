@@ -6,15 +6,16 @@ pub use layout::Layout;
 pub use layout::OutputType;
 pub use layout::TupleType;
 pub use plan::Plan;
-pub use train::Train;
+pub use value::train::Train;
 pub use value::wagon::Wagon;
 pub use block::Block;
 pub use sender::Sender;
+pub use platform::Step;
+pub use platform::FunctionStep;
 
 pub mod station;
 mod window;
 pub mod transform;
-pub(crate) mod train;
 mod sender;
 pub(crate) mod plan;
 pub(crate) mod source;
@@ -27,3 +28,5 @@ mod debug;
 mod depot;
 pub(crate) mod option;
 mod watermark;
+mod select;
+

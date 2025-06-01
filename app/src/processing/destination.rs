@@ -7,7 +7,7 @@ use crate::processing::plan::DestinationModel;
 use crate::processing::station::Command;
 #[cfg(test)]
 use crate::processing::tests::DummyDestination;
-use crate::processing::train::Train;
+use value::train::Train;
 use crate::sql::LiteDestination;
 use crate::util::Tx;
 use crossbeam::channel::Sender;

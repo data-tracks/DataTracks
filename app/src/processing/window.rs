@@ -1,13 +1,12 @@
+use crate::processing::select::TrueCondition;
+use crate::processing::platform::Condition;
 use crate::processing::transform::Taker;
 use crate::processing::window::Window::{Back, Interval, Non};
 use crate::processing::Train;
-use crate::util;
-use crate::util::{Cache, TimeUnit};
-use value::Time;
-use chrono::{Duration, NaiveTime};
-use std::collections::VecDeque;
-use std::sync::Arc;
+use crate::util::TimeUnit;
+use chrono::{Duration, NaiveTime, Timelike};
 use speedy::{Readable, Writable};
+use value::Time;
 
 #[derive(Clone)]
 pub enum Window {
@@ -16,20 +15,18 @@ pub enum Window {
     Interval(IntervalWindow),
 }
 
-
 impl Default for Window {
     fn default() -> Self {
         Non(NonWindow::default())
     }
 }
 
-
 impl Window {
     pub(crate) fn windowing(&self) -> Box<dyn Taker> {
         match self {
             Back(w) => Box::new(w.clone()),
             Interval(w) => Box::new(w.clone()),
-            Non(_) => Box::<NonWindow>::default()
+            Non(_) => Box::<NonWindow>::default(),
         }
     }
 
@@ -37,7 +34,15 @@ impl Window {
         match self {
             Back(w) => w.dump(),
             Interval(w) => w.dump(),
-            Non(_) => "".to_owned()
+            Non(_) => "".to_owned(),
+        }
+    }
+
+    pub(crate) fn to_condition(&self) -> Condition {
+        match self {
+            Non(n) => Condition::True(TrueCondition {}),
+            Back(_) => {}
+            Interval(_) => {}
         }
     }
 
@@ -60,28 +65,27 @@ impl Taker for NonWindow {
     }
 }
 
-
 #[derive(Clone)]
 pub struct BackWindow {
-    duration: Duration,
+    pub duration: Duration,
     time: i64,
     time_unit: TimeUnit,
-    buffer: VecDeque<Time>,
-    cache: Cache<Time, Vec<Train>>,
-    storage: Arc<util::storage::Storage>
 }
 
 impl BackWindow {
     pub fn new(time: i64, time_unit: TimeUnit) -> Self {
         let now = Time::now();
-        BackWindow { time, time_unit: time_unit.clone(), duration: get_duration(time, time_unit), buffer: VecDeque::new(), cache: Cache::new(100), storage: Arc::new(util::storage::Storage::new_from_path("DB.db".to_string(), now.ms.to_string()).unwrap()) }
+        BackWindow {
+            time,
+            time_unit: time_unit.clone(),
+            duration: get_duration(time, time_unit),
+        }
     }
     fn parse(stencil: String) -> Result<Self, String> {
         let (digit, time_unit) = parse_interval(stencil.as_str())?;
 
         Ok(BackWindow::new(digit, time_unit))
     }
-
 
     pub(crate) fn dump(&self) -> String {
         if self.time == 0 {
@@ -91,41 +95,13 @@ impl BackWindow {
     }
 }
 
-impl Taker for BackWindow {
-    fn take(&mut self, trains: &mut Vec<Train>) -> Vec<Train> {
-        let time = Time::now();
-        self.cache.put(time.clone(), trains.clone());
-        self.storage.write(time.clone().into(), trains.write_to_vec().unwrap()).unwrap();
-        let ms = time.ms;
-
-        let mut values = vec![];
-
-        for i in &self.buffer {
-            if ms - i.ms <= self.duration.num_milliseconds() {
-                let value = if let Some(val) = self.cache.get(&i.clone()){
-                    val.clone()
-                }else {
-                    Readable::read_from_buffer(&self.storage.read_u8(i.clone().into()).unwrap()).unwrap()
-                };
-
-                values.append(&mut value.clone());
-            }
-        }
-        values.append(trains);
-        self.buffer.push_back(time);
-
-
-        values
-    }
-}
-
 fn get_duration(time: i64, time_unit: TimeUnit) -> Duration {
     match time_unit {
         TimeUnit::Millis => Duration::milliseconds(time),
         TimeUnit::Seconds => Duration::seconds(time),
         TimeUnit::Minutes => Duration::minutes(time),
         TimeUnit::Hours => Duration::hours(time),
-        TimeUnit::Days => Duration::days(time)
+        TimeUnit::Days => Duration::days(time),
     }
 }
 
@@ -135,7 +111,9 @@ fn parse_interval(stencil: &str) -> Result<(i64, TimeUnit), String> {
     let mut digit_passed: bool = false;
     for char in stencil.chars() {
         if !char.is_numeric() && !digit_passed {
-            digit = temp.parse().map_err(|_| format!("Could not parse {} as time", stencil))?;
+            digit = temp
+                .parse()
+                .map_err(|_| format!("Could not parse {} as time", stencil))?;
             digit_passed = false;
             temp = "".to_string();
         }
@@ -151,27 +129,50 @@ fn parse_time_unit(time: String) -> Result<TimeUnit, String> {
 
 #[derive(Clone)]
 pub struct IntervalWindow {
-    time: i64,
-    time_unit: TimeUnit,
-    start: NaiveTime,
-    buffer: VecDeque<Vec<Train>>,
+    pub time: i64,
+    pub time_unit: TimeUnit,
+    pub start: NaiveTime,
+    pub t: Time,
+    pub millis_delta: i64,
 }
 
 impl IntervalWindow {
     fn new(time: i64, time_unit: TimeUnit, start: NaiveTime) -> IntervalWindow {
-        IntervalWindow { time, time_unit, start, buffer: VecDeque::new() }
+        IntervalWindow {
+            time,
+            time_unit: time_unit.clone(),
+            start,
+            t: Time::new((start.second() * 1000) as i64, 0),
+            millis_delta: time * time_unit.as_ms(),
+        }
     }
     pub(crate) fn dump(&self) -> String {
-        format!("[{}{}@{}]", &self.time, self.time_unit, &self.start.format("%H:%M"))
+        format!(
+            "[{}{}@{}]",
+            &self.time,
+            self.time_unit,
+            &self.start.format("%H:%M")
+        )
     }
+
+    pub(crate) fn get_times(&self, time: &Time) -> (Time, Time) {
+        let mut temp = self.t;
+
+        while &temp < time {
+            temp += self.millis_delta;
+        }
+        (temp, temp + self.millis_delta)
+    }
+
     fn parse(input: String) -> Result<IntervalWindow, String> {
         match input.split_once('@') {
             None => {
                 let (time, time_unit) = parse_interval(&input)?;
-                let start = NaiveTime::from_hms_opt(0, 0, 0).ok_or("Could not parse start time for interval".to_string())?;
+                let start = NaiveTime::from_hms_opt(0, 0, 0)
+                    .ok_or("Could not parse start time for interval".to_string())?;
 
                 Ok(IntervalWindow::new(time, time_unit, start))
-            },
+            }
             Some((interval, start)) => {
                 let (time, time_unit) = parse_interval(interval)?;
                 let start = parse_time(start).unwrap();
@@ -182,17 +183,9 @@ impl IntervalWindow {
     }
 }
 
-impl Taker for IntervalWindow {
-    fn take(&mut self, wagons: &mut Vec<Train>) -> Vec<Train> {
-        self.buffer.push_back(wagons.clone());
-        wagons.clone()
-    }
-}
-
 fn parse_time(time_str: &str) -> Result<NaiveTime, chrono::ParseError> {
     NaiveTime::parse_from_str(time_str, "%H:%M")
 }
-
 
 #[cfg(test)]
 mod test {
@@ -204,11 +197,11 @@ mod test {
     use crate::processing::station::Command::Ready;
     use crate::processing::station::Station;
     use crate::processing::tests::dict_values;
-    use crate::processing::train::Train;
     use crate::processing::window::{BackWindow, Window};
     use crate::util::{new_channel, TimeUnit};
-    use value::Value;
     use crossbeam::channel::unbounded;
+    use value::train::Train;
+    use value::Value;
 
     #[test]
     fn default_behavior() {
@@ -220,7 +213,6 @@ mod test {
 
         let (tx, rx) = new_channel("test");
 
-
         station.add_out(0, tx).unwrap();
         station.operate(Arc::new(control.0), HashMap::new());
         station.send(Train::new(values.clone())).unwrap();
@@ -228,7 +220,10 @@ mod test {
         let res = rx.recv();
         match res {
             Ok(mut t) => {
-                assert_eq!(values.len(), t.values.clone().map_or(usize::MAX, |vec| vec.len()));
+                assert_eq!(
+                    values.len(),
+                    t.values.clone().map_or(usize::MAX, |vec| vec.len())
+                );
                 for (i, value) in t.values.take().unwrap().into_iter().enumerate() {
                     assert_eq!(value, values[i]);
                     assert_ne!(Value::text(""), *value.as_dict().unwrap().get("$").unwrap())
@@ -251,7 +246,6 @@ mod test {
 
         let (tx, rx) = new_channel("test");
 
-
         station.add_out(0, tx).unwrap();
         station.operate(Arc::new(control.0), HashMap::new());
         // wait for read
@@ -270,10 +264,16 @@ mod test {
         }
 
         // 1. train
-        assert_eq!(results.remove(0).values.take().unwrap().get(0).unwrap(), values.get(0).unwrap());
+        assert_eq!(
+            results.remove(0).values.take().unwrap().get(0).unwrap(),
+            values.get(0).unwrap()
+        );
         // 2. " or 1. & 2. depending on how fast it was handled
         let res = results.remove(0).values.take().unwrap();
-        assert!(res.get(0).unwrap() == values.get(1).unwrap() || res.get(1).unwrap() == values.get(1).unwrap() );
+        assert!(
+            res.get(0).unwrap() == values.get(1).unwrap()
+                || res.get(1).unwrap() == values.get(1).unwrap()
+        );
 
         // 3. "
         assert_eq!(results.remove(0).values.take().unwrap(), after);

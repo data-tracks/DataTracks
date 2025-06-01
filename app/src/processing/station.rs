@@ -8,7 +8,7 @@ use crate::processing::layout::Layout;
 use crate::processing::plan::PlanStage;
 use crate::processing::platform::Platform;
 use crate::processing::sender::Sender;
-use crate::processing::train::Train;
+use value::train::Train;
 use crate::processing::transform::Transform;
 use crate::processing::window::Window;
 use crate::util::{new_channel, new_id, Rx, Tx};
@@ -338,7 +338,7 @@ pub mod tests {
     use crate::processing::station::Command::{Okay, Ready, Threshold};
     use crate::processing::station::{Command, Station};
     pub use crate::processing::tests::dict_values;
-    use crate::processing::train::Train;
+    use value::train::Train;
     use crate::processing::transform::{FuncTransform, Transform};
     use crate::util::{new_channel, Rx, Tx};
     use value::{Dict, Value};

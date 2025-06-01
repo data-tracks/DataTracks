@@ -1,29 +1,32 @@
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread;
+use std::thread::{sleep, spawn};
 use std::time::Duration;
 
+use crate::new_channel;
 use crate::optimize::OptimizeStrategy;
 use crate::processing::block::Block;
+use crate::processing::select::{TriggerSelector, WindowSelector};
 use crate::processing::layout::Layout;
 use crate::processing::sender::Sender;
 use crate::processing::station::Command::{Okay, Ready, Threshold};
 use crate::processing::station::{Command, Station};
-use crate::processing::train::MutWagonsFunc;
-use crate::processing::transform::{Taker, Transform};
+use crate::processing::transform::Transform;
 use crate::processing::watermark::WatermarkStrategy;
 use crate::processing::window::Window;
-use crate::processing::Block::{All, Non, Specific};
-use crate::processing::{watermark, Train};
+use crate::processing::Train;
+use crate::util::Tx;
 use crate::util::{new_id, Rx};
-use crossbeam::channel;
 use crossbeam::channel::Receiver;
+use crossbeam::{channel, select};
 pub use logos::Source;
-use tracing::debug;
-use value::Time;
-use crate::Tx;
+use tracing::{debug, error};
+use value::{Time, Value};
 
 const IDLE_TIMEOUT: Duration = Duration::from_nanos(10);
+
+// What: Transformations, Where: Windowing, When: Triggers, How: Accumulation
 
 pub(crate) struct Platform {
     id: usize,
@@ -89,9 +92,14 @@ impl Platform {
         let mut threshold = 2000;
         let mut too_high = false;
 
-        let watermark_strategy = self.watermark_strategy.clone();
-        let mut block = Block::new(self.inputs.clone(), self.blocks.clone(), process);
-        
+        let mut watermark_strategy = Arc::new(self.watermark_strategy.clone());
+
+        let storage = Arc::new(Mutex::new(vec![]));
+
+        let window_selector = WindowSelector::new(storage.clone().into(), self.window.clone());
+        let trigger_selector = TriggerSelector::new(storage.clone().into());
+
+        let when_tx = when(watermark_strategy.clone(), window_selector, trigger_selector, process);
 
         control.send(Ready(stop)).unwrap();
 
@@ -109,14 +117,20 @@ impl Platform {
             // did we get a command?
             if let Ok(command) = self.control.try_recv() {
                 match command {
-                    Command::Stop(_) => return,
+                    Command::Stop(_) => {
+                        match when_tx.send(Command::Stop(stop)) {
+                            Ok(_) => {}
+                            Err(err) => {
+                                error!("cannot stop trigger {err}")
+                            }
+                        }
+                        return;
+                    }
                     Command::Attach(num, (send, watermark)) => {
-                        block.attach(num, send);
-                        self.watermark_strategy.attach(num, watermark);
+                        watermark_strategy.attach(num, watermark);
                     }
                     Command::Detach(num) => {
-                        block.detach(num);
-                        self.watermark_strategy.detach(num);
+                        watermark_strategy.detach(num);
                     }
                     Threshold(th) => {
                         threshold = th;
@@ -129,16 +143,53 @@ impl Platform {
                 Ok(train) => {
                     debug!("{:?}", train);
                     if self.layout.fits_train(&train) {
-                        self.watermark_strategy.mark(&train);
-                        block.next(train); // window takes precedence to
+                        storage.lock().unwrap().push(train.clone());
+                        watermark_strategy.mark(&train);
                     }
                 }
                 _ => {
-                    thread::sleep(timeout); // wait again
+                    sleep(timeout); // wait again
                 }
             };
         }
     }
+}
+
+fn when(
+    watermark_strategy: Arc<WatermarkStrategy>,
+    mut select: WindowSelector,
+    mut trigger: TriggerSelector,
+    mut what: Box<dyn Step>,
+) -> Tx<Command> {
+    let (tx, rx) = new_channel::<Command, &str>("Trigger");
+    // shall we?
+    // - specific window?
+    // - specific watermark
+    // - always
+    // take what we need -> window
+    // - which window?
+    // apply transformation
+    // send out
+    spawn(move || loop {
+        if let Ok(command) = rx.recv() {
+            match command {
+                Command::Stop(_) => return,
+                _ => {}
+            }
+        }
+        let current = watermark_strategy.current();
+
+        let windows = select.select(current);
+
+        match trigger.select(windows) {
+            trains if trains.len() > 0  => {
+                trains.into_iter().for_each(|train| what.apply(train));
+            }
+            _ => sleep(IDLE_TIMEOUT),
+        }
+    });
+
+    tx
 }
 
 fn optimize(
@@ -185,6 +236,12 @@ pub struct FunctionStep {
     function: Box<dyn FnMut(Train)>,
 }
 
+impl FunctionStep {
+    pub fn new(function: Box<dyn FnMut(Train)>) -> FunctionStep {
+        FunctionStep { function }
+    }
+}
+
 impl Step for FunctionStep {
     fn apply(&mut self, train: Train) {
         (self.function)(train);
@@ -214,5 +271,41 @@ impl Step for SenderStep {
 
     fn attach(&mut self, num: usize, tx: Tx<Train>) {
         self.sender.add(num, tx)
+    }
+}
+
+
+pub struct WindowOperator {
+    storage: Arc<Mutex<Vec<Train>>>,
+    window: Window,
+}
+
+impl WindowOperator {
+    pub fn new(window: Window, storage: Arc<Mutex<Vec<Train>>>) -> Self {
+        WindowOperator { storage, window }
+    }
+
+    pub fn get(&self, time: &Time) -> Vec<Train> {
+        match &self.window {
+            Window::Non(_) => self.storage.lock().unwrap().clone(),
+            Window::Back(b) => {
+                let back = time - b.duration;
+                self.storage
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .filter(|t| &t.event_time <= time && t.event_time >= back)
+                    .collect()
+            }
+            Window::Interval(i) => {
+                let (from, to) = i.get_times(time);
+                self.storage
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .filter(|t| &t.event_time <= &to && t.event_time >= from)
+                    .collect()
+            }
+        }
     }
 }

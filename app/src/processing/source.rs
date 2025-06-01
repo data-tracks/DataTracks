@@ -7,7 +7,7 @@ use crate::processing::plan::SourceModel;
 use crate::processing::station::Command;
 #[cfg(test)]
 use crate::processing::tests::DummySource;
-use crate::processing::train::Train;
+use value::train::Train;
 use crate::sql::LiteSource;
 use crate::ui::ConfigModel;
 use crate::util::Tx;

@@ -27,24 +27,24 @@ pub struct Storage {
 
 impl Storage {
     /// Create a new storage instance with a temporary file.
-    pub fn new_temp(table_name: String) -> Result<Storage, StorageError> {
+    pub fn new_temp<S:AsRef<str>>(table_name: S) -> Result<Storage, StorageError> {
         let file = NamedTempFile::new().map_err(|e| StorageError::FileError(e.to_string()))?;
         let db = Database::create(file).map_err(|e| StorageError::DatabaseError(e.to_string()))?;
         Ok(Storage {
             path: None,
-            table_name,
+            table_name: table_name.as_ref().to_string(),
             database: db,
         })
     }
 
     /// Create a new storage instance from a specified file path.
-    pub fn new_from_path(file: String, table_name: String) -> Result<Storage, StorageError> {
-        let db = Database::create(file.clone())
+    pub fn new_from_path<S:AsRef<str>>(file: S, table_name: S) -> Result<Storage, StorageError> {
+        let db = Database::create(file.as_ref())
             .map_err(|e| StorageError::DatabaseError(e.to_string()))?;
 
         let storage = Storage {
-            path: Some(file),
-            table_name: table_name.to_string(),
+            path: Some(file.as_ref().to_string()),
+            table_name: table_name.as_ref().to_string(),
             database: db,
         };
         Ok(storage)
@@ -122,40 +122,6 @@ impl Drop for Storage {
     }
 }
 
-
-
-impl redb::Value for Train {
-    type SelfType<'a>
-        = Value
-    where
-        Self: 'a;
-    type AsBytes<'a>
-        = Vec<u8>
-    where
-        Self: 'a;
-
-    fn fixed_width() -> Option<usize> {
-        None
-    }
-
-    fn from_bytes<'a>(data: &'a [u8]) -> Self::SelfType<'a>
-    where
-        Self: 'a,
-    {
-        Value::read_from_buffer(data).expect("Failed to deserialize Train")
-    }
-
-    fn as_bytes<'a, 'b: 'a>(value: &'a Self::SelfType<'b>) -> Self::AsBytes<'a>
-    where
-        Self: 'b,
-    {
-        value.write_to_vec().expect("Failed to serialize Value")
-    }
-
-    fn type_name() -> TypeName {
-        TypeName::new("train")
-    }
-}
 
 #[cfg(test)]
 mod tests {

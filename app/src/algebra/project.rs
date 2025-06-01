@@ -39,7 +39,7 @@ impl Iterator for ProjectIter {
 }
 
 impl ValueIterator for ProjectIter {
-    fn dynamically_load(&mut self, _trains: Vec<Train>) {
+    fn dynamically_load(&mut self, _train: Train) {
         unreachable!()
     }
 
@@ -76,8 +76,8 @@ impl Iterator for ProjectIterator {
 }
 
 impl ValueIterator for ProjectIterator {
-    fn dynamically_load(&mut self, trains: Vec<Train>) {
-        self.input.dynamically_load(trains);
+    fn dynamically_load(&mut self, train: Train) {
+        self.input.dynamically_load(train);
     }
 
     fn clone(&self) -> BoxedIterator {

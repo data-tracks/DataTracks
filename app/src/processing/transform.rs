@@ -3,7 +3,7 @@ use crate::algebra::{Algebra, AlgebraType, BoxedIterator, IndexScan, ValueIterat
 use crate::analyse::{InputDerivable, OutputDerivable, OutputDerivationStrategy};
 use crate::language::Language;
 use crate::processing::option::Configurable;
-use crate::processing::train::Train;
+use value::train::Train;
 use crate::processing::transform::Transform::{ Func, Lang, Postgres, SQLite};
 use crate::processing::Layout;
 use crate::sql::{PostgresTransformer, SqliteTransformer};
@@ -359,8 +359,8 @@ impl Iterator for FuncTransform {
 }
 
 impl ValueIterator for FuncTransform {
-    fn dynamically_load(&mut self, trains: Vec<Train>) {
-        self.input.dynamically_load(trains);
+    fn dynamically_load(&mut self, train: Train) {
+        self.input.dynamically_load(train);
     }
 
     fn clone(&self) -> BoxedIterator {
@@ -384,7 +384,7 @@ mod tests {
     use crate::language::Language;
     use crate::processing::station::Station;
     use crate::processing::tests::dict_values;
-    use crate::processing::train::Train;
+    use value::train::Train;
     use crate::processing::transform::Transform::Func;
     use crate::processing::transform::{build_algebra, FuncTransform};
     use crate::util::new_channel;
@@ -393,6 +393,7 @@ mod tests {
     use std::sync::Arc;
     use std::vec;
     use value::{Dict, Value};
+    use value::wagon::Wagon;
 
     #[test]
     fn transform() {
@@ -545,7 +546,7 @@ mod tests {
             Ok(mut t) => {
                 for (i, input) in inputs.into_iter().enumerate() {
                     let train = Train::new(input).mark(i);
-                    t.dynamically_load(vec![train]);
+                    t.dynamically_load(train);
                 }
 
                 let result = t.drain_to_train(0);
@@ -560,7 +561,7 @@ mod tests {
         let transform = build_iterator(transform.unwrap());
         match transform {
             Ok(mut t) => {
-                t.dynamically_load(input.into_iter().map(|v| Train::new(vec![v])).collect());
+                t.dynamically_load(input.into());
                 let result = t.drain_to_train(0);
                 assert_eq!(result.values.unwrap(), output);
             }
@@ -574,7 +575,7 @@ mod tests {
 
         match transform {
             Ok(mut t) => {
-                t.dynamically_load(input.into_iter().map(|v| Train::new( vec![v])).collect());
+                t.dynamically_load(input.into());
                 let result = t.drain_to_train(0);
                 let result = result.values.unwrap();
                 for result in &result {
