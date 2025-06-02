@@ -1,12 +1,12 @@
-use crate::processing::select::TrueCondition;
-use crate::processing::platform::Condition;
+use std::collections::HashMap;
 use crate::processing::transform::Taker;
 use crate::processing::window::Window::{Back, Interval, Non};
-use crate::processing::Train;
+use crate::processing::{select, Train};
 use crate::util::TimeUnit;
 use chrono::{Duration, NaiveTime, Timelike};
 use speedy::{Readable, Writable};
 use value::Time;
+use crate::processing::select::WindowDescriptor;
 
 #[derive(Clone)]
 pub enum Window {
@@ -22,13 +22,15 @@ impl Default for Window {
 }
 
 impl Window {
-    pub(crate) fn windowing(&self) -> Box<dyn Taker> {
+
+    pub(crate) fn get_strategy(&self) -> Box<dyn FnMut(&Train) -> Vec<(WindowDescriptor, bool)>> {
         match self {
-            Back(w) => Box::new(w.clone()),
-            Interval(w) => Box::new(w.clone()),
-            Non(_) => Box::<NonWindow>::default(),
+            Non(_) => Box::new(|current| vec![(WindowDescriptor::unbounded(), false)]),
+            Back(b) => b.get_strategy(),
+            Interval(i) => i.get_strategy(),
         }
     }
+
 
     pub(crate) fn dump(&self) -> String {
         match self {
@@ -38,19 +40,15 @@ impl Window {
         }
     }
 
-    pub(crate) fn to_condition(&self) -> Condition {
-        match self {
-            Non(n) => Condition::True(TrueCondition {}),
-            Back(_) => {}
-            Interval(_) => {}
-        }
-    }
-
     pub(crate) fn parse(stencil: String) -> Result<Self, String> {
         if stencil.contains('@') {
             return Ok(Interval(IntervalWindow::parse(stencil)?));
         }
         Ok(Back(BackWindow::parse(stencil)?))
+    }
+
+    pub(crate) fn get_window(&self, train: &Train) -> (WindowDescriptor, bool) {
+        todo!()
     }
 }
 
@@ -73,6 +71,10 @@ pub struct BackWindow {
 }
 
 impl BackWindow {
+
+}
+
+impl BackWindow {
     pub fn new(time: i64, time_unit: TimeUnit) -> Self {
         let now = Time::now();
         BackWindow {
@@ -81,6 +83,11 @@ impl BackWindow {
             duration: get_duration(time, time_unit),
         }
     }
+
+    pub(crate) fn get_strategy(&self) -> Box<dyn FnMut(&Train) -> Vec<(WindowDescriptor, bool)>> {
+        todo!()
+    }
+
     fn parse(stencil: String) -> Result<Self, String> {
         let (digit, time_unit) = parse_interval(stencil.as_str())?;
 
@@ -146,6 +153,11 @@ impl IntervalWindow {
             millis_delta: time * time_unit.as_ms(),
         }
     }
+
+    pub(crate) fn get_strategy(&self) -> Box<dyn FnMut(&Train) -> Vec<(WindowDescriptor, bool)>> {
+        todo!()
+    }
+
     pub(crate) fn dump(&self) -> String {
         format!(
             "[{}{}@{}]",
@@ -185,6 +197,32 @@ impl IntervalWindow {
 
 fn parse_time(time_str: &str) -> Result<NaiveTime, chrono::ParseError> {
     NaiveTime::parse_from_str(time_str, "%H:%M")
+}
+
+
+pub struct WindowStrategy{
+    window: Window,
+    dirty_windows: HashMap<WindowDescriptor, bool>,
+}
+
+
+impl WindowStrategy {
+    pub fn new(window: Window) -> Self {
+        WindowStrategy{window, dirty_windows: HashMap::new()}
+    }
+
+    pub(crate) fn mark(&mut self, train:&Train) {
+        let window = self.window.get_window(train);
+        self.dirty_windows.insert(window.0, window.1);
+    }
+
+    pub(crate) fn peek(&mut self) -> &HashMap<WindowDescriptor, bool> {
+        &self.dirty_windows
+    }
+
+    pub(crate) fn trigger(&mut self, window: &WindowDescriptor) {
+        self.dirty_windows.remove(window);
+    }
 }
 
 #[cfg(test)]

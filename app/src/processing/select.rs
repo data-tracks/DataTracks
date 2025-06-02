@@ -8,30 +8,44 @@ use value::Time;
 pub type Storage = Arc<Mutex<Vec<Train>>>;
 
 #[derive(Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Copy)]
-pub struct Window {
+pub struct WindowDescriptor {
     from: Time,
     to: Time,
+    unbounded: bool,
 }
+
+impl WindowDescriptor {
+    pub fn new(from: Time, to: Time) -> WindowDescriptor {
+        WindowDescriptor {from, to, unbounded: false}
+    }
+
+    pub fn unbounded() -> WindowDescriptor {
+        WindowDescriptor {from: Time::now(), to: Time::now(), unbounded: true}
+    }
+}
+
 
 pub struct WindowSelector {
     storage: Arc<Storage>,
     window: processing::window::Window,
+    strategy: Box<dyn FnMut(&Time) -> Vec<(WindowDescriptor, bool)>>
 }
 
 impl WindowSelector {
-    pub(crate) fn new( storage: Arc<Storage>, window: processing::window::Window) -> Self {
-        Self { storage, window }
+    pub(crate) fn new(storage: Arc<Storage>, window: processing::window::Window) -> Self {
+        let strategy = window.get_strategy();
+        Self { storage, window, strategy }
     }
 }
 
 impl WindowSelector {
-    pub(crate) fn select(&self, current: &Time) -> Vec<(Window, bool)> {
-
+    pub(crate) fn select(&self, current: &Time) -> Vec<(WindowDescriptor, bool)> {
+        self.strategy(current)
     }
 }
 
 pub struct TriggerSelector {
-    triggered_windows: HashMap<Window, TriggerStatus>,
+    triggered_windows: HashMap<WindowDescriptor, TriggerStatus>,
     storage: Arc<Storage>,
     fire_early: bool,
     fire_late: bool,
@@ -51,7 +65,7 @@ impl TriggerSelector {
         }
     }
 
-    pub(crate) fn select(&mut self, windows: Vec<(Window, bool)>) -> Vec<Train> {
+    pub(crate) fn select(&mut self, windows: Vec<(WindowDescriptor, bool)>) -> Vec<Train> {
         let mut trains = vec![];
         windows.into_iter().for_each(|(window, is_complete)| {
             let mut trigger = false;
@@ -74,7 +88,7 @@ impl TriggerSelector {
         });
         trains
     }
-    fn get_trains(&self, window: Window) -> Option<Train> {
+    fn get_trains(&self, window: WindowDescriptor) -> Option<Train> {
         let storage = self.storage.lock().unwrap();
         storage
             .iter()
