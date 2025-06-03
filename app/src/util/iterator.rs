@@ -3,6 +3,7 @@ use crate::algebra::{BoxedIterator, ValueIterator};
 use crate::processing::Train;
 use crate::processing::transform::Transform;
 use value::Value;
+use crate::util::storage::Storage;
 
 pub struct EmptyIterator {}
 
@@ -15,7 +16,7 @@ impl Iterator for EmptyIterator {
 }
 
 impl ValueIterator for EmptyIterator {
-    fn dynamically_load(&mut self, _train: Train) {
+    fn set_storage(&mut self, storage: &Storage) {
         // nothing on purpose
     }
 

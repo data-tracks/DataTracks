@@ -7,6 +7,7 @@ use crate::util::EmptyIterator;
 use std::collections::HashMap;
 use std::vec;
 use value::Value;
+use crate::util::storage::Storage;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct IndexScan {
@@ -20,10 +21,11 @@ impl IndexScan {
 }
 
 #[derive(Clone)]
-pub struct ScanIterator {
+pub struct ScanIterator<'a> {
     index: usize,
     values: Vec<Value>,
     trains: Vec<Train>,
+    storage: Option<&'a Storage>
 }
 
 impl ScanIterator {
@@ -56,25 +58,13 @@ impl Iterator for ScanIterator {
 }
 
 impl ValueIterator for ScanIterator {
-    fn dynamically_load(&mut self, mut train: Train) {
-        if train.last() == self.index {
-            train.values = Some(train.values.unwrap().into_iter().map(|d| {
-                let value = match d {
-                    Value::Wagon(w) => {
-                        w.unwrap()
-                    }
-                    v => v
-                };
 
-                Value::wagon(value, self.index.to_string())
-
-            }).collect());
-            self.trains.push(train);
-        }
+    fn set_storage(&mut self, storage: &Storage) {
+        todo!()
     }
 
     fn clone(&self) -> BoxedIterator {
-        Box::new(ScanIterator { index: self.index, values: vec![], trains: self.trains.clone() })
+        Box::new(ScanIterator { index: self.index, values: vec![], trains: self.trains.clone(), storage: None })
     }
 
     fn enrich(&mut self, _transforms: HashMap<String, Transform>) -> Option<BoxedIterator> {
@@ -90,7 +80,7 @@ impl RefHandler for ScanIterator {
     }
 
     fn clone(&self) -> Box<dyn RefHandler + Send + 'static> {
-        Box::new(ScanIterator { index: self.index, values: vec![], trains: vec![] })
+        Box::new(ScanIterator { index: self.index, values: vec![], trains: vec![], storage: self.storage })
     }
 }
 
@@ -107,10 +97,10 @@ impl OutputDerivable for IndexScan {
 }
 
 impl Algebra for IndexScan {
-    type Iterator = ScanIterator;
+    type Iterator<'a> = ScanIterator<'a>;
 
     fn derive_iterator(&mut self) -> Self::Iterator {
-        ScanIterator { index: self.index, values: vec![], trains: vec![] }
+        ScanIterator { index: self.index, values: vec![], trains: vec![], storage: None }
     }
 
 }

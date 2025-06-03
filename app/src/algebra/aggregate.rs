@@ -15,6 +15,7 @@ use value::Value::Null;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
+use crate::util::storage::Storage;
 
 type Agg = (AggOp, Operator);
 
@@ -226,9 +227,8 @@ impl Iterator for AggIterator {
 }
 
 impl ValueIterator for AggIterator {
-    fn dynamically_load(&mut self, train: Train) {
-        self.input.dynamically_load(train);
-        self.reloaded = false;
+    fn set_storage(&mut self, storage: &Storage) {
+        self.input.set_storage(storage);
     }
 
     fn clone(&self) -> BoxedIterator {

@@ -8,6 +8,7 @@ use crate::processing::{Layout, Train};
 use value::Value;
 use std::collections::HashMap;
 use crate::algebra::operator::SetProjectIterator;
+use crate::util::storage::Storage;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Project {
@@ -32,14 +33,14 @@ impl Iterator for ProjectIter {
 
     fn next(&mut self) -> Option<Self::Item> {
         match self {
-            ProjectIter::ValueProjectIterator(p) => {p.next()}
-            ProjectIter::ValueSetProjectIterator(p) => {p.next()}
+            ProjectIter::ValueProjectIterator(p) => p.next(),
+            ProjectIter::ValueSetProjectIterator(p) => p.next(),
         }
     }
 }
 
 impl ValueIterator for ProjectIter {
-    fn dynamically_load(&mut self, _train: Train) {
+    fn set_storage(&mut self, storage: &Storage) {
         unreachable!()
     }
 
@@ -76,8 +77,8 @@ impl Iterator for ProjectIterator {
 }
 
 impl ValueIterator for ProjectIterator {
-    fn dynamically_load(&mut self, train: Train) {
-        self.input.dynamically_load(train);
+    fn set_storage(&mut self, storage: &Storage) {
+        self.input.set_storage(storage);
     }
 
     fn clone(&self) -> BoxedIterator {

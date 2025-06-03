@@ -1,27 +1,28 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use std::thread;
 use std::thread::{sleep, spawn};
 use std::time::Duration;
 
-use crate::new_channel;
 use crate::optimize::OptimizeStrategy;
 use crate::processing::block::Block;
-use crate::processing::select::{TriggerSelector, WindowSelector};
 use crate::processing::layout::Layout;
+use crate::processing::select::{TriggerSelector, WindowSelector};
 use crate::processing::sender::Sender;
 use crate::processing::station::Command::{Okay, Ready, Threshold};
 use crate::processing::station::{Command, Station};
 use crate::processing::transform::Transform;
 use crate::processing::watermark::WatermarkStrategy;
-use crate::processing::window::Window;
+use crate::processing::window::{Window, WindowStrategy};
 use crate::processing::Train;
+use crate::util::new_channel;
+use crate::util::storage::Storage;
 use crate::util::Tx;
 use crate::util::{new_id, Rx};
 use crossbeam::channel::Receiver;
 use crossbeam::{channel, select};
 pub use logos::Source;
-use tracing::{debug, error};
+use parking_lot::RwLock;
+use tracing::{debug, error, info};
 use value::{Time, Value};
 
 const IDLE_TIMEOUT: Duration = Duration::from_nanos(10);
@@ -36,7 +37,7 @@ pub(crate) struct Platform {
     transform: Option<Transform>,
     layout: Layout,
     window: Window,
-    watermark_strategy: WatermarkStrategy,
+    watermark_strategy: Arc<WatermarkStrategy>,
     stop: usize,
     blocks: Vec<usize>,
     inputs: Vec<usize>,
@@ -72,7 +73,7 @@ impl Platform {
                 blocks,
                 inputs,
                 transforms,
-                watermark_strategy,
+                watermark_strategy: Arc::new(watermark_strategy),
             },
             control.0,
         )
@@ -82,9 +83,7 @@ impl Platform {
             self.stop,
             self.transform.clone(),
             self.transforms.clone(),
-            Box::new(SenderStep {
-                sender: self.sender.clone(),
-            }),
+            self.sender.clone(),
         );
 
         let stop = self.stop;
@@ -92,14 +91,20 @@ impl Platform {
         let mut threshold = 2000;
         let mut too_high = false;
 
-        let mut watermark_strategy = Arc::new(self.watermark_strategy.clone());
+        let watermark_strategy = self.watermark_strategy.clone();
 
         let storage = Arc::new(Mutex::new(vec![]));
 
-        let window_selector = WindowSelector::new(storage.clone().into(), self.window.clone());
+        let mut window_selector = Arc::new(RwLock::new(WindowSelector::new(self.window.clone())));
+
         let trigger_selector = TriggerSelector::new(storage.clone().into());
 
-        let when_tx = when(watermark_strategy.clone(), window_selector, trigger_selector, process);
+        let when_tx = when(
+            self.watermark_strategy.clone(),
+            window_selector.clone(),
+            trigger_selector,
+            process,
+        );
 
         control.send(Ready(stop)).unwrap();
 
@@ -143,8 +148,10 @@ impl Platform {
                 Ok(train) => {
                     debug!("{:?}", train);
                     if self.layout.fits_train(&train) {
+                        // save and update if something changed
                         storage.lock().unwrap().push(train.clone());
                         watermark_strategy.mark(&train);
+                        window_selector.write().mark(&train);
                     }
                 }
                 _ => {
@@ -157,9 +164,9 @@ impl Platform {
 
 fn when(
     watermark_strategy: Arc<WatermarkStrategy>,
-    mut select: WindowSelector,
-    mut trigger: TriggerSelector,
-    mut what: Box<dyn Step>,
+    mut where_: Arc<RwLock<WindowSelector>>,
+    mut when: TriggerSelector,
+    mut what: Box<dyn FnMut(Train) + Send>,
 ) -> Tx<Command> {
     let (tx, rx) = new_channel::<Command, &str>("Trigger");
     // shall we?
@@ -171,7 +178,7 @@ fn when(
     // apply transformation
     // send out
     spawn(move || loop {
-        if let Ok(command) = rx.recv() {
+        if let Ok(command) = rx.try_recv() {
             match command {
                 Command::Stop(_) => return,
                 _ => {}
@@ -179,12 +186,14 @@ fn when(
         }
         let current = watermark_strategy.current();
 
-        let windows = select.select(current);
+        // get all "changed" windows
+        let windows = where_.write().select();
 
-        match trigger.select(windows) {
-            trains if trains.len() > 0  => {
-                trains.into_iter().for_each(|train| what.apply(train));
-            }
+        // decide if we fire a window, discard or wait
+        match when.select(windows, &current) {
+            trains if trains.len() > 0 => trains.into_iter().for_each(|(window, train)| {
+                what(train);
+            }),
             _ => sleep(IDLE_TIMEOUT),
         }
     });
@@ -196,20 +205,18 @@ fn optimize(
     stop: usize,
     transform: Option<Transform>,
     transforms: HashMap<String, Transform>,
-    mut next: Box<dyn Step>,
-) -> Box<dyn Step> {
+    sender: Sender,
+) -> Box<dyn FnMut(Train)> {
     match transform {
         Some(transform) => {
             let mut enumerator =
                 transform.optimize(transforms, Some(OptimizeStrategy::rule_based()));
-            Box::new(FunctionStep {
-                function: Box::new(move |train| {
-                    enumerator.dynamically_load(train);
-                    next.apply(enumerator.drain_to_train(stop));
-                }),
+            Box::new(move |train| {
+                enumerator.dynamically_load(train);
+                sender.send(enumerator.drain_to_train(stop));
             })
         }
-        None => next,
+        None => Box::new(|train| sender.send(train)),
     }
 }
 
@@ -224,88 +231,3 @@ fn merge_marks(train: &mut Vec<Train>) -> HashMap<usize, Time> {
     marks
 }
 
-pub trait Step {
-    fn apply(&mut self, train: Train);
-
-    fn detach(&mut self, num: usize);
-
-    fn attach(&mut self, num: usize, tx: Tx<Train>);
-}
-
-pub struct FunctionStep {
-    function: Box<dyn FnMut(Train)>,
-}
-
-impl FunctionStep {
-    pub fn new(function: Box<dyn FnMut(Train)>) -> FunctionStep {
-        FunctionStep { function }
-    }
-}
-
-impl Step for FunctionStep {
-    fn apply(&mut self, train: Train) {
-        (self.function)(train);
-    }
-
-    fn detach(&mut self, _num: usize) {
-        // nothing on purpose
-    }
-
-    fn attach(&mut self, _num: usize, _tx: Tx<Train>) {
-        // nothing on purpose
-    }
-}
-
-pub struct SenderStep {
-    sender: Sender,
-}
-
-impl Step for SenderStep {
-    fn apply(&mut self, train: Train) {
-        self.sender.send(train)
-    }
-
-    fn detach(&mut self, num: usize) {
-        self.sender.remove(num)
-    }
-
-    fn attach(&mut self, num: usize, tx: Tx<Train>) {
-        self.sender.add(num, tx)
-    }
-}
-
-
-pub struct WindowOperator {
-    storage: Arc<Mutex<Vec<Train>>>,
-    window: Window,
-}
-
-impl WindowOperator {
-    pub fn new(window: Window, storage: Arc<Mutex<Vec<Train>>>) -> Self {
-        WindowOperator { storage, window }
-    }
-
-    pub fn get(&self, time: &Time) -> Vec<Train> {
-        match &self.window {
-            Window::Non(_) => self.storage.lock().unwrap().clone(),
-            Window::Back(b) => {
-                let back = time - b.duration;
-                self.storage
-                    .lock()
-                    .unwrap()
-                    .iter()
-                    .filter(|t| &t.event_time <= time && t.event_time >= back)
-                    .collect()
-            }
-            Window::Interval(i) => {
-                let (from, to) = i.get_times(time);
-                self.storage
-                    .lock()
-                    .unwrap()
-                    .iter()
-                    .filter(|t| &t.event_time <= &to && t.event_time >= from)
-                    .collect()
-            }
-        }
-    }
-}

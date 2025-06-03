@@ -14,6 +14,7 @@ use crate::processing::transform::Transform;
 use crate::processing::{Layout, Train};
 use value::Value;
 use std::collections::HashMap;
+use crate::util::storage::Storage;
 
 pub type BoxedIterator = Box<dyn ValueIterator<Item=Value> + Send + 'static>;
 
@@ -189,9 +190,31 @@ impl ValueHandler for IdentityHandler {
 }
 
 
+pub struct Executor {
+    iterator: Box<dyn ValueIterator + Send + 'static>,
+    values: HashMap<usize, Vec<Value>>,
+}
+
+impl Executor {
+    fn next(&mut self, train: Train) {
+        let last = train.last();
+        match train.values {
+            None => {}
+            Some(mut values) => {
+                self.values.entry(last).or_insert(vec![]).append(&mut values);
+            }
+        }
+    }
+
+    fn execute(&mut self, template: Train) {
+
+    }
+}
+
 
 pub trait ValueIterator: Iterator<Item=Value> + Send + 'static {
-    fn dynamically_load(&mut self, train: Train);
+
+    fn set_storage(&mut self, storage: &Storage);
 
     fn drain(&mut self) -> Vec<Value> {
         self.into_iter().collect()

@@ -10,8 +10,6 @@ pub use value::train::Train;
 pub use value::wagon::Wagon;
 pub use block::Block;
 pub use sender::Sender;
-pub use platform::Step;
-pub use platform::FunctionStep;
 
 pub mod station;
 mod window;

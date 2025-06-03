@@ -45,6 +45,10 @@ impl Time {
         Time { ms, ns }
     }
 
+    pub fn duration_since(&self, other: Time) -> Time {
+        Time::new(other.ms - self.ms, other.ns - self.ns)
+    }
+
     pub(crate) fn flatternize<'bldr>(&self, builder: &mut FlatBufferBuilder<'bldr>) -> WIPOffset<FlatTime<'bldr>> {
         FlatTime::create(builder, &TimeArgs{ data: self.ms as i64 })
     }

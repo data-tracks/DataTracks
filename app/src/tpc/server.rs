@@ -112,7 +112,7 @@ impl Server {
             let listener = TcpListener::bind(self.addr)
                 .await
                 .map_err(|err| err.to_string())?;
-            info!("TPC server listening...");
+            info!("TPC server listening {}...", self.addr);
             let rx = Arc::new(rx);
 
             control.send(Command::Ready(0)).unwrap();

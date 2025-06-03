@@ -6,6 +6,7 @@ use crate::processing::transform::Transform;
 use crate::processing::{Layout, Train};
 use value::Value;
 use std::collections::HashMap;
+use crate::util::storage::Storage;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Filter {
@@ -41,8 +42,8 @@ impl Iterator for FilterIterator {
 }
 
 impl ValueIterator for FilterIterator {
-    fn dynamically_load(&mut self, train: Train) {
-        self.input.dynamically_load(train);
+    fn set_storage(&mut self, storage: &Storage) {
+        self.input.set_storage(storage);
     }
 
     fn clone(&self) -> BoxedIterator {

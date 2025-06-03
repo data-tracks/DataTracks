@@ -1,3 +1,4 @@
+use std::sync::Mutex;
 use chrono::Duration;
 use value::Time;
 use crate::processing::Train;
@@ -18,7 +19,7 @@ impl Default for WatermarkStrategy {
 }
 
 impl WatermarkStrategy {
-    pub(crate) fn mark(&mut self, train: &Train) {
+    pub(crate) fn mark(&self, train: &Train) {
         match self {
             WatermarkStrategy::Monotonic(m) => {
                 m.mark(train);
@@ -48,7 +49,7 @@ impl WatermarkStrategy {
         }
     }
 
-    pub(crate) fn current(&self) -> &Time {
+    pub(crate) fn current(&self) -> Time {
         match self {
             WatermarkStrategy::Monotonic(m) => {
                 m.current()
@@ -63,9 +64,9 @@ impl WatermarkStrategy {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default)]
 pub struct MonotonicWatermark {
-    last: Time,
+    last: Mutex<Time>,
 }
 
 
@@ -74,9 +75,10 @@ impl MonotonicWatermark {
         MonotonicWatermark::default()
     }
 
-    pub(crate) fn mark(&mut self, train: &Train) {
-        if train.event_time > self.last {
-            self.last = train.event_time.clone();
+    pub(crate) fn mark(&self, train: &Train) {
+        let mut last = self.last.lock().unwrap();
+        if train.event_time > *last {
+            *last = train.event_time.clone();
         }
     }
 
@@ -88,14 +90,19 @@ impl MonotonicWatermark {
         todo!()
     }
 
-    pub(crate) fn current(&self) -> &Time {
-        &self.last
+    pub(crate) fn current(&self) -> Time {
+        self.last.lock().unwrap().clone()
     }
 }
 
-#[derive(Clone)]
+impl Clone for MonotonicWatermark {
+    fn clone(&self) -> Self {
+        MonotonicWatermark::new()
+    }
+}
+
 pub struct PeriodicWatermark {
-    mark: Time,
+    mark: Mutex<Time>,
     offset: Offset,
 }
 
@@ -105,15 +112,16 @@ impl PeriodicWatermark {
         PeriodicWatermark{ mark: Default::default(), offset }
     }
 
-    pub(crate) fn mark(&mut self, train: &Train) {
+    pub(crate) fn mark(&self, train: &Train) {
         let time = self.offset.apply(&train.event_time);
-        if time > self.mark {
-            self.mark = time;
+        let mut mark = self.mark.lock().unwrap();
+        if time > *mark {
+            *mark = time;
         }
     }
 
-    pub(crate) fn current(&self) -> &Time {
-        &self.mark
+    pub(crate) fn current(&self) -> Time {
+        self.mark.lock().unwrap().clone()
     }
 
     pub(crate) fn detach(&self, num: usize) {
@@ -121,6 +129,12 @@ impl PeriodicWatermark {
     }
     pub(crate) fn attach(&self, num: usize, sender: Tx<Time>) {
         todo!()
+    }
+}
+
+impl Clone for PeriodicWatermark {
+    fn clone(&self) -> Self {
+        PeriodicWatermark::new(self.offset.clone())
     }
 }
 
@@ -159,8 +173,8 @@ impl PunctuatedWatermark {
         todo!()
     }
 
-    pub(crate) fn current(&self) -> &Time {
-        &self.mark
+    pub(crate) fn current(&self) -> Time {
+        self.mark
     }
 }
 

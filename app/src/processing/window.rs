@@ -1,12 +1,11 @@
-use std::collections::HashMap;
+use crate::processing::select::WindowDescriptor;
 use crate::processing::transform::Taker;
 use crate::processing::window::Window::{Back, Interval, Non};
-use crate::processing::{select, Train};
+use crate::processing::Train;
 use crate::util::TimeUnit;
 use chrono::{Duration, NaiveTime, Timelike};
 use speedy::{Readable, Writable};
 use value::Time;
-use crate::processing::select::WindowDescriptor;
 
 #[derive(Clone)]
 pub enum Window {
@@ -22,15 +21,13 @@ impl Default for Window {
 }
 
 impl Window {
-
-    pub(crate) fn get_strategy(&self) -> Box<dyn FnMut(&Train) -> Vec<(WindowDescriptor, bool)>> {
+    pub(crate) fn get_strategy(&self) -> WindowStrategy {
         match self {
-            Non(_) => Box::new(|current| vec![(WindowDescriptor::unbounded(), false)]),
-            Back(b) => b.get_strategy(),
-            Interval(i) => i.get_strategy(),
+            Non(_) => WindowStrategy::None(NoneStrategy::new()),
+            Back(b) => WindowStrategy::Back(BackStrategy::new(b)),
+            Interval(i) => WindowStrategy::Interval(IntervalStrategy::new(i)),
         }
     }
-
 
     pub(crate) fn dump(&self) -> String {
         match self {
@@ -46,22 +43,12 @@ impl Window {
         }
         Ok(Back(BackWindow::parse(stencil)?))
     }
-
-    pub(crate) fn get_window(&self, train: &Train) -> (WindowDescriptor, bool) {
-        todo!()
-    }
 }
 
 #[derive(Clone, Default)]
 pub struct NonWindow {}
 
 impl NonWindow {}
-
-impl Taker for NonWindow {
-    fn take(&mut self, wagons: &mut Vec<Train>) -> Vec<Train> {
-        wagons.clone()
-    }
-}
 
 #[derive(Clone)]
 pub struct BackWindow {
@@ -71,12 +58,7 @@ pub struct BackWindow {
 }
 
 impl BackWindow {
-
-}
-
-impl BackWindow {
     pub fn new(time: i64, time_unit: TimeUnit) -> Self {
-        let now = Time::now();
         BackWindow {
             time,
             time_unit: time_unit.clone(),
@@ -84,8 +66,11 @@ impl BackWindow {
         }
     }
 
-    pub(crate) fn get_strategy(&self) -> Box<dyn FnMut(&Train) -> Vec<(WindowDescriptor, bool)>> {
-        todo!()
+    pub(crate) fn get_strategy(
+        &self,
+    ) -> Box<dyn FnMut(&Time) -> Vec<(WindowDescriptor, bool)> + Send + 'static> {
+        let duration = self.duration.clone();
+        Box::new(move |time| vec![(WindowDescriptor::new(time - duration, *time), true)])
     }
 
     fn parse(stencil: String) -> Result<Self, String> {
@@ -138,24 +123,37 @@ fn parse_time_unit(time: String) -> Result<TimeUnit, String> {
 pub struct IntervalWindow {
     pub time: i64,
     pub time_unit: TimeUnit,
-    pub start: NaiveTime,
-    pub t: Time,
+    pub start: Time,
     pub millis_delta: i64,
 }
 
 impl IntervalWindow {
-    fn new(time: i64, time_unit: TimeUnit, start: NaiveTime) -> IntervalWindow {
+    fn new(time: i64, time_unit: TimeUnit, start: Time) -> IntervalWindow {
         IntervalWindow {
             time,
             time_unit: time_unit.clone(),
             start,
-            t: Time::new((start.second() * 1000) as i64, 0),
             millis_delta: time * time_unit.as_ms(),
         }
     }
 
-    pub(crate) fn get_strategy(&self) -> Box<dyn FnMut(&Train) -> Vec<(WindowDescriptor, bool)>> {
-        todo!()
+    pub(crate) fn get_strategy(
+        &self,
+    ) -> Box<dyn FnMut(&Time) -> Vec<(WindowDescriptor, bool)> + Send + 'static> {
+        let start = self.start;
+        let millis_delta = self.millis_delta;
+        Box::new(move |time| {
+            let delta = time.duration_since(start);
+            let minus = delta.ms % millis_delta;
+            let start_ms = start.ms + delta.ms - minus;
+            vec![(
+                WindowDescriptor::new(
+                    Time::new(start_ms, 0),
+                    Time::new(start_ms + millis_delta, 0),
+                ),
+                false,
+            )]
+        })
     }
 
     pub(crate) fn dump(&self) -> String {
@@ -163,12 +161,12 @@ impl IntervalWindow {
             "[{}{}@{}]",
             &self.time,
             self.time_unit,
-            &self.start.format("%H:%M")
+            &self.start.to_string()
         )
     }
 
     pub(crate) fn get_times(&self, time: &Time) -> (Time, Time) {
-        let mut temp = self.t;
+        let mut temp = self.start;
 
         while &temp < time {
             temp += self.millis_delta;
@@ -180,8 +178,7 @@ impl IntervalWindow {
         match input.split_once('@') {
             None => {
                 let (time, time_unit) = parse_interval(&input)?;
-                let start = NaiveTime::from_hms_opt(0, 0, 0)
-                    .ok_or("Could not parse start time for interval".to_string())?;
+                let start = Time::new(0, 0);
 
                 Ok(IntervalWindow::new(time, time_unit, start))
             }
@@ -195,33 +192,96 @@ impl IntervalWindow {
     }
 }
 
-fn parse_time(time_str: &str) -> Result<NaiveTime, chrono::ParseError> {
-    NaiveTime::parse_from_str(time_str, "%H:%M")
+fn parse_time(time_str: &str) -> Result<Time, String> {
+    Ok(Time::new(
+        (NaiveTime::parse_from_str(time_str, "%H:%M")
+            .map_err(|err| err.to_string())?
+            .second()
+            * 1000) as i64,
+        0,
+    ))
 }
 
-
-pub struct WindowStrategy{
-    window: Window,
-    dirty_windows: HashMap<WindowDescriptor, bool>,
+pub enum WindowStrategy {
+    None(NoneStrategy),
+    Back(BackStrategy),
+    Interval(IntervalStrategy),
 }
-
 
 impl WindowStrategy {
-    pub fn new(window: Window) -> Self {
-        WindowStrategy{window, dirty_windows: HashMap::new()}
+    pub(crate) fn mark(&mut self, train: &Train) -> Vec<(WindowDescriptor, bool)> {
+        match self {
+            WindowStrategy::None(n) => n.mark(train),
+            WindowStrategy::Back(b) => b.mark(train),
+            WindowStrategy::Interval(i) => i.mark(train),
+        }
+    }
+}
+
+pub struct NoneStrategy {}
+
+impl NoneStrategy {
+    pub(crate) fn new() -> Self {
+        NoneStrategy {}
+    }
+    pub(crate) fn mark(&mut self, train: &Train) -> Vec<(WindowDescriptor, bool)> {
+        vec![(WindowDescriptor::unbounded(train.event_time.clone()), true)]
+    }
+}
+
+pub struct BackStrategy {
+    pub duration: Duration,
+    time: i64,
+    time_unit: TimeUnit,
+    delta_ms: i64,
+}
+
+impl BackStrategy {
+    fn new(window: &BackWindow) -> Self {
+        Self {
+            duration: window.duration,
+            time: window.time,
+            time_unit: window.time_unit.clone(),
+            delta_ms: window.time * window.time_unit.as_ms(),
+        }
     }
 
-    pub(crate) fn mark(&mut self, train:&Train) {
-        let window = self.window.get_window(train);
-        self.dirty_windows.insert(window.0, window.1);
+    pub(crate) fn mark(&self, train: &Train) -> Vec<(WindowDescriptor, bool)> {
+        let start = Time::new(train.event_time.ms - self.delta_ms, train.event_time.ns);
+        vec![(WindowDescriptor::new(start, train.event_time), true)]
     }
+}
 
-    pub(crate) fn peek(&mut self) -> &HashMap<WindowDescriptor, bool> {
-        &self.dirty_windows
+pub struct IntervalStrategy {
+    pub time: i64,
+    pub time_unit: TimeUnit,
+    pub start: Time,
+    pub millis_delta: i64,
+}
+
+impl IntervalStrategy {
+    pub(crate) fn mark(&self, train: &Train) -> Vec<(WindowDescriptor, bool)> {
+        let elapsed = train.event_time.duration_since(self.start);
+        let start_delta = elapsed.ms % self.millis_delta;
+        let start = train.event_time.ms - start_delta;
+        vec![(
+            WindowDescriptor::new(
+                Time::new(start, self.start.ns),
+                Time::new(start + self.millis_delta, self.start.ns),
+            ),
+            false,
+        )]
     }
+}
 
-    pub(crate) fn trigger(&mut self, window: &WindowDescriptor) {
-        self.dirty_windows.remove(window);
+impl IntervalStrategy {
+    fn new(window: &IntervalWindow) -> Self {
+        Self {
+            time: window.time,
+            time_unit: window.time_unit.clone(),
+            start: window.start,
+            millis_delta: window.millis_delta,
+        }
     }
 }
 

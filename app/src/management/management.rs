@@ -82,52 +82,17 @@ fn add_default(storage: Arc<Mutex<Storage>>) {
         .spawn(move || {
             let mut plan = Plan::parse(
                 "\
-                1--2{sql|SELECT $1 FROM $1}--3\n\
+                2{sql|SELECT $1 FROM $1}[3s]\n\
                 In\n\
-                HTTP{\"url\":\"127.0.0.1\", \"port\": \"5555\"}:1\n\
-                MQTT{\"url\":\"127.0.0.1\", \"port\": 6666}:1\n\
-                TPC{\"url\":\"127.0.0.1\", \"port\": 9999}:1\n\
+                HTTP{\"url\":\"127.0.0.1\", \"port\": \"5555\"}:2\n\
+                MQTT{\"url\":\"127.0.0.1\", \"port\": 6666}:2\n\
+                TPC{\"url\":\"127.0.0.1\", \"port\": 9999}:2\n\
                 Out\n\
-                MQTT{\"url\":\"127.0.0.1\", \"port\": 8888}:3\n\
-                TPC{\"url\":\"127.0.0.1\", \"port\": 8686}:3\n\
-                HTTP{\"url\":\"127.0.0.1\", \"port\": 9696}:3",
+                MQTT{\"url\":\"127.0.0.1\", \"port\": 8888}:2\n\
+                TPC{\"url\":\"127.0.0.1\", \"port\": 8686}:2\n\
+                HTTP{\"url\":\"127.0.0.1\", \"port\": 9696}:2",
             )
             .unwrap();
-
-            /*let source = Box::new(HttpSource::new(String::from("127.0.0.1"), 5555));
-            let source_id = source.id();
-            plan.add_source(source);
-            plan.connect_in_out(1, source_id);
-
-            let source = Box::new(MqttSource::new(String::from("127.0.0.1"), 6666));
-            let source_id = source.id();
-            plan.add_source(source);
-            plan.connect_in_out(1, source_id);
-
-            let source = Box::new(TpcSource::new(String::from("127.0.0.1"), 9999));
-            let source_id = source.id();
-            plan.add_source(source);
-            plan.connect_in_out(1, source_id);
-
-            let destination = Box::new(DebugDestination::new());
-            let destination_id = destination.id();
-            plan.add_destination(destination);
-            plan.connect_in_out(3, destination_id);
-
-            let destination = Box::new(MqttDestination::new(String::from("127.0.0.1"), 8888));
-            let destination_id = destination.id();
-            plan.add_destination(destination);
-            plan.connect_in_out(3, destination_id);
-
-            let destination = Box::new(TpcDestination::new(String::from("127.0.0.1"), 8686));
-            let destination_id = destination.id();
-            plan.add_destination(destination);
-            plan.connect_in_out(3, destination_id);
-
-            let destination = Box::new(HttpDestination::new(String::from("127.0.0.1"), 9696));
-            let destination_id = destination.id();
-            plan.add_destination(destination);
-            plan.connect_in_out(3, destination_id);*/
 
             let id = plan.id;
             plan.set_name("Default".to_string());

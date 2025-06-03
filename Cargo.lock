@@ -750,6 +750,7 @@ dependencies = [
  "include_dir",
  "logos",
  "mime_guess",
+ "parking_lot",
  "postgres",
  "rand 0.9.1",
  "redb",

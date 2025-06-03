@@ -1,11 +1,10 @@
-use crate::processing::Train;
-use value::Value;
-use redb::{Database, TableDefinition, TypeName};
-use std::fs;
+use redb::{Database, TableDefinition};
 use speedy::{Readable, Writable};
+use std::fs;
 use tempfile::NamedTempFile;
 use thiserror::Error;
 use tracing::error;
+use value::Value;
 
 /// Error type for storage operations
 #[derive(Error, Debug)]

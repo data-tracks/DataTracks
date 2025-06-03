@@ -30,6 +30,28 @@ Out
 MQTT{...}:3
 ```
 
+## Documentation
+```
+{sql|SELECT $1 FROM $1} // transformation - what
+```
+
+```
+...}[3s] // window - where
+```
+
+```
+...}(f?) // layout
+```
+
+```
+...}@watermark // trigger - when
+```
+
+
+```
+{sql|SELECT $1 FROM $1}(f?)[3s]@watermark // all
+```
+
 ## License
 
 [GPLv3](https://www.gnu.org/licenses/)

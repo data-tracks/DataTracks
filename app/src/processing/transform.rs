@@ -20,6 +20,7 @@ use crate::optimize::OptimizeStrategy;
 use crate::processing::tests::DummyDatabase;
 #[cfg(test)]
 use crate::processing::transform::Transform::DummyDB;
+use crate::util::storage::Storage;
 
 pub trait Taker: Send {
     fn take(&mut self, wagons: &mut Vec<Train>) -> Vec<Train>;
@@ -359,8 +360,8 @@ impl Iterator for FuncTransform {
 }
 
 impl ValueIterator for FuncTransform {
-    fn dynamically_load(&mut self, train: Train) {
-        self.input.dynamically_load(train);
+    fn set_storage(&mut self, storage: &Storage) {
+        self.input.set_storage(storage);
     }
 
     fn clone(&self) -> BoxedIterator {
