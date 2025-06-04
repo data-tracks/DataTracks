@@ -4,6 +4,7 @@ use crate::processing::transform::Transform;
 use crate::processing::{Layout, OutputType, Train};
 use value::Value;
 use std::collections::HashMap;
+use crate::util::storage::{Storage, ValueStore};
 
 // "Dummy" table to query for constants, one row
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
@@ -62,7 +63,7 @@ impl Iterator for DualIterator {
 }
 
 impl ValueIterator for DualIterator {
-    fn dynamically_load(&mut self, _train: Train) {
+    fn set_storage(&mut self, storage: &'a ValueStore) {
         // nothing on purpose
     }
 

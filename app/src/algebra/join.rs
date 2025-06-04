@@ -6,6 +6,7 @@ use crate::processing::OutputType::Array;
 use crate::processing::{ArrayType, Layout, Train};
 use value::Value;
 use std::collections::HashMap;
+use crate::util::storage::{Storage, ValueStore};
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Join {
@@ -134,10 +135,10 @@ impl JoinIterator {
     }
 }
 
-impl ValueIterator for JoinIterator {
-    fn dynamically_load(&mut self, train: Train) {
-        self.left.dynamically_load(train.clone());
-        self.right.dynamically_load(train);
+impl<'a> ValueIterator for JoinIterator {
+    fn set_storage(&mut self, storage: &'a ValueStore) {
+        self.left.set_storage(storage);
+        self.right.set_storage(storage);
     }
 
     fn clone(&self) -> BoxedIterator {
@@ -206,16 +207,14 @@ mod test {
     use crate::algebra::{AlgebraType, ValueIterator};
     use crate::processing::Train;
     use value::{Dict, Value};
+    use crate::util::storage::{Storage, ValueStore};
 
     #[test]
     fn one_match() {
-        let left = Train::new(transform(vec![3.into(), 5.5.into()]));
-        let right = Train::new(transform(vec![5.5.into(), "test".into()]));
-        let left = left.mark(0);
-        let right = right.mark(1);
+        let left = transform(vec![3.into(), 5.5.into()]);
+        let right = transform(vec![5.5.into(), "test".into()]);
 
         let left_scan = IndexScan::new(0);
-
         let right_scan = IndexScan::new(1);
 
         let mut join = Join::new(
@@ -227,8 +226,16 @@ mod test {
         );
 
         let mut handle = join.derive_iterator();
-        handle.dynamically_load(left);
-        handle.dynamically_load(right);
+
+
+        let mut left = ValueStore::new_with_values(left);
+        left.set_source(0);
+        let mut right = ValueStore::new_with_values(right);
+        right.set_source(1);
+
+        handle.set_storage(&left);
+        handle.set_storage(&right);
+
         let mut res = handle.drain_to_train(3);
         assert_eq!(
             res.clone().values.unwrap(),

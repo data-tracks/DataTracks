@@ -23,9 +23,9 @@ impl Block {
 
     pub fn next(&mut self, train: Train) {
         match self {
-            Non(n) => n.apply(train),
-            Specific(s) => s.apply(train),
-            All(a) => a.apply(train),
+            Non(n) => {},
+            Specific(s) => {},
+            All(a) => {},
         }
     }
 }

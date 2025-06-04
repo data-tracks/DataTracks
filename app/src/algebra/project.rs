@@ -8,7 +8,7 @@ use crate::processing::{Layout, Train};
 use value::Value;
 use std::collections::HashMap;
 use crate::algebra::operator::SetProjectIterator;
-use crate::util::storage::Storage;
+use crate::util::storage::{Storage, ValueStore};
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Project {
@@ -39,8 +39,8 @@ impl Iterator for ProjectIter {
     }
 }
 
-impl ValueIterator for ProjectIter {
-    fn set_storage(&mut self, storage: &Storage) {
+impl<'a> ValueIterator for ProjectIter {
+    fn set_storage(&mut self, storage: &'a ValueStore) {
         unreachable!()
     }
 
@@ -76,8 +76,8 @@ impl Iterator for ProjectIterator {
     }
 }
 
-impl ValueIterator for ProjectIterator {
-    fn set_storage(&mut self, storage: &Storage) {
+impl<'a> ValueIterator for ProjectIterator {
+    fn set_storage(&mut self, storage: &'a ValueStore) {
         self.input.set_storage(storage);
     }
 

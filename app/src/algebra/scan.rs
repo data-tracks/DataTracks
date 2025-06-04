@@ -3,11 +3,11 @@ use crate::algebra::BoxedIterator;
 use crate::analyse::{InputDerivable, OutputDerivable};
 use crate::processing::transform::Transform;
 use crate::processing::{Layout, Train};
+use crate::util::storage::{Storage, ValueStore};
 use crate::util::EmptyIterator;
 use std::collections::HashMap;
 use std::vec;
 use value::Value;
-use crate::util::storage::Storage;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct IndexScan {
@@ -24,47 +24,40 @@ impl IndexScan {
 pub struct ScanIterator<'a> {
     index: usize,
     values: Vec<Value>,
-    trains: Vec<Train>,
-    storage: Option<&'a Storage>
+    storage: Option<&'a ValueStore>
 }
 
-impl ScanIterator {
-    pub(crate) fn next_train(&mut self) -> bool {
-        loop {
-            if self.trains.is_empty() {
-                return false;
-            } else {
-                let mut train = self.trains.remove(0);
-                if let Some(mut values) = train.values.take() {
-                    if !values.is_empty() {
-                        self.values.append(&mut values);
-                        return true;
-                    }
-                }
+impl ScanIterator<'_> {
+    pub(crate) fn load(&mut self) -> bool {
+        match self.storage {
+            None => return true,
+            Some(store) => {
+                self.values = store.get_all();
+                self.values.is_empty()
             }
         }
     }
 }
 
-impl Iterator for ScanIterator {
+impl Iterator for ScanIterator<'_> {
     type Item = Value;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.values.is_empty() && !self.next_train() {
+        if self.values.is_empty() && self.load() {
             return None
         }
         Some(self.values.remove(0))
     }
 }
 
-impl ValueIterator for ScanIterator {
+impl<'a> ValueIterator for ScanIterator<'static> {
 
-    fn set_storage(&mut self, storage: &Storage) {
-        todo!()
+    fn set_storage(&mut self, storage: &'a ValueStore) {
+        self.storage = Some(storage)
     }
 
     fn clone(&self) -> BoxedIterator {
-        Box::new(ScanIterator { index: self.index, values: vec![], trains: self.trains.clone(), storage: None })
+        Box::new(ScanIterator { index: self.index, values: vec![], storage: None })
     }
 
     fn enrich(&mut self, _transforms: HashMap<String, Transform>) -> Option<BoxedIterator> {
@@ -72,7 +65,7 @@ impl ValueIterator for ScanIterator {
     }
 }
 
-impl RefHandler for ScanIterator {
+impl RefHandler for ScanIterator<'_> {
     fn process(&self, _stop: usize, wagons: Vec<Train>) -> Vec<Train> {
         let mut values = vec![];
         wagons.into_iter().filter(|w| w.last() == self.index).for_each(|mut t| values.append(t.values.take().unwrap().as_mut()));
@@ -80,7 +73,7 @@ impl RefHandler for ScanIterator {
     }
 
     fn clone(&self) -> Box<dyn RefHandler + Send + 'static> {
-        Box::new(ScanIterator { index: self.index, values: vec![], trains: vec![], storage: self.storage })
+        Box::new(ScanIterator { index: self.index, values: vec![], storage: self.storage })
     }
 }
 
@@ -97,10 +90,10 @@ impl OutputDerivable for IndexScan {
 }
 
 impl Algebra for IndexScan {
-    type Iterator<'a> = ScanIterator<'a>;
+    type Iterator = ScanIterator<'static>;
 
     fn derive_iterator(&mut self) -> Self::Iterator {
-        ScanIterator { index: self.index, values: vec![], trains: vec![], storage: None }
+        ScanIterator { index: self.index, values: vec![], storage: None }
     }
 
 }
@@ -149,6 +142,7 @@ mod test {
     use crate::algebra::scan::IndexScan;
     use crate::algebra::ValueIterator;
     use crate::processing::Train;
+    use crate::util::storage::ValueStore;
     use value::Value;
 
     #[test]
@@ -157,8 +151,13 @@ mod test {
 
         let mut scan = IndexScan::new(0);
 
+        let mut storage = ValueStore::new();
         let mut handler = scan.derive_iterator();
-        handler.dynamically_load(train);
+
+        match train.values {
+            None => {},
+            Some(v) => storage.append(v)
+        }
 
         let mut train_2 = handler.drain_to_train(0);
 

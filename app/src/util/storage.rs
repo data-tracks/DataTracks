@@ -17,6 +17,52 @@ pub enum StorageError {
     KeyNotFound,
 }
 
+pub struct ValueStore {
+    storage: Storage,
+    count: usize,
+    index: usize
+}
+
+impl ValueStore {
+
+    pub fn new() -> Self {
+        Self::new_with_values(vec![])
+    }
+
+    pub fn new_with_values(values: Vec<Value>) -> Self {
+        let mut store = ValueStore{
+            storage: Storage::new_temp("temp").unwrap(),
+            count: 0,
+            index: 0,
+        };
+        store.append(values);
+        store
+    }
+
+
+    pub fn add(&mut self, value: Value) -> Result<(), StorageError>{
+        self.count += 1;
+        self.storage.write_value(self.count.into(), value)?;
+        Ok(())
+    }
+
+    pub fn set_source(&mut self, source: usize){
+        self.index = source;
+    }
+
+    pub(crate) fn append(&mut self, values: Vec<Value>) {
+        values.into_iter().for_each(|v| self.storage.write_value(self.count.into(), v).unwrap());
+    }
+
+    pub fn get_all(&self) -> Vec<Value> {
+        let mut values = vec![];
+        for num in 0..self.count {
+            values.push(self.storage.read_value(num.into()).unwrap());
+        }
+        values
+    }
+}
+
 
 pub struct Storage {
     path: Option<String>,
@@ -68,6 +114,16 @@ impl Storage {
             .map_err(|e| StorageError::DatabaseError(e.to_string()))?;
         Ok(())
     }
+
+    pub fn write_value(&mut self, key: Value, value: Value) -> Result<(), StorageError> {
+        self.write(key, value.write_to_vec().unwrap())
+    }
+
+    pub fn read_value(&self, key: Value) -> Result<Value, StorageError> {
+        Value::read_from_buffer(&self.read_u8(key)?).map_err(|e| StorageError::DatabaseError(e.to_string()))
+    }
+
+
 
     /// Read a value by its key from the storage.
     pub fn read_u8(&self, key: Value) -> Result<Vec<u8>, StorageError> {

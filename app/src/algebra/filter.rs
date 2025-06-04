@@ -6,7 +6,7 @@ use crate::processing::transform::Transform;
 use crate::processing::{Layout, Train};
 use value::Value;
 use std::collections::HashMap;
-use crate::util::storage::Storage;
+use crate::util::storage::{Storage, ValueStore};
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Filter {
@@ -41,8 +41,8 @@ impl Iterator for FilterIterator {
     }
 }
 
-impl ValueIterator for FilterIterator {
-    fn set_storage(&mut self, storage: &Storage) {
+impl<'a> ValueIterator for FilterIterator {
+    fn set_storage(&mut self, storage: &'a ValueStore) {
         self.input.set_storage(storage);
     }
 

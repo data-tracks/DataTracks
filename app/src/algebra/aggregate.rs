@@ -15,7 +15,7 @@ use value::Value::Null;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
-use crate::util::storage::Storage;
+use crate::util::storage::{Storage, ValueStore};
 
 type Agg = (AggOp, Operator);
 
@@ -227,7 +227,7 @@ impl Iterator for AggIterator {
 }
 
 impl ValueIterator for AggIterator {
-    fn set_storage(&mut self, storage: &Storage) {
+    fn set_storage(&mut self, storage: &'a ValueStore) {
         self.input.set_storage(storage);
     }
 

@@ -4,6 +4,7 @@ use crate::processing::transform::Transform;
 use crate::processing::{Layout, Train};
 use std::collections::HashMap;
 use value::Value;
+use crate::util::storage::{Storage, ValueStore};
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct VariableScan {
@@ -57,9 +58,11 @@ impl Iterator for BareVariableIterator {
 }
 
 impl ValueIterator for BareVariableIterator {
-    fn dynamically_load(&mut self, _train: Train) {
-        panic!("Not correctly enriched")
+
+    fn set_storage(&mut self, storage: &'a ValueStore) {
+        unreachable!("Not correctly enriched")
     }
+
     fn clone(&self) -> BoxedIterator {
         Box::new(BareVariableIterator { name: self.name.clone(), inputs: self.inputs.iter().map(|i| (*i).clone()).collect() })
     }
@@ -100,7 +103,9 @@ impl Iterator for VariableIterator {
             }
             let values = values.iter().map(|v| v.clone().unwrap()).collect();
 
-            self.transform.dynamically_load(Train::new(values));
+            let storage = ValueStore::new_with_values(values);
+
+            self.transform.set_storage(&storage);
             self.transform.next()
         };
         // we annotate it
@@ -113,8 +118,9 @@ impl Iterator for VariableIterator {
 }
 
 impl ValueIterator for VariableIterator {
-    fn dynamically_load(&mut self, train: Train) {
-        self.inputs.iter_mut().for_each(|v| v.dynamically_load(train.clone()));
+
+    fn set_storage(&mut self, storage: &'a ValueStore) {
+        self.inputs.iter_mut().for_each(|v| v.set_storage(storage));
     }
 
     fn clone(&self) -> BoxedIterator {

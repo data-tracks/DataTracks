@@ -17,6 +17,7 @@ use std::fmt::Debug;
 use std::str::FromStr;
 use std::vec;
 use tracing::warn;
+use crate::util::storage::{Storage, ValueStore};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Op {
@@ -149,9 +150,9 @@ fn unwind<'a>(value: Value) -> Vec<Value> {
     }
 }
 
-impl ValueIterator for SetProjectIterator {
-    fn dynamically_load(&mut self, train: Train) {
-        self.input.dynamically_load(train);
+impl<'a> ValueIterator for SetProjectIterator {
+    fn set_storage(&mut self, storage: &'a ValueStore) {
+        self.input.set_storage(storage);
     }
 
     fn clone(&self) -> BoxedIterator {

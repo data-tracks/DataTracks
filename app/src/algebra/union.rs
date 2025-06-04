@@ -4,6 +4,7 @@ use crate::processing::transform::Transform;
 use crate::processing::{Layout, Train};
 use value::Value;
 use std::collections::HashMap;
+use crate::util::storage::{Storage, ValueStore};
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Union {
@@ -67,9 +68,9 @@ impl Iterator for UnionIterator {
 }
 
 impl ValueIterator for UnionIterator {
-    fn dynamically_load(&mut self, train: Train) {
+    fn set_storage(&mut self, storage: &'a ValueStore) {
         for input in &mut self.inputs {
-            input.dynamically_load(train.clone());
+            input.set_storage(storage);
         }
     }
 

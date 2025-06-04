@@ -1,10 +1,8 @@
 use crate::processing::select::WindowDescriptor;
-use crate::processing::transform::Taker;
 use crate::processing::window::Window::{Back, Interval, Non};
 use crate::processing::Train;
 use crate::util::TimeUnit;
 use chrono::{Duration, NaiveTime, Timelike};
-use speedy::{Readable, Writable};
 use value::Time;
 
 #[derive(Clone)]

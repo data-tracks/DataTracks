@@ -15,7 +15,7 @@ use crate::processing::watermark::WatermarkStrategy;
 use crate::processing::window::{Window, WindowStrategy};
 use crate::processing::Train;
 use crate::util::new_channel;
-use crate::util::storage::Storage;
+use crate::util::storage::{Storage, ValueStore};
 use crate::util::Tx;
 use crate::util::{new_id, Rx};
 use crossbeam::channel::Receiver;
@@ -24,6 +24,7 @@ pub use logos::Source;
 use parking_lot::RwLock;
 use tracing::{debug, error, info};
 use value::{Time, Value};
+use crate::util;
 
 const IDLE_TIMEOUT: Duration = Duration::from_nanos(10);
 
@@ -206,17 +207,25 @@ fn optimize(
     transform: Option<Transform>,
     transforms: HashMap<String, Transform>,
     sender: Sender,
-) -> Box<dyn FnMut(Train)> {
+) -> Box<dyn FnMut(Train) + Send> {
     match transform {
         Some(transform) => {
             let mut enumerator =
                 transform.optimize(transforms, Some(OptimizeStrategy::rule_based()));
             Box::new(move |train| {
-                enumerator.dynamically_load(train);
+                let mut storage = ValueStore::new();
+                match train.values {
+                    None => {}
+                    Some(values) => {
+                        storage.append(values);
+                    }
+                }
+
+                enumerator.set_storage(&storage);
                 sender.send(enumerator.drain_to_train(stop));
             })
         }
-        None => Box::new(|train| sender.send(train)),
+        None => Box::new(move |train| sender.send(train)),
     }
 }
 

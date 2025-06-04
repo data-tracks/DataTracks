@@ -14,7 +14,7 @@ use crate::processing::transform::Transform;
 use crate::processing::{Layout, Train};
 use value::Value;
 use std::collections::HashMap;
-use crate::util::storage::Storage;
+use crate::util::storage::{Storage, ValueStore};
 
 pub type BoxedIterator = Box<dyn ValueIterator<Item=Value> + Send + 'static>;
 
@@ -214,7 +214,7 @@ impl Executor {
 
 pub trait ValueIterator: Iterator<Item=Value> + Send + 'static {
 
-    fn set_storage(&mut self, storage: &Storage);
+    fn set_storage<'a>(&mut self, storage: &'a ValueStore);
 
     fn drain(&mut self) -> Vec<Value> {
         self.into_iter().collect()

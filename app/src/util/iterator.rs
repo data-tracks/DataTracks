@@ -3,7 +3,7 @@ use crate::algebra::{BoxedIterator, ValueIterator};
 use crate::processing::Train;
 use crate::processing::transform::Transform;
 use value::Value;
-use crate::util::storage::Storage;
+use crate::util::storage::{Storage, ValueStore};
 
 pub struct EmptyIterator {}
 
@@ -15,8 +15,8 @@ impl Iterator for EmptyIterator {
     }
 }
 
-impl ValueIterator for EmptyIterator {
-    fn set_storage(&mut self, storage: &Storage) {
+impl<'a> ValueIterator for EmptyIterator {
+    fn set_storage(&mut self, storage: &'a ValueStore) {
         // nothing on purpose
     }
 

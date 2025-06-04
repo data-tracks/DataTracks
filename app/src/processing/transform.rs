@@ -1,26 +1,26 @@
-use schemas::message_generated::protocol::{LanguageTransformArgs, TransformArgs, TransformType};
 use crate::algebra::{Algebra, AlgebraType, BoxedIterator, IndexScan, ValueIterator};
 use crate::analyse::{InputDerivable, OutputDerivable, OutputDerivationStrategy};
 use crate::language::Language;
-use crate::processing::option::Configurable;
-use value::train::Train;
-use crate::processing::transform::Transform::{ Func, Lang, Postgres, SQLite};
-use crate::processing::Layout;
-use crate::sql::{PostgresTransformer, SqliteTransformer};
-use crate::{algebra, language};
-use serde_json::Map;
-use std::collections::HashMap;
-use std::fmt::{Debug, Formatter};
-use std::sync::Arc;
-use flatbuffers::{FlatBufferBuilder, WIPOffset};
-use schemas::message_generated::protocol::{Transform as FlatTransform, LanguageTransform as FlatLanguageTransform};
-use value::Value;
 use crate::optimize::OptimizeStrategy;
+use crate::processing::option::Configurable;
 #[cfg(test)]
 use crate::processing::tests::DummyDatabase;
 #[cfg(test)]
 use crate::processing::transform::Transform::DummyDB;
-use crate::util::storage::Storage;
+use crate::processing::transform::Transform::{Func, Lang, Postgres, SQLite};
+use crate::processing::Layout;
+use crate::sql::{PostgresTransformer, SqliteTransformer};
+use crate::util::storage::{Storage, ValueStore};
+use crate::{algebra, language};
+use flatbuffers::{FlatBufferBuilder, WIPOffset};
+use schemas::message_generated::protocol::{LanguageTransform as FlatLanguageTransform, Transform as FlatTransform};
+use schemas::message_generated::protocol::{LanguageTransformArgs, TransformArgs, TransformType};
+use serde_json::Map;
+use std::collections::HashMap;
+use std::fmt::{Debug, Formatter};
+use std::sync::Arc;
+use value::train::Train;
+use value::Value;
 
 pub trait Taker: Send {
     fn take(&mut self, wagons: &mut Vec<Train>) -> Vec<Train>;
@@ -347,7 +347,7 @@ impl FuncTransform {
     }
 }
 
-impl Iterator for FuncTransform {
+impl <'a> Iterator for FuncTransform {
     type Item = Value;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -359,8 +359,8 @@ impl Iterator for FuncTransform {
     }
 }
 
-impl ValueIterator for FuncTransform {
-    fn set_storage(&mut self, storage: &Storage) {
+impl<'a> ValueIterator for FuncTransform {
+    fn set_storage(&mut self, storage: &'a ValueStore) {
         self.input.set_storage(storage);
     }
 
@@ -385,7 +385,6 @@ mod tests {
     use crate::language::Language;
     use crate::processing::station::Station;
     use crate::processing::tests::dict_values;
-    use value::train::Train;
     use crate::processing::transform::Transform::Func;
     use crate::processing::transform::{build_algebra, FuncTransform};
     use crate::util::new_channel;
@@ -393,8 +392,8 @@ mod tests {
     use std::collections::HashMap;
     use std::sync::Arc;
     use std::vec;
+    use value::train::Train;
     use value::{Dict, Value};
-    use value::wagon::Wagon;
 
     #[test]
     fn transform() {

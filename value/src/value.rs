@@ -358,6 +358,12 @@ impl TryFrom<ValueWrapper<'_>> for Value {
     }
 }
 
+impl From<usize> for Value {
+    fn from(value: usize) -> Self {
+        Value::int(value as i64)
+    }
+}
+
 fn flatten(dict: Dict, prefix: Vec<String>) -> Vec<(String, Value)> {
     let mut values = vec![];
     dict.into_iter().for_each(|(k, v)| match v {

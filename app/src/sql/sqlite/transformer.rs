@@ -11,6 +11,7 @@ use serde_json::Map;
 use std::collections::HashMap;
 use tokio::runtime::Runtime;
 use value::Value;
+use crate::util::storage::{Storage, ValueStore};
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct SqliteTransformer {
@@ -138,11 +139,9 @@ impl Iterator for SqliteIterator {
 }
 
 impl ValueIterator for SqliteIterator {
-    fn dynamically_load(&mut self, train: Train) {
-        if let Some(values) = train.values {
-            for value in values {
-                self.values.append(&mut self.query_values(value));
-            }
+    fn set_storage(&mut self, storage: &'a ValueStore) {
+        for value in storage.get_all() {
+            self.values.append(&mut self.query_values(value));
         }
     }
 

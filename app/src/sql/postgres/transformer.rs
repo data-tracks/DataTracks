@@ -11,6 +11,7 @@ use postgres::{Client, Statement};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use value;
+use crate::util::storage::{Storage, ValueStore};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct PostgresTransformer {
@@ -157,13 +158,12 @@ impl Iterator for PostgresIterator {
     }
 }
 
-impl ValueIterator for PostgresIterator {
-    fn dynamically_load(&mut self, train: Train) {
-        if let Some(values) = train.values {
-            for value in values {
-                let values = &mut self.query_values(value);
-                self.values.append(values);
-            }
+impl<'a> ValueIterator for PostgresIterator {
+
+    fn set_storage(&mut self, storage: &'a ValueStore) {
+        for value in storage.get_all() {
+            let values = &mut self.query_values(value);
+            self.values.append(values);
         }
     }
 
