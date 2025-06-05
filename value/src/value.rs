@@ -4,12 +4,21 @@ use crate::dict::Dict;
 use crate::r#type::ValType;
 use crate::text::Text;
 use crate::time::Time;
-use crate::value::Value::{Null};
+use crate::value::Value::Null;
+use crate::Value::Wagon;
 use crate::{bool, wagon, Bool, Float, Int};
 use bytes::{BufMut, BytesMut};
+use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use json::{parse, JsonValue};
 use postgres::types::{IsNull, Type};
+use redb::{Key, TypeName};
+use rumqttc::{Event, Incoming};
+use rumqttd::protocol::Publish;
+use rumqttd::Notification;
 use rusqlite::types::{FromSqlResult, ToSqlOutput, ValueRef};
+use schemas::message_generated::protocol::{
+    Null as FlatNull, NullArgs, Value as FlatValue, ValueWrapper, ValueWrapperArgs,
+};
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 use std::cmp::{Ordering, PartialEq};
@@ -18,15 +27,8 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::ops::{Add, AddAssign, Div, Mul, Sub};
-use flatbuffers::{FlatBufferBuilder, WIPOffset};
-use rumqttc::{Event, Incoming};
-use rumqttd::protocol::Publish;
-use rumqttd::Notification;
-use schemas::message_generated::protocol::{ValueWrapper, ValueWrapperArgs, Value as FlatValue, Null as FlatNull, NullArgs};
-use tracing::warn;
-use std::{str};
-use redb::{Key, TypeName};
-use crate::Value::Wagon;
+use std::str;
+use tracing::{debug, warn};
 
 #[derive(Eq, Clone, Debug, Serialize, Deserialize, Ord, PartialOrd, Readable, Writable)]
 pub enum Value {
@@ -42,13 +44,11 @@ pub enum Value {
     Wagon(wagon::Wagon),
 }
 
-
 impl Default for Value {
     fn default() -> Self {
         Null
     }
 }
-
 
 impl Value {
     pub fn text(string: &str) -> Value {
@@ -82,7 +82,10 @@ impl Value {
         Value::Array(Array::new(tuple))
     }
 
-    pub fn flatternize<'bldr>(&self, builder: &mut FlatBufferBuilder<'bldr>) -> WIPOffset<ValueWrapper<'bldr>> {
+    pub fn flatternize<'bldr>(
+        &self,
+        builder: &mut FlatBufferBuilder<'bldr>,
+    ) -> WIPOffset<ValueWrapper<'bldr>> {
         let data_type = self.get_flat_type();
 
         let data = match self {
@@ -94,11 +97,11 @@ impl Value {
             Value::Date(_) => todo!("remove"),
             Value::Array(i) => Some(i.flatternize(builder).as_union_value()),
             Value::Dict(i) => Some(i.flatternize(builder).as_union_value()),
-            Null => Some(FlatNull::create(builder, &NullArgs{}).as_union_value()),
+            Null => Some(FlatNull::create(builder, &NullArgs {}).as_union_value()),
             Wagon(i) => return i.value.flatternize(builder),
         };
-        
-        ValueWrapper::create(builder, &ValueWrapperArgs{ data_type, data })
+
+        ValueWrapper::create(builder, &ValueWrapperArgs { data_type, data })
     }
 
     pub(crate) fn get_flat_type(&self) -> FlatValue {
@@ -112,7 +115,7 @@ impl Value {
             Value::Array(_) => FlatValue::List,
             Value::Dict(_) => FlatValue::Document,
             Null => FlatValue::Null,
-            Wagon(w) => w.value.get_flat_type()
+            Wagon(w) => w.value.get_flat_type(),
         }
     }
 
@@ -321,6 +324,16 @@ impl Value {
             Value::Date(d) => Ok(Text(d.to_string())),
         }
     }
+
+    pub(crate) fn wagonize(self, stop: usize) -> Value {
+        match self {
+            Wagon(mut w) => {
+                w.origin = stop.to_string();
+                Wagon(w)
+            }
+            value => Value::wagon(value, stop.to_string()),
+        }
+    }
 }
 
 impl TryFrom<ValueWrapper<'_>> for Value {
@@ -348,13 +361,23 @@ impl TryFrom<ValueWrapper<'_>> for Value {
             FlatValue::List => {
                 let list = value.data_as_list().ok_or("Could not find list")?;
                 let list = list.data().ok_or("Could not find list")?;
-                Ok(Value::array(list.iter().map(|v| v.try_into()).collect::<Result<_, _>>()?))
+                Ok(Value::array(
+                    list.iter()
+                        .map(|v| v.try_into())
+                        .collect::<Result<_, _>>()?,
+                ))
             }
             FlatValue::Document => {
                 todo!()
             }
-            _ => panic!()
+            _ => panic!(),
         }
+    }
+}
+
+impl From<i32> for Value {
+    fn from(value: i32) -> Self {
+        Value::int(value as i64)
     }
 }
 
@@ -391,7 +414,7 @@ macro_rules! value_display {
 
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
-        warn!("{} == {}", self, other);
+        debug!("{} == {}", self, other);
 
         match (self, other) {
             (Null, Null) => true,
@@ -420,9 +443,9 @@ impl PartialEq for Value {
                 .map(|other| {
                     a.values.len() == other.values.len()
                         && a.values
-                        .iter()
-                        .zip(other.values.iter())
-                        .all(|(a, b)| a == b)
+                            .iter()
+                            .zip(other.values.iter())
+                            .all(|(a, b)| a == b)
                 })
                 .unwrap_or(false),
 
@@ -623,10 +646,8 @@ impl TryFrom<Notification> for Dict {
 
     fn try_from(value: Notification) -> Result<Self, Self::Error> {
         match value {
-            Notification::Forward(f) => {
-                f.publish.try_into()
-            }
-            _ => Err(format!("Unexpected notification {:?}", value))?
+            Notification::Forward(f) => f.publish.try_into(),
+            _ => Err(format!("Unexpected notification {:?}", value))?,
         }
     }
 }
@@ -636,8 +657,12 @@ impl TryFrom<Publish> for Dict {
 
     fn try_from(publish: Publish) -> Result<Self, Self::Error> {
         let mut dict = BTreeMap::new();
-        let value = str::from_utf8(&publish.payload).map_err(|e| e.to_string())?.into();
-        let topic = str::from_utf8(&publish.topic).map_err(|e| e.to_string())?.into();
+        let value = str::from_utf8(&publish.payload)
+            .map_err(|e| e.to_string())?
+            .into();
+        let topic = str::from_utf8(&publish.topic)
+            .map_err(|e| e.to_string())?
+            .into();
         dict.insert("$".to_string(), value);
         dict.insert("$topic".to_string(), topic);
         Ok(Value::dict(dict).into())
@@ -646,11 +671,11 @@ impl TryFrom<Publish> for Dict {
 
 impl redb::Value for Value {
     type SelfType<'a>
-    = Value
+        = Value
     where
         Self: 'a;
     type AsBytes<'a>
-    = Vec<u8>
+        = Vec<u8>
     where
         Self: 'a;
 
@@ -690,20 +715,19 @@ impl TryFrom<Event> for Dict {
 
     fn try_from(value: Event) -> Result<Self, Self::Error> {
         match value {
-            Event::Incoming(i) => {
-                match i {
-                    Incoming::Publish(p) => {
-                        let mut map = BTreeMap::new();
-                        map.insert("$".to_string(), Value::text(str::from_utf8(&p.payload).map_err(|e| e.to_string())?));
-                        map.insert("$topic".to_string(), Value::text(&p.topic));
-                        Ok(Value::dict(map).as_dict().unwrap())
-                    }
-                    _ => Err(format!("Unexpected Incoming publish {:?}", i))?
+            Event::Incoming(i) => match i {
+                Incoming::Publish(p) => {
+                    let mut map = BTreeMap::new();
+                    map.insert(
+                        "$".to_string(),
+                        Value::text(str::from_utf8(&p.payload).map_err(|e| e.to_string())?),
+                    );
+                    map.insert("$topic".to_string(), Value::text(&p.topic));
+                    Ok(Value::dict(map).as_dict().unwrap())
                 }
-            }
-            Event::Outgoing(_) => {
-                Err(String::from("Unexpected Outgoing publish"))
-            }
+                _ => Err(format!("Unexpected Incoming publish {:?}", i))?,
+            },
+            Event::Outgoing(_) => Err(String::from("Unexpected Outgoing publish")),
         }
     }
 }
@@ -986,8 +1010,8 @@ mod tests {
         assert_eq!(Value::int(42), Value::int(42));
         assert_ne!(Value::int(42), Value::int(7));
 
-        assert_eq!(Value::float(3.14), Value::float(3.14));
-        assert_ne!(Value::float(3.14), Value::float(2.71));
+        assert_eq!(Value::float(3.314), Value::float(3.314));
+        assert_ne!(Value::float(3.314), Value::float(2.71));
 
         assert_eq!(Value::bool(true), Value::bool(true));
         assert_ne!(Value::bool(true), Value::bool(false));
@@ -1021,22 +1045,22 @@ mod tests {
     fn value_in_vec() {
         let values = vec![
             Value::int(42),
-            Value::float(3.14),
+            Value::float(3.314),
             Value::bool(true),
             Value::text("Hello"),
             Value::null(),
-            Value::time(3, 0).into(),
-            Value::date(305).into(),
+            Value::time(3, 0),
+            Value::date(305),
             Value::array(vec![3.into(), 7.into()]),
         ];
 
         assert_eq!(values[0], Value::int(42));
-        assert_eq!(values[1], Value::float(3.14));
+        assert_eq!(values[1], Value::float(3.314));
         assert_eq!(values[2], Value::bool(true));
         assert_eq!(values[3], Value::text("Hello"));
         assert_eq!(values[4], Value::null());
-        assert_eq!(values[5], Value::time(3, 0).into());
-        assert_eq!(values[6], Value::date(305).into());
+        assert_eq!(values[5], Value::time(3, 0));
+        assert_eq!(values[6], Value::date(305));
         assert_eq!(values[7], Value::array(vec![3.into(), 7.into()]));
     }
 
@@ -1044,20 +1068,20 @@ mod tests {
     fn value_in_map() {
         let mut map = HashMap::new();
         map.insert("int", Value::int(42));
-        map.insert("float", Value::float(3.14));
+        map.insert("float", Value::float(3.314));
         map.insert("bool", Value::bool(true));
         map.insert("text", Value::text("Hello"));
         map.insert("null", Value::null());
-        map.insert("time", Value::time(3, 0).into());
-        map.insert("date", Value::date(305).into());
+        map.insert("time", Value::time(3, 0));
+        map.insert("date", Value::date(305));
 
         assert_eq!(map.get("int"), Some(&Value::int(42)));
-        assert_eq!(map.get("float"), Some(&Value::float(3.14)));
+        assert_eq!(map.get("float"), Some(&Value::float(3.314)));
         assert_eq!(map.get("bool"), Some(&Value::bool(true)));
         assert_eq!(map.get("text"), Some(&Value::text("Hello")));
         assert_eq!(map.get("null"), Some(&Value::null()));
-        assert_eq!(map.get("time"), Some(&Value::time(3, 0).into()));
-        assert_eq!(map.get("date"), Some(&Value::date(305).into()));
+        assert_eq!(map.get("time"), Some(&Value::time(3, 0)));
+        assert_eq!(map.get("date"), Some(&Value::date(305)));
     }
 
     #[test]
@@ -1173,7 +1197,6 @@ mod tests {
         let value = div(2.5.into(), 5.into());
         assert_eq!(value, 0.5.into());
     }
-
 
     fn add(a: Value, b: Value) -> Value {
         &a + &b

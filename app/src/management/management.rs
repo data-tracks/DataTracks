@@ -1,22 +1,17 @@
-use crate::http::destination::HttpDestination;
 use crate::management::storage::Storage;
-use crate::mqtt::{MqttDestination, MqttSource};
-use crate::processing::destination::Destination;
-use crate::processing::source::Source;
 use crate::processing::station::Command;
-use crate::processing::{DebugDestination, HttpSource, Plan, Train};
-use crate::tpc::{start_tpc, TpcDestination, TpcSource};
+use crate::processing::{Plan, Train};
+use crate::tpc::{start_tpc};
 use crate::ui::start_web;
 use crossbeam::channel::Sender;
 use reqwest::blocking::Client;
-use schemas::message_generated::protocol::Message;
-use serde::Serialize;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 use tracing::{error, info};
 use value::Time;
 
+#[derive(Default)]
 pub struct Manager {
     storage: Arc<Mutex<Storage>>,
     handles: Vec<thread::JoinHandle<()>>,
@@ -82,15 +77,15 @@ fn add_default(storage: Arc<Mutex<Storage>>) {
         .spawn(move || {
             let mut plan = Plan::parse(
                 "\
-                2{sql|SELECT $1 FROM $1}[3s]\n\
+                1--2{sql|SELECT $1 FROM $1}[3s]--3\n\
                 In\n\
-                HTTP{\"url\":\"127.0.0.1\", \"port\": \"5555\"}:2\n\
-                MQTT{\"url\":\"127.0.0.1\", \"port\": 6666}:2\n\
-                TPC{\"url\":\"127.0.0.1\", \"port\": 9999}:2\n\
+                HTTP{\"url\":\"127.0.0.1\", \"port\": \"5555\"}:1\n\
+                MQTT{\"url\":\"127.0.0.1\", \"port\": 6666}:1\n\
+                TPC{\"url\":\"127.0.0.1\", \"port\": 9999}:1\n\
                 Out\n\
-                MQTT{\"url\":\"127.0.0.1\", \"port\": 8888}:2\n\
-                TPC{\"url\":\"127.0.0.1\", \"port\": 8686}:2\n\
-                HTTP{\"url\":\"127.0.0.1\", \"port\": 9696}:2",
+                MQTT{\"url\":\"127.0.0.1\", \"port\": 8888}:3\n\
+                TPC{\"url\":\"127.0.0.1\", \"port\": 8686}:3\n\
+                HTTP{\"url\":\"127.0.0.1\", \"port\": 9696}:3",
             )
             .unwrap();
 

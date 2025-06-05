@@ -13,14 +13,15 @@ pub mod dummy {
     use crate::processing::source::Source;
     use crate::processing::station::Command;
     use crate::processing::station::Command::{Ready, Stop};
-    use value::train::Train;
     use crate::processing::transform::{Transform, Transformer};
     use crate::processing::Layout;
     use crate::ui::ConfigModel;
+    use crate::util::storage::ValueStore;
     use crate::util::{new_channel, new_id, Rx, Tx};
-    use value::Value;
     use crossbeam::channel::{unbounded, Sender};
     use serde_json::Map;
+    use value::train::Train;
+    use value::Value;
 
     pub struct DummySource {
         id: usize,
@@ -35,9 +36,22 @@ pub mod dummy {
             Self::new_with_delay(values, Duration::from_millis(0), delay)
         }
 
-        pub(crate) fn new_with_delay(values: Vec<Vec<Value>>, initial_delay: Duration, delay: Duration) -> (Self, usize) {
+        pub(crate) fn new_with_delay(
+            values: Vec<Vec<Value>>,
+            initial_delay: Duration,
+            delay: Duration,
+        ) -> (Self, usize) {
             let id = new_id();
-            (DummySource { id, values: Some(values), initial_delay, delay, senders: vec![] }, id)
+            (
+                DummySource {
+                    id,
+                    values: Some(values),
+                    initial_delay,
+                    delay,
+                    senders: vec![],
+                },
+                id,
+            )
         }
     }
 
@@ -49,9 +63,15 @@ pub mod dummy {
         fn options(&self) -> Map<String, serde_json::Value> {
             let mut options = serde_json::map::Map::new();
             if self.initial_delay.as_millis() != 0 {
-                options.insert(String::from("initial_delay"), serde_json::Value::from(self.initial_delay.as_millis() as i64));
+                options.insert(
+                    String::from("initial_delay"),
+                    serde_json::Value::from(self.initial_delay.as_millis() as i64),
+                );
             }
-            options.insert(String::from("delay"), serde_json::Value::from(self.delay.as_millis() as i64));
+            options.insert(
+                String::from("delay"),
+                serde_json::Value::from(self.delay.as_millis() as i64),
+            );
 
             options
         }
@@ -61,24 +81,28 @@ pub mod dummy {
         fn parse(options: Map<String, serde_json::Value>) -> Result<Self, String> {
             let delay = Duration::from_millis(options.get("delay").unwrap().as_u64().unwrap());
 
-            let values = options.get("values").cloned().unwrap_or_else(|| serde_json::Value::Object(serde_json::Map::new()));
+            let values = options
+                .get("values")
+                .cloned()
+                .unwrap_or_else(|| serde_json::Value::Object(serde_json::Map::new()));
 
             let values: Value = serde_json::from_value(values).unwrap();
 
             let values = match values {
-                Value::Array(a) => {
-                    a.values.into_iter().map(|v| match v {
-                        Value::Array(a) => {
-                            a.values
-                        }
-                        _ => vec![]
-                    }).collect()
-                },
-                _ => vec![]
+                Value::Array(a) => a
+                    .values
+                    .into_iter()
+                    .map(|v| match v {
+                        Value::Array(a) => a.values,
+                        _ => vec![],
+                    })
+                    .collect(),
+                _ => vec![],
             };
 
             let mut source = if options.contains_key("initial_delay") {
-                let initial_delay = Duration::from_millis(options.get("initial_delay").unwrap().as_u64().unwrap());
+                let initial_delay =
+                    Duration::from_millis(options.get("initial_delay").unwrap().as_u64().unwrap());
 
                 DummySource::new_with_delay(values, initial_delay, delay).0
             } else {
@@ -86,7 +110,7 @@ pub mod dummy {
             };
 
             match options.get("id") {
-                None => {},
+                None => {}
                 Some(id) => {
                     source.id = id.as_u64().unwrap() as usize;
                 }
@@ -108,16 +132,13 @@ pub mod dummy {
 
                 // wait for ready from callee
                 match rx.recv() {
-                    Ok(command) => {
-                        match command {
-                            Ready(_id) => {}
-                            _ => panic!()
-                        }
-                    }
-                    _ => panic!()
+                    Ok(command) => match command {
+                        Ready(_id) => {}
+                        _ => panic!(),
+                    },
+                    _ => panic!(),
                 }
                 sleep(initial_delay);
-
 
                 for values in &values {
                     for sender in &senders {
@@ -142,14 +163,20 @@ pub mod dummy {
             String::from("Dummy")
         }
         fn serialize(&self) -> SourceModel {
-            SourceModel { type_name: String::from("Dummy"), id: self.id.to_string(), configs: HashMap::new() }
+            SourceModel {
+                type_name: String::from("Dummy"),
+                id: self.id.to_string(),
+                configs: HashMap::new(),
+            }
         }
 
         fn from(_configs: HashMap<String, ConfigModel>) -> Result<Box<dyn Source>, String>
         where
             Self: Sized,
         {
-            Err(String::from("This source does not allow for modifications."))
+            Err(String::from(
+                "This source does not allow for modifications.",
+            ))
         }
 
         fn serialize_default() -> Result<SourceModel, ()> {
@@ -189,7 +216,10 @@ pub mod dummy {
 
         fn options(&self) -> Map<String, serde_json::Value> {
             let mut options = serde_json::map::Map::new();
-            options.insert(String::from("result_size"), serde_json::Value::from(self.result_size));
+            options.insert(
+                String::from("result_size"),
+                serde_json::Value::from(self.result_size),
+            );
             options
         }
     }
@@ -232,7 +262,7 @@ pub mod dummy {
                                 break;
                             }
                         }
-                        _ => sleep(Duration::from_nanos(100))
+                        _ => sleep(Duration::from_nanos(100)),
                     }
                 }
                 drop(shared);
@@ -254,7 +284,11 @@ pub mod dummy {
         }
 
         fn serialize(&self) -> DestinationModel {
-            DestinationModel { type_name: String::from("Dummy"), id: self.id.to_string(), configs: HashMap::new() }
+            DestinationModel {
+                type_name: String::from("Dummy"),
+                id: self.id.to_string(),
+                configs: HashMap::new(),
+            }
         }
 
         fn serialize_default() -> Option<DestinationModel>
@@ -267,18 +301,20 @@ pub mod dummy {
         fn get_result_handle(&self) -> Arc<Mutex<Vec<Train>>> {
             self.results.clone()
         }
-
     }
 
     #[derive(Clone, Debug, PartialEq)]
-    pub struct DummyDatabase{
+    pub struct DummyDatabase {
         query: String,
         mapping: Option<HashMap<Value, Value>>,
     }
 
     impl DummyDatabase {
-        pub(crate) fn new(query: String,) -> DummyDatabase {
-            DummyDatabase { query, mapping: None }
+        pub(crate) fn new(query: String) -> DummyDatabase {
+            DummyDatabase {
+                query,
+                mapping: None,
+            }
         }
 
         pub fn add_mapping(&mut self, mapping: HashMap<Value, Value>) {
@@ -304,10 +340,15 @@ pub mod dummy {
 
     impl Transformer for DummyDatabase {
         fn parse(options: Map<String, serde_json::Value>) -> Result<Self, String> {
-            Ok(DummyDatabase::new(options.get("query").unwrap().to_string()))
+            Ok(DummyDatabase::new(
+                options.get("query").unwrap().to_string(),
+            ))
         }
 
-        fn optimize(&self, _transforms: HashMap<String, Transform>) -> Box<dyn ValueIterator<Item=Value> + Send> {
+        fn optimize(
+            &self,
+            _transforms: HashMap<String, Transform>,
+        ) -> Box<dyn ValueIterator<Item = Value> + Send> {
             Box::new(MappingIterator::new(self.mapping.clone().unwrap()))
         }
 
@@ -316,15 +357,17 @@ pub mod dummy {
         }
     }
 
-    pub struct MappingIterator{
+    pub struct MappingIterator {
         mapping: HashMap<Value, Value>,
         values: Vec<Value>,
     }
 
-
     impl MappingIterator {
         pub fn new(mapping: HashMap<Value, Value>) -> MappingIterator {
-            MappingIterator{mapping, values: Vec::new()}
+            MappingIterator {
+                mapping,
+                values: Vec::new(),
+            }
         }
 
         pub(crate) fn get_value(&self, value: Value) -> Option<Value> {
@@ -345,13 +388,12 @@ pub mod dummy {
     }
 
     impl ValueIterator for MappingIterator {
-        fn dynamically_load(&mut self, train: Train) {
-            if let Some(values) = train.values {
-                for value in values {
-                    let values = self.get_value(value);
-                    if let Some(values) = values {
-                        self.values.push(values);
-                    }
+
+        fn set_storage(&mut self, storage: ValueStore) {
+            for value in storage.drain() {
+                let values = self.get_value(value);
+                if let Some(values) = values {
+                    self.values.push(values);
                 }
             }
         }
@@ -366,9 +408,6 @@ pub mod dummy {
     }
 }
 
-
-
-
 #[cfg(test)]
 pub mod tests {
     use crate::processing::destination::Destination;
@@ -379,11 +418,11 @@ pub mod tests {
     use crate::processing::transform::{FuncTransform, Transform};
     use crate::processing::Train;
     use crate::util::new_channel;
-    use value::{Dict, Value};
     use std::any::Any;
     use std::thread::sleep;
     use std::time::{Duration, SystemTime};
     use std::vec;
+    use value::{Dict, Value};
 
     pub fn dict_values(values: Vec<Value>) -> Vec<Value> {
         let mut dicts = vec![];
@@ -418,7 +457,6 @@ pub mod tests {
         assert_ne!(res.values.take().unwrap(), vec![Value::null().into()]);
 
         assert!(output_rx.try_recv().is_err());
-
 
         drop(input); // close the channel
         plan.halt()
@@ -464,23 +502,28 @@ pub mod tests {
 
         assert!(output2_rx.try_recv().is_err());
 
-
         drop(input); // close the channel
         plan.halt()
     }
-
 
     #[test]
     fn sql_parse_transform() {
         let values = vec![vec![3.into(), "test".into(), true.into(), Value::null()]];
         let id = 3;
         let destination = 4;
-        let stencil = format!("\
+        let stencil = format!(
+            "\
         3{{sql|Select * From $0}}\n\
         In\n\
         Dummy{{\"id\": {}, \"delay\":{},\"values\":{}}}:3\n\
         Out\n\
-        Dummy{{\"id\": {},\"result_size\":{}}}:3", id, 3, dump(&values), destination, values.len());
+        Dummy{{\"id\": {},\"result_size\":{}}}:3",
+            id,
+            3,
+            dump(&values),
+            destination,
+            values.len()
+        );
 
         let mut plan = Plan::parse(&stencil).unwrap();
 
@@ -496,7 +539,6 @@ pub mod tests {
             plan.control_receiver.1.recv().unwrap();
         }
 
-
         let results = clone.lock().unwrap();
         for mut train in results.clone() {
             assert_eq!(train.values.take().unwrap(), *values.get(0).unwrap())
@@ -504,7 +546,12 @@ pub mod tests {
     }
 
     pub(crate) fn dump(value: &Vec<Vec<Value>>) -> String {
-        let values: Value = value.iter().cloned().map(|v| v.into()).collect::<Vec<_>>().into();
+        let values: Value = value
+            .iter()
+            .cloned()
+            .map(|v| v.into())
+            .collect::<Vec<_>>()
+            .into();
         serde_json::to_string(&values).unwrap()
     }
 
@@ -513,7 +560,10 @@ pub mod tests {
         let source1 = 1;
         let source4 = 4;
         let destination = 5;
-        let values1 = vec![vec![Value::from(Dict::from(Value::from(3.3)))], vec![Value::from(Dict::from(Value::from(3.1)))]];
+        let values1 = vec![
+            vec![Value::from(Dict::from(Value::from(3.3)))],
+            vec![Value::from(Dict::from(Value::from(3.1)))],
+        ];
         let values4 = vec![vec![Value::from(Dict::from(Value::from(3)))]];
         let stencil = format!(
             "1-|2--3\n\
@@ -528,7 +578,9 @@ pub mod tests {
             id2 = source4,
             values1 = dump(&values1.clone()),
             values4 = dump(&values4.clone()),
-            destination = destination, len = 1);
+            destination = destination,
+            len = 1
+        );
 
         let mut plan = Plan::parse(&stencil).unwrap();
         let result = plan.get_result(destination);
@@ -541,7 +593,7 @@ pub mod tests {
         for _com in vec![Ready(1), Stop(1)] {
             match plan.control_receiver.1.recv() {
                 Ok(_command) => {}
-                Err(_) => panic!()
+                Err(_) => panic!(),
             }
         }
 
@@ -552,19 +604,22 @@ pub mod tests {
         for _com in vec![Ready(4), Stop(4), Ready(3), Stop(3)] {
             match plan.control_receiver.1.recv() {
                 Ok(_command) => {}
-                Err(_) => panic!()
+                Err(_) => panic!(),
             }
         }
 
         let mut res = vec![];
 
-        values1.into_iter().for_each(|mut values| res.append(&mut values));
-        values4.into_iter().for_each(|mut values| res.append(&mut values));
+        values1
+            .into_iter()
+            .for_each(|mut values| res.append(&mut values));
+        values4
+            .into_iter()
+            .for_each(|mut values| res.append(&mut values));
 
         let lock = result.lock().unwrap();
         let mut train = lock.clone().pop().unwrap();
         drop(lock);
-
 
         assert_eq!(train.values.clone().unwrap().len(), res.len());
         for (_i, value) in train.values.take().unwrap().into_iter().enumerate() {
@@ -612,38 +667,48 @@ pub mod tests {
         plan.clone_platform(0);
 
         // source 1 ready + stop, each platform ready, destination ready (+ stop only after stopped)
-        for _com in vec![Ready(1), Stop(1), Ready(0), Ready(0), Ready(0), Ready(0), Ready(0)] {
+        for _com in vec![
+            Ready(1),
+            Stop(1),
+            Ready(0),
+            Ready(0),
+            Ready(0),
+            Ready(0),
+            Ready(0),
+        ] {
             match plan.control_receiver.1.recv() {
                 Ok(_command) => {}
-                Err(_) => panic!()
+                Err(_) => panic!(),
             }
         }
 
         println!("time: {} millis", now.elapsed().unwrap().as_millis())
     }
 
-
     #[test]
     fn full_test() {
         let mut values = vec![];
 
-        let hello = Value::Dict(Dict::from_json(r#"{"msg": "hello", "$topic": ["command"]}"#));
+        let hello = Value::Dict(Dict::from_json(
+            r#"{"msg": "hello", "$topic": ["command"]}"#,
+        ));
         values.push(vec![hello]);
         values.push(vec![Value::from(Value::float(3.6))]);
 
         let source = 1;
         let destination = 4;
 
-        let mut plan = Plan::parse(
-            &format!("\
+        let mut plan = Plan::parse(&format!(
+            "\
             0--1(f)--2\n\
             In\n\
             Dummy{{\"id\":{source}, \"delay\":1, \"values\":{values}}}:1\n\
             Out\n\
             Dummy{{\"id\":{destination}, \"result_size\":{size}}}:2",
-                     values = dump(&values.clone()),
-                     size = 1)
-        ).unwrap();
+            values = dump(&values.clone()),
+            size = 1
+        ))
+        .unwrap();
 
         plan.operate().unwrap();
 
@@ -651,7 +716,10 @@ pub mod tests {
         plan.send_control(&source, Ready(0));
 
         for command in [Ready(0), Stop(0), Ready(2), Stop(2)] {
-            assert_eq!(command.type_id(), plan.control_receiver.1.recv().unwrap().type_id());
+            assert_eq!(
+                command.type_id(),
+                plan.control_receiver.1.recv().unwrap().type_id()
+            );
         }
         let lock = result.lock().unwrap();
         assert_eq!(lock.len(), 1)
@@ -660,48 +728,98 @@ pub mod tests {
     #[test]
     fn global_transformer_test() {
         let values = vec![vec![Value::float(3.6), Value::float(4.6)]];
-        let res: Vec<Vec<Value>> = values.iter().cloned().map(|v| v.iter().cloned().map(|v| &v + &Value::int(1)).collect()).collect();
+        let res: Vec<Vec<Value>> = values
+            .iter()
+            .cloned()
+            .map(|v| v.iter().cloned().map(|v| &v + &Value::int(1)).collect())
+            .collect();
         let source = 1;
-        let destination= 5;
+        let destination = 5;
 
-
-        test_single_in_out("1{sql|SELECT * FROM $example($0)}", values.clone(), res.clone(), source, destination, true);
-        test_single_in_out("1{sql|SELECT $example FROM $example($0)}", values, res, source, destination, true);
+        test_single_in_out(
+            "1{sql|SELECT * FROM $example($0)}",
+            values.clone(),
+            res.clone(),
+            source,
+            destination,
+            true,
+        );
+        test_single_in_out(
+            "1{sql|SELECT $example FROM $example($0)}",
+            values,
+            res,
+            source,
+            destination,
+            true,
+        );
     }
 
     #[test]
     fn global_transformer_dict_test() {
-        let values = vec![vec![Value::dict_from_kv("age", Value::float(3.6)), Value::dict_from_kv("age", Value::float(4.6))]];
+        let values = vec![vec![
+            Value::dict_from_kv("age", Value::float(3.6)),
+            Value::dict_from_kv("age", Value::float(4.6)),
+        ]];
         let res: Vec<Vec<Value>> = vec![vec![Value::float(4.6), Value::float(5.6)]];
         let source = 1;
         let destination = 5;
 
-
-        test_single_in_out("1{sql|SELECT * FROM $example($0.age)}", values.clone(), res.clone(), source, destination, true);
+        test_single_in_out(
+            "1{sql|SELECT * FROM $example($0.age)}",
+            values.clone(),
+            res.clone(),
+            source,
+            destination,
+            true,
+        );
     }
 
     #[test]
     fn unwind_test() {
-        let values = vec![vec![Value::array( vec![Value::float(3.6), Value::float(4.6)])]];
+        let values = vec![vec![Value::array(vec![
+            Value::float(3.6),
+            Value::float(4.6),
+        ])]];
         let res: Vec<Vec<Value>> = vec![vec![Value::float(3.6), Value::float(4.6)]];
         let source = 1;
         let destination = 5;
 
-
-        test_single_in_out("1{sql|SELECT * FROM UNWIND($0)}", values.clone(), res.clone(), source, destination, true);
-        test_single_in_out("1{sql|SELECT unwind FROM UNWIND($0)}", values.clone(), res.clone(), source, destination, true);
+        test_single_in_out(
+            "1{sql|SELECT * FROM UNWIND($0)}",
+            values.clone(),
+            res.clone(),
+            source,
+            destination,
+            true,
+        );
+        test_single_in_out(
+            "1{sql|SELECT unwind FROM UNWIND($0)}",
+            values.clone(),
+            res.clone(),
+            source,
+            destination,
+            true,
+        );
     }
-
 
     #[test]
     fn split_test() {
         let values = vec![vec!["Hey there".into(), "how are you".into()]];
-        let res: Vec<Vec<Value>> = vec![vec![Value::array(vec!["Hey".into(), "there".into()]), Value::array(vec!["how".into(), "are".into(), "you".into()])]];
+        let res: Vec<Vec<Value>> = vec![vec![
+            Value::array(vec!["Hey".into(), "there".into()]),
+            Value::array(vec!["how".into(), "are".into(), "you".into()]),
+        ]];
         let source = 1;
         let destination = 5;
 
-
-        test_single_in_out("1{sql|SELECT SPLIT($0, '\\s+') FROM $0}", values.clone(), res.clone(), source, destination, true);
+        test_single_in_out(
+            "1{sql|SELECT SPLIT($0, '\\s+') FROM $0}",
+            values.clone(),
+            res.clone(),
+            source,
+            destination,
+            true,
+        );
     }
 
     #[test]
@@ -711,39 +829,68 @@ pub mod tests {
         let source = 1;
         let destination = 5;
 
-
-        test_single_in_out("1{sql|SELECT * FROM (SELECT * FROM $0)}", values.clone(), res.clone(), source, destination, true);
+        test_single_in_out(
+            "1{sql|SELECT * FROM (SELECT * FROM $0)}",
+            values.clone(),
+            res.clone(),
+            source,
+            destination,
+            true,
+        );
     }
 
     #[test]
     fn wordcount_test() {
         let values = vec![vec!["Hey there".into(), "how are you".into()]];
-        let res: Vec<Vec<Value>> = vec![vec!["Hey".into(), "there".into(),"how".into(), "are".into(), "you".into()]];
+        let res: Vec<Vec<Value>> = vec![vec![
+            "Hey".into(),
+            "there".into(),
+            "how".into(),
+            "are".into(),
+            "you".into(),
+        ]];
         let source = 1;
         let destination = 5;
 
-
-        test_single_in_out("1{sql|SELECT * FROM UNWIND(SELECT SPLIT($0, '\\s+') FROM $0)}", values.clone(), res.clone(), source, destination, false);
+        test_single_in_out(
+            "1{sql|SELECT * FROM UNWIND(SELECT SPLIT($0, '\\s+') FROM $0)}",
+            values.clone(),
+            res.clone(),
+            source,
+            destination,
+            false,
+        );
     }
 
     #[test]
     fn group_test() {
         let values = vec![vec!["Hey".into(), "Hallo".into(), "Hey".into()]];
-        let res: Vec<Vec<Value>> = vec![vec![vec![2.into(), "Hey".into(), 7.into()].into(), vec![1.into(), "Hallo".into(), 6.into()].into()]];
+        let res: Vec<Vec<Value>> = vec![vec![
+            vec![2.into(), "Hey".into(), 7.into()].into(),
+            vec![1.into(), "Hallo".into(), 6.into()].into(),
+        ]];
         let source = 1;
         let destination = 5;
 
-        test_single_in_out("1{sql|SELECT COUNT(*), $0, COUNT(*) + 5 FROM $0 GROUP BY $0}", values.clone(), res.clone(), source, destination, false);
+        test_single_in_out(
+            "1{sql|SELECT COUNT(*), $0, COUNT(*) + 5 FROM $0 GROUP BY $0}",
+            values.clone(),
+            res.clone(),
+            source,
+            destination,
+            false,
+        );
     }
-
 
     #[test]
     fn wordcount_group_test() {
         let values = vec![vec!["Hey Hallo".into(), "Hey".into()]];
-        let res: Vec<Vec<Value>> = vec![vec![vec!["Hey".into(), 2.into()].into(), vec!["Hallo".into(), 1.into()].into()]];
+        let res: Vec<Vec<Value>> = vec![vec![
+            vec!["Hey".into(), 2.into()].into(),
+            vec!["Hallo".into(), 1.into()].into(),
+        ]];
         let source = 1;
         let destination = 5;
-
 
         test_single_in_out("1{sql|SELECT unwind, COUNT(*) FROM UNWIND(SELECT SPLIT($0, '\\s+') FROM $0) GROUP BY unwind}", values.clone(), res.clone(), source, destination, false);
     }
@@ -751,12 +898,21 @@ pub mod tests {
     #[test]
     fn dict_test() {
         let values = vec![vec![Value::float(3.6), Value::float(4.6)]];
-        let res: Vec<Vec<Value>> = vec![vec![Value::dict_from_kv("key", Value::float(3.6)), Value::dict_from_kv("key", Value::float(4.6))]];
+        let res: Vec<Vec<Value>> = vec![vec![
+            Value::dict_from_kv("key", Value::float(3.6)),
+            Value::dict_from_kv("key", Value::float(4.6)),
+        ]];
         let source = 1;
         let destination = 5;
 
-
-        test_single_in_out("1{sql|SELECT {'key': $0} FROM $0}", values.clone(), res.clone(), source, destination, true);
+        test_single_in_out(
+            "1{sql|SELECT {'key': $0} FROM $0}",
+            values.clone(),
+            res.clone(),
+            source,
+            destination,
+            true,
+        );
     }
 
     #[test]
@@ -766,59 +922,115 @@ pub mod tests {
         let source = 1;
         let destination = 5;
 
-
-        test_single_in_out("1{sql|SELECT [$0] FROM $0}", values.clone(), res.clone(), source, destination, true);
+        test_single_in_out(
+            "1{sql|SELECT [$0] FROM $0}",
+            values.clone(),
+            res.clone(),
+            source,
+            destination,
+            true,
+        );
     }
 
     #[test]
     fn array_multiple_test() {
         let values = vec![vec![Value::float(4.6)]];
-        let res: Vec<Vec<Value>> = vec![vec![Value::array(vec![Value::float(4.6), Value::float(4.6)])]];
+        let res: Vec<Vec<Value>> = vec![vec![Value::array(vec![
+            Value::float(4.6),
+            Value::float(4.6),
+        ])]];
         let source = 1;
         let destination = 5;
 
-
-        test_single_in_out("1{sql|SELECT [$0,$0] FROM $0}", values.clone(), res.clone(), source, destination, true);
+        test_single_in_out(
+            "1{sql|SELECT [$0,$0] FROM $0}",
+            values.clone(),
+            res.clone(),
+            source,
+            destination,
+            true,
+        );
     }
 
     #[test]
     fn array_index_test() {
-        let values = vec![vec![Value::array(vec![Value::float(1.0), Value::float(2.0)])]];
+        let values = vec![vec![Value::array(vec![
+            Value::float(1.0),
+            Value::float(2.0),
+        ])]];
         let res: Vec<Vec<Value>> = vec![vec![Value::float(2.0)]];
         let source = 1;
         let destination = 5;
 
-
-        test_single_in_out("1{sql|SELECT $0.1 FROM $0}", values.clone(), res.clone(), source, destination, true);
+        test_single_in_out(
+            "1{sql|SELECT $0.1 FROM $0}",
+            values.clone(),
+            res.clone(),
+            source,
+            destination,
+            true,
+        );
     }
 
     #[test]
     fn array_swap_test() {
-        let values = vec![vec![Value::array(vec![Value::float(1.0), Value::float(2.0)])]];
-        let res: Vec<Vec<Value>> = vec![vec![Value::array(vec![Value::float(2.0), Value::float(1.0)])]];
+        let values = vec![vec![Value::array(vec![
+            Value::float(1.0),
+            Value::float(2.0),
+        ])]];
+        let res: Vec<Vec<Value>> = vec![vec![Value::array(vec![
+            Value::float(2.0),
+            Value::float(1.0),
+        ])]];
         let source = 1;
         let destination = 5;
 
-
-        test_single_in_out("1{sql|SELECT [$0.1, $0.0] FROM $0}", values.clone(), res.clone(), source, destination, true);
+        test_single_in_out(
+            "1{sql|SELECT [$0.1, $0.0] FROM $0}",
+            values.clone(),
+            res.clone(),
+            source,
+            destination,
+            true,
+        );
     }
 
     #[test]
     fn dict_multi_key_test() {
         let values = vec![vec![Value::float(3.6), Value::float(4.6)]];
         let res: Vec<Vec<Value>> = vec![vec![
-            Value::dict_from_pairs(vec![("key", Value::float(3.6)), ("key2", Value::float(3.6))]),
-            Value::dict_from_pairs(vec![("key", Value::float(4.6)), ("key2", Value::float(4.6))])]];
+            Value::dict_from_pairs(vec![
+                ("key", Value::float(3.6)),
+                ("key2", Value::float(3.6)),
+            ]),
+            Value::dict_from_pairs(vec![
+                ("key", Value::float(4.6)),
+                ("key2", Value::float(4.6)),
+            ]),
+        ]];
         let source = 1;
         let destination = 5;
 
-
-        test_single_in_out("1{sql|SELECT {'key': $0, 'key2': $0 } FROM $0}", values.clone(), res.clone(), source, destination, true);
+        test_single_in_out(
+            "1{sql|SELECT {'key': $0, 'key2': $0 } FROM $0}",
+            values.clone(),
+            res.clone(),
+            source,
+            destination,
+            true,
+        );
     }
 
-    fn test_single_in_out(query: &str, values: Vec<Vec<Value>>, res: Vec<Vec<Value>>, source: usize, destination: usize, ordered: bool) {
-        let mut plan = Plan::parse(
-            &format!("\
+    fn test_single_in_out(
+        query: &str,
+        values: Vec<Vec<Value>>,
+        res: Vec<Vec<Value>>,
+        source: usize,
+        destination: usize,
+        ordered: bool,
+    ) {
+        let mut plan = Plan::parse(&format!(
+            "\
             0--{query}--2\n\
             \n\
             In\n\
@@ -827,12 +1039,13 @@ pub mod tests {
             Dummy{{\"id\":{destination}, \"result_size\":{size}}}:2\n\
             Transform\n\
             $example:Dummy{{}}",
-                     query = query,
-                     source = source,
-                     values = dump(&values.clone()),
-                     size = 1,
-                     destination = destination)
-        ).unwrap();
+            query = query,
+            source = source,
+            values = dump(&values.clone()),
+            size = 1,
+            destination = destination
+        ))
+        .unwrap();
 
         // get result arc
         let result = plan.get_result(destination);
@@ -845,7 +1058,13 @@ pub mod tests {
 
         // wait for startup else whe risk grabbing the lock too early
         for _command in 0..4 {
-            assert!(vec![Ready(source), Ready(destination), Stop(source), Stop(destination)].contains(&plan.control_receiver.1.recv().unwrap()));
+            assert!(vec![
+                Ready(source),
+                Ready(destination),
+                Stop(source),
+                Stop(destination)
+            ]
+            .contains(&plan.control_receiver.1.recv().unwrap()));
         }
 
         let lock = result.lock().unwrap();
@@ -859,7 +1078,7 @@ pub mod tests {
             for (i, value) in train.values.take().unwrap().into_iter().enumerate() {
                 assert_eq!(expected.get(i).unwrap().clone(), value)
             }
-        }else {
+        } else {
             for value in train.values.take().unwrap().into_iter() {
                 let i = expected.iter().position(|x| x == &value);
                 assert!(i.is_some());

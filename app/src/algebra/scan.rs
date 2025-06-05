@@ -3,7 +3,7 @@ use crate::algebra::BoxedIterator;
 use crate::analyse::{InputDerivable, OutputDerivable};
 use crate::processing::transform::Transform;
 use crate::processing::{Layout, Train};
-use crate::util::storage::{Storage, ValueStore};
+use crate::util::storage::ValueStore;
 use crate::util::EmptyIterator;
 use std::collections::HashMap;
 use std::vec;
@@ -21,25 +21,25 @@ impl IndexScan {
 }
 
 #[derive(Clone)]
-pub struct ScanIterator<'a> {
+pub struct ScanIterator {
     index: usize,
     values: Vec<Value>,
-    storage: Option<&'a ValueStore>
+    storage: Option<ValueStore>
 }
 
-impl ScanIterator<'_> {
+impl ScanIterator {
     pub(crate) fn load(&mut self) -> bool {
-        match self.storage {
-            None => return true,
+        match &self.storage {
+            None => true,
             Some(store) => {
-                self.values = store.get_all();
+                self.values = store.drain();
                 self.values.is_empty()
             }
         }
     }
 }
 
-impl Iterator for ScanIterator<'_> {
+impl Iterator for ScanIterator {
     type Item = Value;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -50,9 +50,9 @@ impl Iterator for ScanIterator<'_> {
     }
 }
 
-impl<'a> ValueIterator for ScanIterator<'static> {
+impl ValueIterator for ScanIterator {
 
-    fn set_storage(&mut self, storage: &'a ValueStore) {
+    fn set_storage(&mut self, storage: ValueStore) {
         self.storage = Some(storage)
     }
 
@@ -65,7 +65,7 @@ impl<'a> ValueIterator for ScanIterator<'static> {
     }
 }
 
-impl RefHandler for ScanIterator<'_> {
+impl RefHandler for ScanIterator {
     fn process(&self, _stop: usize, wagons: Vec<Train>) -> Vec<Train> {
         let mut values = vec![];
         wagons.into_iter().filter(|w| w.last() == self.index).for_each(|mut t| values.append(t.values.take().unwrap().as_mut()));
@@ -73,7 +73,7 @@ impl RefHandler for ScanIterator<'_> {
     }
 
     fn clone(&self) -> Box<dyn RefHandler + Send + 'static> {
-        Box::new(ScanIterator { index: self.index, values: vec![], storage: self.storage })
+        Box::new(ScanIterator { index: self.index, values: vec![], storage: self.storage.clone() })
     }
 }
 
@@ -90,7 +90,7 @@ impl OutputDerivable for IndexScan {
 }
 
 impl Algebra for IndexScan {
-    type Iterator = ScanIterator<'static>;
+    type Iterator = ScanIterator;
 
     fn derive_iterator(&mut self) -> Self::Iterator {
         ScanIterator { index: self.index, values: vec![], storage: None }

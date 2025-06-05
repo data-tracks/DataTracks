@@ -1,10 +1,10 @@
 use crate::algebra::{Algebra, BoxedIterator, ValueIterator};
 use crate::analyse::{InputDerivable, OutputDerivable};
 use crate::processing::transform::Transform;
-use crate::processing::{Layout, OutputType, Train};
+use crate::processing::{Layout, OutputType};
 use value::Value;
 use std::collections::HashMap;
-use crate::util::storage::{Storage, ValueStore};
+use crate::util::storage::ValueStore;
 
 // "Dummy" table to query for constants, one row
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
@@ -14,6 +14,12 @@ pub struct Dual {}
 impl Dual {
     pub fn new() -> Self {
         Dual {}
+    }
+}
+
+impl Default for Dual {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -49,6 +55,12 @@ impl DualIterator {
     }
 }
 
+impl Default for DualIterator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Iterator for DualIterator {
     type Item = Value;
 
@@ -63,7 +75,7 @@ impl Iterator for DualIterator {
 }
 
 impl ValueIterator for DualIterator {
-    fn set_storage(&mut self, storage: &'a ValueStore) {
+    fn set_storage(&mut self, storage: ValueStore) {
         // nothing on purpose
     }
 

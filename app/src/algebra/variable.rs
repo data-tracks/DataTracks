@@ -1,10 +1,10 @@
 use crate::algebra::{Algebra, AlgebraType, BoxedIterator, ValueIterator};
 use crate::analyse::{InputDerivable, OutputDerivable};
 use crate::processing::transform::Transform;
-use crate::processing::{Layout, Train};
+use crate::processing::Layout;
+use crate::util::storage::ValueStore;
 use std::collections::HashMap;
 use value::Value;
-use crate::util::storage::{Storage, ValueStore};
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct VariableScan {
@@ -33,9 +33,14 @@ impl OutputDerivable for VariableScan {
 impl Algebra for VariableScan {
     type Iterator = BareVariableIterator;
     fn derive_iterator(&mut self) -> Self::Iterator {
-        BareVariableIterator::new(self.name.clone(), self.inputs.iter_mut().map(|i| i.derive_iterator()).collect())
+        BareVariableIterator::new(
+            self.name.clone(),
+            self.inputs
+                .iter_mut()
+                .map(|i| i.derive_iterator())
+                .collect(),
+        )
     }
-
 }
 
 pub struct BareVariableIterator {
@@ -58,31 +63,50 @@ impl Iterator for BareVariableIterator {
 }
 
 impl ValueIterator for BareVariableIterator {
-
-    fn set_storage(&mut self, storage: &'a ValueStore) {
+    fn set_storage(&mut self, storage: ValueStore) {
         unreachable!("Not correctly enriched")
     }
 
     fn clone(&self) -> BoxedIterator {
-        Box::new(BareVariableIterator { name: self.name.clone(), inputs: self.inputs.iter().map(|i| (*i).clone()).collect() })
+        Box::new(BareVariableIterator {
+            name: self.name.clone(),
+            inputs: self.inputs.iter().map(|i| (*i).clone()).collect(),
+        })
     }
 
     fn enrich(&mut self, transforms: HashMap<String, Transform>) -> Option<BoxedIterator> {
         let transform = transforms.get(&self.name).unwrap();
         let name = self.name.clone();
-        Some(Box::new(VariableIterator::new(name, self.inputs.iter().map(|v| (*v).clone()).collect(), transform.optimize(transforms.clone(), None))))
+        Some(Box::new(VariableIterator::new(
+            name,
+            self.inputs.iter().map(|v| (*v).clone()).collect(),
+            transform.optimize(transforms.clone(), None),
+        )))
     }
 }
 
 pub struct VariableIterator {
     transform: BoxedIterator,
     inputs: Vec<BoxedIterator>,
+    store: ValueStore,
     name: String,
 }
 
 impl VariableIterator {
-    pub(crate) fn new(name: String, inputs: Vec<BoxedIterator>, transform: BoxedIterator) -> Self {
-        VariableIterator { inputs, transform, name }
+    pub(crate) fn new(
+        name: String,
+        inputs: Vec<BoxedIterator>,
+        mut transform: BoxedIterator,
+    ) -> Self {
+        let store = ValueStore::new();
+        transform.set_storage(store.clone());
+
+        VariableIterator {
+            inputs,
+            transform,
+            name,
+            store,
+        }
     }
 }
 
@@ -94,7 +118,7 @@ impl Iterator for VariableIterator {
             let value = self.transform.next();
 
             if let Some(value) = value {
-                return Some(value)
+                return Some(value);
             }
 
             let values: Vec<_> = self.inputs.iter_mut().map(|v| v.next()).collect();
@@ -103,9 +127,8 @@ impl Iterator for VariableIterator {
             }
             let values = values.iter().map(|v| v.clone().unwrap()).collect();
 
-            let storage = ValueStore::new_with_values(values);
+            self.store.append(values);
 
-            self.transform.set_storage(&storage);
             self.transform.next()
         };
         // we annotate it
@@ -118,13 +141,18 @@ impl Iterator for VariableIterator {
 }
 
 impl ValueIterator for VariableIterator {
-
-    fn set_storage(&mut self, storage: &'a ValueStore) {
-        self.inputs.iter_mut().for_each(|v| v.set_storage(storage));
+    fn set_storage(&mut self, storage: ValueStore) {
+        self.inputs
+            .iter_mut()
+            .for_each(|v| v.set_storage(storage.clone()));
     }
 
     fn clone(&self) -> BoxedIterator {
-        Box::new(VariableIterator::new(self.name.clone(), self.inputs.iter().map(|v| (*v).clone()).collect(), self.transform.clone()))
+        Box::new(VariableIterator::new(
+            self.name.clone(),
+            self.inputs.iter().map(|v| (*v).clone()).collect(),
+            self.transform.clone(),
+        ))
     }
 
     fn enrich(&mut self, _transforms: HashMap<String, Transform>) -> Option<BoxedIterator> {

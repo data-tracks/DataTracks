@@ -3,15 +3,15 @@ use crate::analyse::{InputDerivable, OutputDerivationStrategy};
 use crate::language::Language;
 use crate::processing::option::Configurable;
 use crate::processing::transform::{Transform, Transformer};
-use crate::processing::{Layout, Train};
+use crate::processing::Layout;
 use crate::sql::sqlite::connection::SqliteConnector;
+use crate::util::storage::ValueStore;
 use crate::util::{new_id, DynamicQuery};
 use rusqlite::{params_from_iter, ToSql};
 use serde_json::Map;
 use std::collections::HashMap;
 use tokio::runtime::Runtime;
 use value::Value;
-use crate::util::storage::{Storage, ValueStore};
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct SqliteTransformer {
@@ -139,8 +139,8 @@ impl Iterator for SqliteIterator {
 }
 
 impl ValueIterator for SqliteIterator {
-    fn set_storage(&mut self, storage: &'a ValueStore) {
-        for value in storage.get_all() {
+    fn set_storage(&mut self, storage: ValueStore) {
+        for value in storage.drain() {
             self.values.append(&mut self.query_values(value));
         }
     }

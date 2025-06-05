@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use std::thread::{sleep, spawn};
+use std::thread::{sleep, Builder};
 use std::time::Duration;
 
+use crate::algebra::{Executor, IdentityIterator};
 use crate::optimize::OptimizeStrategy;
-use crate::processing::block::Block;
 use crate::processing::layout::Layout;
 use crate::processing::select::{TriggerSelector, WindowSelector};
 use crate::processing::sender::Sender;
@@ -12,19 +12,16 @@ use crate::processing::station::Command::{Okay, Ready, Threshold};
 use crate::processing::station::{Command, Station};
 use crate::processing::transform::Transform;
 use crate::processing::watermark::WatermarkStrategy;
-use crate::processing::window::{Window, WindowStrategy};
+use crate::processing::window::Window;
 use crate::processing::Train;
 use crate::util::new_channel;
-use crate::util::storage::{Storage, ValueStore};
 use crate::util::Tx;
 use crate::util::{new_id, Rx};
+use crossbeam::channel;
 use crossbeam::channel::Receiver;
-use crossbeam::{channel, select};
 pub use logos::Source;
 use parking_lot::RwLock;
-use tracing::{debug, error, info};
-use value::{Time, Value};
-use crate::util;
+use tracing::{debug, error};
 
 const IDLE_TIMEOUT: Duration = Duration::from_nanos(10);
 
@@ -96,7 +93,7 @@ impl Platform {
 
         let storage = Arc::new(Mutex::new(vec![]));
 
-        let mut window_selector = Arc::new(RwLock::new(WindowSelector::new(self.window.clone())));
+        let window_selector = Arc::new(RwLock::new(WindowSelector::new(self.window.clone())));
 
         let trigger_selector = TriggerSelector::new(storage.clone().into());
 
@@ -165,9 +162,9 @@ impl Platform {
 
 fn when(
     watermark_strategy: Arc<WatermarkStrategy>,
-    mut where_: Arc<RwLock<WindowSelector>>,
+    where_: Arc<RwLock<WindowSelector>>,
     mut when: TriggerSelector,
-    mut what: Box<dyn FnMut(Train) + Send>,
+    mut what: Executor,
 ) -> Tx<Command> {
     let (tx, rx) = new_channel::<Command, &str>("Trigger");
     // shall we?
@@ -178,26 +175,34 @@ fn when(
     // - which window?
     // apply transformation
     // send out
-    spawn(move || loop {
-        if let Ok(command) = rx.try_recv() {
-            match command {
-                Command::Stop(_) => return,
+    let result = Builder::new()
+        .name(String::from("when"))
+        .spawn(move || loop {
+            if let Ok(Command::Stop(_)) = rx.try_recv() {
+                return;
+            };
+            // get all "changed" windows
+            let windows = where_.write().select();
+
+            let current = watermark_strategy.current();
+
+            // decide if we fire a window, discard or wait
+            match when.select(windows, &current) {
+                trains if !trains.is_empty() => {
+                    let train = trains
+                        .into_iter()
+                        .map(|(_, t)| t)
+                        .reduce(|a, b| a.merge(b))
+                        .unwrap();
+                    what.execute(train);
+                }
                 _ => {}
             }
-        }
-        let current = watermark_strategy.current();
-
-        // get all "changed" windows
-        let windows = where_.write().select();
-
-        // decide if we fire a window, discard or wait
-        match when.select(windows, &current) {
-            trains if trains.len() > 0 => trains.into_iter().for_each(|(window, train)| {
-                what(train);
-            }),
-            _ => sleep(IDLE_TIMEOUT),
-        }
-    });
+        });
+    match result {
+        Ok(_) => {}
+        Err(err) => error!("{}", err),
+    }
 
     tx
 }
@@ -207,36 +212,16 @@ fn optimize(
     transform: Option<Transform>,
     transforms: HashMap<String, Transform>,
     sender: Sender,
-) -> Box<dyn FnMut(Train) + Send> {
-    match transform {
-        Some(transform) => {
-            let mut enumerator =
-                transform.optimize(transforms, Some(OptimizeStrategy::rule_based()));
-            Box::new(move |train| {
-                let mut storage = ValueStore::new();
-                match train.values {
-                    None => {}
-                    Some(values) => {
-                        storage.append(values);
-                    }
-                }
-
-                enumerator.set_storage(&storage);
-                sender.send(enumerator.drain_to_train(stop));
-            })
-        }
-        None => Box::new(move |train| sender.send(train)),
-    }
+) -> Executor {
+    let enumerator = match transform {
+        Some(transform) => transform.optimize(transforms, Some(OptimizeStrategy::rule_based())),
+        None => Box::new(IdentityIterator::new()),
+    };
+    Executor::new(
+        stop,
+        enumerator,
+        Box::new(move |train| {
+            sender.send(train.flag(stop));
+        }),
+    )
 }
-
-fn merge_marks(train: &mut Vec<Train>) -> HashMap<usize, Time> {
-    // merge watermarks for now
-    let mut marks = HashMap::new();
-    train.iter().for_each(|t| {
-        t.marks.iter().for_each(|(k, v)| {
-            marks.insert(*k, v.clone());
-        })
-    });
-    marks
-}
-

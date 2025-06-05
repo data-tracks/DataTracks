@@ -3,15 +3,15 @@ use crate::analyse::{InputDerivable, OutputDerivationStrategy};
 use crate::language::Language;
 use crate::processing::option::Configurable;
 use crate::processing::transform::{Transform, Transformer};
-use crate::processing::{Layout, Train};
+use crate::processing::Layout;
 use crate::sql::postgres::connection::PostgresConnection;
+use crate::util::storage::ValueStore;
 use crate::util::{DynamicQuery, ValueExtractor};
 use postgres::types::ToSql;
 use postgres::{Client, Statement};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use value;
-use crate::util::storage::{Storage, ValueStore};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct PostgresTransformer {
@@ -158,10 +158,9 @@ impl Iterator for PostgresIterator {
     }
 }
 
-impl<'a> ValueIterator for PostgresIterator {
-
-    fn set_storage(&mut self, storage: &'a ValueStore) {
-        for value in storage.get_all() {
+impl ValueIterator for PostgresIterator {
+    fn set_storage(&mut self, storage: ValueStore) {
+        for value in storage.drain() {
             let values = &mut self.query_values(value);
             self.values.append(values);
         }

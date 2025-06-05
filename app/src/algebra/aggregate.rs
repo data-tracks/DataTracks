@@ -9,13 +9,13 @@ use crate::algebra::{
 use crate::analyse::{InputDerivable, OutputDerivable};
 use crate::processing::transform::Transform;
 use crate::processing::OutputType::Array;
-use crate::processing::{ArrayType, Layout, Train};
+use crate::processing::{ArrayType, Layout};
 use value::Value;
 use value::Value::Null;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
-use crate::util::storage::{Storage, ValueStore};
+use crate::util::storage::ValueStore;
 
 type Agg = (AggOp, Operator);
 
@@ -132,7 +132,7 @@ impl Algebra for Aggregate {
 
 type AggHandler = (BoxedValueLoader, BoxedValueHandler);
 
-pub struct AggIterator {
+pub struct AggIterator{
     input: BoxedIterator,
     groups: HashMap<u64, Vec<Value>>,
     hashes: HashMap<u64, Value>,
@@ -227,7 +227,7 @@ impl Iterator for AggIterator {
 }
 
 impl ValueIterator for AggIterator {
-    fn set_storage(&mut self, storage: &'a ValueStore) {
+    fn set_storage(&mut self, storage: ValueStore) {
         self.input.set_storage(storage);
     }
 

@@ -3,10 +3,10 @@ use crate::algebra::implement::implement;
 use crate::algebra::{AlgebraType, BoxedValueHandler, Operator};
 use crate::analyse::{InputDerivable, OutputDerivable};
 use crate::processing::transform::Transform;
-use crate::processing::{Layout, Train};
-use value::Value;
+use crate::processing::Layout;
+use crate::util::storage::ValueStore;
 use std::collections::HashMap;
-use crate::util::storage::{Storage, ValueStore};
+use value::Value;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Filter {
@@ -16,14 +16,16 @@ pub struct Filter {
 
 impl Filter {
     pub fn new(input: AlgebraType, condition: Operator) -> Self {
-        Filter { input: Box::new(input), condition }
+        Filter {
+            input: Box::new(input),
+            condition,
+        }
     }
 }
 
-
 pub struct FilterIterator {
     input: BoxedIterator,
-    condition: BoxedValueHandler
+    condition: BoxedValueHandler,
 }
 
 impl Iterator for FilterIterator {
@@ -33,7 +35,7 @@ impl Iterator for FilterIterator {
         for value in self.input.by_ref() {
             if let Ok(bool) = self.condition.process(&value).as_bool() {
                 if bool.0 {
-                    return Some(value)
+                    return Some(value);
                 }
             }
         }
@@ -41,20 +43,26 @@ impl Iterator for FilterIterator {
     }
 }
 
-impl<'a> ValueIterator for FilterIterator {
-    fn set_storage(&mut self, storage: &'a ValueStore) {
+impl ValueIterator for FilterIterator {
+    fn set_storage(&mut self, storage: ValueStore) {
         self.input.set_storage(storage);
     }
 
     fn clone(&self) -> BoxedIterator {
-        Box::new(FilterIterator {input: self.input.clone(), condition: self.condition.clone()})
+        Box::new(FilterIterator {
+            input: self.input.clone(),
+            condition: self.condition.clone(),
+        })
     }
 
     fn enrich(&mut self, transforms: HashMap<String, Transform>) -> Option<BoxedIterator> {
         let input = self.input.enrich(transforms);
 
         if let Some(input) = input {
-            self.input = Box::new(FilterIterator { input, condition: self.condition.clone() });
+            self.input = Box::new(FilterIterator {
+                input,
+                condition: self.condition.clone(),
+            });
         };
         None
     }
@@ -62,7 +70,9 @@ impl<'a> ValueIterator for FilterIterator {
 
 impl InputDerivable for Filter {
     fn derive_input_layout(&self) -> Option<Layout> {
-        self.input.derive_input_layout().map(|l| l.merge(&self.condition.derive_input_layout().unwrap_or_default()))
+        self.input
+            .derive_input_layout()
+            .map(|l| l.merge(&self.condition.derive_input_layout().unwrap_or_default()))
     }
 }
 
@@ -80,5 +90,4 @@ impl Algebra for Filter {
         let input = self.input.derive_iterator();
         FilterIterator { input, condition }
     }
-
 }

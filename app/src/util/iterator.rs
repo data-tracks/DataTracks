@@ -1,9 +1,8 @@
-use std::collections::HashMap;
 use crate::algebra::{BoxedIterator, ValueIterator};
-use crate::processing::Train;
 use crate::processing::transform::Transform;
+use crate::util::storage::ValueStore;
+use std::collections::HashMap;
 use value::Value;
-use crate::util::storage::{Storage, ValueStore};
 
 pub struct EmptyIterator {}
 
@@ -15,8 +14,8 @@ impl Iterator for EmptyIterator {
     }
 }
 
-impl<'a> ValueIterator for EmptyIterator {
-    fn set_storage(&mut self, storage: &'a ValueStore) {
+impl ValueIterator for EmptyIterator {
+    fn set_storage(&mut self, storage: ValueStore) {
         // nothing on purpose
     }
 

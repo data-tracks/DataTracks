@@ -3,10 +3,10 @@ use crate::algebra::{AlgebraType, BoxedIterator, ValueIterator};
 use crate::analyse::{InputDerivable, OutputDerivable};
 use crate::processing::transform::Transform;
 use crate::processing::OutputType::Array;
-use crate::processing::{ArrayType, Layout, Train};
-use value::Value;
+use crate::processing::{ArrayType, Layout};
+use crate::util::storage::ValueStore;
 use std::collections::HashMap;
-use crate::util::storage::{Storage, ValueStore};
+use value::Value;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Join {
@@ -135,9 +135,9 @@ impl JoinIterator {
     }
 }
 
-impl<'a> ValueIterator for JoinIterator {
-    fn set_storage(&mut self, storage: &'a ValueStore) {
-        self.left.set_storage(storage);
+impl ValueIterator for JoinIterator {
+    fn set_storage(&mut self, storage: ValueStore) {
+        self.left.set_storage(storage.clone());
         self.right.set_storage(storage);
     }
 
@@ -205,9 +205,8 @@ mod test {
     use crate::algebra::join::Join;
     use crate::algebra::scan::IndexScan;
     use crate::algebra::{AlgebraType, ValueIterator};
-    use crate::processing::Train;
+    use crate::util::storage::ValueStore;
     use value::{Dict, Value};
-    use crate::util::storage::{Storage, ValueStore};
 
     #[test]
     fn one_match() {
@@ -227,14 +226,13 @@ mod test {
 
         let mut handle = join.derive_iterator();
 
-
         let mut left = ValueStore::new_with_values(left);
         left.set_source(0);
         let mut right = ValueStore::new_with_values(right);
         right.set_source(1);
 
-        handle.set_storage(&left);
-        handle.set_storage(&right);
+        handle.set_storage(left);
+        handle.set_storage(right);
 
         let mut res = handle.drain_to_train(3);
         assert_eq!(
@@ -249,25 +247,30 @@ mod test {
 
     #[test]
     fn multi_match() {
-        let train0 = Train::new(transform(vec![3.into(), 5.5.into()]));
-        let train1 = Train::new(transform(vec![5.5.into(), 5.5.into()]));
-        let train0 = train0.mark(0);
-        let train1 = train1.mark(1);
+        let left = transform(vec![3.into(), 5.5.into()]);
+        let right = transform(vec![5.5.into(), 5.5.into()]);
 
-        let left = IndexScan::new(0);
-        let right = IndexScan::new(1);
+        let left_scan = IndexScan::new(0);
+        let right_scan = IndexScan::new(1);
 
         let mut join = Join::new(
-            AlgebraType::IndexScan(left),
-            AlgebraType::IndexScan(right),
+            AlgebraType::IndexScan(left_scan),
+            AlgebraType::IndexScan(right_scan),
             |val| val.clone(),
             |val| val.clone(),
             |left, right| Value::Dict(left.as_dict().unwrap().merge(right.as_dict().unwrap())),
         );
 
         let mut handle = join.derive_iterator();
-        handle.dynamically_load(train0.clone());
-        handle.dynamically_load(train1.clone());
+
+        let mut left = ValueStore::new_with_values(left);
+        left.set_source(0);
+        let mut right = ValueStore::new_with_values(right);
+        right.set_source(1);
+
+        handle.set_storage(left);
+        handle.set_storage(right);
+
         let mut res = handle.drain_to_train(3);
         assert_eq!(
             res.values.clone().unwrap(),

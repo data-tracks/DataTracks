@@ -10,7 +10,7 @@ use crate::processing::transform::Transform::DummyDB;
 use crate::processing::transform::Transform::{Func, Lang, Postgres, SQLite};
 use crate::processing::Layout;
 use crate::sql::{PostgresTransformer, SqliteTransformer};
-use crate::util::storage::{Storage, ValueStore};
+use crate::util::storage::ValueStore;
 use crate::{algebra, language};
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use schemas::message_generated::protocol::{LanguageTransform as FlatLanguageTransform, Transform as FlatTransform};
@@ -126,9 +126,9 @@ impl Transform {
         }
     }
 
-    pub fn optimize(&self, transforms: HashMap<String, Transform>, optimizer: Option<OptimizeStrategy>) -> Box<dyn ValueIterator<Item=Value> + Send> {
+    pub fn optimize(&self, transforms: HashMap<String, Transform>, optimizer: Option<OptimizeStrategy>) -> BoxedIterator {
         match self {
-            Func(f) => ValueIterator::clone(f),
+            Func(f) => f.derive_iter(),
             Lang(f) => {
                 let optimized = match optimizer {
                     None => f.algebra.clone(),
@@ -277,7 +277,7 @@ pub fn build_algebra(language: &Language, query: &str) -> Result<AlgebraType, St
 }
 
 pub struct FuncTransform {
-    pub input: BoxedIterator,
+    //pub input: BoxedIterator,
     pub func: Arc<dyn Fn(i64, Value) -> Value + Send + Sync>,
     pub in_layout: Layout,
     pub out_layout: Layout,
@@ -299,7 +299,7 @@ impl PartialEq for FuncTransform {
 
 impl Clone for FuncTransform {
     fn clone(&self) -> Self {
-        FuncTransform { input: self.input.clone(), func: self.func.clone(), in_layout: self.in_layout.clone(), out_layout: self.out_layout.clone() }
+        FuncTransform { func: self.func.clone(), in_layout: self.in_layout.clone(), out_layout: self.out_layout.clone() }
     }
 }
 
@@ -319,19 +319,17 @@ impl FuncTransform {
     }
 
     pub(crate) fn new_with_layout(func: Arc<(dyn Fn(i64, Value) -> Value + Send + Sync)>, in_layout: Layout, out_layout: Layout) -> Self {
-        let mut scan = IndexScan::new(0);
-        let iterator = scan.derive_iterator();
-        FuncTransform { input: Box::new(iterator), func, in_layout, out_layout }
-    }
-
-    fn new_from_input(input: BoxedIterator, func: Arc<dyn Fn(i64, Value) -> Value + Send + Sync>) -> Self {
-        FuncTransform { input, func, in_layout: Layout::default(), out_layout: Layout::default() }
+        FuncTransform {func, in_layout, out_layout }
     }
 
     pub(crate) fn new_val(_stop: i64, func: fn(Value) -> Value) -> FuncTransform {
         Self::new(Arc::new(move |_stop, value| {
             func(value)
         }))
+    }
+
+    pub(crate) fn derive_iter(&self) -> Box<FuncIter> {
+        Box::new(FuncIter::new(self.func.clone()))
     }
 
     pub(crate) fn derive_input_layout(&self) -> Option<Layout> {
@@ -347,7 +345,21 @@ impl FuncTransform {
     }
 }
 
-impl <'a> Iterator for FuncTransform {
+pub struct FuncIter{
+    pub input: BoxedIterator,
+    pub func: Arc<dyn Fn(i64, Value) -> Value + Send + Sync>,
+}
+
+impl FuncIter {
+    fn new(func: Arc<dyn Fn(i64, Value) -> Value + Send + Sync>) -> Self {
+        let mut scan = IndexScan::new(0);
+        let iter = scan.derive_iterator();
+
+        FuncIter{ input: Box::new(iter), func }
+    }
+}
+
+impl Iterator for FuncIter {
     type Item = Value;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -359,13 +371,13 @@ impl <'a> Iterator for FuncTransform {
     }
 }
 
-impl<'a> ValueIterator for FuncTransform {
-    fn set_storage(&mut self, storage: &'a ValueStore) {
+impl ValueIterator for FuncIter{
+    fn set_storage(&mut self, storage: ValueStore) {
         self.input.set_storage(storage);
     }
 
     fn clone(&self) -> BoxedIterator {
-        Box::new(FuncTransform { input: self.input.clone(), func: self.func.clone(), in_layout: self.in_layout.clone(), out_layout: self.out_layout.clone() })
+        Box::new(FuncIter { input: self.input.clone(), func: self.func.clone() })
     }
 
     fn enrich(&mut self, transforms: HashMap<String, Transform>) -> Option<BoxedIterator> {
@@ -388,6 +400,7 @@ mod tests {
     use crate::processing::transform::Transform::Func;
     use crate::processing::transform::{build_algebra, FuncTransform};
     use crate::util::new_channel;
+    use crate::util::storage::ValueStore;
     use crossbeam::channel::unbounded;
     use std::collections::HashMap;
     use std::sync::Arc;
@@ -545,8 +558,8 @@ mod tests {
         match transform {
             Ok(mut t) => {
                 for (i, input) in inputs.into_iter().enumerate() {
-                    let train = Train::new(input).mark(i);
-                    t.dynamically_load(train);
+                    let storage = ValueStore::new_with_values(input);
+                    t.set_storage(storage);
                 }
 
                 let result = t.drain_to_train(0);
@@ -561,7 +574,9 @@ mod tests {
         let transform = build_iterator(transform.unwrap());
         match transform {
             Ok(mut t) => {
-                t.dynamically_load(input.into());
+                let storage = ValueStore::new_with_values(input);
+                t.set_storage(storage);
+                
                 let result = t.drain_to_train(0);
                 assert_eq!(result.values.unwrap(), output);
             }
@@ -575,7 +590,9 @@ mod tests {
 
         match transform {
             Ok(mut t) => {
-                t.dynamically_load(input.into());
+                let storage = ValueStore::new_with_values(input);
+                t.set_storage(storage);
+      
                 let result = t.drain_to_train(0);
                 let result = result.values.unwrap();
                 for result in &result {

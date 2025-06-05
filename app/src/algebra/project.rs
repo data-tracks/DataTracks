@@ -1,14 +1,14 @@
 use crate::algebra::algebra::{Algebra, IdentityHandler, ValueHandler};
 use crate::algebra::function::Operator;
 use crate::algebra::implement::implement;
+use crate::algebra::operator::SetProjectIterator;
 use crate::algebra::{AlgebraType, BoxedIterator, Op, ValueIterator};
 use crate::analyse::{InputDerivable, OutputDerivable};
 use crate::processing::transform::Transform;
-use crate::processing::{Layout, Train};
-use value::Value;
+use crate::processing::Layout;
+use crate::util::storage::ValueStore;
 use std::collections::HashMap;
-use crate::algebra::operator::SetProjectIterator;
-use crate::util::storage::{Storage, ValueStore};
+use value::Value;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Project {
@@ -18,15 +18,17 @@ pub struct Project {
 
 impl Project {
     pub fn new(project: Operator, input: AlgebraType) -> Self {
-        Project { input: Box::new(input), project }
+        Project {
+            input: Box::new(input),
+            project,
+        }
     }
 }
 
 pub enum ProjectIter {
     ValueProjectIterator(ProjectIterator),
-    ValueSetProjectIterator(SetProjectIterator)
+    ValueSetProjectIterator(SetProjectIterator),
 }
-
 
 impl Iterator for ProjectIter {
     type Item = Value;
@@ -39,26 +41,25 @@ impl Iterator for ProjectIter {
     }
 }
 
-impl<'a> ValueIterator for ProjectIter {
-    fn set_storage(&mut self, storage: &'a ValueStore) {
+impl ValueIterator for ProjectIter {
+    fn set_storage(&mut self, storage: ValueStore) {
         unreachable!()
     }
 
     fn clone(&self) -> BoxedIterator {
         match self {
             ProjectIter::ValueProjectIterator(p) => p.clone(),
-            ProjectIter::ValueSetProjectIterator(p) => p.clone()
+            ProjectIter::ValueSetProjectIterator(p) => p.clone(),
         }
     }
 
     fn enrich(&mut self, transforms: HashMap<String, Transform>) -> Option<BoxedIterator> {
         match self {
             ProjectIter::ValueProjectIterator(p) => p.enrich(transforms),
-            ProjectIter::ValueSetProjectIterator(p) => p.enrich(transforms)
+            ProjectIter::ValueSetProjectIterator(p) => p.enrich(transforms),
         }
     }
 }
-
 
 pub struct ProjectIterator {
     input: BoxedIterator,
@@ -70,19 +71,22 @@ impl Iterator for ProjectIterator {
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(value) = self.input.next() {
-            return Some(self.project.process(&value))
+            return Some(self.project.process(&value));
         }
         None
     }
 }
 
 impl<'a> ValueIterator for ProjectIterator {
-    fn set_storage(&mut self, storage: &'a ValueStore) {
+    fn set_storage(&mut self, storage: ValueStore) {
         self.input.set_storage(storage);
     }
 
     fn clone(&self) -> BoxedIterator {
-        Box::new(ProjectIterator {input: self.input.clone(), project: self.project.clone()})
+        Box::new(ProjectIterator {
+            input: self.input.clone(),
+            project: self.project.clone(),
+        })
     }
 
     fn enrich(&mut self, transforms: HashMap<String, Transform>) -> Option<BoxedIterator> {
@@ -107,15 +111,25 @@ impl OutputDerivable for Project {
     }
 }
 
-
 impl Algebra for Project {
     type Iterator = ProjectIter;
 
     fn derive_iterator(&mut self) -> ProjectIter {
         match &self.project.op {
             Op::Collection(_) => {
-                let op = self.project.operands.iter().map(|o| implement(o)).collect::<Vec<_>>().first().map(|o| (*o).clone()).unwrap_or(IdentityHandler::new());
-                return ProjectIter::ValueSetProjectIterator(SetProjectIterator::new(self.input.derive_iterator(), op))
+                let op = self
+                    .project
+                    .operands
+                    .iter()
+                    .map(|o| implement(o))
+                    .collect::<Vec<_>>()
+                    .first()
+                    .map(|o| (*o).clone())
+                    .unwrap_or(IdentityHandler::new());
+                return ProjectIter::ValueSetProjectIterator(SetProjectIterator::new(
+                    self.input.derive_iterator(),
+                    op,
+                ));
             }
             _ => {}
         }

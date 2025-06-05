@@ -1,11 +1,10 @@
 use crate::processing;
+use crate::processing::window::WindowStrategy;
 use std::cmp::PartialEq;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use tracing::info;
 use value::train::Train;
 use value::Time;
-use crate::processing::window::WindowStrategy;
 
 pub type Storage = Arc<Mutex<Vec<Train>>>;
 

@@ -14,8 +14,11 @@ use value::Value::{Array, Bool, Date, Dict, Float, Int, Null, Text, Time, Wagon}
 use regex::Regex;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::Debug;
+use std::rc::Rc;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::vec;
+use parking_lot::Mutex;
 use tracing::warn;
 use crate::util::storage::{Storage, ValueStore};
 
@@ -150,8 +153,8 @@ fn unwind<'a>(value: Value) -> Vec<Value> {
     }
 }
 
-impl<'a> ValueIterator for SetProjectIterator {
-    fn set_storage(&mut self, storage: &'a ValueStore) {
+impl ValueIterator for SetProjectIterator {
+    fn set_storage(&mut self, storage: ValueStore) {
         self.input.set_storage(storage);
     }
 

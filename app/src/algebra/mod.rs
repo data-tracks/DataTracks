@@ -18,6 +18,8 @@ pub use scan::IndexScan;
 pub use scan::TableScan;
 pub use variable::VariableScan;
 pub use set::AlgSet;
+pub use executor::Executor;
+pub use executor::IdentityIterator;
 
 mod project;
 mod algebra;
@@ -32,4 +34,5 @@ mod aggregate;
 mod variable;
 mod dual;
 mod set;
+mod executor;
 
