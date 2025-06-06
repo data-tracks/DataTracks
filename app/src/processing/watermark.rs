@@ -1,16 +1,17 @@
-use std::sync::Mutex;
-use chrono::Duration;
-use value::Time;
 use crate::processing::Train;
 use crate::util::Tx;
+use chrono::Duration;
+use std::collections::HashMap;
+use std::sync::Mutex;
+use tracing::error;
+use value::Time;
 
 #[derive(Clone)]
 pub enum WatermarkStrategy {
-    Monotonic(MonotonicWatermark), // every point
-    Periodic(PeriodicWatermark), // offset delay every point
+    Monotonic(MonotonicWatermark),   // every point
+    Periodic(PeriodicWatermark),     // offset delay every point
     Punctuated(PunctuatedWatermark), // on certain event
 }
-
 
 impl Default for WatermarkStrategy {
     fn default() -> Self {
@@ -33,7 +34,7 @@ impl WatermarkStrategy {
         }
     }
 
-    pub fn attach(&self, num: usize, sender: Tx<Time>) {
+    pub fn attach(&mut self, num: usize, sender: Tx<Time>) {
         match self {
             WatermarkStrategy::Monotonic(m) => m.attach(num, sender),
             WatermarkStrategy::Periodic(p) => p.attach(num, sender),
@@ -41,7 +42,7 @@ impl WatermarkStrategy {
         }
     }
 
-    pub(crate) fn detach(&self, num: usize) {
+    pub(crate) fn detach(&mut self, num: usize) {
         match self {
             WatermarkStrategy::Monotonic(m) => m.detach(num),
             WatermarkStrategy::Periodic(p) => p.detach(num),
@@ -51,15 +52,9 @@ impl WatermarkStrategy {
 
     pub(crate) fn current(&self) -> Time {
         match self {
-            WatermarkStrategy::Monotonic(m) => {
-                m.current()
-            }
-            WatermarkStrategy::Periodic(p) => {
-                p.current()
-            }
-            WatermarkStrategy::Punctuated(p) => {
-                p.current()
-            }
+            WatermarkStrategy::Monotonic(m) => m.current(),
+            WatermarkStrategy::Periodic(p) => p.current(),
+            WatermarkStrategy::Punctuated(p) => p.current(),
         }
     }
 }
@@ -67,8 +62,8 @@ impl WatermarkStrategy {
 #[derive(Default)]
 pub struct MonotonicWatermark {
     last: Mutex<Time>,
+    observers: HashMap<usize, Tx<Time>>,
 }
-
 
 impl MonotonicWatermark {
     pub fn new() -> Self {
@@ -79,15 +74,22 @@ impl MonotonicWatermark {
         let mut last = self.last.lock().unwrap();
         if train.event_time > *last {
             *last = train.event_time.clone();
+
+            self.observers
+                .values()
+                .for_each(|observer| match observer.send(*last) {
+                    Ok(_) => {}
+                    Err(err) => error!(err),
+                })
         }
     }
 
-    pub(crate) fn detach(&self, num: usize) {
-        todo!()
+    pub(crate) fn detach(&mut self, num: usize) {
+        self.observers.remove(&num);
     }
 
-    pub(crate) fn attach(&self, num: usize, sender: Tx<Time>) {
-        todo!()
+    pub(crate) fn attach(&mut self, num: usize, sender: Tx<Time>) {
+        self.observers.insert(num, sender);
     }
 
     pub(crate) fn current(&self) -> Time {
@@ -106,10 +108,12 @@ pub struct PeriodicWatermark {
     offset: Offset,
 }
 
-
 impl PeriodicWatermark {
     pub fn new(offset: Offset) -> Self {
-        PeriodicWatermark{ mark: Default::default(), offset }
+        PeriodicWatermark {
+            mark: Default::default(),
+            offset,
+        }
     }
 
     pub(crate) fn mark(&self, train: &Train) {
@@ -139,12 +143,11 @@ impl Clone for PeriodicWatermark {
 }
 
 #[derive(Clone)]
-pub struct Offset{
-    duration: Duration
+pub struct Offset {
+    duration: Duration,
 }
 
 impl Offset {
-    
     fn apply(&self, time: &Time) -> Time {
         time - self.duration
     }
@@ -155,10 +158,11 @@ pub struct PunctuatedWatermark {
     mark: Time,
 }
 
-
 impl PunctuatedWatermark {
     pub fn new() -> Self {
-        PunctuatedWatermark{ mark: Default::default() }
+        PunctuatedWatermark {
+            mark: Default::default(),
+        }
     }
 
     pub(crate) fn detach(&self, num: usize) {
@@ -177,5 +181,3 @@ impl PunctuatedWatermark {
         self.mark
     }
 }
-
-

@@ -1,29 +1,37 @@
 use crate::algebra::{BoxedIterator, ValueIterator};
 use crate::processing::transform::Transform;
+use crate::processing::Sender;
 use crate::util::storage::ValueStore;
+use crate::util::Tx;
 use std::collections::{HashMap, VecDeque};
 use value::train::Train;
 use value::Value;
 
-pub type BoxedTrainHandler = Box<dyn FnMut(Train) + Send + 'static>;
-
 pub struct Executor {
     iterator: BoxedIterator,
-    next: BoxedTrainHandler,
+    sender: Sender,
     storage: ValueStore,
     stop: usize,
 }
 
 impl Executor {
-    pub fn new(stop: usize, mut iterator: BoxedIterator, next: BoxedTrainHandler) -> Self {
+    pub fn new(stop: usize, mut iterator: BoxedIterator, sender: Sender) -> Self {
         let storage = ValueStore::new();
         iterator.set_storage(storage.clone());
         Executor {
             iterator,
-            next,
+            sender,
             storage,
             stop,
         }
+    }
+
+    pub(crate) fn attach(&mut self, num: usize, train_observer: Tx<Train>) {
+        self.sender.add(num, train_observer);
+    }
+
+    pub(crate) fn detach(&mut self, num: usize) {
+        self.sender.remove(num);
     }
 
     pub fn execute(&mut self, train: Train) {
@@ -42,7 +50,7 @@ impl Executor {
         train.event_time = event_time;
         train.marks = marks;
 
-        (self.next)(train);
+        self.sender.send(train.flag(self.stop));
     }
 }
 

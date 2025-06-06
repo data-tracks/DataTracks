@@ -8,7 +8,7 @@ use crate::optimize::OptimizeStrategy;
 use crate::processing::layout::Layout;
 use crate::processing::select::{TriggerSelector, WindowSelector};
 use crate::processing::sender::Sender;
-use crate::processing::station::Command::{Okay, Ready, Threshold};
+use crate::processing::station::Command::{Attach, Detach, Okay, Ready, Threshold};
 use crate::processing::station::{Command, Station};
 use crate::processing::transform::Transform;
 use crate::processing::watermark::WatermarkStrategy;
@@ -21,7 +21,7 @@ use crossbeam::channel;
 use crossbeam::channel::Receiver;
 pub use logos::Source;
 use parking_lot::RwLock;
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 
 const IDLE_TIMEOUT: Duration = Duration::from_nanos(10);
 
@@ -35,7 +35,7 @@ pub(crate) struct Platform {
     transform: Option<Transform>,
     layout: Layout,
     window: Window,
-    watermark_strategy: Arc<WatermarkStrategy>,
+    watermark_strategy: WatermarkStrategy,
     stop: usize,
     blocks: Vec<usize>,
     inputs: Vec<usize>,
@@ -71,7 +71,7 @@ impl Platform {
                 blocks,
                 inputs,
                 transforms,
-                watermark_strategy: Arc::new(watermark_strategy),
+                watermark_strategy,
             },
             control.0,
         )
@@ -89,7 +89,7 @@ impl Platform {
         let mut threshold = 2000;
         let mut too_high = false;
 
-        let watermark_strategy = self.watermark_strategy.clone();
+        let mut watermark_strategy = Arc::new(Mutex::new(self.watermark_strategy.clone()));
 
         let storage = Arc::new(Mutex::new(vec![]));
 
@@ -98,7 +98,7 @@ impl Platform {
         let trigger_selector = TriggerSelector::new(storage.clone().into());
 
         let when_tx = when(
-            self.watermark_strategy.clone(),
+            watermark_strategy.clone(),
             window_selector.clone(),
             trigger_selector,
             process,
@@ -129,11 +129,16 @@ impl Platform {
                         }
                         return;
                     }
-                    Command::Attach(num, (send, watermark)) => {
-                        watermark_strategy.attach(num, watermark);
+                    Attach(num, (send, watermark)) => {
+                        watermark_strategy
+                            .lock()
+                            .unwrap()
+                            .attach(num, watermark.clone());
+                        when_tx.send(Attach(num, (send, watermark))).unwrap();
                     }
-                    Command::Detach(num) => {
-                        watermark_strategy.detach(num);
+                    Detach(num) => {
+                        when_tx.send(Detach(num)).unwrap();
+                        watermark_strategy.lock().unwrap().detach(num);
                     }
                     Threshold(th) => {
                         threshold = th;
@@ -148,7 +153,7 @@ impl Platform {
                     if self.layout.fits_train(&train) {
                         // save and update if something changed
                         storage.lock().unwrap().push(train.clone());
-                        watermark_strategy.mark(&train);
+                        watermark_strategy.lock().unwrap().mark(&train);
                         window_selector.write().mark(&train);
                     }
                 }
@@ -161,7 +166,7 @@ impl Platform {
 }
 
 fn when(
-    watermark_strategy: Arc<WatermarkStrategy>,
+    watermark_strategy: Arc<Mutex<WatermarkStrategy>>,
     where_: Arc<RwLock<WindowSelector>>,
     mut when: TriggerSelector,
     mut what: Executor,
@@ -178,13 +183,24 @@ fn when(
     let result = Builder::new()
         .name(String::from("when"))
         .spawn(move || loop {
-            if let Ok(Command::Stop(_)) = rx.try_recv() {
-                return;
-            };
+            match rx.try_recv() {
+                Ok(cmd) => match cmd {
+                    Command::Stop(_) => return,
+                    Attach(num, (observe, _)) => {
+                        what.attach(num, observe.clone());
+                    }
+                    Detach(num) => {
+                        what.detach(num);
+                    }
+                    _ => {}
+                },
+                Err(_) => {}
+            }
+
             // get all "changed" windows
             let windows = where_.write().select();
 
-            let current = watermark_strategy.current();
+            let current = watermark_strategy.lock().unwrap().current();
 
             // decide if we fire a window, discard or wait
             match when.select(windows, &current) {
@@ -217,11 +233,5 @@ fn optimize(
         Some(transform) => transform.optimize(transforms, Some(OptimizeStrategy::rule_based())),
         None => Box::new(IdentityIterator::new()),
     };
-    Executor::new(
-        stop,
-        enumerator,
-        Box::new(move |train| {
-            sender.send(train.flag(stop));
-        }),
-    )
+    Executor::new(stop, enumerator, sender)
 }

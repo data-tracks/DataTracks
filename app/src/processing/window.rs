@@ -235,7 +235,7 @@ pub struct BackStrategy {
 }
 
 impl BackStrategy {
-    fn new(window: &BackWindow) -> Self {
+    pub(crate) fn new(window: &BackWindow) -> Self {
         Self {
             duration: window.duration,
             time: window.time,

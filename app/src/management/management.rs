@@ -1,7 +1,7 @@
 use crate::management::storage::Storage;
 use crate::processing::station::Command;
 use crate::processing::{Plan, Train};
-use crate::tpc::{start_tpc};
+use crate::tpc::start_tpc;
 use crate::ui::start_web;
 use crossbeam::channel::Sender;
 use reqwest::blocking::Client;

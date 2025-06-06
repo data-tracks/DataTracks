@@ -17,6 +17,7 @@ use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
 use tower_http::cors::CorsLayer;
 use tracing::{debug, error};
+use value::Time;
 
 #[derive(Clone)]
 pub struct HttpDestination {
@@ -92,7 +93,10 @@ async fn start_destination(http: HttpDestination, _rx: Receiver<Command>, receiv
         Err(err) => error!("{}", err),
     }
 
-    let state = DestinationState { outs: clone, name: String::from("HTTP Destination") };
+    let state = DestinationState {
+        outs: clone,
+        name: String::from("HTTP Destination"),
+    };
 
     let app = Router::new()
         .route("/ws", get(publish_ws))

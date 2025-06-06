@@ -9,7 +9,7 @@ use crate::util::new_channel;
 use crate::util::Tx;
 use axum::routing::get;
 use axum::Router;
-use crossbeam::channel::{RecvTimeoutError};
+use crossbeam::channel::RecvTimeoutError;
 use schemas::message_generated::protocol::Create;
 use serde_json::{Map, Value};
 use std::collections::HashMap;
@@ -35,24 +35,33 @@ pub struct Storage {
 }
 
 pub struct Attachment {
-    port: u16,
+    data_port: u16,
+    watermark_port: u16,
     sender: Tx<Train>,
+    wm_sender: Tx<Time>,
     shutdown_flag: Arc<AtomicBool>,
     shutdown_channel: Sender<bool>,
-    handles: Vec<thread::JoinHandle<()>>,
+    wm_shutdown_channel: Sender<bool>,
+    handles: Vec<JoinHandle<()>>,
 }
 
 impl Attachment {
     pub fn new(
-        port: u16,
+        data_port: u16,
+        watermark_port: u16,
         sender: Tx<Train>,
+        wm_sender: Tx<Time>,
         shutdown_channel: Sender<bool>,
+        wm_shutdown_channel: Sender<bool>,
         shutdown_flag: Arc<AtomicBool>,
-        handles: Vec<thread::JoinHandle<()>>,
+        handles: Vec<JoinHandle<()>>,
     ) -> Self {
         Attachment {
-            port,
+            watermark_port,
+            wm_sender,
+            data_port,
             sender,
+            wm_shutdown_channel,
             shutdown_flag,
             shutdown_channel,
             handles,
@@ -65,8 +74,13 @@ impl Storage {
         Default::default()
     }
 
-    pub fn start_http_attacher(&mut self, id: usize, port: u16) -> (Tx<Train>, Tx<Time>) {
-        let addr = util::parse_addr("127.0.0.1", port);
+    pub fn start_http_attacher(
+        &mut self,
+        id: usize,
+        data_port: u16,
+        watermark_port: u16,
+    ) -> (Tx<Train>, Tx<Time>) {
+        let addr = util::parse_addr("127.0.0.1", data_port);
         let (tx, rx) = new_channel::<Train, &str>("HTTP Attacher Bus");
         let (water_tx, water_rx) = new_channel::<Time, &str>("HTTP Attacher Watermark");
 
@@ -80,7 +94,7 @@ impl Storage {
         let flag = shutdown_flag.clone();
 
         let mut handles: Vec<JoinHandle<()>> = vec![];
-        
+
         let res = thread::Builder::new()
             .name(format!("HTTP Observer {id}"))
             .spawn(move || {
@@ -110,12 +124,15 @@ impl Storage {
             });
 
         match res {
-            Ok(handle) => handles.push(handle), 
+            Ok(handle) => handles.push(handle),
             Err(err) => error!("{}", err),
         }
 
         tokio::spawn(async move {
-            let state = DestinationState { name: "HTTP Attacher".to_string(), outs: bus };
+            let state = DestinationState {
+                name: "HTTP Attacher".to_string(),
+                outs: bus,
+            };
             let app = Router::new()
                 .route("/ws", get(util::publish_ws))
                 .layer(CorsLayer::permissive())
@@ -136,8 +153,83 @@ impl Storage {
             }
         });
 
-        let attachment = Attachment::new(port, tx.clone(), sh_tx, shutdown_flag, handles);
-        
+        // watermark
+        let flag = shutdown_flag.clone();
+        let water_bus = Arc::new(Mutex::new(HashMap::<usize, Tx<Train>>::new()));
+        let water_clone = water_bus.clone();
+        let (water_sh_tx, water_sh_rx) = oneshot::channel();
+
+        let res = thread::Builder::new()
+            .name(format!("HTTP Watermark Observer {id}"))
+            .spawn(move || {
+                while !flag.load(Ordering::Relaxed) {
+                    match water_rx.recv_timeout(Duration::from_millis(10)) {
+                        Ok(time) => match water_clone.lock() {
+                            Ok(lock) => {
+                                lock.values().for_each(|l| {
+                                    match l.send(Train::new(vec![time.into()])) {
+                                        Ok(_) => {}
+                                        Err(err) => error!("Bus error: {err}"),
+                                    }
+                                });
+                            }
+                            Err(e) => {
+                                error!("Bus error lock: {e}");
+                            }
+                        },
+                        Err(err) => match err {
+                            RecvTimeoutError::Timeout => {
+                                debug!("Error {err}")
+                            }
+                            RecvTimeoutError::Disconnected => {
+                                error!(err = ?err, "recv channel error");
+                            }
+                        },
+                    };
+                }
+            });
+
+        match res {
+            Ok(handle) => handles.push(handle),
+            Err(err) => error!("{}", err),
+        }
+
+        tokio::spawn(async move {
+            let state = DestinationState {
+                name: "HTTP Watermark Attacher".to_string(),
+                outs: water_bus,
+            };
+            let app = Router::new()
+                .route("/ws", get(util::publish_ws))
+                .layer(CorsLayer::permissive())
+                .with_state(state);
+
+            let listener = match TcpListener::bind(&addr).await {
+                Ok(listener) => listener,
+                Err(err) => panic!("Error attach {err}"),
+            };
+            match axum::serve(listener, app)
+                .with_graceful_shutdown(async move {
+                    water_sh_rx.await.ok();
+                })
+                .await
+            {
+                Ok(_) => {}
+                Err(err) => error!("{}", err),
+            }
+        });
+
+        let attachment = Attachment::new(
+            data_port,
+            watermark_port,
+            tx.clone(),
+            water_tx.clone(),
+            sh_tx,
+            water_sh_tx,
+            shutdown_flag,
+            handles,
+        );
+
         self.attachments.lock().unwrap().insert(id, attachment);
         (tx, water_tx)
     }
@@ -223,16 +315,19 @@ impl Storage {
         source_id: usize,
         plan_id: usize,
         stop_id: usize,
-    ) -> Result<usize, String> {
+    ) -> Result<(u16, u16), String> {
         {
             let attach = self.attachments.lock().unwrap();
             let values = attach.get(&source_id);
             if let Some(attachment) = values {
-                return Ok(attachment.port as usize);
+                return Ok((attachment.data_port, attachment.watermark_port));
             }
         }
 
-        let tx = self.start_http_attacher(source_id, 3131);
+        let data_port = 3131;
+        let watermark_port = 4141;
+
+        let tx = self.start_http_attacher(source_id, data_port, watermark_port);
         let mut lock = self.plans.lock().unwrap();
         let plan = lock.get_mut(&plan_id).unwrap();
         match plan.stations.get_mut(&stop_id) {
@@ -245,7 +340,7 @@ impl Storage {
                     .unwrap();
             }
         }
-        Ok(3131)
+        Ok((data_port, watermark_port))
     }
 
     pub fn detach(&mut self, source_id: usize, plan_id: usize, stop_id: usize) {

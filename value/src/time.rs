@@ -4,30 +4,17 @@ use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use schemas::message_generated::protocol::{Time as FlatTime, TimeArgs};
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
+use std::cmp::Ordering;
 use std::fmt::Formatter;
 use std::ops;
 use std::ops::Sub;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-#[derive(
-    Clone,
-    Debug,
-    Eq,
-    Hash,
-    PartialEq,
-    Ord,
-    PartialOrd,
-    Serialize,
-    Deserialize,
-    Readable,
-    Writable,
-    Copy
-)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize, Readable, Writable, Copy)]
 pub struct Time {
-    pub ns: u32,
     pub ms: i64,
+    pub ns: u32,
 }
-
 
 impl Default for Time {
     fn default() -> Self {
@@ -38,7 +25,7 @@ impl Default for Time {
 impl Time {
     pub fn new(ms: i64, ns: u32) -> Time {
         if ns >= 1000000 {
-            let ms = ms + (ns/1000000) as i64;
+            let ms = ms + (ns / 1000000) as i64;
             let ns = ns % 1000000;
             return Time { ns, ms };
         }
@@ -49,8 +36,16 @@ impl Time {
         Time::new(other.ms - self.ms, other.ns - self.ns)
     }
 
-    pub(crate) fn flatternize<'bldr>(&self, builder: &mut FlatBufferBuilder<'bldr>) -> WIPOffset<FlatTime<'bldr>> {
-        FlatTime::create(builder, &TimeArgs{ data: self.ms as i64 })
+    pub(crate) fn flatternize<'bldr>(
+        &self,
+        builder: &mut FlatBufferBuilder<'bldr>,
+    ) -> WIPOffset<FlatTime<'bldr>> {
+        FlatTime::create(
+            builder,
+            &TimeArgs {
+                data: self.ms as i64,
+            },
+        )
     }
 
     pub fn now() -> Time {
@@ -106,7 +101,14 @@ impl Sub<Duration> for &Time {
     type Output = Time;
 
     fn sub(self, rhs: Duration) -> Self::Output {
-        Value::time(self.ms - rhs.num_milliseconds(), rhs.num_nanoseconds().map(|ns| self.ns as i64 - ns).unwrap_or(0) as u32).as_time().unwrap()
+        Value::time(
+            self.ms - rhs.num_milliseconds(),
+            rhs.num_nanoseconds()
+                .map(|ns| self.ns as i64 - ns)
+                .unwrap_or(0) as u32,
+        )
+        .as_time()
+        .unwrap()
     }
 }
 
@@ -137,5 +139,29 @@ impl ops::Add<i64> for Time {
     fn add(mut self, rhs: i64) -> Self::Output {
         self.ms = rhs;
         self
+    }
+}
+
+impl PartialOrd for Time {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        match self.ms.partial_cmp(&other.ms) {
+            None => None,
+            Some(ord) => {
+                if ord == Ordering::Equal {
+                    self.ns.partial_cmp(&other.ns)
+                } else {
+                    Some(ord)
+                }
+            }
+        }
+    }
+}
+
+impl Ord for Time {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match self.ms.cmp(&other.ms) {
+            Ordering::Equal => self.ns.cmp(&other.ns),
+            ord => ord,
+        }
     }
 }
