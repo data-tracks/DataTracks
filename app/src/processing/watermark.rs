@@ -2,10 +2,11 @@ use crate::processing::Train;
 use crate::util::Tx;
 use chrono::Duration;
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use tracing::error;
 use value::Time;
 
+/// Thread-safe and shareable watermarks
 #[derive(Clone)]
 pub enum WatermarkStrategy {
     Monotonic(MonotonicWatermark),   // every point
@@ -34,7 +35,7 @@ impl WatermarkStrategy {
         }
     }
 
-    pub fn attach(&mut self, num: usize, sender: Tx<Time>) {
+    pub fn attach(&self, num: usize, sender: Tx<Time>) {
         match self {
             WatermarkStrategy::Monotonic(m) => m.attach(num, sender),
             WatermarkStrategy::Periodic(p) => p.attach(num, sender),
@@ -42,7 +43,7 @@ impl WatermarkStrategy {
         }
     }
 
-    pub(crate) fn detach(&mut self, num: usize) {
+    pub(crate) fn detach(&self, num: usize) {
         match self {
             WatermarkStrategy::Monotonic(m) => m.detach(num),
             WatermarkStrategy::Periodic(p) => p.detach(num),
@@ -62,7 +63,16 @@ impl WatermarkStrategy {
 #[derive(Default)]
 pub struct MonotonicWatermark {
     last: Mutex<Time>,
-    observers: HashMap<usize, Tx<Time>>,
+    observers: Arc<Mutex<HashMap<usize, Tx<Time>>>>,
+}
+
+impl Clone for MonotonicWatermark {
+    fn clone(&self) -> Self {
+        MonotonicWatermark {
+            last: Mutex::new(self.current()),
+            observers: self.observers.clone(),
+        }
+    }
 }
 
 impl MonotonicWatermark {
@@ -73,9 +83,11 @@ impl MonotonicWatermark {
     pub(crate) fn mark(&self, train: &Train) {
         let mut last = self.last.lock().unwrap();
         if train.event_time > *last {
-            *last = train.event_time.clone();
+            *last = train.event_time;
 
             self.observers
+                .lock()
+                .unwrap()
                 .values()
                 .for_each(|observer| match observer.send(*last) {
                     Ok(_) => {}
@@ -84,22 +96,16 @@ impl MonotonicWatermark {
         }
     }
 
-    pub(crate) fn detach(&mut self, num: usize) {
-        self.observers.remove(&num);
+    pub(crate) fn detach(&self, num: usize) {
+        self.observers.lock().unwrap().remove(&num);
     }
 
-    pub(crate) fn attach(&mut self, num: usize, sender: Tx<Time>) {
-        self.observers.insert(num, sender);
+    pub(crate) fn attach(&self, num: usize, sender: Tx<Time>) {
+        self.observers.lock().unwrap().insert(num, sender);
     }
 
     pub(crate) fn current(&self) -> Time {
-        self.last.lock().unwrap().clone()
-    }
-}
-
-impl Clone for MonotonicWatermark {
-    fn clone(&self) -> Self {
-        MonotonicWatermark::new()
+        *self.last.lock().unwrap()
     }
 }
 

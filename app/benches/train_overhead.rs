@@ -10,11 +10,9 @@ pub fn benchmark_overhead(c: &mut Criterion) {
 
         let sender = Sender::new(0, tx);
 
-        let handler = Box::new(move |train: Train| sender.send(train));
-
         let identity = Box::new(IdentityIterator::new());
 
-        let executer = Executor::new(0, identity, handler);
+        let executer = Executor::new(0, identity, sender);
 
         let train = Train::new(vec![Value::Dict(Dict::from(Value::int(3)))]);
 

@@ -38,7 +38,7 @@ impl Executor {
         let train = train.mark(self.stop);
 
         let marks = train.marks.clone();
-        let event_time = train.event_time.clone();
+        let event_time = train.event_time;
 
         match train.values {
             None => {}
@@ -54,7 +54,7 @@ impl Executor {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct IdentityIterator {
     values: VecDeque<Value>,
     storage: Option<ValueStore>,

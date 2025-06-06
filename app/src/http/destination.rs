@@ -66,7 +66,10 @@ async fn start_destination(http: HttpDestination, _rx: Receiver<Command>, receiv
         url = http.url,
         port = http.port
     );
-    let addr = parse_addr(http.url, http.port);
+    let addr = match parse_addr(http.url, http.port) {
+        Ok(addr) => addr,
+        Err(err) => panic!("{}", err),
+    };
 
     let channels = Arc::new(Mutex::new(HashMap::<usize, Tx<Train>>::new()));
     let clone = channels.clone();

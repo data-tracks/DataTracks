@@ -159,20 +159,13 @@ fn handle_register(
     let plans = builder.create_vector(&plans);
 
     let plans = Plans::create(&mut builder, &PlansArgs { plans: Some(plans) });
-    let catalog = Catalog::create(
-        &mut builder,
-        &CatalogArgs {
-            plans: Some(plans),
-            ..Default::default()
-        },
-    );
+    let catalog = Catalog::create(&mut builder, &CatalogArgs { plans: Some(plans) });
 
     let register = Register::create(
         &mut builder,
         &RegisterArgs {
             id: Some(id as i64),
             catalog: Some(catalog),
-            ..Default::default()
         },
     )
     .as_union_value();

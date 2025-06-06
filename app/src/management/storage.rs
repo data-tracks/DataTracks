@@ -1,5 +1,6 @@
 use crate::http::destination::DestinationState;
 use crate::http::util;
+use crate::http::util::parse_addr;
 use crate::processing::destination::Destination;
 use crate::processing::plan::Status;
 use crate::processing::source::Source;
@@ -80,7 +81,10 @@ impl Storage {
         data_port: u16,
         watermark_port: u16,
     ) -> (Tx<Train>, Tx<Time>) {
-        let addr = util::parse_addr("127.0.0.1", data_port);
+        let addr = match parse_addr("127.0.0.1", data_port) {
+            Ok(addr) => addr,
+            Err(err) => panic!("{}", err),
+        };
         let (tx, rx) = new_channel::<Train, &str>("HTTP Attacher Bus");
         let (water_tx, water_rx) = new_channel::<Time, &str>("HTTP Attacher Watermark");
 
@@ -154,6 +158,10 @@ impl Storage {
         });
 
         // watermark
+        let addr = match parse_addr("127.0.0.1", watermark_port) {
+            Ok(addr) => addr,
+            Err(err) => panic!("{}", err),
+        };
         let flag = shutdown_flag.clone();
         let water_bus = Arc::new(Mutex::new(HashMap::<usize, Tx<Train>>::new()));
         let water_clone = water_bus.clone();

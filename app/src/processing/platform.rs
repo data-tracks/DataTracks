@@ -89,13 +89,13 @@ impl Platform {
         let mut threshold = 2000;
         let mut too_high = false;
 
-        let mut watermark_strategy = Arc::new(Mutex::new(self.watermark_strategy.clone()));
+        let watermark_strategy = self.watermark_strategy.clone();
 
         let storage = Arc::new(Mutex::new(vec![]));
 
         let window_selector = Arc::new(RwLock::new(WindowSelector::new(self.window.clone())));
 
-        let trigger_selector = TriggerSelector::new(storage.clone().into());
+        let trigger_selector = TriggerSelector::new(storage.clone());
 
         let when_tx = when(
             watermark_strategy.clone(),
@@ -130,15 +130,12 @@ impl Platform {
                         return;
                     }
                     Attach(num, (send, watermark)) => {
-                        watermark_strategy
-                            .lock()
-                            .unwrap()
-                            .attach(num, watermark.clone());
+                        watermark_strategy.attach(num, watermark.clone());
                         when_tx.send(Attach(num, (send, watermark))).unwrap();
                     }
                     Detach(num) => {
                         when_tx.send(Detach(num)).unwrap();
-                        watermark_strategy.lock().unwrap().detach(num);
+                        watermark_strategy.detach(num);
                     }
                     Threshold(th) => {
                         threshold = th;
@@ -153,7 +150,7 @@ impl Platform {
                     if self.layout.fits_train(&train) {
                         // save and update if something changed
                         storage.lock().unwrap().push(train.clone());
-                        watermark_strategy.lock().unwrap().mark(&train);
+                        watermark_strategy.mark(&train);
                         window_selector.write().mark(&train);
                     }
                 }
@@ -166,7 +163,7 @@ impl Platform {
 }
 
 fn when(
-    watermark_strategy: Arc<Mutex<WatermarkStrategy>>,
+    watermark_strategy: WatermarkStrategy,
     where_: Arc<RwLock<WindowSelector>>,
     mut when: TriggerSelector,
     mut what: Executor,
@@ -183,8 +180,8 @@ fn when(
     let result = Builder::new()
         .name(String::from("when"))
         .spawn(move || loop {
-            match rx.try_recv() {
-                Ok(cmd) => match cmd {
+            if let Ok(cmd) = rx.try_recv() {
+                match cmd {
                     Command::Stop(_) => return,
                     Attach(num, (observe, _)) => {
                         what.attach(num, observe.clone());
@@ -193,14 +190,13 @@ fn when(
                         what.detach(num);
                     }
                     _ => {}
-                },
-                Err(_) => {}
+                }
             }
 
             // get all "changed" windows
             let windows = where_.write().select();
 
-            let current = watermark_strategy.lock().unwrap().current();
+            let current = watermark_strategy.current();
 
             // decide if we fire a window, discard or wait
             match when.select(windows, &current) {

@@ -1,17 +1,17 @@
 use crate::processing::station::Command;
 use crossbeam::channel::{Receiver, Sender};
 
+use crate::util::deserialize_message;
+use flatbuffers::FlatBufferBuilder;
+use schemas::message_generated::protocol::{Message, MessageArgs, Payload, Register, RegisterArgs};
 use std::io;
 use std::io::Error;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::sync::Arc;
-use flatbuffers::FlatBufferBuilder;
-use schemas::message_generated::protocol::{Message, MessageArgs, Payload, Register, RegisterArgs};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
 use tracing::{error, info};
-use crate::util::deserialize_message;
 
 pub struct Server {
     addr: SocketAddr,
@@ -60,15 +60,29 @@ pub trait StreamUser: Clone {
     fn interrupt(&mut self) -> Receiver<Command>;
 
     fn control(&mut self) -> Sender<Command>;
-    
 }
 
 pub fn handle_register() -> Result<Vec<u8>, String> {
     let mut builder = FlatBufferBuilder::new();
 
-    let register = Register::create(&mut builder, &RegisterArgs { id: None, catalog: None, ..Default::default() }).as_union_value();
+    let register = Register::create(
+        &mut builder,
+        &RegisterArgs {
+            id: None,
+            catalog: None,
+            ..Default::default()
+        },
+    )
+    .as_union_value();
 
-    let msg = Message::create(&mut builder, &MessageArgs{data_type: Payload::Register, data: Some(register), status: None });
+    let msg = Message::create(
+        &mut builder,
+        &MessageArgs {
+            data_type: Payload::Register,
+            data: Some(register),
+            status: None,
+        },
+    );
 
     builder.finish(msg, None);
     Ok(builder.finished_data().to_vec())
@@ -120,17 +134,11 @@ impl Server {
             loop {
                 let (stream, _) = listener.accept().await.map_err(|err| err.to_string())?;
 
-                match rx.try_recv() {
-                    Ok(cmd) => match cmd {
+                if let Ok(cmd) = rx.try_recv() {
+                    match cmd {
                         Command::Stop(s) => return Err(format!("Stopped {}", s)),
-                        Command::Ready(_) => {}
-                        Command::Overflow(_) => {}
-                        Command::Threshold(_) => {}
-                        Command::Okay(_) => {}
-                        Command::Attach(_, _) => {}
-                        Command::Detach(_) => {}
-                    },
-                    Err(_) => {}
+                        _ => {}
+                    }
                 }
 
                 user.clone().handle(stream.into()).await;
