@@ -2,20 +2,21 @@ use crate::processing::option::Configurable;
 use crate::processing::plan::SourceModel;
 use crate::processing::source::Source;
 use crate::processing::station::Command;
-use crate::processing::{Train};
+use crate::processing::Train;
+use crate::tpc::server::{handle_register, StreamUser, TcpStream};
+use crate::tpc::Server;
 use crate::ui::{ConfigModel, StringModel};
-use crate::util::{deserialize_message, new_id, Tx};
+use crate::util::Tx;
+use crate::util::{deserialize_message, new_id};
 use crossbeam::channel::{unbounded, Receiver, Sender};
+use schemas::message_generated::protocol::Payload;
 use serde_json::{Map, Value};
-use std::collections::{HashMap};
-use std::sync::{Arc};
+use std::collections::HashMap;
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
-use schemas::message_generated::protocol::{Payload};
 use tokio::time::sleep;
 use tracing::{debug, error, info, warn};
-use crate::tpc::Server;
-use crate::tpc::server::{handle_register, StreamUser, TcpStream};
 
 #[derive(Clone)]
 pub struct TpcSource {
@@ -26,15 +27,17 @@ pub struct TpcSource {
 }
 
 impl TpcSource {
-
     pub fn new(url: String, port: u16) -> Self {
         Self {
-            id: new_id(), url, port, outs: Vec::new(),
+            id: new_id(),
+            url,
+            port,
+            outs: Vec::new(),
         }
     }
 
     fn send(&self, train: Train) {
-        self.outs.iter().for_each(|out| out.send(train.clone()).unwrap())
+        self.outs.iter().for_each(|out| out.send(train.clone()))
     }
 }
 
@@ -51,16 +54,21 @@ impl Configurable for TpcSource {
     }
 }
 
-impl Source for TpcSource{
+impl Source for TpcSource {
     fn parse(options: Map<String, Value>) -> Result<Self, String>
     where
-        Self: Sized
+        Self: Sized,
     {
         let port = options.get("port").unwrap().as_u64().unwrap_or(9999);
-        let url = options.get("url").unwrap().as_str().unwrap().parse().unwrap();
+        let url = options
+            .get("url")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .parse()
+            .unwrap();
         Ok(TpcSource::new(url, port as u16))
     }
-    
 
     fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command> {
         debug!("starting tpc source...");
@@ -72,19 +80,21 @@ impl Source for TpcSource{
 
         let clone = self.clone();
 
-        let res = thread::Builder::new().name("TPC Source".to_string()).spawn(move || {
-            let server = Server::new(url.clone(), port);
-            match server.start(clone, control, rx) {
-                Ok(_) => {}
-                Err(_) => {}
-            }
-        });
+        let res = thread::Builder::new()
+            .name("TPC Source".to_string())
+            .spawn(move || {
+                let server = Server::new(url.clone(), port);
+                match server.start(clone, control, rx) {
+                    Ok(_) => {}
+                    Err(_) => {}
+                }
+            });
 
         match res {
             Ok(_) => {}
-            Err(err) => error!("{:?}", err)
+            Err(err) => error!("{:?}", err),
         }
-        
+
         tx
     }
 
@@ -101,22 +111,26 @@ impl Source for TpcSource{
     }
 
     fn serialize(&self) -> SourceModel {
-        SourceModel { type_name: String::from("Tpc"), id: self.id.to_string(), configs: HashMap::new() }
+        SourceModel {
+            type_name: String::from("Tpc"),
+            id: self.id.to_string(),
+            configs: HashMap::new(),
+        }
     }
 
     fn from(configs: HashMap<String, ConfigModel>) -> Result<Box<dyn Source>, String>
     where
-        Self: Sized
+        Self: Sized,
     {
         let port = if let Some(port) = configs.get("port") {
             port.as_int()?
         } else {
-            return Err(String::from("Could not create TpcSource."))
+            return Err(String::from("Could not create TpcSource."));
         };
         let url = if let Some(url) = configs.get("url") {
             url.as_str()
         } else {
-            return Err(String::from("Could not create TpcSource."))
+            return Err(String::from("Could not create TpcSource."));
         };
 
         Ok(Box::new(TpcSource::new(url.to_owned(), port as u16)))
@@ -124,11 +138,18 @@ impl Source for TpcSource{
 
     fn serialize_default() -> Result<SourceModel, ()>
     where
-        Self: Sized
+        Self: Sized,
     {
         let mut configs = HashMap::new();
-        configs.insert(String::from("port"), ConfigModel::String(StringModel::new("9999")));
-        Ok(SourceModel { type_name: String::from("Tpc"), id: String::from("Tpc"), configs })
+        configs.insert(
+            String::from("port"),
+            ConfigModel::String(StringModel::new("9999")),
+        );
+        Ok(SourceModel {
+            type_name: String::from("Tpc"),
+            id: String::from("Tpc"),
+            configs,
+        })
     }
 }
 
@@ -144,23 +165,21 @@ impl StreamUser for TpcSource {
                     stream.read(&mut buffer).await.unwrap();
                     // Deserialize FlatBuffers message
                     match deserialize_message(&buffer) {
-                        Ok(msg) => {
-                            match msg.data_type() {
-                                Payload::Register => {
-                                    info!("tpc registration");
-                                    stream.write_all(&handle_register().unwrap()).await.unwrap();
-                                },
-                                Payload::Train => {
-                                    let msg = msg.data_as_train().unwrap();
-                                    
-                                    match msg.try_into() {
-                                        Ok(train) => self.send(train),
-                                        Err(err) => warn!("error transformation {}", err)
-                                    }
+                        Ok(msg) => match msg.data_type() {
+                            Payload::Register => {
+                                info!("tpc registration");
+                                stream.write_all(&handle_register().unwrap()).await.unwrap();
+                            }
+                            Payload::Train => {
+                                let msg = msg.data_as_train().unwrap();
+
+                                match msg.try_into() {
+                                    Ok(train) => self.send(train),
+                                    Err(err) => warn!("error transformation {}", err),
                                 }
-                                _ => {
-                                    todo!("other tpc payloads")
-                                }
+                            }
+                            _ => {
+                                todo!("other tpc payloads")
                             }
                         },
                         Err(_) => (),
@@ -181,4 +200,3 @@ impl StreamUser for TpcSource {
         todo!()
     }
 }
-

@@ -3,7 +3,6 @@ use crate::util::Tx;
 use chrono::Duration;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use tracing::error;
 use value::Time;
 
 /// Thread-safe and shareable watermarks
@@ -62,14 +61,14 @@ impl WatermarkStrategy {
 
 #[derive(Default)]
 pub struct MonotonicWatermark {
-    last: Mutex<Time>,
+    last: Arc<Mutex<Time>>,
     observers: Arc<Mutex<HashMap<usize, Tx<Time>>>>,
 }
 
 impl Clone for MonotonicWatermark {
     fn clone(&self) -> Self {
         MonotonicWatermark {
-            last: Mutex::new(self.current()),
+            last: self.last.clone(),
             observers: self.observers.clone(),
         }
     }
@@ -82,17 +81,16 @@ impl MonotonicWatermark {
 
     pub(crate) fn mark(&self, train: &Train) {
         let mut last = self.last.lock().unwrap();
-        if train.event_time > *last {
+        let time = train.event_time;
+        if time > *last {
             *last = train.event_time;
+            drop(last);
 
             self.observers
                 .lock()
                 .unwrap()
                 .values()
-                .for_each(|observer| match observer.send(*last) {
-                    Ok(_) => {}
-                    Err(err) => error!(err),
-                })
+                .for_each(|observer| observer.send(time))
         }
     }
 
@@ -131,10 +129,10 @@ impl PeriodicWatermark {
     }
 
     pub(crate) fn current(&self) -> Time {
-        self.mark.lock().unwrap().clone()
+        *self.mark.lock().unwrap()
     }
 
-    pub(crate) fn detach(&self, num: usize) {
+    pub(crate) fn detach(&self, _num: usize) {
         todo!()
     }
     pub(crate) fn attach(&self, num: usize, sender: Tx<Time>) {
@@ -164,6 +162,12 @@ pub struct PunctuatedWatermark {
     mark: Time,
 }
 
+impl Default for PunctuatedWatermark {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PunctuatedWatermark {
     pub fn new() -> Self {
         PunctuatedWatermark {
@@ -171,15 +175,15 @@ impl PunctuatedWatermark {
         }
     }
 
-    pub(crate) fn detach(&self, num: usize) {
+    pub(crate) fn detach(&self, _num: usize) {
         todo!()
     }
 
-    pub(crate) fn attach(&self, num: usize, sender: Tx<Time>) {
+    pub(crate) fn attach(&self, _num: usize, _sender: Tx<Time>) {
         todo!()
     }
 
-    pub(crate) fn mark(&self, train: &Train) {
+    pub(crate) fn mark(&self, _train: &Train) {
         todo!()
     }
 

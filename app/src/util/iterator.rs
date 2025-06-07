@@ -15,7 +15,7 @@ impl Iterator for EmptyIterator {
 }
 
 impl ValueIterator for EmptyIterator {
-    fn set_storage(&mut self, storage: ValueStore) {
+    fn set_storage(&mut self, _storage: ValueStore) {
         // nothing on purpose
     }
 

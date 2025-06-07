@@ -3,7 +3,8 @@ use crate::processing::option::Configurable;
 use crate::processing::plan::DestinationModel;
 use crate::processing::station::Command;
 use crate::processing::Train;
-use crate::util::{new_channel, new_id, Rx, Tx};
+use crate::util::{new_channel, new_id};
+use crate::util::{Rx, Tx};
 use crossbeam::channel::{unbounded, Sender};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
@@ -21,8 +22,12 @@ pub struct DebugDestination {
 
 impl DebugDestination {
     pub fn new() -> Self {
-        let (tx, rx) = new_channel("Debug Destination");
-        DebugDestination { id: new_id(), receiver: Some(rx), sender: tx }
+        let (tx, rx) = new_channel("Debug Destination", false);
+        DebugDestination {
+            id: new_id(),
+            receiver: Some(rx),
+            sender: tx,
+        }
     }
 }
 
@@ -61,7 +66,11 @@ impl Destination for DebugDestination {
                             writeln!(w, "{:?}", train).expect("Could not write to debug file.");
                         }
 
-                        debug!("last: {}, {:?}", train.last(), train.values.unwrap_or(vec![]));
+                        debug!(
+                            "last: {}, {:?}",
+                            train.last(),
+                            train.values.unwrap_or(vec![])
+                        );
                     }
                     Err(e) => {
                         error!("{}", e)
@@ -71,7 +80,6 @@ impl Destination for DebugDestination {
                 if let Some(ref mut w) = writer {
                     w.flush().unwrap();
                 }
-
             }
         });
         tx
@@ -81,7 +89,6 @@ impl Destination for DebugDestination {
         self.sender.clone()
     }
 
-
     fn id(&self) -> usize {
         self.id
     }
@@ -90,15 +97,22 @@ impl Destination for DebugDestination {
         String::from("Debug")
     }
 
-
     fn serialize(&self) -> DestinationModel {
-        DestinationModel { type_name: String::from("Debug"), id: self.id.to_string(), configs: HashMap::new() }
+        DestinationModel {
+            type_name: String::from("Debug"),
+            id: self.id.to_string(),
+            configs: HashMap::new(),
+        }
     }
 
     fn serialize_default() -> Option<DestinationModel>
     where
         Self: Sized,
     {
-        Some(DestinationModel { type_name: String::from("Debug"), id: String::from("Debug"), configs: HashMap::new() })
+        Some(DestinationModel {
+            type_name: String::from("Debug"),
+            id: String::from("Debug"),
+            configs: HashMap::new(),
+        })
     }
 }

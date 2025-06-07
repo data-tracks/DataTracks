@@ -29,7 +29,6 @@ use std::hash::{Hash, Hasher};
 use std::ops::{Add, AddAssign, Div, Mul, Sub};
 use std::str;
 use tracing::debug;
-use tracing::warn;
 
 #[derive(Eq, Clone, Debug, Serialize, Deserialize, Ord, PartialOrd, Readable, Writable)]
 pub enum Value {

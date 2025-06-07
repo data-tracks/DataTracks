@@ -142,7 +142,7 @@ pub mod dummy {
 
                 for values in &values {
                     for sender in &senders {
-                        sender.send(Train::new(values.clone())).unwrap();
+                        sender.send(Train::new(values.clone()));
                     }
                     sleep(delay);
                 }
@@ -194,7 +194,7 @@ pub mod dummy {
 
     impl DummyDestination {
         pub(crate) fn new(result_size: usize) -> Self {
-            let (tx, rx) = new_channel("dummy sender");
+            let (tx, rx) = new_channel("dummy sender", true /* bool */);
             DummyDestination {
                 id: new_id(),
                 result_size,
@@ -388,7 +388,6 @@ pub mod dummy {
     }
 
     impl ValueIterator for MappingIterator {
-
         fn set_storage(&mut self, storage: ValueStore) {
             for value in storage.drain() {
                 let values = self.get_value(value);
@@ -440,7 +439,7 @@ pub mod tests {
         let mut first = Station::new(0);
         let input = first.get_in();
 
-        let (output_tx, output_rx) = new_channel("test");
+        let (output_tx, output_rx) = new_channel("test", false);
 
         let mut second = Station::new(1);
         second.add_out(0, output_tx).unwrap();
@@ -450,7 +449,7 @@ pub mod tests {
 
         plan.operate().unwrap();
 
-        input.send(Train::new(values.clone())).unwrap();
+        input.send(Train::new(values.clone()));
 
         let mut res = output_rx.recv().unwrap();
         assert_eq!(res.values.clone().unwrap(), values);
@@ -471,9 +470,9 @@ pub mod tests {
         let first_id = first.stop;
         let input = first.get_in();
 
-        let (output1_tx, output1_rx) = new_channel("test1");
+        let (output1_tx, output1_rx) = new_channel("test1", false);
 
-        let (output2_tx, output2_rx) = new_channel("test2");
+        let (output2_tx, output2_rx) = new_channel("test2", false);
 
         let mut second = Station::new(1);
         second.add_out(0, output1_tx).unwrap();
@@ -488,7 +487,7 @@ pub mod tests {
 
         plan.operate().unwrap();
 
-        input.send(Train::new(values.clone())).unwrap();
+        input.send(Train::new(values.clone()));
 
         let mut res = output1_rx.recv().unwrap();
         assert_eq!(res.values.clone().unwrap(), values);

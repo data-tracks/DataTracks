@@ -1,7 +1,8 @@
+use crate::util::Tx;
+use logos::Source;
 use std::collections::HashMap;
 use tracing::warn;
 use value::train::Train;
-use crate::util::Tx;
 
 #[derive(Clone, Default)]
 pub struct Sender {
@@ -9,16 +10,17 @@ pub struct Sender {
 }
 
 impl Sender {
-    pub fn new(num: usize,sender: Tx<Train>) -> Self {
-        Sender{outs: HashMap::from([(num, sender)])}
+    pub fn new(num: usize, sender: Tx<Train>) -> Self {
+        Sender {
+            outs: HashMap::from([(num, sender)]),
+        }
     }
 }
 
 impl Sender {
     pub(crate) fn send_to(&self, num: usize, train: Train) {
-        self.outs.get(&num).unwrap().send(train).unwrap();
+        self.outs.get(&num).unwrap().send(train);
     }
-    
 }
 
 impl Sender {
@@ -33,9 +35,9 @@ impl Sender {
     pub fn send(&self, train: Train) {
         for out in &self.outs {
             if out.1.len() > 100 {
-                warn!("too large {}", out.1.name())
+                warn!("too large {}, size {}", out.1.name(), out.1.len());
             }
-            out.1.send(train.clone()).expect(&("Error on :".to_owned() + &out.0.to_string()));
+            out.1.send(train.clone());
         }
     }
 }

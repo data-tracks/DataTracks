@@ -1,6 +1,5 @@
-use crate::http::destination::DestinationState;
 use crate::http::util;
-use crate::http::util::parse_addr;
+use crate::http::util::{parse_addr, DestinationState};
 use crate::processing::destination::Destination;
 use crate::processing::plan::Status;
 use crate::processing::source::Source;
@@ -10,20 +9,15 @@ use crate::util::new_channel;
 use crate::util::Tx;
 use axum::routing::get;
 use axum::Router;
-use crossbeam::channel::RecvTimeoutError;
 use schemas::message_generated::protocol::Create;
 use serde_json::{Map, Value};
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
-use std::thread;
-use std::thread::JoinHandle;
-use std::time::Duration;
+use std::sync::Mutex;
 use tokio::net::TcpListener;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::Sender;
 use tower_http::cors::CorsLayer;
-use tracing::{debug, error};
+use tracing::error;
 use value::Time;
 
 #[derive(Default)]
@@ -40,10 +34,8 @@ pub struct Attachment {
     watermark_port: u16,
     sender: Tx<Train>,
     wm_sender: Tx<Time>,
-    shutdown_flag: Arc<AtomicBool>,
     shutdown_channel: Sender<bool>,
     wm_shutdown_channel: Sender<bool>,
-    handles: Vec<JoinHandle<()>>,
 }
 
 impl Attachment {
@@ -54,8 +46,6 @@ impl Attachment {
         wm_sender: Tx<Time>,
         shutdown_channel: Sender<bool>,
         wm_shutdown_channel: Sender<bool>,
-        shutdown_flag: Arc<AtomicBool>,
-        handles: Vec<JoinHandle<()>>,
     ) -> Self {
         Attachment {
             watermark_port,
@@ -63,9 +53,7 @@ impl Attachment {
             data_port,
             sender,
             wm_shutdown_channel,
-            shutdown_flag,
             shutdown_channel,
-            handles,
         }
     }
 }
@@ -85,58 +73,14 @@ impl Storage {
             Ok(addr) => addr,
             Err(err) => panic!("{}", err),
         };
-        let (tx, rx) = new_channel::<Train, &str>("HTTP Attacher Bus");
-        let (water_tx, water_rx) = new_channel::<Time, &str>("HTTP Attacher Watermark");
 
-        let bus = Arc::new(Mutex::new(HashMap::<usize, Tx<Train>>::new()));
-        let clone = bus.clone();
+        let (tx, _) = new_channel::<Train, &str>("HTTP Attacher", true);
 
         let (sh_tx, sh_rx) = oneshot::channel();
-
-        let shutdown_flag = Arc::new(AtomicBool::new(false));
-
-        let flag = shutdown_flag.clone();
-
-        let mut handles: Vec<JoinHandle<()>> = vec![];
-
-        let res = thread::Builder::new()
-            .name(format!("HTTP Observer {id}"))
-            .spawn(move || {
-                while !flag.load(Ordering::Relaxed) {
-                    match rx.recv_timeout(Duration::from_millis(10)) {
-                        Ok(train) => match clone.lock() {
-                            Ok(lock) => {
-                                lock.values().for_each(|l| match l.send(train.clone()) {
-                                    Ok(_) => {}
-                                    Err(err) => error!("Bus error: {err}"),
-                                });
-                            }
-                            Err(e) => {
-                                error!("Bus error lock: {e}");
-                            }
-                        },
-                        Err(err) => match err {
-                            RecvTimeoutError::Timeout => {
-                                debug!("Error {err}")
-                            }
-                            RecvTimeoutError::Disconnected => {
-                                error!(err = ?err, "recv channel error");
-                            }
-                        },
-                    };
-                }
-            });
-
-        match res {
-            Ok(handle) => handles.push(handle),
-            Err(err) => error!("{}", err),
-        }
+        let tx_clone = tx.clone();
 
         tokio::spawn(async move {
-            let state = DestinationState {
-                name: "HTTP Attacher".to_string(),
-                outs: bus,
-            };
+            let state = DestinationState::train("HTTP Attacher", tx_clone);
             let app = Router::new()
                 .route("/ws", get(util::publish_ws))
                 .layer(CorsLayer::permissive())
@@ -162,51 +106,13 @@ impl Storage {
             Ok(addr) => addr,
             Err(err) => panic!("{}", err),
         };
-        let flag = shutdown_flag.clone();
-        let water_bus = Arc::new(Mutex::new(HashMap::<usize, Tx<Train>>::new()));
-        let water_clone = water_bus.clone();
+
         let (water_sh_tx, water_sh_rx) = oneshot::channel();
+        let (water_tx, _) = new_channel::<Time, &str>("HTTP Attacher Watermark", true);
 
-        let res = thread::Builder::new()
-            .name(format!("HTTP Watermark Observer {id}"))
-            .spawn(move || {
-                while !flag.load(Ordering::Relaxed) {
-                    match water_rx.recv_timeout(Duration::from_millis(10)) {
-                        Ok(time) => match water_clone.lock() {
-                            Ok(lock) => {
-                                lock.values().for_each(|l| {
-                                    match l.send(Train::new(vec![time.into()])) {
-                                        Ok(_) => {}
-                                        Err(err) => error!("Bus error: {err}"),
-                                    }
-                                });
-                            }
-                            Err(e) => {
-                                error!("Bus error lock: {e}");
-                            }
-                        },
-                        Err(err) => match err {
-                            RecvTimeoutError::Timeout => {
-                                debug!("Error {err}")
-                            }
-                            RecvTimeoutError::Disconnected => {
-                                error!(err = ?err, "recv channel error");
-                            }
-                        },
-                    };
-                }
-            });
-
-        match res {
-            Ok(handle) => handles.push(handle),
-            Err(err) => error!("{}", err),
-        }
-
+        let water_tx_clone = water_tx.clone();
         tokio::spawn(async move {
-            let state = DestinationState {
-                name: "HTTP Watermark Attacher".to_string(),
-                outs: water_bus,
-            };
+            let state = DestinationState::time("HTTP Watermark Attacher", water_tx_clone);
             let app = Router::new()
                 .route("/ws", get(util::publish_ws))
                 .layer(CorsLayer::permissive())
@@ -234,8 +140,6 @@ impl Storage {
             water_tx.clone(),
             sh_tx,
             water_sh_tx,
-            shutdown_flag,
-            handles,
         );
 
         self.attachments.lock().unwrap().insert(id, attachment);

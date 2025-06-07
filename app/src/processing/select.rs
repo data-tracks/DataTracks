@@ -260,7 +260,7 @@ mod tests {
 
         assert_eq!(values.len(), 2);
 
-        assert_eq!(values.get(0).cloned().unwrap().1.values.unwrap().len(), 1);
+        assert_eq!(values.first().cloned().unwrap().1.values.unwrap().len(), 1);
         assert_eq!(values.get(1).cloned().unwrap().1.values.unwrap().len(), 2);
     }
 }

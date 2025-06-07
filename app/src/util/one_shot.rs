@@ -1,25 +1,39 @@
-use std::time::Duration;
 use crossbeam::channel::{unbounded, Receiver, RecvTimeoutError, Sender};
+use std::time::Duration;
 
-
-pub fn new_channel<Msg: Send, S: AsRef<str>>(name: S) -> (Tx<Msg>, Rx<Msg>) {
+pub(crate) fn new_channel<Msg: Send + Clone, S: AsRef<str>>(
+    name: S,
+) -> (SingleTx<Msg>, SingleRx<Msg>) {
     let (tx, rx) = unbounded::<Msg>();
 
-    (Tx(tx, name.as_ref().to_string()), Rx(rx, name.as_ref().to_string()))
+    let uuid = uuid::Uuid::new_v4();
+
+    (
+        SingleTx(tx, rx.clone(), name.as_ref().to_string(), uuid.clone()),
+        SingleRx(rx, name.as_ref().to_string(), uuid),
+    )
 }
 
 #[derive(Clone)]
-pub struct Rx<D>(Receiver<D>, String);
+pub struct SingleRx<D>(Receiver<D>, String, pub(crate) uuid::Uuid);
 
-impl<F> Rx<F> {
+impl<F> SingleRx<F> {
     pub fn recv_timeout(&self, duration: Duration) -> Result<F, RecvTimeoutError> {
         self.0.recv_timeout(duration)
     }
 
-    pub fn len(&self) -> usize { self.0.len() }
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
     pub fn recv(&self) -> Result<F, String> {
         self.0.recv().map_err(|e| e.to_string())
     }
+
     pub(crate) fn try_recv(&self) -> Result<F, String> {
         self.0.try_recv().map_err(|e| e.to_string())
     }
@@ -30,19 +44,23 @@ impl<F> Rx<F> {
 }
 
 #[derive(Clone)]
-pub struct Tx<T>(Sender<T>, String);
+pub struct SingleTx<T>(Sender<T>, Receiver<T>, String, pub(crate) uuid::Uuid);
 
-impl<F:Send> Tx<F>{
+impl<F: Send> SingleTx<F> {
+    pub(crate) fn subscribe(&self) -> SingleRx<F> {
+        SingleRx(self.1.clone(), self.name(), self.3)
+    }
+
     pub(crate) fn send(&self, msg: F) -> Result<(), String> {
         self.0.send(msg).map_err(|e| e.to_string())
     }
-    
+
     pub(crate) fn len(&self) -> usize {
         self.0.len()
     }
-    
+
     pub fn name(&self) -> String {
-        self.1.clone()
+        self.2.clone()
     }
 }
 
@@ -54,16 +72,15 @@ mod test {
     use std::thread::spawn;
     use std::time::Instant;
 
+    use crate::util::one_shot::new_channel;
     use rand::random;
-
-    use crate::util::channel::new_channel;
 
     #[test]
     fn receive() {
         let value = 3i64;
         let (tx, rx) = new_channel("test");
 
-        tx.send(value.clone()).unwrap();
+        let _ = tx.send(value);
 
         assert_eq!(3, rx.recv().unwrap())
     }

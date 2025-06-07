@@ -6,7 +6,7 @@ use value::{Dict, Value};
 
 pub fn benchmark_overhead(c: &mut Criterion) {
     c.bench_function("block_overhead", |b| {
-        let (tx, rx) = new_channel("test");
+        let (tx, rx) = new_channel("test", false);
 
         let sender = Sender::new(0, tx);
 
@@ -19,7 +19,7 @@ pub fn benchmark_overhead(c: &mut Criterion) {
         b.iter(|| {
             //block.next(train.clone());
 
-            rx.recv().unwrap();
+            rx.recv();
         });
     });
 }

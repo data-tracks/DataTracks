@@ -5,7 +5,8 @@ use crate::processing::station::Command;
 use crate::processing::station::Command::Ready;
 use crate::processing::{plan, Train};
 use crate::sql::sqlite::connection::SqliteConnector;
-use crate::util::{new_channel, new_id, DynamicQuery, Rx, Tx};
+use crate::util::{new_channel, new_id, DynamicQuery};
+use crate::util::{Rx, Tx};
 use crossbeam::channel::{unbounded, Sender};
 use rusqlite::params_from_iter;
 use serde_json::Map;
@@ -18,7 +19,6 @@ use tracing::error;
 
 pub struct LiteDestination {
     id: usize,
-    receiver: Rx<Train>,
     sender: Tx<Train>,
     connector: SqliteConnector,
     query: DynamicQuery,
@@ -26,13 +26,17 @@ pub struct LiteDestination {
 
 impl LiteDestination {
     pub fn new(path: String, query: String) -> Self {
-        let (tx, rx) = new_channel("SQLite Destination");
+        let (tx, _) = new_channel("SQLite Destination", false);
         let connection = SqliteConnector::new(&path);
         let query = DynamicQuery::build_dynamic_query(query);
-        LiteDestination { id: new_id(), receiver: rx, sender: tx, connector: connection, query }
+        LiteDestination {
+            id: new_id(),
+            sender: tx,
+            connector: connection,
+            query,
+        }
     }
 }
-
 
 impl Configurable for LiteDestination {
     fn name(&self) -> String {
@@ -42,7 +46,10 @@ impl Configurable for LiteDestination {
     fn options(&self) -> Map<String, serde_json::Value> {
         let mut options = Map::new();
         self.connector.add_options(&mut options);
-        options.insert(String::from("query"), serde_json::Value::String(self.query.get_query()));
+        options.insert(
+            String::from("query"),
+            serde_json::Value::String(self.query.get_query()),
+        );
         options
     }
 }
@@ -61,44 +68,49 @@ impl Destination for LiteDestination {
     }
 
     fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command> {
-        let receiver = self.receiver.clone();
+        let receiver = self.sender.subscribe();
         let (tx, rx) = unbounded();
         let id = self.id;
         let query = self.query.clone();
         let runtime = Runtime::new().unwrap();
         let connection = self.connector.clone();
 
+        let res = thread::Builder::new()
+            .name("SQLite Destination".to_string())
+            .spawn(move || {
+                runtime.block_on(async {
+                    let conn = connection.connect().await.unwrap();
+                    let (query, value_functions) = query.prepare_query("$", None);
+                    let mut prepared = conn.prepare_cached(&query).unwrap();
 
-        let res = thread::Builder::new().name("SQLite Destination".to_string()).spawn(move || {
-            runtime.block_on(async {
-                let conn = connection.connect().await.unwrap();
-                let (query, value_functions) = query.prepare_query("$", None);
-                let mut prepared = conn.prepare_cached(&query).unwrap();
-
-                control.send(Ready(id)).unwrap();
-                loop {
-                    if plan::check_commands(&rx) { break; }
-                    match receiver.try_recv() {
-                        Ok(mut train) => {
-                            let values = train.values.take().unwrap();
-                            if values.is_empty() {
-                                continue;
-                            }
-                            for value in values {
-                                let _ = prepared.query(params_from_iter(value_functions(&value))).unwrap();
-                            }
+                    control.send(Ready(id)).unwrap();
+                    loop {
+                        if plan::check_commands(&rx) {
+                            break;
                         }
-                        _ => tokio::time::sleep(Duration::from_nanos(100)).await
+                        match receiver.try_recv() {
+                            Ok(mut train) => {
+                                let values = train.values.take().unwrap();
+                                if values.is_empty() {
+                                    continue;
+                                }
+                                for value in values {
+                                    let _ = prepared
+                                        .query(params_from_iter(value_functions(&value)))
+                                        .unwrap();
+                                }
+                            }
+                            _ => tokio::time::sleep(Duration::from_nanos(100)).await,
+                        }
                     }
-                }
-            })
-        });
+                })
+            });
 
         match res {
             Ok(_) => {}
-            Err(err) => error!("{}", err)
+            Err(err) => error!("{}", err),
         }
-        
+
         tx
     }
 
@@ -117,7 +129,11 @@ impl Destination for LiteDestination {
     fn serialize(&self) -> DestinationModel {
         let mut configs = HashMap::new();
         self.connector.serialize(&mut configs);
-        DestinationModel { type_name: self.name(), id: self.id.to_string(), configs }
+        DestinationModel {
+            type_name: self.name(),
+            id: self.id.to_string(),
+            configs,
+        }
     }
 
     fn serialize_default() -> Option<DestinationModel>
@@ -127,10 +143,6 @@ impl Destination for LiteDestination {
         None
     }
 }
-
-
-
-
 
 #[cfg(test)]
 mod tests {

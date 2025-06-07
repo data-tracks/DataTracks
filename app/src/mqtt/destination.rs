@@ -6,7 +6,8 @@ use crate::processing::station::Command;
 use crate::processing::station::Command::Ready;
 use crate::processing::{plan, Train};
 use crate::ui::{ConfigModel, NumberModel, StringModel};
-use crate::util::{new_channel, new_id, Rx, Tx};
+use crate::util::{new_channel, new_id};
+use crate::util::{Rx, Tx};
 use crossbeam::channel::{unbounded, Sender};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
@@ -15,21 +16,24 @@ use std::thread;
 use std::time::Duration;
 use tokio::runtime::Runtime;
 use tracing::{debug, error, info};
-use value;
 
 pub struct MqttDestination {
     id: usize,
     port: u16,
     url: String,
-    receiver: Rx<Train>,
     sender: Tx<Train>,
 }
 
 impl MqttDestination {
     pub fn new(url: String, port: u16) -> Self {
-        let (tx, rx) = new_channel("MQTT Destination");
+        let (sender, _) = new_channel("MQTT Destination", false);
         let id = new_id();
-        MqttDestination { id, port, url, receiver: rx, sender: tx }
+        MqttDestination {
+            id,
+            port,
+            url,
+            sender,
+        }
     }
 }
 
@@ -68,58 +72,69 @@ impl Destination for MqttDestination {
         debug!("starting mqtt destination...");
 
         let id = self.id;
-        let receiver = self.receiver.clone();
+        let receiver = self.sender.subscribe();
         let (tx, rx) = unbounded();
         let url = self.url.clone();
         let port = self.port;
 
         let (mut broker, mut link_tx, _link_rx) = broker::create_broker(port, url.clone(), id);
 
-        let res = thread::Builder::new().name("MQTT Destination".to_string()).spawn(move || {
-            runtime.block_on(async move {
+        let res = thread::Builder::new()
+            .name("MQTT Destination".to_string())
+            .spawn(move || {
+                runtime.block_on(async move {
+                    // Start the broker asynchronously
+                    tokio::spawn(async move {
+                        broker.start().expect("Broker failed to start");
+                    });
 
-                // Start the broker asynchronously
-                tokio::spawn(async move {
-                    broker.start().expect("Broker failed to start");
-                });
+                    info!("Embedded MQTT broker for sending is running...");
 
-                info!("Embedded MQTT broker for sending is running...");
+                    link_tx.subscribe("#").unwrap(); // all topics
 
-                link_tx.subscribe("#").unwrap(); // all topics
-
-                control.send(Ready(id)).unwrap();
-                loop {
-                    if plan::check_commands(&rx) { break; }
-                    match receiver.try_recv() {
-                        Ok(train) => {
-                            debug!("Sending {:?}", train);
-                            if let Some(values) = train.values {
-                                for value in values {
-                                    let value = match value {
-                                        value::Value::Dict(v) => {
-                                            v.get_data().cloned().unwrap_or_default()
-                                        }
-                                        _ => {
-                                            value
-                                        }
-                                    };
-                                    let payload = serde_json::to_string(&value.to_string()).unwrap();
-                                    link_tx.publish("test", payload).map_err(|e| e.to_string()).unwrap();
-                                }
-
-                            }
+                    control.send(Ready(id)).unwrap();
+                    loop {
+                        if plan::check_commands(&rx) {
+                            break;
                         }
-                        _ => tokio::time::sleep(Duration::from_nanos(100)).await
+                        match receiver.try_recv() {
+                            Ok(train) => {
+                                debug!("Sending {:?}", train);
+                                if let Some(values) = train.values {
+                                    for value in values {
+                                        let value = match value {
+                                            value::Value::Dict(v) => {
+                                                v.get_data().cloned().unwrap_or_default()
+                                            }
+                                            _ => value,
+                                        };
+                                        let payload = serde_json::to_string(&value.to_string())
+                                            .unwrap_or_else(|err| {
+                                                error!("Mqtt payload error {}", err);
+                                                String::from("error")
+                                            });
+                                        match link_tx
+                                            .publish("test", payload)
+                                            .map_err(|e| e.to_string())
+                                        {
+                                            Ok(_) => {}
+                                            Err(error) => error!("MQTT Error {}", error),
+                                        };
+                                    }
+                                }
+                            }
+                            _ => tokio::time::sleep(Duration::from_nanos(100)).await,
+                        }
                     }
-                }
+                    error!("MQTT broker stopped");
+                });
             });
-        });
 
         match res {
             Ok(_) => {}
-            Err(err) => error!("{}", err)
+            Err(err) => error!("{}", err),
         }
-        
+
         tx
     }
 
@@ -137,9 +152,19 @@ impl Destination for MqttDestination {
 
     fn serialize(&self) -> DestinationModel {
         let mut configs = HashMap::new();
-        configs.insert("url".to_string(), ConfigModel::String(StringModel::new(&self.url)));
-        configs.insert("port".to_string(), ConfigModel::Number(NumberModel::new(self.port as i64)));
-        DestinationModel { type_name: self.name(), id: self.id.to_string(), configs }
+        configs.insert(
+            "url".to_string(),
+            ConfigModel::String(StringModel::new(&self.url)),
+        );
+        configs.insert(
+            "port".to_string(),
+            ConfigModel::Number(NumberModel::new(self.port as i64)),
+        );
+        DestinationModel {
+            type_name: self.name(),
+            id: self.id.to_string(),
+            configs,
+        }
     }
 
     fn serialize_default() -> Option<DestinationModel>

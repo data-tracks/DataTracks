@@ -7,16 +7,16 @@ use crate::processing::plan::SourceModel;
 use crate::processing::station::Command;
 #[cfg(test)]
 use crate::processing::tests::DummySource;
-use value::train::Train;
+use crate::processing::HttpSource;
 use crate::sql::LiteSource;
+use crate::tpc::TpcSource;
 use crate::ui::ConfigModel;
 use crate::util::Tx;
 use crossbeam::channel::Sender;
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use schemas::message_generated::protocol::{Source as FlatSource, SourceArgs};
 use serde_json::{Map, Value};
-use crate::processing::HttpSource;
-use crate::tpc::TpcSource;
+use value::train::Train;
 
 pub fn parse_source(type_: &str, options: Map<String, Value>) -> Result<Box<dyn Source>, String> {
     let source: Box<dyn Source> = match type_.to_ascii_lowercase().as_str() {
@@ -45,18 +45,25 @@ pub trait Source: Send + Sync + Configurable {
     fn outs(&mut self) -> &mut Vec<Tx<Train>>;
 
     fn id(&self) -> usize;
-    
+
     fn type_(&self) -> String;
 
     fn dump_source(&self, _include_id: bool) -> String {
         Configurable::dump(self).to_string()
     }
-    
+
     fn flatternize<'a>(&self, builder: &mut FlatBufferBuilder<'a>) -> WIPOffset<FlatSource<'a>> {
         let name = Some(builder.create_string(&self.name().to_string()));
         let type_ = Some(builder.create_string(&self.type_().to_string()));
-        
-        FlatSource::create(builder, &SourceArgs{ id: self.id() as u64, name, type_ })
+
+        FlatSource::create(
+            builder,
+            &SourceArgs {
+                id: self.id() as u64,
+                name,
+                type_,
+            },
+        )
     }
 
     fn serialize(&self) -> SourceModel;
@@ -68,7 +75,4 @@ pub trait Source: Send + Sync + Configurable {
     fn serialize_default() -> Result<SourceModel, ()>
     where
         Self: Sized;
-
 }
-
-

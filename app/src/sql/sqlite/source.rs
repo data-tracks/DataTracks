@@ -6,7 +6,8 @@ use crate::processing::station::Command::{Ready, Stop};
 use crate::processing::{plan, Train};
 use crate::sql::sqlite::connection::SqliteConnector;
 use crate::ui::ConfigModel;
-use crate::util::{new_id, Tx};
+use crate::util::new_id;
+use crate::util::Tx;
 use crossbeam::channel::{unbounded, Sender};
 use rusqlite::params;
 use serde_json::{Map, Value};
@@ -25,7 +26,12 @@ impl LiteSource {
     pub fn new(path: String, query: String) -> LiteSource {
         let id = new_id();
         let connection = SqliteConnector::new(path.as_str());
-        LiteSource { id, connector: connection, outs: Vec::new(), query }
+        LiteSource {
+            id,
+            connector: connection,
+            outs: Vec::new(),
+            query,
+        }
     }
 }
 
@@ -66,7 +72,9 @@ impl Source for LiteSource {
             control.send(Ready(id)).unwrap();
             let count = prepared.column_count();
             loop {
-                if plan::check_commands(&rx) { break; }
+                if plan::check_commands(&rx) {
+                    break;
+                }
 
                 let mut iter = prepared.query(params![]).unwrap();
                 let mut values = vec![];
@@ -76,9 +84,8 @@ impl Source for LiteSource {
                 let train = Train::new(values);
 
                 for sender in &sender {
-                    sender.send(train.clone()).unwrap();
+                    sender.send(train.clone());
                 }
-
             }
             control.send(Stop(id)).unwrap();
         });
@@ -88,7 +95,6 @@ impl Source for LiteSource {
     fn outs(&mut self) -> &mut Vec<Tx<Train>> {
         &mut self.outs
     }
-
 
     fn id(&self) -> usize {
         self.id
@@ -102,7 +108,11 @@ impl Source for LiteSource {
         let mut configs = HashMap::new();
         self.connector.serialize(&mut configs);
         configs.insert("query".to_string(), ConfigModel::text(self.query.as_str()));
-        SourceModel { type_name: String::from("SQLite"), id: self.id.to_string(), configs }
+        SourceModel {
+            type_name: String::from("SQLite"),
+            id: self.id.to_string(),
+            configs,
+        }
     }
 
     fn from(configs: HashMap<String, ConfigModel>) -> Result<Box<dyn Source>, String>
@@ -112,12 +122,12 @@ impl Source for LiteSource {
         let query = if let Some(query) = configs.get("query") {
             query.as_str()
         } else {
-            return Err(String::from("Could not create SQLiteSource."))
+            return Err(String::from("Could not create SQLiteSource."));
         };
         let path = if let Some(path) = configs.get("path") {
             path.as_str()
         } else {
-            return Err(String::from("Could not create MqttSource."))
+            return Err(String::from("Could not create MqttSource."));
         };
 
         Ok(Box::new(LiteSource::new(path, query)))
@@ -127,14 +137,17 @@ impl Source for LiteSource {
     where
         Self: Sized,
     {
-        Ok(SourceModel { type_name: String::from("SQLite"), id: String::from("SQLite"), configs: HashMap::new() })
+        Ok(SourceModel {
+            type_name: String::from("SQLite"),
+            id: String::from("SQLite"),
+            configs: HashMap::new(),
+        })
     }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::processing::Plan;
-
 
     //#[test]
     fn test_simple_source() {
@@ -159,6 +172,3 @@ mod tests {
         println!("{:?}", values);
     }
 }
-
-
-

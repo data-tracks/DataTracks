@@ -90,9 +90,9 @@ impl SharedState {
         }
         self.counter = 0;
     }
-    
+
     pub(crate) fn drain(&mut self) -> Vec<Value> {
-        self.storage.cache.drain().map(|(_,v)| v ).collect()
+        self.storage.cache.drain().map(|(_, v)| v).collect()
     }
 }
 
@@ -112,7 +112,7 @@ impl CachedStorage {
     }
     pub(crate) fn delete(&mut self, key: Value) -> Result<(), StorageError> {
         self.cache.remove(&key);
-        
+
         Ok(())
     }
     pub(crate) fn write_value(&mut self, key: Value, value: Value) {
@@ -121,7 +121,7 @@ impl CachedStorage {
 }
 
 impl CachedStorage {
-    pub fn new(storage: Storage, cache: usize) -> Self {
+    pub fn new(_storage: Storage, _cache: usize) -> Self {
         CachedStorage {
             cache: Default::default(),
         }

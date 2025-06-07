@@ -8,19 +8,16 @@ use crate::algebra::Op::{Agg, Binary, Collection, Tuple};
 use crate::algebra::TupleOp::{And, Combine, Index, Input, Or};
 use crate::algebra::{BoxedIterator, BoxedValueHandler, ValueIterator};
 use crate::processing::transform::Transform;
-use crate::processing::{ArrayType, DictType, Layout, OutputType, Train, TupleType};
-use value::{Value};
-use value::Value::{Array, Bool, Date, Dict, Float, Int, Null, Text, Time, Wagon};
+use crate::processing::{ArrayType, DictType, Layout, OutputType, TupleType};
+use crate::util::storage::ValueStore;
 use regex::Regex;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::Debug;
-use std::rc::Rc;
 use std::str::FromStr;
-use std::sync::Arc;
 use std::vec;
-use parking_lot::Mutex;
-use tracing::warn;
-use crate::util::storage::{Storage, ValueStore};
+use tracing::{error, warn};
+use value::Value;
+use value::Value::{Array, Bool, Date, Dict, Float, Int, Null, Text, Time, Wagon};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Op {
@@ -190,7 +187,6 @@ pub enum TupleOp {
     Context(ContextOp),
     KeyValue(Option<String>),
 }
-
 
 impl TupleOp {
     pub fn implement(&self, operators: Vec<Operator>) -> BoxedValueHandler {
@@ -450,17 +446,14 @@ impl TupleOp {
                 format!("${}", c.name)
             }
             TupleOp::Doc => "".to_string(),
-            TupleOp::Split(_) => {
-                "SPLIT".to_string()
-            }
+            TupleOp::Split(_) => "SPLIT".to_string(),
         }
     }
 }
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum BinaryOp {
-    Cast
+    Cast,
 }
-
 
 impl BinaryOp {
     pub(crate) fn dump(&self, _as_call: bool) -> String {
@@ -486,15 +479,12 @@ impl BinaryOp {
         _inputs: HashMap<String, &Layout>,
     ) -> Layout {
         match self {
-            BinaryOp::Cast => {
-                match operands.get(1) {
-                    None => Layout::default(),
-                    Some(o) => o.clone(),
-                }
-            }
+            BinaryOp::Cast => match operands.get(1) {
+                None => Layout::default(),
+                Some(o) => o.clone(),
+            },
         }
     }
-
 }
 
 impl ValueHandler for BinaryOp {
@@ -521,7 +511,6 @@ impl ArgImplementable<BoxedValueHandler, Vec<Operator>> for BinaryOp {
         }
     }
 }
-
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum AggOp {
@@ -716,18 +705,19 @@ impl ValueHandler for ContextOp {
                 }
             }
             Array(a) => {
-                let mut array =
-                    a.values.iter()
-                        .filter(|v| match v {
-                            Wagon(w) => w.origin == self.name,
-                            _ => false,
-                        })
-                        .cloned()
-                        .map(|w| match w {
-                            Wagon(w) => w.unwrap(),
-                            _ => panic!(),
-                        })
-                        .collect::<Vec<_>>();
+                let mut array = a
+                    .values
+                    .iter()
+                    .filter(|v| match v {
+                        Wagon(w) => w.origin == self.name,
+                        _ => false,
+                    })
+                    .cloned()
+                    .map(|w| match w {
+                        Wagon(w) => w.unwrap(),
+                        _ => panic!(),
+                    })
+                    .collect::<Vec<_>>();
                 if array.len() == 1 {
                     array.pop().unwrap()
                 } else {
@@ -748,7 +738,10 @@ impl ValueHandler for ContextOp {
                 );
                 Value::dict(map)
             }
-            _ => panic!("Could not process {}", value),
+            _ => {
+                error!("Could not process {}", value);
+                Value::null()
+            }
         }
     }
 
@@ -789,10 +782,15 @@ impl SplitOp {
     fn split(value: &Value, regex: &str) -> Value {
         let re = Regex::new(regex).unwrap();
         match value {
-            Text(t) => Value::array(re.split(&t.0).collect::<Vec<_>>().into_iter().map(|v| v.into()).collect::<Vec<_>>(),
+            Text(t) => Value::array(
+                re.split(&t.0)
+                    .collect::<Vec<_>>()
+                    .into_iter()
+                    .map(|v| v.into())
+                    .collect::<Vec<_>>(),
             ),
             Wagon(w) => Self::split(&w.clone().unwrap(), regex),
-            v => Self::split(&Text(v.as_text().unwrap()), regex)
+            v => Self::split(&Text(v.as_text().unwrap()), regex),
         }
     }
 }
@@ -817,7 +815,7 @@ impl ValueHandler for NameOp {
             v => {
                 warn!("Could not process {} with key {}", v, self.name);
                 Null
-            },
+            }
         }
     }
 
@@ -912,9 +910,9 @@ mod tests {
     use crate::analyse::{InputDerivable, OutputDerivable};
     use crate::processing::OutputType::{Array, Dict};
     use crate::processing::{ArrayType, DictType, Layout, OutputType};
-    use value::Value;
     use std::collections::HashMap;
     use std::vec;
+    use value::Value;
 
     #[test]
     fn test_layout_literal() {

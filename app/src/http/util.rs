@@ -1,20 +1,19 @@
-use crate::http::destination::DestinationState;
 use crate::http::source::SourceState;
 use crate::processing::Train;
-use crate::util::new_channel;
-use crate::util::new_id;
-use axum::extract::ws::{Message, WebSocket};
-use axum::extract::{Path, State, WebSocketUpgrade};
+use crate::util::{Rx, Tx};
+use axum::extract::ws::{Message, Utf8Bytes, WebSocket};
+use axum::extract::{State, WebSocketUpgrade};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
-use serde_json::{json, Map, Value};
+use serde::Deserialize;
+use serde_json::Value;
 use std::collections::BTreeMap;
 use std::net::{IpAddr, SocketAddr};
 use std::thread;
 use tracing::{debug, warn};
 use value;
-use value::Dict;
+use value::{Dict, Time};
 
 pub async fn receive(
     State(state): State<SourceState>,
@@ -25,7 +24,7 @@ pub async fn receive(
     let train = transform_to_train(payload);
 
     for out in state.source.lock().unwrap().iter() {
-        out.send(train.clone()).unwrap();
+        out.send(train.clone());
     }
 
     // Return a response
@@ -33,38 +32,17 @@ pub async fn receive(
 }
 
 pub fn transform_to_train(payload: Value) -> Train {
-    match payload {
-        v => match serde_json::from_str::<Train>(v.as_str().unwrap()) {
-            Ok(msg) => msg,
-            Err(_) => {
-                let mut map = BTreeMap::new();
-                map.insert(String::from("$"), v.into());
-                Train::new(vec![value::Value::Dict(Dict::new(map))])
-            }
-        },
+    let v = payload;
+    match serde_json::from_str::<Train>(v.as_str().unwrap()) {
+        Ok(msg) => msg,
+        Err(_) => {
+            let mut map = BTreeMap::new();
+            map.insert(String::from("$"), v.into());
+            Train::new(vec![value::Value::Dict(Dict::new(map))])
+        }
     }
     .mark(0)
 }
-
-pub async fn receive_with_topic(
-    Path(topic): Path<String>,
-    State(state): State<SourceState>,
-    Json(payload): Json<Value>,
-) -> impl IntoResponse {
-    debug!("New http message received: {:?}", payload);
-
-    let mut dict = transform_to_train(payload);
-    //dict.insert(String::from("topic"), value::Value::text(topic.as_str()));
-    todo!();
-    //let train = Train::new(vec![value::Value::Dict(dict)]);
-    for out in state.source.lock().unwrap().iter() {
-        //out.send(train.clone()).unwrap();
-    }
-
-    // Return a response
-    (StatusCode::OK, "Done".to_string())
-}
-
 pub fn parse_addr<S: AsRef<str>>(url: S, port: u16) -> Result<SocketAddr, String> {
     // We could read our port in from the environment as well
     let url = match url.as_ref() {
@@ -104,43 +82,87 @@ pub fn parse_addr<S: AsRef<str>>(url: S, port: u16) -> Result<SocketAddr, String
     }
 }
 
+#[derive(Clone)]
+pub enum DestinationState {
+    Train(DestinationTrainState),
+    Time(DestinationTimeState),
+}
+
+pub enum RxWrapper {
+    Train(Rx<Train>),
+    Time(Rx<Time>),
+}
+
+impl RxWrapper {
+    pub(crate) fn recv(&self) -> Result<Utf8Bytes, String> {
+        match self {
+            RxWrapper::Train(t) => t.recv().map(|t| serde_json::to_string(&t).unwrap().into()),
+            RxWrapper::Time(t) => t.recv().map(|t| {
+                serde_json::to_string(&Train::new(vec![t.into()]))
+                    .unwrap()
+                    .into()
+            }),
+        }
+    }
+}
+
+impl DestinationState {
+    pub fn train<S: AsRef<str>>(name: S, receiver: Tx<Train>) -> DestinationState {
+        let name = name.as_ref().to_string();
+        DestinationState::Train(DestinationTrainState {
+            name,
+            out: receiver,
+        })
+    }
+
+    pub fn time<S: AsRef<str>>(name: S, receiver: Tx<Time>) -> DestinationState {
+        let name = name.as_ref().to_string();
+        DestinationState::Time(DestinationTimeState {
+            name,
+            out: receiver,
+        })
+    }
+    fn subscribe(&self) -> RxWrapper {
+        match self {
+            DestinationState::Train(t) => RxWrapper::Train(t.out.subscribe()),
+            DestinationState::Time(t) => RxWrapper::Time(t.out.subscribe()),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct DestinationTrainState {
+    pub name: String,
+    pub out: Tx<Train>,
+}
+
+#[derive(Clone)]
+pub(crate) struct DestinationTimeState {
+    pub name: String,
+    pub out: Tx<Time>,
+}
+
 pub async fn publish_ws(ws: WebSocketUpgrade, State(state): State<DestinationState>) -> Response {
     ws.on_upgrade(|socket| handle_publish_socket(socket, state))
 }
 
 async fn handle_publish_socket(mut socket: WebSocket, state: DestinationState) {
-    let (tx, rx) = new_channel("");
-    let id = new_id();
-    {
-        // drop after
-        state.outs.lock().unwrap().insert(id, tx);
-    }
-
+    let rx = state.subscribe();
     loop {
         match rx.recv() {
-            Ok(train) => {
-                match socket
-                    .send(Message::Text(serde_json::to_string(&train).unwrap().into()))
-                    .await
-                {
-                    Ok(_) => {}
-                    Err(err) => {
-                        for _ in 0..3 {
-                            if socket
-                                .send(Message::Text(serde_json::to_string(&train).unwrap().into()))
-                                .await
-                                .is_ok()
-                            {
-                                continue;
-                            }
+            Ok(item) => match socket.send(Message::Text(item.clone())).await {
+                Ok(_) => {}
+                Err(err) => {
+                    for _ in 0..3 {
+                        if socket.send(Message::Text(item.clone())).await.is_ok() {
+                            continue;
                         }
-
-                        warn!("Failed to send message after retry: {}", err);
-                        state.outs.lock().unwrap().remove(&id);
-                        return;
                     }
+
+                    warn!("Failed to send message after retry: {}", err);
+                    return;
                 }
-            }
+            },
             Err(err) => {
                 warn!("Error {err}")
             }
@@ -161,15 +183,12 @@ async fn handle_receive_socket(mut socket: WebSocket, state: SourceState) {
                 let train = if let Ok(payload) = serde_json::from_str::<Value>(&text) {
                     transform_to_train(payload)
                 } else {
-                    let value = json!({"d": *text});
                     transform_to_train(text.parse().unwrap())
                 };
 
                 debug!("New train created: {:?}", train);
                 for out in state.source.lock().unwrap().iter_mut() {
-                    if let Err(e) = out.send(train.clone()) {
-                        debug!("Failed to send message: {:?}", e);
-                    }
+                    out.send(train.clone());
                 }
             }
             _ => warn!("Error while reading from socket: {:?}", msg),

@@ -1,4 +1,4 @@
-use crate::http::util::{parse_addr, publish_ws};
+use crate::http::util::{parse_addr, publish_ws, DestinationState, DestinationTrainState};
 use crate::processing::destination::Destination;
 use crate::processing::option::Configurable;
 use crate::processing::plan::DestinationModel;
@@ -11,31 +11,28 @@ use axum::Router;
 use crossbeam::channel::{unbounded, Receiver, Sender};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::thread;
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
 use tower_http::cors::CorsLayer;
 use tracing::{debug, error};
-use value::Time;
 
 #[derive(Clone)]
 pub struct HttpDestination {
     id: usize,
     url: String,
     port: u16,
-    receiver: Rx<Train>,
     sender: Tx<Train>,
 }
 
 impl HttpDestination {
     pub fn new(url: String, port: u16) -> Self {
-        let (sender, receiver) = new_channel("Incoming HTTP Destination");
+        let (sender, _) = new_channel("Incoming HTTP Destination", false);
         HttpDestination {
             id: 0,
             url,
             port,
-            receiver,
             sender,
         }
     }
@@ -54,13 +51,7 @@ impl Configurable for HttpDestination {
     }
 }
 
-#[derive(Clone)]
-pub(crate) struct DestinationState {
-    pub name: String,
-    pub outs: Arc<Mutex<HashMap<usize, Tx<Train>>>>,
-}
-
-async fn start_destination(http: HttpDestination, _rx: Receiver<Command>, receiver: Rx<Train>) {
+async fn start_destination(http: HttpDestination, _rx: Receiver<Command>, sender: Tx<Train>) {
     debug!(
         "starting http destination on {url}:{port}...",
         url = http.url,
@@ -71,35 +62,7 @@ async fn start_destination(http: HttpDestination, _rx: Receiver<Command>, receiv
         Err(err) => panic!("{}", err),
     };
 
-    let channels = Arc::new(Mutex::new(HashMap::<usize, Tx<Train>>::new()));
-    let clone = channels.clone();
-
-    let res = thread::Builder::new()
-        .name("HTTP Destination Bus".to_string())
-        .spawn(move || loop {
-            match receiver.recv() {
-                Ok(train) => match channels.lock() {
-                    Ok(lock) => {
-                        lock.values().for_each(|l| match l.send(train.clone()) {
-                            Ok(_) => {}
-                            Err(err) => error!("{}", err),
-                        });
-                    }
-                    Err(_) => {}
-                },
-                Err(err) => error!(err = ?err, "recv channel error"),
-            };
-        });
-
-    match res {
-        Ok(_) => {}
-        Err(err) => error!("{}", err),
-    }
-
-    let state = DestinationState {
-        outs: clone,
-        name: String::from("HTTP Destination"),
-    };
+    let state = DestinationState::train(String::from("HTTP Destination"), sender);
 
     let app = Router::new()
         .route("/ws", get(publish_ws))
@@ -143,7 +106,7 @@ impl Destination for HttpDestination {
         let rt = Runtime::new().unwrap();
 
         let (tx, rx) = unbounded();
-        let receiver = self.receiver.clone();
+        let sender = self.sender.clone();
 
         let clone = self.clone();
 
@@ -151,7 +114,7 @@ impl Destination for HttpDestination {
             .name("HTTP Destination".to_string())
             .spawn(move || {
                 rt.block_on(async {
-                    start_destination(clone, rx, receiver).await;
+                    start_destination(clone, rx, sender).await;
                 });
             });
         match res {

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::thread::{sleep, Builder};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::algebra::{Executor, IdentityIterator};
 use crate::optimize::OptimizeStrategy;
@@ -14,14 +14,14 @@ use crate::processing::transform::Transform;
 use crate::processing::watermark::WatermarkStrategy;
 use crate::processing::window::Window;
 use crate::processing::Train;
-use crate::util::new_channel;
-use crate::util::Tx;
-use crate::util::{new_id, Rx};
+use crate::util::new_id;
+use crate::util::{new_channel, Rx, Tx};
 use crossbeam::channel;
 use crossbeam::channel::Receiver;
+use ctrlc::Error::System;
 pub use logos::Source;
 use parking_lot::RwLock;
-use tracing::{debug, error, info};
+use tracing::{debug, error, warn};
 
 const IDLE_TIMEOUT: Duration = Duration::from_nanos(10);
 
@@ -121,20 +121,15 @@ impl Platform {
             if let Ok(command) = self.control.try_recv() {
                 match command {
                     Command::Stop(_) => {
-                        match when_tx.send(Command::Stop(stop)) {
-                            Ok(_) => {}
-                            Err(err) => {
-                                error!("cannot stop trigger {err}")
-                            }
-                        }
+                        when_tx.send(Command::Stop(stop));
                         return;
                     }
                     Attach(num, (send, watermark)) => {
                         watermark_strategy.attach(num, watermark.clone());
-                        when_tx.send(Attach(num, (send, watermark))).unwrap();
+                        when_tx.send(Attach(num, (send, watermark)));
                     }
                     Detach(num) => {
-                        when_tx.send(Detach(num)).unwrap();
+                        when_tx.send(Detach(num));
                         watermark_strategy.detach(num);
                     }
                     Threshold(th) => {
@@ -168,7 +163,7 @@ fn when(
     mut when: TriggerSelector,
     mut what: Executor,
 ) -> Tx<Command> {
-    let (tx, rx) = new_channel::<Command, &str>("Trigger");
+    let (tx, rx) = new_channel::<Command, &str>("Trigger", false);
     // shall we?
     // - specific window?
     // - specific watermark

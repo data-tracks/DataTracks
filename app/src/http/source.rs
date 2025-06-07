@@ -1,17 +1,17 @@
-use crate::http::util::{parse_addr, receive, receive_with_topic, receive_ws};
+use crate::http::util::{parse_addr, receive, receive_ws};
 use crate::processing::option::Configurable;
 use crate::processing::plan::SourceModel;
 use crate::processing::source::Source;
 use crate::processing::station::Command;
 use crate::processing::Train;
 use crate::ui::ConfigModel;
-use crate::util::{new_id, Tx};
+use crate::util::new_id;
+use crate::util::Tx;
 use axum::routing::{get, post};
 use axum::Router;
 use crossbeam::channel::{unbounded, Receiver, Sender};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
-use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use tokio::net::TcpListener;
@@ -19,7 +19,6 @@ use tokio::runtime::Runtime;
 use tower_http::cors::CorsLayer;
 use tracing::error;
 use tracing::log::debug;
-use value;
 
 // ws: npx wscat -c ws://127.0.0.1:3666/ws/data
 // messages like: curl --json '{"website": "linuxize.com"}' localhost:5555/data/isabel
@@ -59,7 +58,6 @@ async fn start_source(http: HttpSource, _rx: Receiver<Command>) {
 
     let app = Router::new()
         .route("/data", post(receive))
-        .route("/data/{*topic}", post(receive_with_topic))
         .route("/ws", get(receive_ws))
         .layer(CorsLayer::permissive())
         .with_state(state);
@@ -179,6 +177,6 @@ impl Source for HttpSource {
 }
 
 #[derive(Clone)]
-pub(crate) struct SourceState {
+pub struct SourceState {
     pub source: Arc<Mutex<Vec<Tx<Train>>>>,
 }

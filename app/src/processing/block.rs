@@ -10,22 +10,21 @@ pub enum Block {
     All(AllBlock),
 }
 
-
 impl Block {
     pub fn new(inputs: Vec<usize>, blocks: Vec<usize>) -> Self {
         if blocks.is_empty() {
-            return Non(NonBlock{});
+            return Non(NonBlock {});
         } else if same_vecs(&blocks, &inputs) {
             return All(AllBlock::new(inputs));
         }
-        Specific(SpecificBlock::new( inputs, blocks ))
+        Specific(SpecificBlock::new(inputs, blocks))
     }
 
-    pub fn next(&mut self, train: Train) {
+    pub fn next(&mut self, _train: Train) {
         match self {
-            Non(n) => {},
-            Specific(s) => {},
-            All(a) => {},
+            Non(_) => {}
+            Specific(_) => {}
+            All(_) => {}
         }
     }
 }
@@ -45,11 +44,7 @@ fn same_vecs(a: &Vec<usize>, b: &Vec<usize>) -> bool {
     true
 }
 
-
-
-pub struct NonBlock {
-}
-
+pub struct NonBlock {}
 
 pub struct SpecificBlock {
     input: Vec<usize>,
@@ -58,17 +53,18 @@ pub struct SpecificBlock {
 }
 
 impl SpecificBlock {
-
-    fn new(input: Vec<usize>, blocks: Vec<usize>) -> Self{
+    fn new(input: Vec<usize>, blocks: Vec<usize>) -> Self {
         let mut buffer = HashMap::new();
         blocks.iter().for_each(|b| {
             buffer.insert(*b, vec![]);
         });
-        SpecificBlock{input, blocks, buffer}
+        SpecificBlock {
+            input,
+            blocks,
+            buffer,
+        }
     }
-    
 }
-
 
 fn merge_buffer(drain: Drain<usize, Vec<Value>>) -> Vec<Train> {
     let mut trains = vec![];
@@ -84,18 +80,19 @@ pub struct AllBlock {
     switch: HashMap<usize, bool>,
 }
 
-
-
 impl AllBlock {
-
-    fn new(input: Vec<usize>) -> Self{
+    fn new(input: Vec<usize>) -> Self {
         let mut buffer = HashMap::new();
         let mut switch = HashMap::new();
-        input.iter().for_each(|i|{
+        input.iter().for_each(|i| {
             buffer.insert(*i, vec![]);
             switch.insert(*i, false);
         });
 
-        AllBlock{input, buffer, switch}
+        AllBlock {
+            input,
+            buffer,
+            switch,
+        }
     }
 }

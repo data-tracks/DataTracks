@@ -8,17 +8,18 @@ use crate::processing::layout::Layout;
 use crate::processing::plan::PlanStage;
 use crate::processing::platform::Platform;
 use crate::processing::sender::Sender;
-use value::train::Train;
 use crate::processing::transform::Transform;
+use crate::processing::watermark::WatermarkStrategy;
 use crate::processing::window::Window;
-use crate::util::{new_channel, new_id, Rx, Tx};
+use crate::util::{new_channel, new_id};
+use crate::util::{Rx, Tx};
 use crossbeam::channel;
 use crossbeam::channel::{unbounded, Receiver};
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
-use schemas::message_generated::protocol::{Station as FlatStation};
+use schemas::message_generated::protocol::Station as FlatStation;
 use tracing::{debug, error};
+use value::train::Train;
 use value::Time;
-use crate::processing::watermark::WatermarkStrategy;
 
 #[derive(Clone)]
 pub struct Station {
@@ -32,7 +33,7 @@ pub struct Station {
     pub inputs: Vec<usize>,
     pub layout: Layout,
     pub control: (channel::Sender<Command>, Receiver<Command>),
-    pub watermark_strategy: WatermarkStrategy
+    pub watermark_strategy: WatermarkStrategy,
 }
 
 impl Default for Station {
@@ -43,7 +44,7 @@ impl Default for Station {
 
 impl Station {
     pub(crate) fn new(stop: usize) -> Self {
-        let incoming = new_channel(format!("Incoming {stop}"));
+        let incoming = new_channel(format!("Incoming {stop}"), false);
         let control = unbounded();
         Station {
             id: new_id(),
@@ -64,16 +65,21 @@ impl Station {
         &self,
         builder: &mut FlatBufferBuilder<'a>,
     ) -> WIPOffset<FlatStation<'a>> {
-        let blocks = builder.create_vector(&self.block.iter().map(|b| *b as u64).collect::<Vec<_>>());
-        let inputs = builder.create_vector(&self.inputs.iter().map(|b| *b as u64).collect::<Vec<_>>());
+        let blocks =
+            builder.create_vector(&self.block.iter().map(|b| *b as u64).collect::<Vec<_>>());
+        let inputs =
+            builder.create_vector(&self.inputs.iter().map(|b| *b as u64).collect::<Vec<_>>());
         let transform = self.transform.clone().map(|t| t.flatternize(builder));
-        FlatStation::create(builder, &StationArgs {
-            id: self.id as u64,
-            stop: self.stop as u64,
-            transform,
-            block: Some(blocks),
-            inputs: Some(inputs),
-        })
+        FlatStation::create(
+            builder,
+            &StationArgs {
+                id: self.id as u64,
+                stop: self.stop as u64,
+                transform,
+                block: Some(blocks),
+                inputs: Some(inputs),
+            },
+        )
     }
 
     // |1 or <1 or -1
@@ -239,8 +245,8 @@ impl Station {
         Ok(())
     }
 
-    pub(crate) fn send(&mut self, train: Train) -> Result<(), String> {
-        self.incoming.0.send(train).map_err(|e| e.to_string())
+    pub(crate) fn send(&mut self, train: Train) {
+        self.incoming.0.send(train)
     }
 
     pub fn dump(&self, already_dumped: bool) -> String {
@@ -306,7 +312,7 @@ impl PartialEq for Command {
             (Command::Overflow(a), Command::Overflow(b)) => a.eq(b),
             (Command::Threshold(a), Command::Threshold(b)) => a.eq(b),
             (Command::Okay(a), Command::Okay(b)) => a.eq(b),
-            (Command::Attach(a,_), Command::Attach(b,_)) => a.eq(b),
+            (Command::Attach(a, _), Command::Attach(b, _)) => a.eq(b),
             (Command::Detach(a), Command::Detach(b)) => a.eq(b),
             _ => false,
         }
@@ -338,11 +344,12 @@ pub mod tests {
     use crate::processing::station::Command::{Okay, Ready, Threshold};
     use crate::processing::station::{Command, Station};
     pub use crate::processing::tests::dict_values;
-    use value::train::Train;
     use crate::processing::transform::{FuncTransform, Transform};
-    use crate::util::{new_channel, Rx, Tx};
-    use value::{Dict, Value};
+    use crate::util::Rx;
+    use crate::util::{new_channel, Tx};
     use crossbeam::channel::{unbounded, Receiver, Sender};
+    use value::train::Train;
+    use value::{Dict, Value};
 
     #[test]
     fn start_stop_test() {
@@ -361,11 +368,11 @@ pub mod tests {
             values.push(Value::Dict(Dict::from(Value::int(x))))
         }
 
-        let (tx, rx) = new_channel("test");
+        let (tx, rx) = new_channel("test", false);
 
         station.add_out(0, tx).unwrap();
         station.operate(Arc::new(control.0), HashMap::new());
-        station.send(Train::new(values.clone())).unwrap();
+        station.send(Train::new(values.clone()));
 
         let res = rx.recv();
         match res {
@@ -392,7 +399,7 @@ pub mod tests {
         let mut first = Station::new(0);
         let input = first.get_in();
 
-        let (output_tx, output_rx) = new_channel("test");
+        let (output_tx, output_rx) = new_channel("test", false);
 
         let mut second = Station::new(1);
         second.add_out(0, output_tx).unwrap();
@@ -403,7 +410,7 @@ pub mod tests {
         first.operate(Arc::clone(&control), HashMap::new());
         second.operate(Arc::clone(&control), HashMap::new());
 
-        input.send(Train::new(values.clone())).unwrap();
+        input.send(Train::new(values.clone()));
 
         let res = output_rx.recv().unwrap();
         assert_eq!(res.values.clone().unwrap(), values);
@@ -454,9 +461,7 @@ pub mod tests {
         sender.send(Threshold(3)).unwrap();
 
         for _ in 0..1_000 {
-            train_sender
-                .send(Train::new(dict_values(vec![Value::int(3)])))
-                .unwrap();
+            train_sender.send(Train::new(dict_values(vec![Value::int(3)])));
         }
 
         // the station should start, the threshold should be reached and after some time be balanced
@@ -474,9 +479,7 @@ pub mod tests {
         station.operate(Arc::clone(&a_tx), HashMap::new());
 
         for _ in 0..1_000 {
-            train_sender
-                .send(Train::new(dict_values(vec![Value::int(3)])))
-                .unwrap();
+            train_sender.send(Train::new(dict_values(vec![Value::int(3)])));
         }
 
         // the station should open a platform, the station starts another platform,  the threshold should be reached and after some time be balanced
@@ -491,15 +494,11 @@ pub mod tests {
         let _sender = station.operate(Arc::clone(&a_tx), HashMap::new());
 
         for _ in 0..500 {
-            train_sender
-                .send(Train::new(dict_values(vec![Value::int(3)])))
-                .unwrap();
+            train_sender.send(Train::new(dict_values(vec![Value::int(3)])));
         }
         station.operate(Arc::clone(&a_tx), HashMap::new());
         for _ in 0..500 {
-            train_sender
-                .send(Train::new(dict_values(vec![Value::int(3)])))
-                .unwrap();
+            train_sender.send(Train::new(dict_values(vec![Value::int(3)])));
         }
 
         // the station should open a platform, the station starts another platform,  the threshold should be reached and after some time be balanced
@@ -553,7 +552,7 @@ pub mod tests {
             let time = Instant::now();
 
             for train in trains {
-                train_sender.send(train).unwrap();
+                train_sender.send(train);
             }
 
             for _ in 0..amount {
@@ -581,7 +580,7 @@ pub mod tests {
     ) {
         let mut station = Station::new(0);
         let train_sender = station.get_in();
-        let (tx, rx) = new_channel("test");
+        let (tx, rx) = new_channel("test", false);
         let _train_receiver = station.add_out(0, tx);
         let time = duration.clone();
 

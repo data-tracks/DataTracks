@@ -6,11 +6,12 @@ use crate::processing::Train;
 use crate::tpc::server::{ack, StreamUser, TcpStream};
 use crate::tpc::Server;
 use crate::ui::{ConfigModel, NumberModel, StringModel};
-use crate::util::{new_channel, new_id, Rx, Tx};
+use crate::util::{new_channel, new_id};
+use crate::util::{Rx, Tx};
 use crossbeam::channel::{unbounded, Receiver, Sender};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 use tokio::time::sleep;
@@ -21,33 +22,27 @@ pub struct TpcDestination {
     id: usize,
     port: u16,
     url: String,
-    receiver: Rx<Train>,
     sender: Tx<Train>,
     tx: Sender<Command>,
     rx: Receiver<Command>,
     control: Option<Arc<Sender<Command>>>,
-    bus: Arc<Mutex<HashMap<usize, Tx<Train>>>>,
 }
 
 impl TpcDestination {
     pub fn new(url: String, port: u16) -> Self {
-        let (tx, rx) = new_channel("TPC Destination");
+        let (tx, rx) = new_channel("TPC Destination", true);
         let id = new_id();
 
         let (t, r) = unbounded();
-
-        let bus = Arc::new(Mutex::new(HashMap::new()));
 
         TpcDestination {
             id,
             port,
             url,
-            receiver: rx,
             sender: tx,
             tx: t,
             rx: r,
             control: None,
-            bus,
         }
     }
 }
@@ -69,7 +64,7 @@ impl StreamUser for TpcDestination {
     async fn handle(&mut self, mut stream: TcpStream) {
         let control = self.control.clone().unwrap();
 
-        let (tx, rx) = new_channel(format!("TPC Destination {}", self.url));
+        let receiver = self.sender.subscribe();
 
         match ack(&mut stream).await {
             Ok(_) => {}
@@ -79,34 +74,21 @@ impl StreamUser for TpcDestination {
             }
         }
 
-        let id = {
-            let mut bus = self.bus.lock().unwrap();
-            let id = bus.len();
-            bus.insert(id, tx.clone());
-            id
-        };
-
         control.send(Command::Ready(self.id)).unwrap();
         let mut retry = 3;
         loop {
-            match self.rx.try_recv() {
-                Ok(msg) => {
-                    panic!("msg: {:?}", msg);
-                }
-                Err(_) => {}
+            if let Ok(msg) = self.rx.try_recv() {
+                panic!("msg: {:?}", msg);
             }
-            
-            match rx.try_recv() {
-                Ok(msg) => match stream.write_all(&<Train as Into<Vec<u8>>>::into(msg.into())).await {
+
+            match receiver.try_recv() {
+                Ok(msg) => match stream.write_all(&<Train as Into<Vec<u8>>>::into(msg)).await {
                     Ok(_) => {
                         retry = 3;
                     }
                     Err(err) => {
                         if retry < 1 {
                             error!("Error TPC Destination disconnected {:?}", err);
-                            {
-                                self.bus.lock().unwrap().remove(&id);
-                            }
                             return;
                         }
                         retry -= 1;
@@ -154,41 +136,15 @@ impl Destination for TpcDestination {
         let server = Server::new(url.clone(), port);
         self.control = Some(control);
 
-        let receiver = self.receiver.clone();
-        let outs = self.bus.clone();
-
-        let res = thread::Builder::new()
-            .name("TPC Destination Bus".to_string())
-            .spawn(move || loop {
-                match receiver.recv() {
-                    Ok(train) => match outs.lock() {
-                        Ok(outs) => {
-                            outs.values().for_each(|s| match s.send(train.clone()) {
-                                Ok(_) => {}
-                                Err(err) => error!("{:?}", err),
-                            });
-                        }
-                        Err(err) => error!("{:?}", err),
-                    },
-                    Err(err) => error!("{:?}", err),
-                }
-            });
-        match res {
-            Ok(_) => {}
-            Err(err) => error!("tpc destination bus: {}", err),
-        }
-
         let tx = self.tx.clone();
-        let tx_clone = tx.clone();
         let rx = self.rx.clone();
 
         let clone = self.clone();
+
         let res = thread::Builder::new()
             .name("TPC Destination".to_string())
             .spawn(move || {
-                server
-                    .start(clone, Arc::new(tx_clone), Arc::new(rx))
-                    .unwrap();
+                server.start(clone, Arc::new(tx), Arc::new(rx)).unwrap();
             });
 
         match res {
@@ -196,7 +152,7 @@ impl Destination for TpcDestination {
             Err(err) => error!("{}", err),
         }
 
-        tx
+        self.tx.clone()
     }
 
     fn get_in(&self) -> Tx<Train> {
