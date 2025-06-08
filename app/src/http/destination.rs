@@ -5,6 +5,7 @@ use crate::processing::plan::DestinationModel;
 use crate::processing::station::Command;
 use crate::processing::Train;
 use crate::ui::ConfigModel;
+use crate::util::new_broadcast;
 use crate::util::{new_channel, Rx, Tx};
 use axum::routing::get;
 use axum::Router;
@@ -28,7 +29,7 @@ pub struct HttpDestination {
 
 impl HttpDestination {
     pub fn new(url: String, port: u16) -> Self {
-        let (sender, _) = new_channel("Incoming HTTP Destination", false);
+        let sender = new_broadcast("Incoming HTTP Destination");
         HttpDestination {
             id: 0,
             url,

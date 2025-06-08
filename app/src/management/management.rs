@@ -77,7 +77,7 @@ fn add_default(storage: Arc<Mutex<Storage>>) {
         .spawn(move || {
             let mut plan = Plan::parse(
                 "\
-                1--2{sql|SELECT $1 FROM $1}[3s]--3\n\
+                1--2{sql|SELECT $1 FROM $1}[2s]--3\n\
                 In\n\
                 HTTP{\"url\":\"127.0.0.1\", \"port\": \"5555\"}:1\n\
                 MQTT{\"url\":\"127.0.0.1\", \"port\": 6666}:1\n\

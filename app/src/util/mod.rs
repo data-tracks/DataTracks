@@ -1,4 +1,5 @@
 pub use builder::StringBuilder;
+pub use channel::new_broadcast;
 pub use channel::new_channel;
 pub use channel::{Rx, Tx};
 pub use dynamic::DynamicQuery;

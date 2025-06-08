@@ -4,23 +4,23 @@ use crate::management::Manager;
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
 
+mod algebra;
+mod analyse;
+mod http;
+mod language;
+mod management;
+mod mqtt;
+mod processing;
+mod sql;
 mod ui;
 mod util;
-mod processing;
-mod language;
-mod algebra;
-mod management;
-mod http;
-mod mqtt;
-mod analyse;
-mod sql;
 
-mod tpc;
 mod optimize;
+mod tpc;
 
 fn main() {
     setup_logging();
@@ -32,7 +32,8 @@ fn main() {
     // Set up the Ctrl+C handler
     ctrlc::set_handler(move || {
         tx.send(()).expect("Could not send signal on shutdown.");
-    }).expect("Error setting Ctrl-C handler");
+    })
+    .expect("Error setting Ctrl-C handler");
 
     let mut manager = Manager::new();
 
@@ -41,8 +42,8 @@ fn main() {
     shutdown_hook(rx, manager)
 }
 
-
 fn shutdown_hook(rx: Receiver<()>, mut manager: Manager) {
+    let instant = Instant::now();
     // Wait for the shutdown signal or the thread to finish
     loop {
         if rx.try_recv().is_ok() {
@@ -63,7 +64,5 @@ fn setup_logging() {
         .with_max_level(Level::INFO)
         .finish();
 
-    tracing::subscriber::set_global_default(subscriber)
-        .expect("setting default subscriber failed");
+    tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 }
-

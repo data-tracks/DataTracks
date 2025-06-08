@@ -6,8 +6,9 @@ use crate::processing::station::Command;
 use crate::processing::station::Command::Ready;
 use crate::processing::{plan, Train};
 use crate::ui::{ConfigModel, NumberModel, StringModel};
-use crate::util::{new_channel, new_id};
-use crate::util::{Rx, Tx};
+use crate::util::new_broadcast;
+use crate::util::new_id;
+use crate::util::Tx;
 use crossbeam::channel::{unbounded, Sender};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
@@ -26,7 +27,7 @@ pub struct MqttDestination {
 
 impl MqttDestination {
     pub fn new(url: String, port: u16) -> Self {
-        let (sender, _) = new_channel("MQTT Destination", false);
+        let sender = new_broadcast("MQTT Destination");
         let id = new_id();
         MqttDestination {
             id,

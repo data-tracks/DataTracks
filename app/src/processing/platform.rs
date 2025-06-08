@@ -21,7 +21,7 @@ use crossbeam::channel::Receiver;
 use ctrlc::Error::System;
 pub use logos::Source;
 use parking_lot::RwLock;
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info, warn};
 
 const IDLE_TIMEOUT: Duration = Duration::from_nanos(10);
 
@@ -172,9 +172,8 @@ fn when(
     // - which window?
     // apply transformation
     // send out
-    let result = Builder::new()
-        .name(String::from("when"))
-        .spawn(move || loop {
+    let result = Builder::new().name(String::from("when")).spawn(move || {
+        loop {
             if let Ok(cmd) = rx.try_recv() {
                 match cmd {
                     Command::Stop(_) => return,
@@ -190,6 +189,9 @@ fn when(
 
             // get all "changed" windows
             let windows = where_.write().select();
+            if windows.is_empty() {
+                continue;
+            }
 
             let current = watermark_strategy.current();
 
@@ -205,7 +207,8 @@ fn when(
                 }
                 _ => {}
             }
-        });
+        }
+    });
     match result {
         Ok(_) => {}
         Err(err) => error!("{}", err),

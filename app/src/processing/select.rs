@@ -54,7 +54,7 @@ impl WindowSelector {
 
 pub struct TriggerSelector {
     triggered_windows: HashMap<WindowDescriptor, TriggerStatus>,
-    storage: Storage,
+    pub(crate) storage: Storage,
     fire_on: TriggerType,
     fire_early: bool,
     fire_late: bool,

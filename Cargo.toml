@@ -15,6 +15,9 @@ opt-level = 3    # Maximum optimization level
 lto = true       # Enable Link Time Optimization
 codegen-units = 1 # Use a single codegen unit for better optimization (slower compile)
 
+[profile.profiling]
+inherits = "release"
+debug = true
 
 # Config for 'cargo dist'
 [workspace.metadata.dist]

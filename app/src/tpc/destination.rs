@@ -6,8 +6,9 @@ use crate::processing::Train;
 use crate::tpc::server::{ack, StreamUser, TcpStream};
 use crate::tpc::Server;
 use crate::ui::{ConfigModel, NumberModel, StringModel};
-use crate::util::{new_channel, new_id};
-use crate::util::{Rx, Tx};
+use crate::util::new_broadcast;
+use crate::util::new_id;
+use crate::util::Tx;
 use crossbeam::channel::{unbounded, Receiver, Sender};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
@@ -30,7 +31,7 @@ pub struct TpcDestination {
 
 impl TpcDestination {
     pub fn new(url: String, port: u16) -> Self {
-        let (tx, rx) = new_channel("TPC Destination", true);
+        let tx = new_broadcast("TPC Destination");
         let id = new_id();
 
         let (t, r) = unbounded();
