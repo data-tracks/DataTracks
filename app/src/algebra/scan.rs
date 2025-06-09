@@ -168,12 +168,12 @@ mod test {
 
         let mut scan = IndexScan::new(0);
 
-        let mut storage = ValueStore::new();
+        let storage = ValueStore::new();
         let mut handler = scan.derive_iterator();
 
         storage.append(train.values);
 
-        let mut train_2 = handler.drain_to_train(0);
+        let train_2 = handler.drain_to_train(0);
 
         assert_eq!(train_2.values, transform(vec![3.into(), "test".into()]));
         assert_ne!(train_2.values, transform(vec![8.into(), "test".into()]));

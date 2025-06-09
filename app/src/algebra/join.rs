@@ -268,7 +268,7 @@ mod test {
         handle.set_storage(left);
         handle.set_storage(right);
 
-        let mut res = handle.drain_to_train(3);
+        let res = handle.drain_to_train(3);
         assert_eq!(
             res.values,
             vec![

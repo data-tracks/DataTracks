@@ -1,7 +1,5 @@
 use crate::management::Storage;
-use crate::processing::Plan;
-use flatbuffers::{FlatBufferBuilder, ForwardsUOffset};
-use schemas::message_generated;
+use flatbuffers::FlatBufferBuilder;
 use schemas::message_generated::protocol::{
     Bind, BindArgs, Catalog, CatalogArgs, CreateType, GetType, Message, MessageArgs, Payload,
     Plans, PlansArgs, Register, RegisterArgs, Status, StatusArgs,

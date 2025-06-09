@@ -4,7 +4,7 @@ use crate::management::Manager;
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
 

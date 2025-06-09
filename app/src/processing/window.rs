@@ -285,7 +285,7 @@ mod test {
 
         let res = rx.recv();
         match res {
-            Ok(mut t) => {
+            Ok(t) => {
                 assert_eq!(values.len(), t.values.len());
                 for (i, value) in t.values.into_iter().enumerate() {
                     assert_eq!(value, values[i]);
