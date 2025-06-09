@@ -1,7 +1,6 @@
-
-mod source;
-mod destination;
 mod broker;
+mod destination;
+mod source;
 
 pub use source::MqttSource;
 

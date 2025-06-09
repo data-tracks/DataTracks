@@ -1,7 +1,7 @@
 pub use parse::transform;
 
-mod parse;
-mod lex;
 mod buffer;
+mod lex;
+mod parse;
 mod statement;
 mod translate;

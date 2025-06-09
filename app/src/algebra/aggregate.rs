@@ -10,12 +10,12 @@ use crate::analyse::{InputDerivable, OutputDerivable};
 use crate::processing::transform::Transform;
 use crate::processing::OutputType::Array;
 use crate::processing::{ArrayType, Layout};
-use value::Value;
-use value::Value::Null;
+use crate::util::storage::ValueStore;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
-use crate::util::storage::ValueStore;
+use value::Value;
+use value::Value::Null;
 
 type Agg = (AggOp, Operator);
 
@@ -132,7 +132,7 @@ impl Algebra for Aggregate {
 
 type AggHandler = (BoxedValueLoader, BoxedValueHandler);
 
-pub struct AggIterator{
+pub struct AggIterator {
     input: BoxedIterator,
     groups: HashMap<u64, Vec<Value>>,
     hashes: HashMap<u64, Value>,
@@ -195,7 +195,7 @@ impl AggIterator {
             // first we add grouped
             if values.len() > 0 {
                 end_values.push(values[0].clone());
-            }else {
+            } else {
                 end_values.push(Null)
             }
 
@@ -203,7 +203,8 @@ impl AggIterator {
                 end_values.push(agg.get());
             }
 
-            self.values.push(self.output_func.process(&end_values.into()));
+            self.values
+                .push(self.output_func.process(&end_values.into()));
         }
 
         self.reloaded = true;
@@ -234,7 +235,10 @@ impl ValueIterator for AggIterator {
     fn clone(&self) -> BoxedIterator {
         Box::new(AggIterator::new(
             self.input.clone(),
-            self.aggregates.iter().map(|(a, o)| ((*a).clone(), (*o).clone())).collect(),
+            self.aggregates
+                .iter()
+                .map(|(a, o)| ((*a).clone(), (*o).clone()))
+                .collect(),
             self.output_func.clone(),
             self.hasher.clone(),
         ))

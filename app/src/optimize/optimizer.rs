@@ -1,9 +1,9 @@
-use tracing::{debug};
 use crate::algebra::{AlgSet, AlgebraType};
 use crate::optimize::rule::Rule::{Impossible, Merge};
 use crate::optimize::rule::{Rule, RuleBehavior};
 use crate::optimize::rules::MergeRule;
 use crate::util::ChangingVisitor;
+use tracing::debug;
 
 pub enum OptimizeStrategy {
     RuleBased(RuleBasedOptimizer),
@@ -13,8 +13,7 @@ impl OptimizeStrategy {
     pub(crate) fn apply(&mut self, raw: AlgebraType) -> AlgebraType {
         let expandable = AlgebraType::Set(add_set(raw));
         let optimized = match self {
-            OptimizeStrategy::RuleBased(o) => {
-                o.optimize(expandable.clone())}
+            OptimizeStrategy::RuleBased(o) => o.optimize(expandable.clone()),
         };
         remove_set(optimized.unwrap_or(expandable))
     }
@@ -97,7 +96,6 @@ impl ChangingVisitor<&mut AlgebraType> for RuleBasedOptimizer {
             AlgebraType::Aggregate(a) => self.visit(&mut *a.input),
             AlgebraType::Variable(_) => (),
             AlgebraType::Set(ref mut s) => {
-
                 if self.current_rule.can_apply(&AlgebraType::Set(s.clone())) {
                     let applied = self.current_rule.apply(&mut AlgebraType::Set(s.clone()));
                     s.set.extend(applied);

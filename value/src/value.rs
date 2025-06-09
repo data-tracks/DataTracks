@@ -30,7 +30,7 @@ use std::ops::{Add, AddAssign, Div, Mul, Sub};
 use std::str;
 use tracing::debug;
 
-#[derive(Eq, Clone, Debug, Serialize, Deserialize, Ord, PartialOrd, Readable, Writable)]
+#[derive(Clone, Debug, Serialize, Deserialize, Ord, PartialOrd, Readable, Writable)]
 pub enum Value {
     Int(Int),
     Float(Float),
@@ -323,7 +323,7 @@ impl Value {
         }
     }
 
-    pub(crate) fn wagonize(self, stop: usize) -> Value {
+    pub fn wagonize(self, stop: usize) -> Value {
         match self {
             Wagon(mut w) => {
                 w.origin = Box::new(stop.into());
@@ -409,6 +409,8 @@ macro_rules! value_display {
         }
     };
 }
+
+impl Eq for Value {}
 
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {

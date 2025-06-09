@@ -7,7 +7,7 @@ use crate::algebra::scan::IndexScan;
 use crate::algebra::set::AlgSet;
 use crate::algebra::union::Union;
 use crate::algebra::variable::VariableScan;
-use crate::algebra::{Operator, TableScan};
+use crate::algebra::{Operator, Scan};
 use crate::analyse::{InputDerivable, OutputDerivable};
 use crate::optimize::Cost;
 use crate::processing::transform::Transform;
@@ -16,7 +16,7 @@ use crate::util::storage::ValueStore;
 use std::collections::HashMap;
 use value::Value;
 
-pub type BoxedIterator = Box<dyn ValueIterator<Item=Value> + Send + 'static>;
+pub type BoxedIterator = Box<dyn ValueIterator<Item = Value> + Send + 'static>;
 
 pub type BoxedValueHandler = Box<dyn ValueHandler + Send + 'static>;
 
@@ -26,17 +26,15 @@ pub type BoxedValueLoader = Box<dyn ValueLoader + Send + 'static>;
 pub enum AlgebraType {
     Dual(Dual),
     IndexScan(IndexScan),
-    TableScan(TableScan),
+    TableScan(Scan),
     Project(Project),
     Filter(Filter),
     Join(Join),
     Union(Union),
     Aggregate(Aggregate),
     Variable(VariableScan),
-    Set(AlgSet)
+    Set(AlgSet),
 }
-
-
 
 impl AlgebraType {
     pub(crate) fn calc_cost(&self) -> Cost {
@@ -44,39 +42,32 @@ impl AlgebraType {
             AlgebraType::Dual(_) => Cost::new(1),
             AlgebraType::IndexScan(_) => Cost::new(1),
             AlgebraType::TableScan(_) => Cost::new(1),
-            AlgebraType::Project(p) => {
-                Cost::new(1) + p.project.calc_cost() + p.input.calc_cost()
-            }
-            AlgebraType::Filter(f) => {
-                Cost::new(1) + f.condition.calc_cost() + f.input.calc_cost()
-            }
-            AlgebraType::Join(j) => {
-                Cost::new(2) + j.left.calc_cost() + j.right.calc_cost()
-            }
+            AlgebraType::Project(p) => Cost::new(1) + p.project.calc_cost() + p.input.calc_cost(),
+            AlgebraType::Filter(f) => Cost::new(1) + f.condition.calc_cost() + f.input.calc_cost(),
+            AlgebraType::Join(j) => Cost::new(2) + j.left.calc_cost() + j.right.calc_cost(),
             AlgebraType::Union(u) => {
-                Cost::new(u.inputs.len()) + u.inputs.iter().fold(Cost::default(), |a,b| a * b.calc_cost())
+                Cost::new(u.inputs.len())
+                    + u.inputs
+                        .iter()
+                        .fold(Cost::default(), |a, b| a * b.calc_cost())
             }
             AlgebraType::Aggregate(a) => {
                 Cost::new(1) + Cost::new(a.aggregates.len()) * a.input.calc_cost()
             }
-            AlgebraType::Variable(_) => {
-                Cost::new(1) + Cost::default()
-            }
-            AlgebraType::Set(s) => {
-                s.set.iter().fold(Cost::default(), |a, b| {
-                    let b = b.calc_cost();
-                    if a < b {
-                        a
-                    }else {
-                        b
-                    }
-                })
-            }
+            AlgebraType::Variable(_) => Cost::new(1) + Cost::default(),
+            AlgebraType::Set(s) => s.set.iter().fold(Cost::default(), |a, b| {
+                let b = b.calc_cost();
+                if a < b {
+                    a
+                } else {
+                    b
+                }
+            }),
         }
     }
 
     pub fn table(name: String) -> AlgebraType {
-        AlgebraType::TableScan(TableScan::new(name))
+        AlgebraType::TableScan(Scan::new(name))
     }
 
     pub fn project(project: Operator, input: AlgebraType) -> AlgebraType {
@@ -117,11 +108,10 @@ impl OutputDerivable for AlgebraType {
             AlgebraType::Variable(v) => v.derive_output_layout(inputs),
             AlgebraType::Dual(d) => d.derive_output_layout(inputs),
             AlgebraType::TableScan(t) => t.derive_output_layout(inputs),
-            AlgebraType::Set(s) => s.initial.derive_output_layout(inputs)
+            AlgebraType::Set(s) => s.initial.derive_output_layout(inputs),
         }
     }
 }
-
 
 impl Algebra for AlgebraType {
     type Iterator = BoxedIterator;
@@ -135,7 +125,7 @@ impl Algebra for AlgebraType {
                     ProjectIter::ValueProjectIterator(p) => Box::new(p),
                     ProjectIter::ValueSetProjectIterator(p) => Box::new(p),
                 }
-            },
+            }
             AlgebraType::Filter(f) => Box::new(f.derive_iterator()),
             AlgebraType::Join(j) => Box::new(j.derive_iterator()),
             AlgebraType::Union(u) => Box::new(u.derive_iterator()),
@@ -146,13 +136,11 @@ impl Algebra for AlgebraType {
             AlgebraType::Set(s) => s.initial.derive_iterator(),
         }
     }
-
 }
 
 pub trait Algebra: Clone + InputDerivable + OutputDerivable {
-    type Iterator: Iterator<Item=Value> + Send + 'static;
+    type Iterator: Iterator<Item = Value> + Send + 'static;
     fn derive_iterator(&mut self) -> Self::Iterator;
-
 }
 
 pub fn build_iterator(mut algebra: AlgebraType) -> Result<BoxedIterator, String> {
@@ -171,11 +159,9 @@ pub trait ValueHandler: Send {
     fn clone(&self) -> BoxedValueHandler;
 }
 
-
 pub struct IdentityHandler;
 
 impl IdentityHandler {
-
     pub fn new() -> BoxedValueHandler {
         Box::new(IdentityHandler {})
     }
@@ -189,12 +175,7 @@ impl ValueHandler for IdentityHandler {
     }
 }
 
-
-
-
-
-pub trait ValueIterator: Iterator<Item=Value> + Send + 'static {
-
+pub trait ValueIterator: Iterator<Item = Value> + Send + 'static {
     fn set_storage(&mut self, storage: ValueStore);
 
     fn drain(&mut self) -> Vec<Value> {
@@ -208,6 +189,4 @@ pub trait ValueIterator: Iterator<Item=Value> + Send + 'static {
     fn clone(&self) -> BoxedIterator;
 
     fn enrich(&mut self, transforms: HashMap<String, Transform>) -> Option<BoxedIterator>;
-
 }
-

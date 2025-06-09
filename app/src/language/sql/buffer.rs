@@ -13,7 +13,7 @@ impl<'source> BufferedLexer<'source> {
     pub(crate) fn consume_buffer(&mut self) -> Result<Token, String> {
         match self.buffer.pop() {
             None => Err("Not enough tokens".to_string()),
-            Some(t) => Ok(t)
+            Some(t) => Ok(t),
         }
     }
     pub(crate) fn buffer(&mut self, token: Token) {
@@ -22,7 +22,7 @@ impl<'source> BufferedLexer<'source> {
 
     pub fn next(&mut self) -> Result<Token, String> {
         if !self.buffer.is_empty() {
-            return self.consume_buffer()
+            return self.consume_buffer();
         }
         match self.lexer.next() {
             None => Err("No more values".to_string()),
@@ -32,7 +32,7 @@ impl<'source> BufferedLexer<'source> {
                     self.error = Some(e);
                     Err("Error while tokenizing query".to_string())
                 }
-            }
+            },
         }
     }
 
@@ -46,8 +46,11 @@ impl<'source> BufferedLexer<'source> {
         }
     }
 
-
     pub(crate) fn new(lexer: &'source mut Lexer<'source, Token>) -> Self {
-        BufferedLexer { lexer, buffer: vec![], error: None }
+        BufferedLexer {
+            lexer,
+            buffer: vec![],
+            error: None,
+        }
     }
 }

@@ -38,17 +38,31 @@ impl ConfigModel {
         match self {
             ConfigModel::String(string) => string.string.clone(),
             ConfigModel::Number(num) => num.number.to_string(),
-            ConfigModel::List(list) => list.list.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(","),
+            ConfigModel::List(list) => list
+                .list
+                .iter()
+                .map(|v| v.to_string())
+                .collect::<Vec<_>>()
+                .join(","),
             ConfigModel::Boolean(b) => b.boolean.to_string(),
         }
     }
 
     pub fn as_int(&self) -> Result<usize, String> {
         match self {
-            ConfigModel::String(string) => string.string.as_str().parse::<usize>().map_err(|e| e.to_string()),
+            ConfigModel::String(string) => string
+                .string
+                .as_str()
+                .parse::<usize>()
+                .map_err(|e| e.to_string()),
             ConfigModel::Number(number) => Ok(number.number as usize),
             ConfigModel::List(_) => Err("Cannot transform list to number.".to_string()),
-            ConfigModel::Boolean(i) => i.boolean.to_string().as_str().parse::<usize>().map_err(|e| e.to_string()),
+            ConfigModel::Boolean(i) => i
+                .boolean
+                .to_string()
+                .as_str()
+                .parse::<usize>()
+                .map_err(|e| e.to_string()),
         }
     }
 }
@@ -83,8 +97,6 @@ impl From<bool> for ConfigModel {
     }
 }
 
-
-
 #[derive(Serialize, Deserialize)]
 pub struct ConfigContainer {
     name: String,
@@ -108,7 +120,10 @@ pub struct StringModel {
 
 impl StringModel {
     pub(crate) fn new(string: &str) -> StringModel {
-        StringModel { base_config: BaseConfig::default(), string: string.to_string() }
+        StringModel {
+            base_config: BaseConfig::default(),
+            string: string.to_string(),
+        }
     }
 }
 
@@ -132,10 +147,12 @@ pub struct BooleanModel {
 
 impl BooleanModel {
     pub(crate) fn new(boolean: bool) -> Self {
-        BooleanModel { base_config: BaseConfig::default(), boolean }
+        BooleanModel {
+            base_config: BaseConfig::default(),
+            boolean,
+        }
     }
 }
-
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct NumberModel {
@@ -145,7 +162,10 @@ pub struct NumberModel {
 
 impl NumberModel {
     pub(crate) fn new(number: i64) -> NumberModel {
-        NumberModel { base_config: BaseConfig::default(), number }
+        NumberModel {
+            base_config: BaseConfig::default(),
+            number,
+        }
     }
 }
 
@@ -155,6 +175,3 @@ pub struct ListModel {
     base_config: BaseConfig,
     list: Vec<ConfigModel>,
 }
-
-
-

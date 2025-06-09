@@ -2,7 +2,7 @@ use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Clone)]
 pub enum WindowType {
-    Thumbling
+    Thumbling,
 }
 
 impl Display for WindowType {

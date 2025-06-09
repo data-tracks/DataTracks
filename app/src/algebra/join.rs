@@ -122,7 +122,7 @@ impl JoinIterator {
                 self.right_index += 1;
             }
             true
-        } else if self.cache_right.len() == 0 {
+        } else if self.cache_right.is_empty() {
             false
         } else if self.right_index < self.cache_right.len() - 1 {
             // index 0 length 1 cannot go further
@@ -226,9 +226,9 @@ mod test {
 
         let mut handle = join.derive_iterator();
 
-        let mut left = ValueStore::new_with_values(left);
+        let mut left = ValueStore::new_with_values(left, 0);
         left.set_source(0);
-        let mut right = ValueStore::new_with_values(right);
+        let mut right = ValueStore::new_with_values(right, 0);
         right.set_source(1);
 
         handle.set_storage(left);
@@ -260,9 +260,9 @@ mod test {
 
         let mut handle = join.derive_iterator();
 
-        let mut left = ValueStore::new_with_values(left);
+        let mut left = ValueStore::new_with_values(left, 0);
         left.set_source(0);
-        let mut right = ValueStore::new_with_values(right);
+        let mut right = ValueStore::new_with_values(right, 0);
         right.set_source(1);
 
         handle.set_storage(left);

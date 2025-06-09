@@ -491,13 +491,13 @@ pub mod tests {
 
         let res = output1_rx.recv().unwrap();
         assert_eq!(res.values.clone(), values);
-        assert_ne!(res.values, vec![Value::null().into()]);
+        assert_ne!(res.values, vec![Value::null()]);
 
         assert!(output1_rx.try_recv().is_err());
 
         let res = output2_rx.recv().unwrap();
         assert_eq!(res.values.clone(), values);
-        assert_ne!(res.values, vec![Value::null().into()]);
+        assert_ne!(res.values, vec![Value::null()]);
 
         assert!(output2_rx.try_recv().is_err());
 
@@ -540,11 +540,11 @@ pub mod tests {
 
         let results = clone.lock().unwrap();
         for train in results.clone() {
-            assert_eq!(train.values, *values.get(0).unwrap())
+            assert_eq!(train.values, *values.first().unwrap())
         }
     }
 
-    pub(crate) fn dump(value: &Vec<Vec<Value>>) -> String {
+    pub(crate) fn dump(value: &[Vec<Value>]) -> String {
         let values: Value = value
             .iter()
             .cloned()
@@ -621,7 +621,7 @@ pub mod tests {
         drop(lock);
 
         assert_eq!(train.values.len(), res.len());
-        for (_i, value) in train.values.into_iter().enumerate() {
+        for value in train.values.into_iter() {
             assert!(res.contains(&value))
         }
     }
@@ -692,7 +692,7 @@ pub mod tests {
             r#"{"msg": "hello", "$topic": ["command"]}"#,
         ));
         values.push(vec![hello]);
-        values.push(vec![Value::from(Value::float(3.6))]);
+        values.push(vec![Value::float(3.6)]);
 
         let source = 1;
         let destination = 4;
@@ -910,7 +910,7 @@ pub mod tests {
             res.clone(),
             source,
             destination,
-            true,
+            false,
         );
     }
 
@@ -1070,7 +1070,7 @@ pub mod tests {
         let train = lock.clone().pop().unwrap();
         drop(lock);
 
-        let mut expected = res.get(0).unwrap().clone();
+        let mut expected = res.first().unwrap().clone();
 
         assert_eq!(train.values.len(), expected.len());
         if ordered {

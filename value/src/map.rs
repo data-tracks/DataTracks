@@ -7,7 +7,6 @@ use crate::value::Value;
 #[derive(Eq, Clone, Debug)]
 pub struct HoMap(HashMap<Value, Value>);
 
-
 impl HoMap {
     pub fn _new(map: HashMap<Value, Value>) -> Self {
         HoMap(map)

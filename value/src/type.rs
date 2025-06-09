@@ -10,7 +10,7 @@ pub enum ValType {
     Dict,
     Null,
     Any,
-    Tuple
+    Tuple,
 }
 
 impl ValType {
@@ -27,18 +27,19 @@ impl ValType {
             ValType::Null => "null".to_string(),
             ValType::Any => "any".to_string(),
             ValType::Tuple => "tuple".to_string(),
-        }.to_uppercase()
+        }
+        .to_uppercase()
     }
 }
 
 impl ValType {
-    pub fn parse(stencil: &str) -> Result<ValType,String> {
+    pub fn parse(stencil: &str) -> Result<ValType, String> {
         match stencil.to_lowercase().as_str() {
             "int" | "integer" | "i" => Ok(ValType::Integer),
             "float" | "f" => Ok(ValType::Float),
             "bool" | "boolean" | "b" => Ok(ValType::Bool),
             "text" | "string" | "s" => Ok(ValType::Text),
-            _ => Err(String::from("Could not parse the type of the value."))
+            _ => Err(String::from("Could not parse the type of the value.")),
         }
     }
 }

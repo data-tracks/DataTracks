@@ -8,12 +8,24 @@ use std::cmp::min;
 use std::fmt::{Display, Formatter};
 use std::ops::{Add, Div, Sub};
 
-#[derive(Eq, Hash, Debug, PartialEq, Clone, Copy, Serialize, Deserialize, Ord, PartialOrd, Readable, Writable)]
+#[derive(
+    Eq,
+    Hash,
+    Debug,
+    PartialEq,
+    Clone,
+    Copy,
+    Serialize,
+    Deserialize,
+    Ord,
+    PartialOrd,
+    Readable,
+    Writable,
+)]
 pub struct Float {
     pub number: i64,
     pub shift: u8,
 }
-
 
 impl Float {
     pub(crate) fn as_f64(&self) -> f64 {
@@ -26,19 +38,38 @@ impl Float {
         let split = parsed.find('.');
 
         match split {
-            None => Float { number: value as i64, shift: 0 },
-            Some(i) => Float { number: number.parse().unwrap(), shift: (number.len() - i) as u8 }
+            None => Float {
+                number: value as i64,
+                shift: 0,
+            },
+            Some(i) => Float {
+                number: number.parse().unwrap(),
+                shift: (number.len() - i) as u8,
+            },
         }
     }
 
-    pub(crate) fn flatternize<'bldr>(&self, builder: &mut FlatBufferBuilder<'bldr>) -> WIPOffset<FlatFloat<'bldr>> {
-        FlatFloat::create(builder, &FloatArgs{ data: self.as_f64() as f32 })
+    pub(crate) fn flatternize<'bldr>(
+        &self,
+        builder: &mut FlatBufferBuilder<'bldr>,
+    ) -> WIPOffset<FlatFloat<'bldr>> {
+        FlatFloat::create(
+            builder,
+            &FloatArgs {
+                data: self.as_f64() as f32,
+            },
+        )
     }
 
     pub(crate) fn normalize(&self) -> Self {
         let nulls = min(self.number.trailing_zeros() as u8, self.shift);
         if nulls > 0 {
-            let number = self.number.to_string().trim_end_matches('0').parse().unwrap();
+            let number = self
+                .number
+                .to_string()
+                .trim_end_matches('0')
+                .parse()
+                .unwrap();
             let shift = self.shift - nulls;
             Float { number, shift }
         } else {
@@ -46,7 +77,6 @@ impl Float {
         }
     }
 }
-
 
 impl Add for Float {
     type Output = Self;
@@ -67,10 +97,13 @@ impl Add for Float {
                 left *= shift * -10;
                 shift = other.shift as i64;
             }
-            _ => shift = self.shift as i64
+            _ => shift = self.shift as i64,
         }
 
-        Float { number: left + right, shift: shift as u8 }
+        Float {
+            number: left + right,
+            shift: shift as u8,
+        }
     }
 }
 
@@ -90,13 +123,15 @@ impl Div for Float {
     }
 }
 
-
 // Adding FloatWrapper to IntWrapper
 impl Add<Int> for Float {
     type Output = Float;
 
     fn add(self, other: Int) -> Float {
-        Float { number: self.number + other.0, shift: self.shift }
+        Float {
+            number: self.number + other.0,
+            shift: self.shift,
+        }
     }
 }
 
@@ -105,7 +140,10 @@ impl Sub<Int> for Float {
     type Output = Float;
 
     fn sub(self, other: Int) -> Float {
-        Float { number: self.number - other.0 * (10 * self.shift) as i64, shift: self.shift }
+        Float {
+            number: self.number - other.0 * (10 * self.shift) as i64,
+            shift: self.shift,
+        }
     }
 }
 
@@ -125,18 +163,16 @@ impl PartialEq<Text> for Float {
     fn eq(&self, other: &Text) -> bool {
         match other.0.parse::<f64>() {
             Ok(f) => f == self.as_f64(),
-            Err(_) => false
+            Err(_) => false,
         }
     }
 }
-
 
 impl Display for Float {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.as_f64())
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -160,4 +196,3 @@ mod tests {
         assert_eq!(res.as_f64(), 35.5 + 35.5)
     }
 }
-

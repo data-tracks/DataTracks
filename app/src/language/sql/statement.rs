@@ -16,9 +16,8 @@ pub(crate) enum SqlStatement {
     Operator(SqlOperator),
     Alias(SqlAlias),
     Variable(SqlVariable),
-    Window(SqlWindow)
+    Window(SqlWindow),
 }
-
 
 impl SqlStatement {
     pub(crate) fn dump(&self, quote: &str) -> String {
@@ -38,12 +37,8 @@ impl SqlStatement {
 
     pub(crate) fn as_literal(&self) -> Option<Value> {
         match self {
-            SqlStatement::Value(v) => {
-                Some(v.value.clone())
-            }
-            SqlStatement::Identifier(i) => {
-                Some(Value::text(&i.names.join(".")))
-            }
+            SqlStatement::Value(v) => Some(v.value.clone()),
+            SqlStatement::Identifier(i) => Some(Value::text(&i.names.join("."))),
             _ => None,
         }
     }
@@ -53,22 +48,22 @@ impl SqlStatement {
 pub struct SqlWindow {
     _type: WindowType,
     size: usize,
-    unit: TimeUnit
+    unit: TimeUnit,
 }
 
 impl SqlWindow {
     pub fn new(_type: WindowType, size: usize, unit: TimeUnit) -> Self {
-        SqlWindow{
-            _type,
-            size,
-            unit,
-        }
+        SqlWindow { _type, size, unit }
     }
 
     fn dump(&self, quote: &str) -> String {
-        format!("{} (SIZE {} {})", self._type, self.size, self.unit.dump_full(quote))
+        format!(
+            "{} (SIZE {} {})",
+            self._type,
+            self.size,
+            self.unit.dump_full(quote)
+        )
     }
-
 }
 
 #[derive(Debug)]
@@ -81,7 +76,7 @@ impl SqlType {
         self.sql_type.dump(quote)
     }
     pub(crate) fn new(sql_type: ValType) -> SqlType {
-        SqlType{ sql_type }
+        SqlType { sql_type }
     }
 }
 
@@ -93,7 +88,7 @@ pub struct SqlVariable {
 
 impl SqlVariable {
     pub(crate) fn new(name: String, inputs: Vec<SqlStatement>) -> Self {
-        SqlVariable{name, inputs}
+        SqlVariable { name, inputs }
     }
 }
 
@@ -116,7 +111,12 @@ impl SqlIdentifier {
 
 impl Statement for SqlIdentifier {
     fn dump(&self, quote: &str) -> String {
-        self.names.iter().map(|n| format!("{}{}{}", quote, n, quote)).collect::<Vec<_>>().join(".").to_string()
+        self.names
+            .iter()
+            .map(|n| format!("{}{}{}", quote, n, quote))
+            .collect::<Vec<_>>()
+            .join(".")
+            .to_string()
     }
 }
 
@@ -128,7 +128,10 @@ pub struct SqlAlias {
 
 impl SqlAlias {
     pub fn new(target: SqlStatement, alias: SqlStatement) -> Self {
-        SqlAlias { target: Box::new(target), alias: Box::new(alias) }
+        SqlAlias {
+            target: Box::new(target),
+            alias: Box::new(alias),
+        }
     }
 }
 
@@ -142,27 +145,47 @@ impl Statement for SqlAlias {
 pub struct SqlOperator {
     pub(crate) operator: Op,
     pub(crate) operands: Vec<SqlStatement>,
-    pub(crate) is_call: bool // call: Function(op1, op2), no call: op1 op op2
+    pub(crate) is_call: bool, // call: Function(op1, op2), no call: op1 op op2
 }
 
 impl SqlOperator {
     pub fn new(operator: Op, operands: Vec<SqlStatement>, is_call: bool) -> Self {
-        SqlOperator { operator, operands, is_call }
+        SqlOperator {
+            operator,
+            operands,
+            is_call,
+        }
     }
 }
 
 impl Statement for SqlOperator {
     fn dump(&self, quote: &str) -> String {
-
         // special cases
         if self.is_call {
             let op = self.operator.dump(true);
-            return format!("{}({})", op, self.operands.iter().map(|o| o.dump(quote)).collect::<Vec<String>>().join(", "))
-        }else if matches!(self.operator, Op::Tuple(TupleOp::Doc)){
-            let operators = self.operands.iter().map(|o|o.dump(quote)).collect::<Vec<String>>().join(", ");
-            return format!("{{{}}}", operators)
-        }else if matches!(self.operator, Op::Tuple(TupleOp::KeyValue(_))){
-            return format!("{}:{}", self.operands.first().unwrap().dump(quote), self.operands.get(1).unwrap().dump(quote))
+            return format!(
+                "{}({})",
+                op,
+                self.operands
+                    .iter()
+                    .map(|o| o.dump(quote))
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            );
+        } else if matches!(self.operator, Op::Tuple(TupleOp::Doc)) {
+            let operators = self
+                .operands
+                .iter()
+                .map(|o| o.dump(quote))
+                .collect::<Vec<String>>()
+                .join(", ");
+            return format!("{{{}}}", operators);
+        } else if matches!(self.operator, Op::Tuple(TupleOp::KeyValue(_))) {
+            return format!(
+                "{}:{}",
+                self.operands.first().unwrap().dump(quote),
+                self.operands.get(1).unwrap().dump(quote)
+            );
         }
 
         let op = self.operator.dump(false);
@@ -171,11 +194,16 @@ impl Statement for SqlOperator {
                 format!("{}{}", op, self.operands.first().unwrap().dump(quote))
             }
             2 => {
-                format!("{} {} {}", self.operands.first().unwrap().dump(quote), op, self.operands.get(1).unwrap().dump(quote))
+                format!(
+                    "{} {} {}",
+                    self.operands.first().unwrap().dump(quote),
+                    op,
+                    self.operands.get(1).unwrap().dump(quote)
+                )
             }
-            _ => {
-                self.operands.iter().fold(String::new(), |a, b| format!("{} {} {}", a, op, b.dump(quote)))
-            }
+            _ => self.operands.iter().fold(String::new(), |a, b| {
+                format!("{} {} {}", a, op, b.dump(quote))
+            }),
         }
     }
 }
@@ -184,8 +212,6 @@ impl Statement for SqlOperator {
 pub struct SqlValue {
     pub(crate) value: Value,
 }
-
-
 
 impl SqlValue {
     pub fn new(value: Value) -> Self {
@@ -200,10 +226,9 @@ impl SqlValue {
             Value::Wagon(w) => {
                 let value = w.clone().unwrap();
                 Self::dump_value(&value, quote)
-            },
-            v => format!("{}", v)
+            }
+            v => format!("{}", v),
         }
-
     }
 }
 
@@ -211,7 +236,6 @@ impl Statement for SqlValue {
     fn dump(&self, _quote: &str) -> String {
         SqlValue::dump_value(&self.value, "'")
     }
-
 }
 
 #[derive(Debug)]
@@ -237,7 +261,10 @@ impl SqlList {
 
 impl Statement for SqlList {
     fn dump(&self, quote: &str) -> String {
-        self.list.iter().map(|a| a.dump(quote)).fold(String::from(""), |a, b| a + &b)
+        self.list
+            .iter()
+            .map(|a| a.dump(quote))
+            .fold(String::from(""), |a, b| a + &b)
     }
 }
 
@@ -248,7 +275,9 @@ pub(crate) struct SqlSymbol {
 
 impl SqlSymbol {
     pub(crate) fn new(symbol: &str) -> SqlSymbol {
-        SqlSymbol { symbol: symbol.to_string() }
+        SqlSymbol {
+            symbol: symbol.to_string(),
+        }
     }
 }
 
@@ -260,31 +289,60 @@ impl Statement for SqlSymbol {
 
 impl Sql for SqlSymbol {}
 
-
 impl SqlSelect {
-    pub(crate) fn new(columns: Vec<SqlStatement>, froms: Vec<SqlStatement>, window: Option<SqlWindow>,wheres: Vec<SqlStatement>, groups: Vec<SqlStatement>) -> SqlSelect {
-        SqlSelect { columns, froms, window, wheres, orders: vec![], groups }
+    pub(crate) fn new(
+        columns: Vec<SqlStatement>,
+        froms: Vec<SqlStatement>,
+        window: Option<SqlWindow>,
+        wheres: Vec<SqlStatement>,
+        groups: Vec<SqlStatement>,
+    ) -> SqlSelect {
+        SqlSelect {
+            columns,
+            froms,
+            window,
+            wheres,
+            orders: vec![],
+            groups,
+        }
     }
 }
-
 
 impl Statement for SqlSelect {
     fn dump(&self, quote: &str) -> String {
         let mut select = "SELECT ".to_string();
-        if let Some(columns) = self.columns.iter().map(|el| el.dump(quote)).reduce(|a, b| a + ", " + &b) {
+        if let Some(columns) = self
+            .columns
+            .iter()
+            .map(|el| el.dump(quote))
+            .reduce(|a, b| a + ", " + &b)
+        {
             select += &columns;
         }
 
-        if let Some(froms) = self.froms.iter().map(|el| el.dump("")).reduce(|a, b| a + ", " + &b) {
+        if let Some(froms) = self
+            .froms
+            .iter()
+            .map(|el| el.dump(""))
+            .reduce(|a, b| a + ", " + &b)
+        {
             select += format!(" FROM {}", &froms).as_str();
         }
 
-        if let Some( window ) = self.window.clone() {
+        if let Some(window) = self.window.clone() {
             select += format!(" WINDOW {}", window.dump(quote)).as_str();
         }
 
         if !self.wheres.is_empty() {
-            select += format!(" WHERE {}", self.wheres.iter().map(|el| el.dump(quote)).collect::<Vec<String>>().join(" AND ")).as_str();
+            select += format!(
+                " WHERE {}",
+                self.wheres
+                    .iter()
+                    .map(|el| el.dump(quote))
+                    .collect::<Vec<String>>()
+                    .join(" AND ")
+            )
+            .as_str();
         }
 
         select

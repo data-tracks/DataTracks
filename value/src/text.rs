@@ -1,5 +1,5 @@
-use crate::{Bool, Float, Int};
 use crate::value_display;
+use crate::{Bool, Float, Int};
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use schemas::message_generated::protocol::{Text as FlatText, TextArgs};
 use serde::{Deserialize, Serialize};
@@ -7,13 +7,18 @@ use speedy::{Readable, Writable};
 use std::cmp::PartialEq;
 use std::fmt::Formatter;
 
-#[derive(Eq, Hash, Debug, PartialEq, Clone, Serialize, Deserialize, Ord, PartialOrd, Readable, Writable)]
+#[derive(
+    Eq, Hash, Debug, PartialEq, Clone, Serialize, Deserialize, Ord, PartialOrd, Readable, Writable,
+)]
 pub struct Text(pub String);
 
 impl Text {
-    pub(crate) fn flatternize<'bldr>(&self, builder: &mut FlatBufferBuilder<'bldr>) -> WIPOffset<FlatText<'bldr>> {
+    pub(crate) fn flatternize<'bldr>(
+        &self,
+        builder: &mut FlatBufferBuilder<'bldr>,
+    ) -> WIPOffset<FlatText<'bldr>> {
         let data = Some(builder.create_string(&self.0));
-        FlatText::create(builder, &TextArgs{ data })
+        FlatText::create(builder, &TextArgs { data })
     }
 }
 

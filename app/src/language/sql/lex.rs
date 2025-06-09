@@ -4,13 +4,19 @@ use std::{mem, vec};
 use crate::algebra::Op::Tuple;
 use crate::algebra::{Op, TupleOp};
 use crate::language::sql::buffer::BufferedLexer;
-use crate::language::sql::lex::Token::{As, BracketClose, Comma, From, GroupBy, Identifier, Limit, OrderBy, Select, Semi, Star, Text, Time, Where, Window};
-use crate::language::sql::statement::{SqlAlias, SqlIdentifier, SqlList, SqlOperator, SqlSelect, SqlStatement, SqlSymbol, SqlType, SqlValue, SqlVariable, SqlWindow};
+use crate::language::sql::lex::Token::{
+    As, BracketClose, Comma, From, GroupBy, Identifier, Limit, OrderBy, Select, Semi, Star, Text,
+    Time, Where, Window,
+};
+use crate::language::sql::statement::{
+    SqlAlias, SqlIdentifier, SqlList, SqlOperator, SqlSelect, SqlStatement, SqlSymbol, SqlType,
+    SqlValue, SqlVariable, SqlWindow,
+};
+use crate::util::TimeUnit::*;
+use crate::util::{TimeUnit, WindowType};
+use logos::{Lexer, Logos};
 use value;
 use value::ValType;
-use logos::{Lexer, Logos};
-use crate::util::{TimeUnit, WindowType};
-use crate::util::TimeUnit::*;
 
 #[derive(Logos, Debug, PartialEq, Clone)]
 #[logos(skip r"[ \t\n\f]+")] // Ignore this regex pattern between tokens
@@ -146,13 +152,19 @@ fn parse_select(lexer: &mut BufferedLexer, stops: &[Token]) -> Result<SqlStateme
     let mut last_end = lexer.consume_buffer();
     let mut wheres = vec![];
     if last_end == Ok(Where) {
-        wheres = parse_expressions(lexer, &[&[Semi, GroupBy, Limit, OrderBy, Window], stops].concat())?;
+        wheres = parse_expressions(
+            lexer,
+            &[&[Semi, GroupBy, Limit, OrderBy, Window], stops].concat(),
+        )?;
 
         last_end = lexer.consume_buffer();
     }
     let mut window = None;
     if last_end == Ok(Window) {
-        window = Some(parse_window(lexer, &[&[Semi, GroupBy, Limit, OrderBy], stops].concat())?);
+        window = Some(parse_window(
+            lexer,
+            &[&[Semi, GroupBy, Limit, OrderBy], stops].concat(),
+        )?);
 
         last_end = lexer.consume_buffer();
     }
@@ -172,8 +184,8 @@ fn parse_window(lexer: &mut BufferedLexer, _stops: &[Token]) -> Result<SqlWindow
         Token::Thumbling => WindowType::Thumbling,
         _ => return Err(format!("Unexpected token {:?}", lexer.next()?)),
     };
-    lexer.next()?;// bracket open
-    lexer.next()?;// SIZE
+    lexer.next()?; // bracket open
+    lexer.next()?; // SIZE
     let size = match lexer.next()? {
         Token::Number(size) => size as usize,
         _ => return Err("Invalid window size".to_string()),
@@ -181,9 +193,9 @@ fn parse_window(lexer: &mut BufferedLexer, _stops: &[Token]) -> Result<SqlWindow
     let unit = match lexer.next()? {
         Time(time) => time,
         _ => return Err("Invalid window unit".to_string()),
-    };// bracket close
+    }; // bracket close
     lexer.next()?;
-    Ok(SqlWindow::new(_type, size, unit ))
+    Ok(SqlWindow::new(_type, size, unit))
 }
 
 fn parse_expressions(
@@ -748,7 +760,7 @@ mod test {
             "$0",
             Some(&format!("{} = 3", quote_identifier("$0"))),
             None,
-            None
+            None,
         );
         test_query_diff(query, query);
     }
@@ -764,7 +776,7 @@ mod test {
                 quote_identifier("name")
             )),
             None,
-            None
+            None,
         );
         let res = &select(
             &format!("{}", quote_identifier("name")),
@@ -775,7 +787,7 @@ mod test {
                 quote_identifier("name")
             )),
             None,
-            None
+            None,
         );
         test_query_diff(query, res);
     }
@@ -791,7 +803,7 @@ mod test {
                 quote_identifier("name")
             )),
             None,
-            None
+            None,
         );
         test_query_diff(query, query);
     }
@@ -810,7 +822,13 @@ mod test {
 
     #[test]
     fn test_window() {
-        let query = &select("COUNT(*)", "$0", None, None, Some("THUMBLING (SIZE 5 SECONDS)"));
+        let query = &select(
+            "COUNT(*)",
+            "$0",
+            None,
+            None,
+            Some("THUMBLING (SIZE 5 SECONDS)"),
+        );
         test_query_diff(query, query);
     }
 

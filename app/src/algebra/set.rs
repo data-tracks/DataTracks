@@ -1,10 +1,10 @@
 use crate::algebra::{Algebra, AlgebraType};
 use crate::analyse::{InputDerivable, OutputDerivable};
+use crate::optimize::Rule;
 use crate::processing::Layout;
 use crate::util::EmptyIterator;
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
-use crate::optimize::Rule;
 
 #[derive(Debug, Clone)]
 pub struct AlgSet {
@@ -16,7 +16,11 @@ pub struct AlgSet {
 impl AlgSet {
     pub fn new(initial: AlgebraType) -> AlgSet {
         let set = HashSet::from_iter(vec![initial.clone()]);
-        AlgSet { initial: Box::new(initial), set, rules: vec![] }
+        AlgSet {
+            initial: Box::new(initial),
+            set,
+            rules: vec![],
+        }
     }
 }
 

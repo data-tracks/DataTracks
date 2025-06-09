@@ -8,7 +8,6 @@ pub(crate) struct PostgresConnection {
     pub(crate) db: String,
 }
 
-
 impl PostgresConnection {
     pub fn new(url: String, port: u16, db: String) -> Self {
         PostgresConnection { url, port, db }
@@ -21,6 +20,10 @@ impl PostgresConnection {
     }
 
     pub fn connect(&self) -> Result<Client, String> {
-        Client::connect(&format!("postgresql://{}@{}:{}", self.db, self.url, self.port), NoTls).map_err(|e| e.to_string())
+        Client::connect(
+            &format!("postgresql://{}@{}:{}", self.db, self.url, self.port),
+            NoTls,
+        )
+        .map_err(|e| e.to_string())
     }
 }

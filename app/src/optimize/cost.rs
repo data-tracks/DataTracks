@@ -2,13 +2,13 @@ use std::cmp::Ordering;
 use std::ops::{Add, Mul};
 
 #[derive(Debug)]
-pub enum  Cost {
+pub enum Cost {
     Numeric(usize),
-    Infinite
+    Infinite,
 }
 
 impl Cost {
-    pub(crate) fn new(value:usize) -> Self {
+    pub(crate) fn new(value: usize) -> Self {
         Cost::Numeric(value)
     }
 }
@@ -24,7 +24,7 @@ impl PartialEq<Self> for Cost {
         match (self, other) {
             (Cost::Numeric(a), Cost::Numeric(b)) => a == b,
             (Cost::Infinite, Cost::Infinite) => true,
-            _ => false
+            _ => false,
         }
     }
 }
@@ -37,7 +37,6 @@ impl PartialOrd for Cost {
             (Cost::Infinite, Cost::Numeric(_)) => Some(Ordering::Greater),
             (Cost::Numeric(_), Cost::Infinite) => Some(Ordering::Less),
         }
-
     }
 }
 

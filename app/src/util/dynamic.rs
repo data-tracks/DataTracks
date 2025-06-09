@@ -3,7 +3,6 @@ use crate::util::StringBuilder;
 use value::Value;
 use value::Value::{Array, Dict};
 
-
 pub type ValueExtractor = Box<dyn Fn(&Value) -> Vec<Value> + Send + Sync>;
 type FieldExtractor = Box<dyn Fn(&Value) -> Value + Send + Sync>;
 
@@ -19,7 +18,6 @@ pub struct DynamicQuery {
     estimated_size: usize,
     replace_type: ReplaceType,
 }
-
 
 impl DynamicQuery {
     pub fn build_dynamic_query(query: String) -> Self {
@@ -68,7 +66,7 @@ impl DynamicQuery {
                 Segment::DynamicIndex(_) | Segment::DynamicKey(_) | Segment::DynamicFull => {
                     let index = match placeholder {
                         None => i.to_string(),
-                        Some(placeholder) => placeholder.to_owned()
+                        Some(placeholder) => placeholder.to_owned(),
                     };
                     let key = format!("{}{}", prefix, index);
                     builder.append_string(&key);
@@ -81,13 +79,14 @@ impl DynamicQuery {
     }
 
     pub fn new(query: String, parts: Vec<Segment>) -> DynamicQuery {
-        let estimated_size = parts.iter().map(|p| {
-            match p {
+        let estimated_size = parts
+            .iter()
+            .map(|p| match p {
                 Segment::Static(s) => s.len(),
                 Segment::DynamicIndex(_) | Segment::DynamicKey(_) => 10,
-                Segment::DynamicFull => 10
-            }
-        }).sum::<usize>();
+                Segment::DynamicFull => 10,
+            })
+            .sum::<usize>();
         let replace_type = if parts.iter().all(|p| matches!(p, Segment::DynamicFull)) {
             ReplaceType::Full
         } else if parts.iter().all(|p| matches!(p, Segment::DynamicKey(_))) {
@@ -95,7 +94,12 @@ impl DynamicQuery {
         } else {
             ReplaceType::Index
         };
-        DynamicQuery { query, parts, estimated_size, replace_type }
+        DynamicQuery {
+            query,
+            parts,
+            estimated_size,
+            replace_type,
+        }
     }
 
     pub fn derive_input_layout(&self) -> Layout {
@@ -116,11 +120,13 @@ impl DynamicQuery {
                         indexes.push(index);
                     }
                 }
-                indexes.iter().max().map(|i| Layout::array(Some(*i as i32))).unwrap_or(Layout::array(None))
+                indexes
+                    .iter()
+                    .max()
+                    .map(|i| Layout::array(Some(*i as i32)))
+                    .unwrap_or(Layout::array(None))
             }
-            ReplaceType::Full => {
-                Layout::default()
-            }
+            ReplaceType::Full => Layout::default(),
         }
     }
 
@@ -132,42 +138,58 @@ impl DynamicQuery {
         self.query.clone()
     }
 
-    pub fn prepare_query(&self, prefix: &str, placeholder: Option<&str>) -> (String, ValueExtractor) {
+    pub fn prepare_query(
+        &self,
+        prefix: &str,
+        placeholder: Option<&str>,
+    ) -> (String, ValueExtractor) {
         let query = self.replace_indexed_query(prefix, placeholder);
-        let parts = self.parts.iter().filter(|p| !matches!(p, Segment::Static(_))).cloned().collect::<Vec<Segment>>();
-        let parts: Vec<FieldExtractor> = parts.into_iter().map(|part| {
-            let func: FieldExtractor = match part {
-                Segment::DynamicIndex(i) => Box::new(move |value| {
-                    if let Array(array) = value {
-                        array.values.get(i).unwrap().clone()
-                    } else {
-                        panic!()
-                    }
-                }),
-                Segment::DynamicKey(k) => Box::new(move |value| {
-                    if let Dict(dict) = value {
-                        dict.get(&k).unwrap().clone()
-                    } else {
-                        panic!()
-                    }
-                }),
-                Segment::DynamicFull => Box::new(|value| {
-                    value.clone()
-                }),
-                _ => unreachable!()
-            };
-            func
-        }).collect();
+        let parts = self
+            .parts
+            .iter()
+            .filter(|p| !matches!(p, Segment::Static(_)))
+            .cloned()
+            .collect::<Vec<Segment>>();
+        let parts: Vec<FieldExtractor> = parts
+            .into_iter()
+            .map(|part| {
+                let func: FieldExtractor = match part {
+                    Segment::DynamicIndex(i) => Box::new(move |value| {
+                        if let Array(array) = value {
+                            array.values.get(i).unwrap().clone()
+                        } else {
+                            panic!()
+                        }
+                    }),
+                    Segment::DynamicKey(k) => Box::new(move |value| {
+                        if let Dict(dict) = value {
+                            dict.get(&k).unwrap().clone()
+                        } else {
+                            panic!()
+                        }
+                    }),
+                    Segment::DynamicFull => Box::new(|value| value.clone()),
+                    _ => unreachable!(),
+                };
+                func
+            })
+            .collect();
 
-        (query, Box::new(move |value| {
-            parts.iter().map(|part| {
-                let mut value = value.clone();
-                while let Value::Wagon(w) = value {
-                    value = w.clone().unwrap();
-                }
-                part(&value)
-            }).collect()
-        }))
+        (
+            query,
+            Box::new(move |value| {
+                parts
+                    .iter()
+                    .map(|part| {
+                        let mut value = value.clone();
+                        while let Value::Wagon(w) = value {
+                            value = w.clone().unwrap();
+                        }
+                        part(&value)
+                    })
+                    .collect()
+            }),
+        )
     }
 
     fn text(text: String) -> Segment {
@@ -193,7 +215,6 @@ pub enum ReplaceType {
     Index,
     Full,
 }
-
 
 #[derive(PartialOrd, PartialEq, Clone, Debug)]
 pub enum Segment {

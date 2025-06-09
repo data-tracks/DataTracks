@@ -1,8 +1,7 @@
-pub struct BufferedReader{
+pub struct BufferedReader {
     string: String,
-    position: usize
+    position: usize,
 }
-
 
 impl BufferedReader {
     pub(crate) fn consume_until(&mut self, stop: char) -> String {
@@ -30,7 +29,10 @@ impl BufferedReader {
 
 impl BufferedReader {
     pub(crate) fn new(string: String) -> BufferedReader {
-        BufferedReader{ string, position: 0 }
+        BufferedReader {
+            string,
+            position: 0,
+        }
     }
 
     pub(crate) fn next(&mut self) -> Option<char> {
@@ -46,11 +48,11 @@ impl BufferedReader {
         self.string.chars().nth(self.position + pos - 1)
     }
 
-    pub(crate) fn consume_spaces(&mut self){
+    pub(crate) fn consume_spaces(&mut self) {
         while let Some(char) = self.peek_next() {
-            if char == ' '{
+            if char == ' ' {
                 self.next();
-            }else {
+            } else {
                 return;
             }
         }

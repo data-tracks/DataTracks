@@ -1,23 +1,38 @@
-use crate::{Bool, Float, Text};
 use crate::value_display;
-use serde::{Deserialize, Serialize};
-use std::fmt::{Debug, Formatter};
-use std::ops::{Add, Div, Sub};
+use crate::{Bool, Float, Text};
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use schemas::message_generated::protocol::{Integer, IntegerArgs};
+use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
+use std::fmt::{Debug, Formatter};
+use std::ops::{Add, Div, Sub};
 
-#[derive(Eq, Hash, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Ord, PartialOrd, Readable, Writable)]
+#[derive(
+    Eq,
+    Hash,
+    PartialEq,
+    Clone,
+    Copy,
+    Debug,
+    Serialize,
+    Deserialize,
+    Ord,
+    PartialOrd,
+    Readable,
+    Writable,
+)]
 pub struct Int(pub(crate) i64);
 
-
-impl Int{
-    pub fn new(value: i64) -> Int{
+impl Int {
+    pub fn new(value: i64) -> Int {
         Int(value)
     }
 
-    pub(crate) fn flatternize<'bldr>(&self, builder: &mut FlatBufferBuilder<'bldr>) -> WIPOffset<Integer<'bldr>> {
-        Integer::create(builder, &IntegerArgs{ data: self.0 })
+    pub(crate) fn flatternize<'bldr>(
+        &self,
+        builder: &mut FlatBufferBuilder<'bldr>,
+    ) -> WIPOffset<Integer<'bldr>> {
+        Integer::create(builder, &IntegerArgs { data: self.0 })
     }
 }
 
@@ -44,7 +59,6 @@ impl Div for Int {
         Int(self.0 / other.0)
     }
 }
-
 
 // Adding IntWrapper to FloatWrapper
 impl Add<Float> for Int {
@@ -96,7 +110,7 @@ impl PartialEq<Text> for Int {
     fn eq(&self, other: &Text) -> bool {
         match other.0.parse::<i64>() {
             Ok(i) => i == self.0,
-            Err(_) => false
+            Err(_) => false,
         }
     }
 }

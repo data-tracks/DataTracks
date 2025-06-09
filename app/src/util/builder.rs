@@ -1,11 +1,12 @@
-
 pub struct StringBuilder {
     string: String,
 }
 
 impl StringBuilder {
     pub fn new() -> Self {
-        StringBuilder{ string: String::new() }
+        StringBuilder {
+            string: String::new(),
+        }
     }
 
     pub fn build(&mut self) -> String {

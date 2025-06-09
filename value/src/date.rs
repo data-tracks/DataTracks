@@ -1,15 +1,16 @@
 use chrono::{Duration, NaiveDate};
 use serde::{Deserialize, Serialize};
-use std::fmt::Formatter;
 use speedy::{Readable, Writable};
+use std::fmt::Formatter;
 
 const EPOCH_DATE: NaiveDate = NaiveDate::from_ymd_opt(1970, 1, 1).unwrap();
 
-#[derive(Clone, Debug, Eq, Ord, PartialOrd, PartialEq, Serialize, Deserialize, Readable, Writable)]
+#[derive(
+    Clone, Debug, Eq, Ord, PartialOrd, PartialEq, Serialize, Deserialize, Readable, Writable,
+)]
 pub struct Date {
-    pub days: i64
+    pub days: i64,
 }
-
 
 impl Date {
     pub fn new(days: i64) -> Date {
@@ -19,9 +20,7 @@ impl Date {
     pub fn as_epoch(&self) -> i64 {
         self.days
     }
-
 }
-
 
 pub struct TimeContainer {
     pub(crate) year: i32,

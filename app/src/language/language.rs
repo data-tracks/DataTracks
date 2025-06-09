@@ -12,7 +12,7 @@ impl Language {
     pub(crate) fn name(&self) -> String {
         match self {
             Sql => "sql".to_string(),
-            Mql => "mql".to_string()
+            Mql => "mql".to_string(),
         }
     }
 }
@@ -21,11 +21,10 @@ impl Display for Language {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Sql => write!(f, "sql"),
-            Mql => write!(f, "mql")
+            Mql => write!(f, "mql"),
         }
     }
 }
-
 
 impl TryFrom<&str> for Language {
     type Error = String;
@@ -34,7 +33,7 @@ impl TryFrom<&str> for Language {
         match value {
             "sql" => Ok(Sql),
             "mql" => Ok(Mql),
-            _ => Err(format!("invalid language: {}", value))
+            _ => Err(format!("invalid language: {}", value)),
         }
     }
 }

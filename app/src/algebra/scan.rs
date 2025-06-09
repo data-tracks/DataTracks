@@ -5,7 +5,7 @@ use crate::processing::transform::Transform;
 use crate::processing::{Layout, Train};
 use crate::util::storage::ValueStore;
 use crate::util::EmptyIterator;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::vec;
 use value::Value;
 
@@ -23,7 +23,7 @@ impl IndexScan {
 #[derive(Clone)]
 pub struct ScanIterator {
     index: usize,
-    values: Vec<Value>,
+    values: VecDeque<Value>,
     storage: Option<ValueStore>,
 }
 
@@ -32,7 +32,7 @@ impl ScanIterator {
         match &self.storage {
             None => true,
             Some(store) => {
-                self.values = store.drain();
+                self.values = VecDeque::from(store.drain());
                 self.values.is_empty()
             }
         }
@@ -46,19 +46,21 @@ impl Iterator for ScanIterator {
         if self.values.is_empty() && self.load() {
             return None;
         }
-        Some(self.values.remove(0))
+        Some(self.values.pop_front().unwrap().wagonize(self.index))
     }
 }
 
 impl ValueIterator for ScanIterator {
     fn set_storage(&mut self, storage: ValueStore) {
-        self.storage = Some(storage)
+        if storage.index == self.index {
+            self.storage = Some(storage);
+        }
     }
 
     fn clone(&self) -> BoxedIterator {
         Box::new(ScanIterator {
             index: self.index,
-            values: vec![],
+            values: VecDeque::new(),
             storage: None,
         })
     }
@@ -81,7 +83,7 @@ impl RefHandler for ScanIterator {
     fn clone(&self) -> Box<dyn RefHandler + Send + 'static> {
         Box::new(ScanIterator {
             index: self.index,
-            values: vec![],
+            values: VecDeque::new(),
             storage: self.storage.clone(),
         })
     }
@@ -108,44 +110,44 @@ impl Algebra for IndexScan {
     fn derive_iterator(&mut self) -> Self::Iterator {
         ScanIterator {
             index: self.index,
-            values: vec![],
+            values: VecDeque::new(),
             storage: None,
         }
     }
 }
 
 #[derive(Debug, Eq, PartialEq, Hash)]
-pub struct TableScan {
+pub struct Scan {
     name: String,
 }
 
-impl TableScan {
+impl Scan {
     pub fn new(name: String) -> Self {
-        TableScan { name }
+        Scan { name }
     }
 }
 
-impl Clone for TableScan {
+impl Clone for Scan {
     fn clone(&self) -> Self {
-        TableScan {
+        Scan {
             name: self.name.clone(),
         }
     }
 }
 
-impl InputDerivable for TableScan {
+impl InputDerivable for Scan {
     fn derive_input_layout(&self) -> Option<Layout> {
         None
     }
 }
 
-impl OutputDerivable for TableScan {
+impl OutputDerivable for Scan {
     fn derive_output_layout(&self, _inputs: HashMap<String, &Layout>) -> Option<Layout> {
         Some(Layout::default())
     }
 }
 
-impl Algebra for TableScan {
+impl Algebra for Scan {
     type Iterator = EmptyIterator;
 
     fn derive_iterator(&mut self) -> Self::Iterator {

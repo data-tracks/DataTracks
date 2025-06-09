@@ -122,7 +122,7 @@ impl CreatingVisitor<&mut Operator, Operator> for OperatorMerger<'_> {
                     .map(|mut o| self.visit(&mut o))
                     .collect();
                 parent.clone()
-            },
+            }
             Op::Agg(AggOp::Count | AggOp::Sum | AggOp::Avg) => {
                 parent.operands = parent
                     .operands

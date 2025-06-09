@@ -505,7 +505,7 @@ mod tests {
             Value::Dict(dict)
         })));
 
-        let values = dict_values(vec![Value::float(3.3).into(), Value::int(3).into()]);
+        let values = dict_values(vec![Value::float(3.3), Value::int(3)]);
 
         let (tx, rx) = new_channel("test", false);
 
@@ -675,7 +675,7 @@ mod tests {
         match transform {
             Ok(mut t) => {
                 for (i, input) in inputs.into_iter().enumerate() {
-                    let storage = ValueStore::new_with_values(input);
+                    let storage = ValueStore::new_with_values(input, i);
                     t.set_storage(storage);
                 }
 
@@ -691,7 +691,7 @@ mod tests {
         let transform = build_iterator(transform.unwrap());
         match transform {
             Ok(mut t) => {
-                let storage = ValueStore::new_with_values(input);
+                let storage = ValueStore::new_with_values(input, 0);
                 t.set_storage(storage);
 
                 let result = t.drain_to_train(0);
@@ -707,7 +707,7 @@ mod tests {
 
         match transform {
             Ok(mut t) => {
-                let storage = ValueStore::new_with_values(input);
+                let storage = ValueStore::new_with_values(input, 0);
                 t.set_storage(storage);
 
                 let result = t.drain_to_train(0);

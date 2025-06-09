@@ -292,7 +292,7 @@ mod test {
                     assert_ne!(Value::text(""), *value.as_dict().unwrap().get("$").unwrap())
                 }
             }
-            Err(..) => assert!(false),
+            Err(..) => panic!(),
         }
     }
 

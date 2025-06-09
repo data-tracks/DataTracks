@@ -16,7 +16,7 @@ impl TimeUnit {
             TimeUnit::Seconds => "SECONDS".to_string(),
             TimeUnit::Minutes => "MINUTES".to_string(),
             TimeUnit::Hours => "HOURS".to_string(),
-            TimeUnit::Days => "DAYS".to_string()
+            TimeUnit::Days => "DAYS".to_string(),
         }
     }
 
@@ -31,7 +31,7 @@ impl TimeUnit {
     }
 }
 
-impl Display for TimeUnit{
+impl Display for TimeUnit {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.into())?;
         Ok(())
@@ -49,14 +49,13 @@ const TIME_UNIT_H: &str = "h";
 const TIME_UNIT_D: &str = "d";
 
 impl From<&TimeUnit> for &str {
-
     fn from(value: &TimeUnit) -> Self {
         match value {
             TimeUnit::Millis => TIME_UNIT_MS,
             TimeUnit::Seconds => TIME_UNIT_S,
             TimeUnit::Minutes => TIME_UNIT_M,
             TimeUnit::Hours => TIME_UNIT_H,
-            TimeUnit::Days => TIME_UNIT_D
+            TimeUnit::Days => TIME_UNIT_D,
         }
     }
 }
@@ -71,8 +70,7 @@ impl TryFrom<&str> for TimeUnit {
             TIME_UNIT_M => Ok(TimeUnit::Minutes),
             TIME_UNIT_H => Ok(TimeUnit::Hours),
             TIME_UNIT_D => Ok(TimeUnit::Days),
-            _ => Err("Could not parse TimeUnit".to_string())
+            _ => Err("Could not parse TimeUnit".to_string()),
         }
     }
 }
-

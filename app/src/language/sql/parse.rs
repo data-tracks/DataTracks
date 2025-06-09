@@ -6,4 +6,3 @@ pub fn transform(query: &str) -> Result<AlgebraType, String> {
     let parse = parse(query)?;
     translate(parse)
 }
-

@@ -24,7 +24,7 @@ pub enum StorageError {
 #[derive(Clone)]
 pub struct ValueStore {
     inner: Arc<Mutex<SharedState>>,
-    index: usize,
+    pub index: usize,
 }
 
 impl Default for ValueStore {
@@ -35,15 +35,15 @@ impl Default for ValueStore {
 
 impl ValueStore {
     pub fn new() -> Self {
-        Self::new_with_values(vec![])
+        Self::new_with_values(vec![], 0)
     }
 
-    pub fn new_with_values(values: Vec<Value>) -> Self {
+    pub fn new_with_values(values: Vec<Value>, index: usize) -> Self {
         let store = ValueStore {
             inner: Arc::new(Mutex::new(SharedState::new(
                 Storage::new_temp("temp").unwrap(),
             ))),
-            index: 0,
+            index,
         };
         store.append(values);
         store
@@ -53,7 +53,9 @@ impl ValueStore {
         let mut inner = self.inner.lock();
         inner.counter += 1;
         let counter = inner.counter.into();
-        inner.storage.write_value(counter, value);
+        inner
+            .storage
+            .write_value(counter, value.wagonize(self.index));
         Ok(())
     }
 

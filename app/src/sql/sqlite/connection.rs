@@ -8,10 +8,11 @@ pub struct SqliteConnector {
     pub path: String,
 }
 
-
 impl SqliteConnector {
     pub fn new(path: &str) -> Self {
-        SqliteConnector { path: path.to_string() }
+        SqliteConnector {
+            path: path.to_string(),
+        }
     }
 
     pub(crate) fn add_options(&self, options: &mut Map<String, Value>) {
@@ -23,7 +24,10 @@ impl SqliteConnector {
     }
 
     pub(crate) fn serialize(&self, configs: &mut HashMap<String, ConfigModel>) {
-        configs.insert("path".to_string(), ConfigModel::String(StringModel::new(&self.path)));
+        configs.insert(
+            "path".to_string(),
+            ConfigModel::String(StringModel::new(&self.path)),
+        );
     }
 }
 
