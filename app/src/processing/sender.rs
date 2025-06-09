@@ -1,5 +1,4 @@
 use crate::util::Tx;
-use logos::Source;
 use std::collections::HashMap;
 use tracing::warn;
 use value::train::Train;
@@ -14,12 +13,6 @@ impl Sender {
         Sender {
             outs: HashMap::from([(num, sender)]),
         }
-    }
-}
-
-impl Sender {
-    pub(crate) fn send_to(&self, num: usize, train: Train) {
-        self.outs.get(&num).unwrap().send(train);
     }
 }
 

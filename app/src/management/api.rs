@@ -10,15 +10,15 @@ use std::sync::{Arc, Mutex};
 use tracing::{debug, info};
 
 #[derive(Debug, Default)]
-pub struct API {
+pub struct Api {
     clients: Vec<isize>,
     count: isize,
 }
 
-impl API {
+impl Api {
     pub fn handle_message(
         storage: Arc<Mutex<Storage>>,
-        api: Arc<Mutex<API>>,
+        api: Arc<Mutex<Api>>,
         msg: Message,
     ) -> Result<Vec<u8>, Vec<u8>> {
         match msg.data_type() {
@@ -139,7 +139,7 @@ impl API {
 fn handle_register(
     _request: Register,
     storage: Arc<Mutex<Storage>>,
-    api: Arc<Mutex<API>>,
+    api: Arc<Mutex<Api>>,
 ) -> Result<Vec<u8>, Vec<u8>> {
     let mut api = api.lock().unwrap();
     let id = api.count;
@@ -181,11 +181,4 @@ fn handle_register(
 
     builder.finish(msg, None);
     Ok(builder.finished_data().to_vec())
-}
-
-fn serialize_plans<'a>(
-    _builder: &'a mut FlatBufferBuilder<'a>,
-    _plan: &'a Plan,
-) -> ForwardsUOffset<message_generated::protocol::Plan<'a>> {
-    todo!()
 }

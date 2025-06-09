@@ -32,12 +32,12 @@ impl DebugDestination {
 }
 
 impl Configurable for DebugDestination {
-    fn options(&self) -> Map<String, Value> {
-        Map::new()
-    }
-
     fn name(&self) -> String {
         String::from("Debug")
+    }
+
+    fn options(&self) -> Map<String, Value> {
+        Map::new()
     }
 }
 
@@ -66,11 +66,7 @@ impl Destination for DebugDestination {
                             writeln!(w, "{:?}", train).expect("Could not write to debug file.");
                         }
 
-                        debug!(
-                            "last: {}, {:?}",
-                            train.last(),
-                            train.values.unwrap_or(vec![])
-                        );
+                        debug!("last: {}, {:?}", train.last(), train.values);
                     }
                     Err(e) => {
                         error!("{}", e)

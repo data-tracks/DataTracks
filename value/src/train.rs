@@ -14,7 +14,7 @@ pub type MutWagonsFunc = Box<dyn FnMut(&mut Vec<Train>) -> Train>;
 #[derive(Clone, Debug, Deserialize, Serialize, Writable, Readable)]
 pub struct Train {
     pub marks: HashMap<usize, Time>,
-    pub values: Option<Vec<Value>>,
+    pub values: Vec<Value>,
     pub event_time: Time,
 }
 
@@ -22,7 +22,7 @@ impl Train {
     pub fn new(values: Vec<Value>) -> Self {
         Train {
             marks: HashMap::new(),
-            values: Some(values),
+            values,
             event_time: Time::now(),
         }
     }
@@ -37,21 +37,13 @@ impl Train {
     }
 
     pub fn flag(mut self, stop: usize) -> Self {
-        self.values = self
-            .values
-            .map(|values| values.into_iter().map(|v| v.wagonize(stop)).collect());
+        self.values = self.values.into_iter().map(|v| v.wagonize(stop)).collect();
         self
     }
 
     pub fn merge(mut self, other: Self) -> Self {
-        if let Some(other_values) = other.values {
-            match self.values.as_mut() {
-                None => {}
-                Some(values) => {
-                    values.extend(other_values);
-                }
-            }
-        }
+        self.values.extend(other.values);
+
         self
     }
 
@@ -67,33 +59,27 @@ impl Train {
 impl ops::Add<Train> for Train {
     type Output = Train;
 
-    fn add(mut self, rhs: Train) -> Self::Output {
-        self.values = match self.values {
-            None => None,
-            Some(mut values) => match rhs.values {
-                None => None,
-                Some(mut b) => {
-                    values.append(&mut b);
-                    Some(values)
-                }
-            },
-        };
+    fn add(mut self, mut rhs: Train) -> Self::Output {
+        self.values.append(&mut rhs.values);
         self
     }
 }
 
-impl<'a> Into<Vec<u8>> for Train {
-    fn into(self) -> Vec<u8> {
+impl From<Train> for Vec<u8> {
+    fn from(value: Train) -> Self {
         let mut builder = FlatBufferBuilder::new();
 
         let args = TrainArgs {
-            values: self.values.map(|v| {
-                let values = &v
-                    .iter()
-                    .map(|e| e.flatternize(&mut builder))
-                    .collect::<Vec<_>>();
-                builder.create_vector(values)
-            }),
+            values: {
+                Some({
+                    let values = value
+                        .values
+                        .iter()
+                        .map(|e| e.flatternize(&mut builder))
+                        .collect::<Vec<_>>();
+                    builder.create_vector(values.as_slice())
+                })
+            },
             topic: None,
             event_time: None,
         };
@@ -123,22 +109,20 @@ impl TryFrom<schemas::message_generated::protocol::Train<'_>> for Train {
     ) -> Result<Self, Self::Error> {
         let _topic = value.topic();
 
-        match value.values() {
-            None => Ok(Train::new(vec![])),
-            Some(values) => Ok(Train::new(
-                values
-                    .iter()
-                    .map(|v| v.try_into())
-                    .collect::<Result<_, _>>()?,
-            )),
-        }
+        Ok(Train::new(
+            value
+                .values()
+                .iter()
+                .map(|v| v.try_into())
+                .collect::<Result<_, _>>()?,
+        ))
     }
 }
 
 impl From<&mut Train> for Train {
     fn from(train: &mut Train) -> Self {
-        let mut train = Train::new(train.values.take().unwrap());
-        train.marks = train.marks.iter().map(|(k, v)| (*k, v.clone())).collect();
+        let mut train = Train::new(train.values.clone());
+        train.marks = train.marks.iter().map(|(k, v)| (*k, *v)).collect();
         train
     }
 }
@@ -150,12 +134,11 @@ impl From<Vec<Train>> for Train {
         }
 
         let mut values = vec![];
-        for mut train in wagons {
-            values.append(train.values.take().unwrap().as_mut());
+        for train in wagons {
+            values.append(train.values.clone().as_mut());
         }
 
-        let train = Train::new(values);
-        train
+        Train::new(values)
     }
 }
 

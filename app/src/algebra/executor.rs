@@ -40,12 +40,8 @@ impl Executor {
         let marks = train.marks.clone();
         let event_time = train.event_time;
 
-        match train.values {
-            None => {}
-            Some(values) => {
-                self.storage.append(values);
-            }
-        }
+        self.storage.append(train.values);
+
         let mut train = self.iterator.drain_to_train(self.stop);
         train.event_time = event_time;
         train.marks = marks;
@@ -99,7 +95,7 @@ impl ValueIterator for IdentityIterator {
         self.storage = Some(storage);
     }
 
-    fn drain_to_train(&mut self, stop: usize) -> Train {
+    fn drain_to_train(&mut self, _stop: usize) -> Train {
         self.load();
         Train::new(self.values.drain(..).collect())
     }
@@ -111,7 +107,7 @@ impl ValueIterator for IdentityIterator {
         })
     }
 
-    fn enrich(&mut self, transforms: HashMap<String, Transform>) -> Option<BoxedIterator> {
+    fn enrich(&mut self, _transforms: HashMap<String, Transform>) -> Option<BoxedIterator> {
         None
     }
 }

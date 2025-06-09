@@ -6,14 +6,12 @@ use crate::algebra::{BoxedValueHandler, ContextOp, TupleOp};
 use crate::analyse::{InputDerivable, OutputDerivable};
 use crate::optimize::Cost;
 use crate::processing::Layout;
-use value::Value;
 use std::collections::HashMap;
+use value::Value;
 
+pub type ReplacerFunction = fn(&mut Operator) -> Vec<(AggOp, Vec<Operator>)>;
 pub trait Replaceable {
-    fn replace(
-        &mut self,
-        replace: fn(&mut Operator) -> Vec<(AggOp, Vec<Operator>)>,
-    ) -> Vec<(AggOp, Vec<Operator>)>;
+    fn replace(&mut self, replace: ReplacerFunction) -> Vec<(AggOp, Vec<Operator>)>;
 }
 
 pub trait Implementable<Implementation> {
@@ -81,17 +79,19 @@ impl Operator {
                 TupleOp::Index(_) => Cost::new(1),
                 Literal(_) => Cost::new(1),
                 Context(_) => Cost::new(1),
-                TupleOp::Split(_) => Cost::new(1) + self.operands[0].calc_cost()
+                TupleOp::Split(_) => Cost::new(1) + self.operands[0].calc_cost(),
             },
-            Op::Collection(_) => {
-                self.operands.iter().map(|o| o.calc_cost()).reduce(|a, b| a + b).unwrap_or(Cost::new(0))
-            }
-            Op::Binary(_) => {
-                Cost::new(1)
-            }
+            Op::Collection(_) => self
+                .operands
+                .iter()
+                .map(|o| o.calc_cost())
+                .reduce(|a, b| a + b)
+                .unwrap_or(Cost::new(0)),
+            Op::Binary(_) => Cost::new(1),
         }
     }
 
+    // $name
     pub fn context(name: String) -> Operator {
         Operator {
             op: Tuple(Context(ContextOp::new(name))),
@@ -159,10 +159,7 @@ impl InputDerivable for Operator {
 }
 
 impl Replaceable for Operator {
-    fn replace(
-        &mut self,
-        replace: fn(&mut Operator) -> Vec<(AggOp, Vec<Operator>)>,
-    ) -> Vec<(AggOp, Vec<Operator>)> {
+    fn replace(&mut self, replace: ReplacerFunction) -> Vec<(AggOp, Vec<Operator>)> {
         match &self.op {
             Op::Agg(_) => replace(self),
             Tuple(_) | Op::Collection(_) => self
@@ -192,7 +189,7 @@ impl Implementable<BoxedValueLoader> for Operator {
             Op::Agg(a) => a.implement(),
             Tuple(_) => Err(()),
             Op::Collection(_) => Err(()),
-            Op::Binary(_) => Err(())
+            Op::Binary(_) => Err(()),
         }
     }
 }

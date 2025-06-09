@@ -12,15 +12,6 @@ pub struct Union {
     distinct: bool,
 }
 
-impl Union {
-    pub fn new(inputs: Vec<AlgebraType>) -> Self {
-        Self {
-            inputs,
-            distinct: true,
-        }
-    }
-}
-
 impl InputDerivable for Union {
     fn derive_input_layout(&self) -> Option<Layout> {
         let input = self

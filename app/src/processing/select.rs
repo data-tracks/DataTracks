@@ -79,7 +79,7 @@ impl TriggerSelector {
         current: &Time,
     ) -> Vec<(WindowDescriptor, Train)> {
         let mut trains = vec![];
-        windows.into_iter().for_each(|(window, is_complete)| {
+        windows.into_iter().for_each(|(window, _is_complete)| {
             let mut trigger = false;
             if let Some(status) = self.triggered_windows.get(&window) {
                 // have already seen this window
@@ -260,7 +260,7 @@ mod tests {
 
         assert_eq!(values.len(), 2);
 
-        assert_eq!(values.first().cloned().unwrap().1.values.unwrap().len(), 1);
-        assert_eq!(values.get(1).cloned().unwrap().1.values.unwrap().len(), 2);
+        assert_eq!(values.first().cloned().unwrap().1.values.len(), 1);
+        assert_eq!(values.get(1).cloned().unwrap().1.values.len(), 2);
     }
 }

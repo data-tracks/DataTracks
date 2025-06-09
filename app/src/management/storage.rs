@@ -222,6 +222,21 @@ impl Storage {
         }
     }
 
+    pub fn stop_plan_by_name(&mut self, name: String) {
+        let mut lock = self.plans.lock().unwrap();
+        let plan = lock
+            .iter_mut()
+            .filter(|(_id, plan)| plan.name == name)
+            .map(|(_, plan)| plan)
+            .next();
+        match plan {
+            None => {}
+            Some(p) => {
+                p.halt();
+            }
+        }
+    }
+
     pub fn attach(
         &mut self,
         source_id: usize,

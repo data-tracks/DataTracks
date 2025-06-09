@@ -218,10 +218,10 @@ impl Station {
     }
 
     pub(crate) fn close(&mut self) {
-        self.control
-            .0
-            .send(Command::Stop(0))
-            .expect("TODO: panic message");
+        match self.control.0.send(Command::Stop(0)) {
+            Ok(_) => {}
+            Err(err) => error!("{}", err),
+        };
     }
 
     pub(crate) fn set_stop(&mut self, stop: usize) {
@@ -376,17 +376,14 @@ pub mod tests {
 
         let res = rx.recv();
         match res {
-            Ok(mut t) => {
-                assert_eq!(
-                    values.len(),
-                    t.values.clone().map_or(usize::MAX, |values| values.len())
-                );
-                for (i, value) in t.values.take().unwrap().iter().enumerate() {
+            Ok(t) => {
+                assert_eq!(values.len(), t.values.len());
+                for (i, value) in t.values.iter().enumerate() {
                     assert_eq!(value, &values[i]);
                     assert_ne!(&Value::text(""), value.as_dict().unwrap().get("$").unwrap())
                 }
             }
-            Err(..) => assert!(false),
+            Err(..) => unreachable!(),
         }
     }
 
@@ -413,8 +410,8 @@ pub mod tests {
         input.send(Train::new(values.clone()));
 
         let res = output_rx.recv().unwrap();
-        assert_eq!(res.values.clone().unwrap(), values);
-        assert_ne!(res.values.clone().unwrap(), vec![Value::null().into()]);
+        assert_eq!(res.values.clone(), values);
+        assert_ne!(res.values.clone(), vec![Value::null().into()]);
 
         assert!(output_rx.try_recv().is_err());
 

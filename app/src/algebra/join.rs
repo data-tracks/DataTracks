@@ -234,15 +234,12 @@ mod test {
         handle.set_storage(left);
         handle.set_storage(right);
 
-        let mut res = handle.drain_to_train(3);
+        let res = handle.drain_to_train(3);
         assert_eq!(
-            res.clone().values.unwrap(),
+            res.values,
             vec![Value::Dict(Dict::from(vec![5.5.into(), 5.5.into()]))]
         );
-        assert_ne!(
-            res.values.take().unwrap(),
-            vec![Value::Dict(Dict::from(vec![]))]
-        );
+        assert_ne!(res.values, vec![Value::Dict(Dict::from(vec![]))]);
     }
 
     #[test]
@@ -273,13 +270,13 @@ mod test {
 
         let mut res = handle.drain_to_train(3);
         assert_eq!(
-            res.values.clone().unwrap(),
+            res.values,
             vec![
                 Value::Dict(Dict::from(vec![5.5.into(), 5.5.into()])),
                 Value::Dict(Dict::from(vec![5.5.into(), 5.5.into()]))
             ]
         );
-        assert_ne!(res.values.take().unwrap(), vec![vec![].into()]);
+        assert_ne!(res.values, vec![vec![].into()]);
     }
 
     pub fn transform(values: Vec<Value>) -> Vec<Value> {

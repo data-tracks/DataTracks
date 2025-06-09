@@ -13,21 +13,15 @@ pub trait OutputDerivable {
     fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Option<Layout>;
 }
 
-
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Default)]
 pub enum OutputDerivationStrategy {
     QueryBased(QueryBasedStrategy),
     ContentBased,
     UserDefined(Layout),
     External(ExternalStrategy),
     Combined(CombinedStrategy),
-    Undefined
-}
-
-impl Default for OutputDerivationStrategy {
-    fn default() -> Self {
-        Undefined
-    }
+    #[default]
+    Undefined,
 }
 
 impl OutputDerivationStrategy {
@@ -44,7 +38,6 @@ impl OutputDerivationStrategy {
     }
 }
 
-
 impl OutputDerivable for OutputDerivationStrategy {
     fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Option<Layout> {
         match self {
@@ -53,7 +46,7 @@ impl OutputDerivable for OutputDerivationStrategy {
             UserDefined(layout) => Some(layout.clone()),
             External(e) => e.derive_output_layout(inputs),
             Combined(comb) => comb.derive_output_layout(inputs),
-            Undefined => Some(Layout::default())
+            Undefined => Some(Layout::default()),
         }
     }
 }
@@ -68,11 +61,16 @@ pub struct QueryBasedStrategy {
 impl QueryBasedStrategy {
     pub fn new(query: String, language: Language) -> Result<Self, String> {
         let algebra = build_algebra(&language, &query)?;
-        let layout = algebra.derive_output_layout(HashMap::new()).ok_or("Could not derive layout.")?;
-        Ok(QueryBasedStrategy { query, layout, language })
+        let layout = algebra
+            .derive_output_layout(HashMap::new())
+            .ok_or("Could not derive layout.")?;
+        Ok(QueryBasedStrategy {
+            query,
+            layout,
+            language,
+        })
     }
 }
-
 
 impl OutputDerivable for QueryBasedStrategy {
     fn derive_output_layout(&self, _inputs: HashMap<String, &Layout>) -> Option<Layout> {
@@ -93,7 +91,9 @@ impl CombinedStrategy {
 
 impl OutputDerivable for CombinedStrategy {
     fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Option<Layout> {
-        Some(self.strategies.iter().fold(Layout::default(), |a, b| a.merge(&b.derive_output_layout(inputs.clone()).unwrap())))
+        Some(self.strategies.iter().fold(Layout::default(), |a, b| {
+            a.merge(&b.derive_output_layout(inputs.clone()).unwrap())
+        }))
     }
 }
 
@@ -116,32 +116,57 @@ mod tests {
 
     #[test]
     fn test_simple_layout_single() {
-        let strategy = OutputDerivationStrategy::query_based("SELECT \"id\" FROM \"company\" WHERE \"name\" = $".to_string(), Language::Sql).unwrap();
+        let strategy = OutputDerivationStrategy::query_based(
+            "SELECT \"id\" FROM \"company\" WHERE \"name\" = $".to_string(),
+            Language::Sql,
+        )
+        .unwrap();
         let output = strategy.derive_output_layout(HashMap::new()).unwrap();
         assert_eq!(Layout::from("id"), output);
     }
 
     #[test]
     fn test_simple_layout_array() {
-        let strategy = OutputDerivationStrategy::query_based("SELECT \"id\", \"name\" FROM \"company\" WHERE \"name\" = $".to_string(), Language::Sql).unwrap();
+        let strategy = OutputDerivationStrategy::query_based(
+            "SELECT \"id\", \"name\" FROM \"company\" WHERE \"name\" = $".to_string(),
+            Language::Sql,
+        )
+        .unwrap();
         let output = strategy.derive_output_layout(HashMap::new()).unwrap();
-        assert_eq!(Layout::tuple(vec![Some("id".to_string()), Some("name".to_string())]), output);
+        assert_eq!(
+            Layout::tuple(vec![Some("id".to_string()), Some("name".to_string())]),
+            output
+        );
         assert_ne!(Layout::default(), output);
     }
 
     #[test]
     fn test_simple_layout_dic_alg() {
-        let node = build_algebra(&Language::Sql, &"SELECT {\"id\":\"id\", \"name\":\"name\"} FROM \"company\"".to_string()).unwrap();
+        let node = build_algebra(
+            &Language::Sql,
+            &"SELECT {\"id\":\"id\", \"name\":\"name\"} FROM \"company\"".to_string(),
+        )
+        .unwrap();
         let output = node.derive_output_layout(HashMap::new()).unwrap();
-        assert_eq!(Layout::dict(vec!["id".to_string(), "name".to_string()]), output);
+        assert_eq!(
+            Layout::dict(vec!["id".to_string(), "name".to_string()]),
+            output
+        );
         assert_ne!(Layout::default(), output);
     }
 
     #[test]
     fn test_simple_layout_dic() {
-        let strategy = OutputDerivationStrategy::query_based("SELECT {'id':\"id\", 'name':\"name\"} FROM \"company\" WHERE \"name\" = $".to_string(), Language::Sql).unwrap();
+        let strategy = OutputDerivationStrategy::query_based(
+            "SELECT {'id':\"id\", 'name':\"name\"} FROM \"company\" WHERE \"name\" = $".to_string(),
+            Language::Sql,
+        )
+        .unwrap();
         let output = strategy.derive_output_layout(HashMap::new()).unwrap();
-        assert_eq!(Layout::dict(vec!["id".to_string(), "name".to_string()]), output);
+        assert_eq!(
+            Layout::dict(vec!["id".to_string(), "name".to_string()]),
+            output
+        );
         assert_ne!(Layout::default(), output);
     }
 }

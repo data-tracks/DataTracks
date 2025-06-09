@@ -5,8 +5,8 @@ use crate::processing::station::Command;
 use crate::processing::station::Command::Ready;
 use crate::processing::{plan, Train};
 use crate::sql::sqlite::connection::SqliteConnector;
+use crate::util::Tx;
 use crate::util::{new_channel, new_id, DynamicQuery};
-use crate::util::{Rx, Tx};
 use crossbeam::channel::{unbounded, Sender};
 use rusqlite::params_from_iter;
 use serde_json::Map;
@@ -89,14 +89,14 @@ impl Destination for LiteDestination {
                             break;
                         }
                         match receiver.try_recv() {
-                            Ok(mut train) => {
-                                let values = train.values.take().unwrap();
+                            Ok(train) => {
+                                let values = &train.values;
                                 if values.is_empty() {
                                     continue;
                                 }
                                 for value in values {
                                     let _ = prepared
-                                        .query(params_from_iter(value_functions(&value)))
+                                        .query(params_from_iter(value_functions(value)))
                                         .unwrap();
                                 }
                             }

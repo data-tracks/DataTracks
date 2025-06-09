@@ -64,13 +64,6 @@ impl BackWindow {
         }
     }
 
-    pub(crate) fn get_strategy(
-        &self,
-    ) -> Box<dyn FnMut(&Time) -> Vec<(WindowDescriptor, bool)> + Send + 'static> {
-        let duration = self.duration.clone();
-        Box::new(move |time| vec![(WindowDescriptor::new(time - duration, *time), true)])
-    }
-
     fn parse(stencil: String) -> Result<Self, String> {
         let (digit, time_unit) = parse_interval(stencil.as_str())?;
 
@@ -133,25 +126,6 @@ impl IntervalWindow {
             start,
             millis_delta: time * time_unit.as_ms(),
         }
-    }
-
-    pub(crate) fn get_strategy(
-        &self,
-    ) -> Box<dyn FnMut(&Time) -> Vec<(WindowDescriptor, bool)> + Send + 'static> {
-        let start = self.start;
-        let millis_delta = self.millis_delta;
-        Box::new(move |time| {
-            let delta = time.duration_since(start);
-            let minus = delta.ms % millis_delta;
-            let start_ms = start.ms + delta.ms - minus;
-            vec![(
-                WindowDescriptor::new(
-                    Time::new(start_ms, 0),
-                    Time::new(start_ms + millis_delta, 0),
-                ),
-                false,
-            )]
-        })
     }
 
     pub(crate) fn dump(&self) -> String {
@@ -251,8 +225,6 @@ impl BackStrategy {
 }
 
 pub struct IntervalStrategy {
-    pub time: i64,
-    pub time_unit: TimeUnit,
     pub start: Time,
     pub millis_delta: i64,
 }
@@ -275,8 +247,6 @@ impl IntervalStrategy {
 impl IntervalStrategy {
     fn new(window: &IntervalWindow) -> Self {
         Self {
-            time: window.time,
-            time_unit: window.time_unit.clone(),
             start: window.start,
             millis_delta: window.millis_delta,
         }
@@ -316,11 +286,8 @@ mod test {
         let res = rx.recv();
         match res {
             Ok(mut t) => {
-                assert_eq!(
-                    values.len(),
-                    t.values.clone().map_or(usize::MAX, |vec| vec.len())
-                );
-                for (i, value) in t.values.take().unwrap().into_iter().enumerate() {
+                assert_eq!(values.len(), t.values.len());
+                for (i, value) in t.values.into_iter().enumerate() {
                     assert_eq!(value, values[i]);
                     assert_ne!(Value::text(""), *value.as_dict().unwrap().get("$").unwrap())
                 }
@@ -361,17 +328,17 @@ mod test {
 
         // 1. train
         assert_eq!(
-            results.remove(0).values.take().unwrap().get(0).unwrap(),
+            results.remove(0).values.get(0).unwrap(),
             values.get(0).unwrap()
         );
         // 2. " or 1. & 2. depending on how fast it was handled
-        let res = results.remove(0).values.take().unwrap();
+        let res = results.remove(0).values;
         assert!(
             res.get(0).unwrap() == values.get(1).unwrap()
                 || res.get(1).unwrap() == values.get(1).unwrap()
         );
 
         // 3. "
-        assert_eq!(results.remove(0).values.take().unwrap(), after);
+        assert_eq!(results.remove(0).values, after);
     }
 }

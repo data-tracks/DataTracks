@@ -1,42 +1,23 @@
-use std::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
-
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 static GLOBAL_ID: AtomicUsize = AtomicUsize::new(0);
 
-
-pub struct IdBuilder {
-    id: AtomicI64,
-}
-
-impl IdBuilder {
-    fn new(id: i64) -> Self {
-        IdBuilder { id: AtomicI64::new(id) }
-    }
-
-    pub fn new_id(&self) -> i64 {
-        self.id.fetch_add(1, Ordering::SeqCst) + 1
-    }
-}
-
-
-pub fn new_id() -> usize{
+pub fn new_id() -> usize {
     GLOBAL_ID.fetch_add(1, Ordering::Relaxed)
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::util::id::IdBuilder;
+    use crate::util::new_id;
 
     #[test]
     fn not_same() {
-        let builder = IdBuilder::new(0);
-
         let mut ids = vec![];
 
         for _ in 0..1000 {
-            let id = builder.new_id();
+            let id = new_id();
             if ids.contains(&(id)) {
-                assert!(false, "overlapping ids")
+                panic!("overlapping ids")
             }
             ids.push(id)
         }

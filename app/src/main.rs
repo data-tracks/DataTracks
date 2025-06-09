@@ -43,7 +43,6 @@ fn main() {
 }
 
 fn shutdown_hook(rx: Receiver<()>, mut manager: Manager) {
-    let instant = Instant::now();
     // Wait for the shutdown signal or the thread to finish
     loop {
         if rx.try_recv().is_ok() {

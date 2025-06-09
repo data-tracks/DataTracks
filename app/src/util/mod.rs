@@ -16,7 +16,6 @@ pub use window::WindowType;
 
 mod broadcast;
 mod builder;
-mod cache;
 mod channel;
 mod dynamic;
 mod id;

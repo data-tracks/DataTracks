@@ -63,7 +63,7 @@ impl Iterator for BareVariableIterator {
 }
 
 impl ValueIterator for BareVariableIterator {
-    fn set_storage(&mut self, storage: ValueStore) {
+    fn set_storage(&mut self, _storage: ValueStore) {
         unreachable!("Not correctly enriched")
     }
 
@@ -78,7 +78,7 @@ impl ValueIterator for BareVariableIterator {
         let transform = transforms.get(&self.name).unwrap();
         let name = self.name.clone();
         Some(Box::new(VariableIterator::new(
-            name,
+            name.into(),
             self.inputs.iter().map(|v| (*v).clone()).collect(),
             transform.optimize(transforms.clone(), None),
         )))
@@ -89,12 +89,12 @@ pub struct VariableIterator {
     transform: BoxedIterator,
     inputs: Vec<BoxedIterator>,
     store: ValueStore,
-    name: String,
+    name: Value,
 }
 
 impl VariableIterator {
     pub(crate) fn new(
-        name: String,
+        name: Value,
         inputs: Vec<BoxedIterator>,
         mut transform: BoxedIterator,
     ) -> Self {

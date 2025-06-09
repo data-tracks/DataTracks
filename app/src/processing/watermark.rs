@@ -135,7 +135,7 @@ impl PeriodicWatermark {
     pub(crate) fn detach(&self, _num: usize) {
         todo!()
     }
-    pub(crate) fn attach(&self, num: usize, sender: Tx<Time>) {
+    pub(crate) fn attach(&self, _num: usize, _sender: Tx<Time>) {
         todo!()
     }
 }

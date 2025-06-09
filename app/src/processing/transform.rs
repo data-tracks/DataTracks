@@ -21,12 +21,7 @@ use serde_json::Map;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
-use value::train::Train;
 use value::Value;
-
-pub trait Taker: Send {
-    fn take(&mut self, wagons: &mut Vec<Train>) -> Vec<Train>;
-}
 
 #[derive(Debug, PartialEq)]
 pub enum Transform {
@@ -345,6 +340,7 @@ impl Default for FuncTransform {
 }
 
 impl FuncTransform {
+    #[cfg(test)]
     pub(crate) fn new_boxed(func: fn(i64, Value) -> Value) -> Self {
         Self::new(Arc::new(func))
     }
@@ -365,6 +361,7 @@ impl FuncTransform {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn new_val(_stop: i64, func: fn(Value) -> Value) -> FuncTransform {
         Self::new(Arc::new(move |_stop, value| func(value)))
     }
@@ -479,12 +476,9 @@ mod tests {
 
         let res = rx.recv();
         match res {
-            Ok(mut t) => {
-                assert_eq!(
-                    values.len(),
-                    t.values.clone().map_or(usize::MAX, |vec| vec.len())
-                );
-                for (i, value) in t.values.take().unwrap().into_iter().enumerate() {
+            Ok(t) => {
+                assert_eq!(values.len(), t.values.len());
+                for (i, value) in t.values.into_iter().enumerate() {
                     assert_eq!(
                         value.as_dict().unwrap().get_data().unwrap().clone(),
                         &values[i].as_dict().unwrap().get_data().unwrap().clone() + &Value::int(3)
@@ -521,28 +515,24 @@ mod tests {
 
         let res = rx.recv();
         match res {
-            Ok(mut t) => {
-                if let Some(vec) = t.values.take() {
-                    assert_eq!(values.len(), vec.len());
-                    for (i, value) in vec.into_iter().enumerate() {
-                        assert_eq!(
-                            value.as_dict().unwrap().get_data().unwrap().clone(),
-                            values
-                                .get(i)
-                                .unwrap()
-                                .as_dict()
-                                .unwrap()
-                                .get_data()
-                                .unwrap()
-                                + &Value::int(3)
-                        );
-                        assert_ne!(
-                            &Value::text(""),
-                            value.as_dict().unwrap().get_data().unwrap()
-                        );
-                    }
-                } else {
-                    panic!("Expected values for key 0");
+            Ok(t) => {
+                assert_eq!(values.len(), t.values.len());
+                for (i, value) in t.values.into_iter().enumerate() {
+                    assert_eq!(
+                        value.as_dict().unwrap().get_data().unwrap().clone(),
+                        values
+                            .get(i)
+                            .unwrap()
+                            .as_dict()
+                            .unwrap()
+                            .get_data()
+                            .unwrap()
+                            + &Value::int(3)
+                    );
+                    assert_ne!(
+                        &Value::text(""),
+                        value.as_dict().unwrap().get_data().unwrap()
+                    );
                 }
             }
             Err(e) => panic!("Failed to receive: {:?}", e),
@@ -690,7 +680,7 @@ mod tests {
                 }
 
                 let result = t.drain_to_train(0);
-                assert_eq!(result.values.unwrap(), output);
+                assert_eq!(result.values, output);
             }
             Err(_) => panic!("Failed"),
         }
@@ -705,7 +695,7 @@ mod tests {
                 t.set_storage(storage);
 
                 let result = t.drain_to_train(0);
-                assert_eq!(result.values.unwrap(), output);
+                assert_eq!(result.values, output);
             }
             Err(_) => panic!("Failed"),
         }
@@ -721,7 +711,7 @@ mod tests {
                 t.set_storage(storage);
 
                 let result = t.drain_to_train(0);
-                let result = result.values.unwrap();
+                let result = result.values;
                 for result in &result {
                     assert!(output.contains(result))
                 }

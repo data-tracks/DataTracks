@@ -1,9 +1,7 @@
 use crate::management::storage::Storage;
-use crate::processing::station::Command;
 use crate::processing::{Plan, Train};
 use crate::tpc::start_tpc;
 use crate::ui::start_web;
-use crossbeam::channel::Sender;
 use reqwest::blocking::Client;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -15,7 +13,6 @@ use value::Time;
 pub struct Manager {
     storage: Arc<Mutex<Storage>>,
     handles: Vec<thread::JoinHandle<()>>,
-    server: Option<Sender<Command>>,
 }
 
 impl Manager {
@@ -23,7 +20,6 @@ impl Manager {
         Manager {
             storage: Arc::new(Mutex::new(Storage::new())),
             handles: vec![],
-            server: None,
         }
     }
 

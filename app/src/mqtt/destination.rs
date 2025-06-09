@@ -101,27 +101,20 @@ impl Destination for MqttDestination {
                         match receiver.try_recv() {
                             Ok(train) => {
                                 debug!("Sending {:?}", train);
-                                if let Some(values) = train.values {
-                                    for value in values {
-                                        let value = match value {
-                                            value::Value::Dict(v) => {
-                                                v.get_data().cloned().unwrap_or_default()
-                                            }
-                                            _ => value,
-                                        };
-                                        let payload = serde_json::to_string(&value.to_string())
-                                            .unwrap_or_else(|err| {
-                                                error!("Mqtt payload error {}", err);
-                                                String::from("error")
-                                            });
-                                        match link_tx
-                                            .publish("test", payload)
-                                            .map_err(|e| e.to_string())
-                                        {
-                                            Ok(_) => {}
-                                            Err(error) => error!("MQTT Error {}", error),
-                                        };
-                                    }
+
+                                for value in &train.values {
+                                    let payload = serde_json::to_string(&value.to_string())
+                                        .unwrap_or_else(|err| {
+                                            error!("Mqtt payload error {}", err);
+                                            String::from("error")
+                                        });
+                                    match link_tx
+                                        .publish("test", payload)
+                                        .map_err(|e| e.to_string())
+                                    {
+                                        Ok(_) => {}
+                                        Err(error) => error!("MQTT Error {}", error),
+                                    };
                                 }
                             }
                             _ => tokio::time::sleep(Duration::from_nanos(100)).await,

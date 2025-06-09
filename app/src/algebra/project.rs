@@ -42,7 +42,7 @@ impl Iterator for ProjectIter {
 }
 
 impl ValueIterator for ProjectIter {
-    fn set_storage(&mut self, storage: ValueStore) {
+    fn set_storage(&mut self, _storage: ValueStore) {
         unreachable!()
     }
 

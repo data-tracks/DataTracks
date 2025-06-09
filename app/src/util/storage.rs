@@ -27,6 +27,12 @@ pub struct ValueStore {
     index: usize,
 }
 
+impl Default for ValueStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ValueStore {
     pub fn new() -> Self {
         Self::new_with_values(vec![])

@@ -1,6 +1,3 @@
-use schemas::message_generated::protocol::{KeyValueStringTransform, KeyValueStringTransformArgs, KeyValueU64Destination, KeyValueU64DestinationArgs, KeyValueU64Source, KeyValueU64SourceArgs, KeyValueU64Station, PlanStatus};
-use schemas::message_generated::protocol::KeyValueU64StationArgs;
-use schemas::message_generated::protocol::{KeyValueU64VecU64, KeyValueU64VecU64Args};
 use crate::processing::destination::{parse_destination, Destination};
 use crate::processing::option::Configurable;
 use crate::processing::plan::Status::Stopped;
@@ -13,6 +10,15 @@ use crate::ui::{ConfigContainer, ConfigModel};
 use crate::util::new_id;
 use core::default::Default;
 use crossbeam::channel::{unbounded, Receiver, Sender};
+use flatbuffers::{FlatBufferBuilder, WIPOffset};
+use schemas::message_generated::protocol::KeyValueU64StationArgs;
+use schemas::message_generated::protocol::{
+    KeyValueStringTransform, KeyValueStringTransformArgs, KeyValueU64Destination,
+    KeyValueU64DestinationArgs, KeyValueU64Source, KeyValueU64SourceArgs, KeyValueU64Station,
+    PlanStatus,
+};
+use schemas::message_generated::protocol::{KeyValueU64VecU64, KeyValueU64VecU64Args};
+use schemas::message_generated::protocol::{Plan as FlatPlan, PlanArgs};
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize, Serializer};
 use serde_json::{Map, Value};
@@ -23,8 +29,6 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
-use flatbuffers::{FlatBufferBuilder, WIPOffset};
-use schemas::message_generated::protocol::{PlanArgs, Plan as FlatPlan};
 use tracing::error;
 
 pub struct Plan {
@@ -40,7 +44,6 @@ pub struct Plan {
     pub status: Status,
     pub transforms: HashMap<String, transform::Transform>,
 }
-
 
 #[cfg(test)]
 impl Plan {
@@ -77,7 +80,7 @@ pub enum Status {
 
 impl Status {
     pub(crate) fn flatternize(&self) -> PlanStatus {
-        match self { 
+        match self {
             Status::Running => PlanStatus::Running,
             Status::Stopped => PlanStatus::Stopped,
             Status::Error => PlanStatus::Error,
@@ -111,41 +114,70 @@ impl Plan {
             dump += "\nIn\n";
             let mut sorted = self.sources.values().collect::<Vec<&Box<dyn Source>>>();
             sorted.sort_by_key(|s| s.name());
-            dump += &sorted.into_iter().map(|s| {
-                let mut stops = self.get_connected_stations(s.id());
-                stops.sort();
-                if stops.is_empty() {
-                    s.dump_source(include_ids).to_string()
-                }else {
-                    format!("{}:{}", s.dump_source(include_ids), stops.iter().map(|s|s.to_string()).collect::<Vec<String>>().join(",") )
-                }
-
-            }).collect::<Vec<_>>().join("\n")
+            dump += &sorted
+                .into_iter()
+                .map(|s| {
+                    let mut stops = self.get_connected_stations(s.id());
+                    stops.sort();
+                    if stops.is_empty() {
+                        s.dump_source(include_ids).to_string()
+                    } else {
+                        format!(
+                            "{}:{}",
+                            s.dump_source(include_ids),
+                            stops
+                                .iter()
+                                .map(|s| s.to_string())
+                                .collect::<Vec<String>>()
+                                .join(",")
+                        )
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
         }
 
         if !self.destinations.is_empty() {
             dump += "\nOut\n";
-            let mut sorted = self.destinations.values().collect::<Vec<&Box<dyn Destination>>>();
+            let mut sorted = self
+                .destinations
+                .values()
+                .collect::<Vec<&Box<dyn Destination>>>();
             sorted.sort_by_key(|s| s.name());
-            dump += &sorted.into_iter().map(|s| {
-
-                let stops = self.get_connected_stations(s.id());
-                if stops.is_empty() {
-                    s.dump_destination(include_ids).to_string()
-                }else {
-                    format!("{}:{}", s.dump_destination(include_ids), stops.iter().map(|s|s.to_string()).collect::<Vec<String>>().join(",") )
-                }
-            }).collect::<Vec<_>>().join("\n")
+            dump += &sorted
+                .into_iter()
+                .map(|s| {
+                    let stops = self.get_connected_stations(s.id());
+                    if stops.is_empty() {
+                        s.dump_destination(include_ids).to_string()
+                    } else {
+                        format!(
+                            "{}:{}",
+                            s.dump_destination(include_ids),
+                            stops
+                                .iter()
+                                .map(|s| s.to_string())
+                                .collect::<Vec<String>>()
+                                .join(",")
+                        )
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
         }
 
         if !self.transforms.is_empty() {
             dump += "\nTransform\n";
             let mut sorted = self.transforms.keys().collect::<Vec<_>>();
             sorted.sort();
-            dump += &sorted.into_iter().map(|name| {
-                let dump = self.transforms.get(name).unwrap().dump(include_ids);
-                format!("${}:{}", name, dump)
-            }).collect::<Vec<_>>().join("\n")
+            dump += &sorted
+                .into_iter()
+                .map(|name| {
+                    let dump = self.transforms.get(name).unwrap().dump(include_ids);
+                    format!("${}:{}", name, dump)
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
         }
 
         dump
@@ -179,7 +211,14 @@ impl Plan {
     }
 
     pub(crate) fn send_control(&mut self, num: &usize, command: Command) {
-        self.controls.get_mut(num).unwrap_or(&mut Vec::new()).iter().for_each(|c| c.send(command.clone()).unwrap_or_else(|err| error!("error: {}", err)))
+        self.controls
+            .get_mut(num)
+            .unwrap_or(&mut Vec::new())
+            .iter()
+            .for_each(|c| {
+                c.send(command.clone())
+                    .unwrap_or_else(|err| error!("error: {}", err))
+            })
     }
 
     pub fn operate(&mut self) -> Result<(), String> {
@@ -189,7 +228,10 @@ impl Plan {
 
         for station in self.stations.values_mut() {
             let entry = self.controls.entry(station.id).or_default();
-            entry.push(station.operate(Arc::clone(&self.control_receiver.0), self.transforms.clone()));
+            entry.push(station.operate(
+                Arc::clone(&self.control_receiver.0),
+                self.transforms.clone(),
+            ));
         }
 
         // wait for all stations to be ready
@@ -197,14 +239,12 @@ impl Plan {
         let start_time = Instant::now();
         while readys.len() != self.controls.len() {
             match self.control_receiver.1.try_recv() {
-                Ok(command) => {
-                    match command {
-                        Command::Ready(id) => {
-                            readys.push(id);
-                        }
-                        command => return Err(format!("Not known command {:?}", command)),
+                Ok(command) => match command {
+                    Command::Ready(id) => {
+                        readys.push(id);
                     }
-                }
+                    command => return Err(format!("Not known command {:?}", command)),
+                },
                 Err(_) => {
                     if start_time.elapsed().as_secs() > 3 {
                         return Err("Stations did not start properly".to_string());
@@ -214,13 +254,18 @@ impl Plan {
             }
         }
 
-
         for destination in self.destinations.values_mut() {
-            self.controls.entry(destination.id()).or_default().push(destination.operate(Arc::clone(&self.control_receiver.0)));
+            self.controls
+                .entry(destination.id())
+                .or_default()
+                .push(destination.operate(Arc::clone(&self.control_receiver.0)));
         }
 
         for source in self.sources.values_mut() {
-            self.controls.entry(source.id()).or_default().push(source.operate(Arc::clone(&self.control_receiver.0)));
+            self.controls
+                .entry(source.id())
+                .or_default()
+                .push(source.operate(Arc::clone(&self.control_receiver.0)));
         }
 
         self.status = Status::Running;
@@ -229,7 +274,10 @@ impl Plan {
 
     pub(crate) fn clone_platform(&mut self, num: usize) {
         let station = self.stations.get_mut(&num).unwrap();
-        self.controls.entry(num).or_default().push(station.operate(Arc::clone(&self.control_receiver.0), self.transforms.clone()))
+        self.controls.entry(num).or_default().push(station.operate(
+            Arc::clone(&self.control_receiver.0),
+            self.transforms.clone(),
+        ))
     }
 
     fn connect_stops(&mut self) -> Result<(), String> {
@@ -240,13 +288,19 @@ impl Plan {
                 let mut last_station = *first;
 
                 for num in stops_iter {
-                    let next_station = self.stations.get_mut(num).ok_or("Could not find target station".to_string())?;
+                    let next_station = self
+                        .stations
+                        .get_mut(num)
+                        .ok_or("Could not find target station".to_string())?;
                     let next_stop_id = next_station.stop;
 
                     next_station.add_insert(last_station);
 
                     let send = next_station.get_in();
-                    let last = self.stations.get_mut(&last_station).ok_or("Could not find target station".to_string())?;
+                    let last = self
+                        .stations
+                        .get_mut(&last_station)
+                        .ok_or("Could not find target station".to_string())?;
                     last.add_out(*line, send)?;
 
                     last_station = next_stop_id;
@@ -256,11 +310,9 @@ impl Plan {
         Ok(())
     }
 
-
     pub fn parse(stencil: &str) -> Result<Self, String> {
         let mut plan = Plan::default();
         let mut phase = Stencil::Network;
-
 
         let lines = stencil.split('\n');
         for (line_number, line) in lines.enumerate() {
@@ -271,15 +323,15 @@ impl Plan {
                 "in" => {
                     phase = Stencil::In;
                     continue;
-                },
+                }
                 "out" => {
                     phase = Stencil::Out;
                     continue;
-                },
+                }
                 "transform" => {
                     phase = Stencil::Transform;
                     continue;
-                },
+                }
                 _ => {}
             }
 
@@ -297,7 +349,6 @@ impl Plan {
                     let _ = plan.parse_line(line_number, line);
                 }
             }
-            
         }
 
         Ok(plan)
@@ -316,7 +367,6 @@ impl Plan {
                 last_char = char;
                 continue;
             }
-
 
             match char {
                 // }--1 or }-|1
@@ -352,82 +402,137 @@ impl Plan {
         Ok(())
     }
 
-    pub(crate) fn flatterize<'builder>(&self, builder: &mut FlatBufferBuilder<'builder>) -> WIPOffset<schemas::message_generated::protocol::Plan<'builder>> {
+    pub(crate) fn flatterize<'builder>(
+        &self,
+        builder: &mut FlatBufferBuilder<'builder>,
+    ) -> WIPOffset<schemas::message_generated::protocol::Plan<'builder>> {
         // Serialize strings
         let name = builder.create_string(&self.name);
         let id = self.id as u64;
 
         // Serialize lines: HashMap<usize, Vec<usize>>
-        let lines: Vec<_> = self.lines.iter().map(|(&k, v)| {
-            let vec = builder.create_vector(v.iter().map(|v| *v as u64).collect::<Vec<u64>>().as_slice());
-            KeyValueU64VecU64::create(builder, &KeyValueU64VecU64Args {
-                key: k as u64,
-                value: Some(vec),
+        let lines: Vec<_> = self
+            .lines
+            .iter()
+            .map(|(&k, v)| {
+                let vec = builder
+                    .create_vector(v.iter().map(|v| *v as u64).collect::<Vec<u64>>().as_slice());
+                KeyValueU64VecU64::create(
+                    builder,
+                    &KeyValueU64VecU64Args {
+                        key: k as u64,
+                        value: Some(vec),
+                    },
+                )
             })
-        }).collect();
+            .collect();
         let lines_vec = builder.create_vector(&lines);
 
         // Serialize stations: HashMap<usize, Station>
-        let stations: Vec<_> = self.stations.iter().map(|(&k, station)| {
-            let fb_station = station.flatternize(builder);
-            KeyValueU64Station::create(builder, &KeyValueU64StationArgs {
-                key: k as u64,
-                value: Some(fb_station),
+        let stations: Vec<_> = self
+            .stations
+            .iter()
+            .map(|(&k, station)| {
+                let fb_station = station.flatternize(builder);
+                KeyValueU64Station::create(
+                    builder,
+                    &KeyValueU64StationArgs {
+                        key: k as u64,
+                        value: Some(fb_station),
+                    },
+                )
             })
-        }).collect();
+            .collect();
         let stations_vec = builder.create_vector(&stations);
 
         // Serialize stations_to_in_outs
-        let in_outs: Vec<_> = self.stations_to_in_outs.iter().map(|(&k, v)| {
-            let vec = builder.create_vector(v.iter().map(|v| *v as u64).collect::<Vec<u64>>().as_slice());
-            KeyValueU64VecU64::create(builder, &KeyValueU64VecU64Args {
-                key: k as u64,
-                value: Some(vec),
+        let in_outs: Vec<_> = self
+            .stations_to_in_outs
+            .iter()
+            .map(|(&k, v)| {
+                let vec = builder
+                    .create_vector(v.iter().map(|v| *v as u64).collect::<Vec<u64>>().as_slice());
+                KeyValueU64VecU64::create(
+                    builder,
+                    &KeyValueU64VecU64Args {
+                        key: k as u64,
+                        value: Some(vec),
+                    },
+                )
             })
-        }).collect();
+            .collect();
         let in_outs_vec = builder.create_vector(&in_outs);
 
-        // Serialize source 
-        let sources = self.sources.iter().map(|(&k, v)| {
-            let source = v.flatternize(builder);
-            KeyValueU64Source::create(builder, &KeyValueU64SourceArgs { key: k as u64, value: Some(source) })
-        }).collect::<Vec<_>>();
-        let sources_vec = builder.create_vector(&sources);
-        
-        // Serialize destination
-        let destinations = self.destinations.iter().map(|(&k, v)| {
-            let destination = v.flatternize(builder);
-            KeyValueU64Destination::create(builder, &KeyValueU64DestinationArgs { key: k as u64, value: Some(destination) })
-        }).collect::<Vec<_>>();
-        let destination_vec = builder.create_vector(&destinations);
-        
-        
-        // Serialize transforms
-        let transforms: Vec<_> = self.transforms.iter().map(|(k, t)| {
-            let key = builder.create_string(k);
-            let fb_transform = t.flatternize(builder);
-            KeyValueStringTransform::create(builder, &KeyValueStringTransformArgs {
-                key: Some(key),
-                value: Some(fb_transform),
+        // Serialize source
+        let sources = self
+            .sources
+            .iter()
+            .map(|(&k, v)| {
+                let source = v.flatternize(builder);
+                KeyValueU64Source::create(
+                    builder,
+                    &KeyValueU64SourceArgs {
+                        key: k as u64,
+                        value: Some(source),
+                    },
+                )
             })
-        }).collect();
+            .collect::<Vec<_>>();
+        let sources_vec = builder.create_vector(&sources);
+
+        // Serialize destination
+        let destinations = self
+            .destinations
+            .iter()
+            .map(|(&k, v)| {
+                let destination = v.flatternize(builder);
+                KeyValueU64Destination::create(
+                    builder,
+                    &KeyValueU64DestinationArgs {
+                        key: k as u64,
+                        value: Some(destination),
+                    },
+                )
+            })
+            .collect::<Vec<_>>();
+        let destination_vec = builder.create_vector(&destinations);
+
+        // Serialize transforms
+        let transforms: Vec<_> = self
+            .transforms
+            .iter()
+            .map(|(k, t)| {
+                let key = builder.create_string(k);
+                let fb_transform = t.flatternize(builder);
+                KeyValueStringTransform::create(
+                    builder,
+                    &KeyValueStringTransformArgs {
+                        key: Some(key),
+                        value: Some(fb_transform),
+                    },
+                )
+            })
+            .collect();
         let transforms = builder.create_vector(&transforms);
         let template = builder.create_string(&self.dump(false));
 
-        FlatPlan::create(builder, &PlanArgs {
-            id,
-            name: Some(name),
-            template: Some(template),
-            lines: Some(lines_vec),
-            stations: Some(stations_vec),
-            stations_to_in_outs: Some(in_outs_vec),
-            sources: Some(sources_vec),
-            destinations: Some(destination_vec),
-            status: self.status.flatternize(),
-            transforms: Some(transforms)
-        })
+        FlatPlan::create(
+            builder,
+            &PlanArgs {
+                id,
+                name: Some(name),
+                template: Some(template),
+                lines: Some(lines_vec),
+                stations: Some(stations_vec),
+                stations_to_in_outs: Some(in_outs_vec),
+                sources: Some(sources_vec),
+                destinations: Some(destination_vec),
+                status: self.status.flatternize(),
+                transforms: Some(transforms),
+            },
+        )
     }
-    
+
     pub(crate) fn build(&mut self, line_num: usize, station: Station) {
         self.lines.entry(line_num).or_default().push(station.stop);
         let stop = station.stop;
@@ -449,7 +554,10 @@ impl Plan {
     fn connect_destinations(&mut self) -> Result<(), String> {
         let mut map = HashMap::new();
         self.destinations.iter().for_each(|destination| {
-            map.insert(destination.1.id(), self.get_connected_stations(destination.1.id()));
+            map.insert(
+                destination.1.id(),
+                self.get_connected_stations(destination.1.id()),
+            );
         });
 
         let mut i = 0;
@@ -463,7 +571,6 @@ impl Plan {
                     Err(String::from("Could not find target station"))?;
                 }
             }
-
         }
         Ok(())
     }
@@ -481,26 +588,31 @@ impl Plan {
                     source.add_out(tx)
                 }
             }
-
         }
         Ok(())
     }
 
     fn get_connected_stations(&self, in_out: usize) -> Vec<usize> {
-        let targets = self.stations_to_in_outs.iter().flat_map(|(stop, in_outs)| {
-            if in_outs.contains(&in_out) {
-                vec![*stop]
-            } else {
-                vec![]
-            }
-        }).collect::<Vec<usize>>();
+        let targets = self
+            .stations_to_in_outs
+            .iter()
+            .flat_map(|(stop, in_outs)| {
+                if in_outs.contains(&in_out) {
+                    vec![*stop]
+                } else {
+                    vec![]
+                }
+            })
+            .collect::<Vec<usize>>();
         targets
     }
 
     pub fn connect_in_out(&mut self, stop: usize, in_out: usize) {
-        self.stations_to_in_outs.entry(stop).or_default().push(in_out);
+        self.stations_to_in_outs
+            .entry(stop)
+            .or_default()
+            .push(in_out);
     }
-
 
     pub(crate) fn add_source(&mut self, source: Box<dyn Source>) {
         let id = source.id();
@@ -525,15 +637,23 @@ impl Plan {
         Ok(())
     }
 
-    fn split_name_options(stencil: &str) -> Result<(Vec<usize>, &str, Map<String, Value>), String> {
+    fn split_name_options<'a>(stencil: &'a str) -> Result<StopNameOptions<'a>, String> {
         let (stencil, stops) = stencil.rsplit_once("}:").unwrap();
-        let stops = stops.split(',').map(|num| num.parse::<usize>()).collect::<Result<Vec<_>, _>>().map_err(|err| err.to_string())?;
+        let stops = stops
+            .split(',')
+            .map(|num| num.parse::<usize>())
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|err| err.to_string())?;
 
-        let (type_name, template) = stencil.split_once('{').ok_or(format!("Invalid template: {}", stencil))?;
+        let (type_name, template) = stencil
+            .split_once('{')
+            .ok_or(format!("Invalid template: {}", stencil))?;
         let json = format!("{{ {} }}", template.trim());
         let options = serde_json::from_str::<Value>(&json)
             .map_err(|e| format!("Could not parse options for {}: {}", type_name, e))?
-            .as_object().ok_or(format!("Invalid options: {}", template))?.clone();
+            .as_object()
+            .ok_or(format!("Invalid options: {}", template))?
+            .clone();
         Ok((stops, type_name, options))
     }
 
@@ -549,7 +669,9 @@ impl Plan {
     }
 
     fn parse_transform(&mut self, stencil: &str) -> Result<(), String> {
-        let (name, stencil) = stencil.split_once(':').ok_or("No name for transformer provided")?;
+        let (name, stencil) = stencil
+            .split_once(':')
+            .ok_or("No name for transformer provided")?;
         let transform = transform::Transform::parse(stencil)?;
 
         self.add_transform(name.trim_start_matches('$'), transform);
@@ -562,24 +684,31 @@ impl Plan {
 
     #[cfg(test)]
     pub fn get_transformation(&mut self, name: &str) -> Result<&mut transform::Transform, String> {
-        self.transforms.get_mut(name).ok_or("No transform found".to_string())
+        self.transforms
+            .get_mut(name)
+            .ok_or("No transform found".to_string())
     }
 
     fn get_station(&self, stop_num: &usize) -> Result<&Station, String> {
-        self.stations.get(stop_num).ok_or_else(|| format!("Station {} not found", stop_num))
+        self.stations
+            .get(stop_num)
+            .ok_or_else(|| format!("Station {} not found", stop_num))
     }
 
     pub fn layouts_match(&self) -> Result<(), String> {
         let mut layouts = HashMap::new(); // track all known station outputs
 
-        while self.stations.len() != layouts.len() { // we should collect all layouts in the end
+        while self.stations.len() != layouts.len() {
+            // we should collect all layouts in the end
             for (line, stops) in &self.lines {
                 if stops.is_empty() {
                     continue;
                 }
                 let mut iter = stops.iter();
                 let station_num = *iter.next().unwrap();
-                let mut layout = self.get_station(&station_num)?.derive_output_layout(HashMap::new());
+                let mut layout = self
+                    .get_station(&station_num)?
+                    .derive_output_layout(HashMap::new());
                 layouts.insert(station_num, layout.clone());
 
                 for stop_num in stops {
@@ -591,7 +720,7 @@ impl Plan {
                     let stations = self.get_previous_stations(stop_num);
                     if !stations.keys().all(|num| layouts.contains_key(num)) {
                         // let's try later
-                        continue
+                        continue;
                     }
                     let mut inputs = HashMap::new();
                     stations.into_iter().for_each(|(num, _station)| {
@@ -601,7 +730,10 @@ impl Plan {
                     let current = station.derive_input_layout();
 
                     if let Err(e) = current.accepts(&layout) {
-                        return Err(format!("On line {} station {} does not accept the previous input due to :{}", line, stop_num, e));
+                        return Err(format!(
+                            "On line {} station {} does not accept the previous input due to :{}",
+                            line, stop_num, e
+                        ));
                     }
 
                     let current = station.derive_output_layout(inputs);
@@ -637,13 +769,12 @@ impl Plan {
 pub fn check_commands(rx: &Receiver<Command>) -> bool {
     if let Ok(command) = rx.try_recv() {
         match command {
-            Command::Stop(_) => { return true }
+            Command::Stop(_) => return true,
             _ => {}
         }
     }
     false
 }
-
 
 enum Stencil {
     Network,
@@ -652,18 +783,12 @@ enum Stencil {
     Transform,
 }
 
-
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) enum PlanStage {
     Window,
     Transform,
     Layout,
     Num,
-}
-
-pub(crate) struct Stage {
-    pub(crate) open: char,
-    pub(crate) close: char,
 }
 
 impl PlanStage {
@@ -675,14 +800,12 @@ impl PlanStage {
     pub(crate) const LAYOUT_CLOSE: char = ')';
 
     pub(crate) fn is_open(char: char) -> bool {
-        matches!(char, PlanStage::LAYOUT_OPEN | PlanStage::TRANSFORM_OPEN | PlanStage::WINDOW_OPEN)
-    }
-
-    pub(crate) fn is_close(char: char) -> bool {
-        matches!(char, PlanStage::LAYOUT_CLOSE | PlanStage::TRANSFORM_CLOSE | PlanStage::WINDOW_CLOSE)
+        matches!(
+            char,
+            PlanStage::LAYOUT_OPEN | PlanStage::TRANSFORM_OPEN | PlanStage::WINDOW_OPEN
+        )
     }
 }
-
 
 impl Serialize for &Plan {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -710,20 +833,26 @@ impl Serialize for &Plan {
         let mut stops = HashMap::new();
 
         for (num, stop) in &self.stations {
-            let ins_outs = self.stations_to_in_outs.get(&stop.stop).cloned().unwrap_or(vec![]);
+            let ins_outs = self
+                .stations_to_in_outs
+                .get(&stop.stop)
+                .cloned()
+                .unwrap_or(vec![]);
             stops.insert(
                 num.to_string(),
                 Stop {
                     num: *num,
-                    transform: stop.transform.clone().map(|t| {
-                        t.into()
-                    }),
-                    sources: ins_outs.clone().iter()
+                    transform: stop.transform.clone().map(|t| t.into()),
+                    sources: ins_outs
+                        .clone()
+                        .iter()
                         .map(|s| self.sources.get(s))
                         .filter(|s| s.is_some())
                         .map(|s| s.unwrap().serialize())
                         .collect(),
-                    destinations: ins_outs.clone().iter()
+                    destinations: ins_outs
+                        .clone()
+                        .iter()
                         .map(|s| self.destinations.get(s))
                         .filter(|s| s.is_some())
                         .map(|s| s.unwrap().serialize())
@@ -751,7 +880,6 @@ struct Stop {
     destinations: Vec<DestinationModel>,
 }
 
-
 #[derive(Serialize, Deserialize)]
 pub struct SourceModel {
     pub(crate) type_name: String,
@@ -771,7 +899,6 @@ struct Transform {
     language: String,
     query: String,
 }
-
 
 impl From<transform::Transform> for ConfigContainer {
     fn from(value: transform::Transform) -> Self {
@@ -811,18 +938,13 @@ impl From<transform::Transform> for ConfigContainer {
     }
 }
 
-
 #[cfg(test)]
 mod test {
     use crate::processing::plan::Plan;
 
     #[test]
     fn parse_line_stop_stencil() {
-        let stencils = vec![
-            "1",
-            "1--2",
-            "1--2--3",
-        ];
+        let stencils = vec!["1", "1--2", "1--2--3"];
 
         for stencil in stencils {
             let plan = Plan::parse(stencil).unwrap();
@@ -832,11 +954,7 @@ mod test {
 
     #[test]
     fn parse_line_different_modes() {
-        let stencils = vec![
-            "1",
-            "1--2",
-            "1-|2"
-        ];
+        let stencils = vec!["1", "1--2", "1-|2"];
 
         for stencil in stencils {
             let plan = Plan::parse(stencil).unwrap();
@@ -861,9 +979,7 @@ mod test {
 
     #[test]
     fn stencil_transform_sql() {
-        let stencils = vec![
-            "1--2{sql|SELECT * FROM $1}",
-        ];
+        let stencils = vec!["1--2{sql|SELECT * FROM $1}"];
 
         for stencil in stencils {
             let plan = Plan::parse(stencil).unwrap();
@@ -873,9 +989,7 @@ mod test {
 
     //#[test]
     fn stencil_transform_mql() {
-        let stencils = vec![
-            "1--2{sql|db.$1.find({})}",
-        ];
+        let stencils = vec!["1--2{sql|db.$1.find({})}"];
 
         for stencil in stencils {
             let plan = Plan::parse(stencil).unwrap();
@@ -883,13 +997,9 @@ mod test {
         }
     }
 
-
     #[test]
     fn stencil_window() {
-        let stencils = vec![
-            "1--2[3s]",
-            "1--2[3s@13:15]",
-        ];
+        let stencils = vec!["1--2[3s]", "1--2[3s@13:15]"];
 
         for stencil in stencils {
             let plan = Plan::parse(stencil).unwrap();
@@ -936,7 +1046,7 @@ mod test {
             1--2\n\
             In\n\
             Mqtt{\"port\":8080,\"url\":\"127.0.0.1\"}:1\
-            "
+            ",
         ];
 
         for stencil in stencils {
@@ -954,7 +1064,7 @@ mod test {
             Mqtt{\"port\":8080,\"url\":\"127.0.0.1\"}:1\n\
             Out\n\
             Dummy{\"result_size\":0}:1\
-            "
+            ",
         ];
 
         for stencil in stencils {
@@ -970,7 +1080,7 @@ mod test {
             1--2\n\
             Out\n\
             Dummy{\"result_size\":0}:1\
-            "
+            ",
         ];
 
         for stencil in stencils {
@@ -986,7 +1096,7 @@ mod test {
             1--2\n\
             In\n\
             Mqtt{\"port\":8080,\"url\":\"127.0.0.1\"}:1,2\n\
-            "
+            ",
         ];
 
         for stencil in stencils {
@@ -996,3 +1106,4 @@ mod test {
     }
 }
 
+type StopNameOptions<'a> = (Vec<usize>, &'a str, Map<String, Value>);

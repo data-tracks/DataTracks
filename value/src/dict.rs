@@ -1,7 +1,9 @@
 use crate::value::Value;
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use json::parse;
-use schemas::message_generated::protocol::{Document, DocumentArgs, KeyValue, KeyValueArgs, Value as FlatValue};
+use schemas::message_generated::protocol::{
+    Document, DocumentArgs, KeyValue, KeyValueArgs, Text, TextArgs, Value as FlatValue,
+};
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 use std::collections::btree_map::{IntoIter, Keys, Values};
@@ -9,41 +11,57 @@ use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 
-#[derive(Eq, Clone, Debug, Default, Serialize, Deserialize, Ord, PartialOrd, Readable, Writable)]
+#[derive(
+    Eq, Clone, Debug, Default, Serialize, Deserialize, Ord, PartialOrd, Readable, Writable,
+)]
 pub struct Dict {
     values: BTreeMap<String, Value>,
     alternative: BTreeMap<String, String>, // "alternative_name" -> Value
 }
 
-
 impl Dict {
-    pub fn new(values: BTreeMap<String, Value>) -> Self{
-        Dict { values, alternative: BTreeMap::new() }
+    pub fn new(values: BTreeMap<String, Value>) -> Self {
+        Dict {
+            values,
+            alternative: BTreeMap::new(),
+        }
     }
 
-    pub(crate) fn flatternize<'bldr>(&self, builder: &mut FlatBufferBuilder<'bldr>) -> WIPOffset<Document<'bldr>> {
-        let values = self.values.iter().map(|(k,v)| {
-            let key = builder.create_string(k);
-            let key_type = FlatValue::Text;
-            let values_type =  v.get_flat_type();
-            let key = None;//Some(Text::create(builder, &TextArgs{ data: Some(key) }).as_union_value());
-            let values = None;//Some(v.flatternize(builder).as_union_value());
-            
-            KeyValue::create(builder, &KeyValueArgs{
-                key_type,
-                key,
-                values_type,
-                values,
+    pub(crate) fn flatternize<'bldr>(
+        &self,
+        builder: &mut FlatBufferBuilder<'bldr>,
+    ) -> WIPOffset<Document<'bldr>> {
+        let values = self
+            .values
+            .iter()
+            .map(|(k, v)| {
+                let key_type = FlatValue::Text;
+                let key = builder.create_string(k);
+                let values_type = v.get_flat_type();
+                let key =
+                    Some(Text::create(builder, &TextArgs { data: Some(key) }).as_union_value());
+                let values = Some(v.flatternize(builder).as_union_value());
+
+                KeyValue::create(
+                    builder,
+                    &KeyValueArgs {
+                        key_type,
+                        key,
+                        values_type,
+                        values,
+                    },
+                )
             })
-        }).collect::<Vec<_>>();
-        
+            .collect::<Vec<_>>();
+
         let values = builder.create_vector(values.as_slice());
-        Document::create(builder, &DocumentArgs{ data: Some(values) })
+        Document::create(builder, &DocumentArgs { data: Some(values) })
     }
 
     pub fn prefix_all(&mut self, prefix: &str) {
         self.values.iter().for_each(|(name, _field)| {
-            self.alternative.insert(format!("{}{}", prefix, name), name.clone());
+            self.alternative
+                .insert(format!("{}{}", prefix, name), name.clone());
         });
     }
 
@@ -51,9 +69,9 @@ impl Dict {
         match self.values.get(key) {
             None => match self.alternative.get(key) {
                 None => None,
-                Some(s) => self.values.get(s)
-            }
-            Some(s) => Some(s)
+                Some(s) => self.values.get(s),
+            },
+            Some(s) => Some(s),
         }
     }
 
@@ -65,7 +83,7 @@ impl Dict {
         self.values.insert(key, value);
     }
 
-    pub(crate) fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.values.is_empty()
     }
 
@@ -89,14 +107,6 @@ impl Dict {
         self.values.len()
     }
 
-    pub(crate) fn pop_first(&mut self) -> Option<(String, Value)> {
-        self.values.pop_first()
-    }
-
-    pub(crate) fn get_data_mut(&mut self) -> Option<&mut Value> {
-        self.values.get_mut("$")
-    }
-
     pub fn merge(&self, other: Dict) -> Dict {
         let mut map = BTreeMap::new();
         for (key, value) in self.clone() {
@@ -106,9 +116,19 @@ impl Dict {
             map.insert(key, value);
         }
         if self.values.contains_key("$") && other.values.contains_key("$") {
-            map.insert("$".into(), vec![self.get_data().unwrap().clone(), other.get_data().unwrap().clone()].into());
+            map.insert(
+                "$".into(),
+                vec![
+                    self.get_data().unwrap().clone(),
+                    other.get_data().unwrap().clone(),
+                ]
+                .into(),
+            );
         }
-        Dict { values: map, alternative: Default::default() }
+        Dict {
+            values: map,
+            alternative: Default::default(),
+        }
     }
 }
 
@@ -133,14 +153,21 @@ impl IntoIterator for Dict {
     }
 }
 
-
 impl Display for Dict {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{{{}}}", self.values.iter().map(|(k, v)| format!("{}: {}", k, v)).collect::<Vec<String>>().join(", "))
+        write!(
+            f,
+            "{{{}}}",
+            self.values
+                .iter()
+                .map(|(k, v)| format!("{}: {}", k, v))
+                .collect::<Vec<String>>()
+                .join(", ")
+        )
     }
 }
 
-impl From<Value> for Dict{
+impl From<Value> for Dict {
     fn from(value: Value) -> Self {
         let mut map = BTreeMap::new();
         match value {
@@ -153,15 +180,21 @@ impl From<Value> for Dict{
                 map.insert("$".into(), i);
             }
         }
-        Dict { values: map, alternative: BTreeMap::new() }
+        Dict {
+            values: map,
+            alternative: BTreeMap::new(),
+        }
     }
 }
 
-impl From<Vec<Value>> for Dict{
+impl From<Vec<Value>> for Dict {
     fn from(value: Vec<Value>) -> Self {
         let mut map = BTreeMap::new();
         map.insert("$".into(), value.into());
-        Dict { values: map, alternative: BTreeMap::new() }
+        Dict {
+            values: map,
+            alternative: BTreeMap::new(),
+        }
     }
 }
 
@@ -171,7 +204,9 @@ impl Dict {
         for (key, value) in parse(value).unwrap().entries() {
             map.insert(key.into(), value.into());
         }
-        Dict { values: map, alternative: BTreeMap::new() }
+        Dict {
+            values: map,
+            alternative: BTreeMap::new(),
+        }
     }
 }
-

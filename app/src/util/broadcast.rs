@@ -3,7 +3,7 @@ use crate::util::one_shot::{SingleRx, SingleTx};
 use parking_lot::Mutex;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
-use tracing::{error, warn};
+use tracing::error;
 
 #[derive(Clone)]
 pub struct BroadcastTx<T: Send + Clone + 'static> {
@@ -91,8 +91,7 @@ impl<T: Clone + Send + 'static> Clone for BroadcastRx<T> {
 impl<T: Clone + Send + 'static> Drop for BroadcastRx<T> {
     fn drop(&mut self) {
         // inefficient but should only happen rarely
-        warn!("dropping");
-        self.sender_ref.lock().retain(|s| s.3 == self.receiver.2)
+        self.sender_ref.lock().retain(|s| s.3 != self.receiver.2)
     }
 }
 

@@ -452,8 +452,8 @@ pub mod tests {
         input.send(Train::new(values.clone()));
 
         let mut res = output_rx.recv().unwrap();
-        assert_eq!(res.values.clone().unwrap(), values);
-        assert_ne!(res.values.take().unwrap(), vec![Value::null().into()]);
+        assert_eq!(res.values.clone(), values);
+        assert_ne!(res.values, vec![Value::null().into()]);
 
         assert!(output_rx.try_recv().is_err());
 
@@ -490,14 +490,14 @@ pub mod tests {
         input.send(Train::new(values.clone()));
 
         let mut res = output1_rx.recv().unwrap();
-        assert_eq!(res.values.clone().unwrap(), values);
-        assert_ne!(res.values.take().unwrap(), vec![Value::null().into()]);
+        assert_eq!(res.values.clone(), values);
+        assert_ne!(res.values, vec![Value::null().into()]);
 
         assert!(output1_rx.try_recv().is_err());
 
         let mut res = output2_rx.recv().unwrap();
-        assert_eq!(res.values.clone().unwrap(), values);
-        assert_ne!(res.values.take().unwrap(), vec![Value::null().into()]);
+        assert_eq!(res.values.clone(), values);
+        assert_ne!(res.values, vec![Value::null().into()]);
 
         assert!(output2_rx.try_recv().is_err());
 
@@ -540,7 +540,7 @@ pub mod tests {
 
         let results = clone.lock().unwrap();
         for mut train in results.clone() {
-            assert_eq!(train.values.take().unwrap(), *values.get(0).unwrap())
+            assert_eq!(train.values, *values.get(0).unwrap())
         }
     }
 
@@ -620,8 +620,8 @@ pub mod tests {
         let mut train = lock.clone().pop().unwrap();
         drop(lock);
 
-        assert_eq!(train.values.clone().unwrap().len(), res.len());
-        for (_i, value) in train.values.take().unwrap().into_iter().enumerate() {
+        assert_eq!(train.values.len(), res.len());
+        for (_i, value) in train.values.into_iter().enumerate() {
             assert!(res.contains(&value))
         }
     }
@@ -1072,13 +1072,13 @@ pub mod tests {
 
         let mut expected = res.get(0).unwrap().clone();
 
-        assert_eq!(train.values.clone().unwrap().len(), expected.len());
+        assert_eq!(train.values.len(), expected.len());
         if ordered {
-            for (i, value) in train.values.take().unwrap().into_iter().enumerate() {
-                assert_eq!(expected.get(i).unwrap().clone(), value)
+            for (i, value) in train.values.into_iter().enumerate() {
+                assert_eq!(expected.get(i).unwrap(), &value)
             }
         } else {
-            for value in train.values.take().unwrap().into_iter() {
+            for value in train.values.into_iter() {
                 let i = expected.iter().position(|x| x == &value);
                 assert!(i.is_some());
                 expected.remove(i.unwrap());

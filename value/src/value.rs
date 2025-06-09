@@ -9,7 +9,7 @@ use crate::Value::Wagon;
 use crate::{bool, wagon, Bool, Float, Int};
 use bytes::{BufMut, BytesMut};
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
-use json::{parse, JsonValue};
+use json::JsonValue;
 use postgres::types::{IsNull, Type};
 use redb::{Key, TypeName};
 use rumqttc::{Event, Incoming};
@@ -42,12 +42,6 @@ pub enum Value {
     Dict(Dict),
     Null,
     Wagon(wagon::Wagon),
-}
-
-impl Default for Value {
-    fn default() -> Self {
-        Null
-    }
 }
 
 impl Value {
@@ -138,7 +132,7 @@ impl Value {
         Value::Dict(Dict::new(map))
     }
 
-    pub fn wagon(value: Value, origin: String) -> Value {
+    pub fn wagon(value: Value, origin: Value) -> Value {
         Wagon(wagon::Wagon::new(value, origin))
     }
 
@@ -173,22 +167,22 @@ impl Value {
         }
     }
 
-    pub fn as_int(&self) -> Result<Int, ()> {
+    pub fn as_int(&self) -> Result<Int, String> {
         match self {
             Value::Int(i) => Ok(*i),
             Value::Float(f) => Ok(Int(f.as_f64() as i64)),
             Value::Bool(b) => Ok(if b.0 { Int(1) } else { Int(0) }),
-            Value::Text(t) => t.0.parse::<i64>().map(Int).map_err(|_| ()),
-            Value::Array(_) => Err(()),
-            Value::Dict(_) => Err(()),
-            Null => Err(()),
+            Value::Text(t) => t.0.parse::<i64>().map(Int).map_err(|err| err.to_string()),
+            Value::Array(_) => Err(String::from("Array cannot be converted")),
+            Value::Dict(_) => Err(String::from("Dict cannot be converted")),
+            Null => Err(String::from("Null cannot be converted")),
             Wagon(w) => w.value.as_int(),
-            Value::Time(t) => Ok(Int(t.ms as i64)),
+            Value::Time(t) => Ok(Int(t.ms)),
             Value::Date(d) => Ok(Int::new(d.as_epoch())),
         }
     }
 
-    pub fn as_float(&self) -> Result<Float, ()> {
+    pub fn as_float(&self) -> Result<Float, String> {
         match self {
             Value::Int(i) => Ok(Float::new(i.0 as f64)),
             Value::Float(f) => Ok(*f),
@@ -197,10 +191,14 @@ impl Value {
             } else {
                 Float::new(0f64)
             }),
-            Value::Text(t) => t.0.parse::<f64>().map(Float::new).map_err(|_| ()),
-            Value::Array(_) => Err(()),
-            Value::Dict(_) => Err(()),
-            Null => Err(()),
+            Value::Text(t) => {
+                t.0.parse::<f64>()
+                    .map(Float::new)
+                    .map_err(|e| e.to_string())
+            }
+            Value::Array(_) => Err(String::from("Array cannot be converted")),
+            Value::Dict(_) => Err(String::from("Dict cannot be converted")),
+            Null => Err(String::from("Null cannot be converted")),
             Wagon(w) => w.value.as_float(),
             Value::Time(t) => Ok(if t.ns != 0 {
                 Float::new(t.ms as f64 + t.ns as f64 / 1e6)
@@ -211,9 +209,9 @@ impl Value {
         }
     }
 
-    pub fn as_time(&self) -> Result<Time, ()> {
+    pub fn as_time(&self) -> Result<Time, String> {
         match self {
-            Value::Int(i) => Ok(Time::new(i.0 as i64, 0)),
+            Value::Int(i) => Ok(Time::new(i.0, 0)),
             Value::Float(f) => {
                 let num = f.number.to_string();
                 let (ms, partial_ns) = num.split_at(num.len() - f.shift as usize);
@@ -222,31 +220,31 @@ impl Value {
             }
             Value::Bool(b) => Ok(Time::new(b.0 as i64, 0)),
             Value::Text(t) => Ok(Time::from(t.clone())),
-            Value::Time(t) => Ok(t.clone()),
-            Value::Array(_) => Err(()),
-            Value::Dict(_) => Err(()),
-            Null => Err(()),
+            Value::Time(t) => Ok(*t),
+            Value::Array(_) => Err(String::from("Array cannot be converted")),
+            Value::Dict(_) => Err(String::from("Dict cannot be converted")),
+            Null => Err(String::from("Null cannot be converted")),
             Wagon(w) => w.value.as_time(),
             Value::Date(_) => Ok(Time::new(0, 0)),
         }
     }
 
-    pub fn as_date(&self) -> Result<Date, ()> {
+    pub fn as_date(&self) -> Result<Date, String> {
         match self {
             Value::Int(i) => Ok(Date::new(i.0)),
             Value::Float(f) => Ok(Date::new(f.as_f64() as i64)),
             Value::Bool(b) => Ok(Date::new(b.0 as i64)),
             Value::Text(t) => Ok(Date::from(t.0.clone())),
-            Value::Time(_) => Err(()),
+            Value::Time(_) => Err(String::from("Time cannot be converted")),
             Value::Date(d) => Ok(d.clone()),
-            Value::Array(_) => Err(()),
-            Value::Dict(_) => Err(()),
-            Null => Err(()),
+            Value::Array(_) => Err(String::from("Array cannot be converted")),
+            Value::Dict(_) => Err(String::from("Dict cannot be converted")),
+            Null => Err(String::from("Null cannot be converted")),
             Wagon(w) => w.value.as_date(),
         }
     }
 
-    pub fn as_dict(&self) -> Result<Dict, ()> {
+    pub fn as_dict(&self) -> Result<Dict, String> {
         match self {
             Value::Time(_)
             | Value::Int(_)
@@ -255,13 +253,13 @@ impl Value {
             | Value::Text(_)
             | Value::Array(_)
             | Value::Date(_)
-            | Null => Err(()),
+            | Null => Err(String::from("Dict cannot be converted")),
             Value::Dict(d) => Ok(d.clone()),
             Wagon(w) => w.value.as_dict(),
         }
     }
 
-    pub fn as_array(&self) -> Result<Array, ()> {
+    pub fn as_array(&self) -> Result<Array, String> {
         match self {
             Value::Time(_)
             | Value::Int(_)
@@ -270,12 +268,12 @@ impl Value {
             | Value::Text(_)
             | Value::Date(_)
             | Value::Dict(_)
-            | Null => Err(()),
+            | Null => Err(String::from("Array cannot be converted")),
             Value::Array(a) => Ok(a.clone()),
             Wagon(w) => w.value.as_array(),
         }
     }
-    pub fn as_bool(&self) -> Result<Bool, ()> {
+    pub fn as_bool(&self) -> Result<Bool, String> {
         match self {
             Value::Int(i) => Ok(if i.0 > 0 { Bool(true) } else { Bool(false) }),
             Value::Float(f) => Ok(if f.number <= 0 {
@@ -297,7 +295,7 @@ impl Value {
         }
     }
 
-    pub fn as_text(&self) -> Result<Text, ()> {
+    pub fn as_text(&self) -> Result<Text, String> {
         match self {
             Value::Int(i) => Ok(Text(i.0.to_string())),
             Value::Float(f) => Ok(Text(f.as_f64().to_string())),
@@ -328,10 +326,10 @@ impl Value {
     pub(crate) fn wagonize(self, stop: usize) -> Value {
         match self {
             Wagon(mut w) => {
-                w.origin = stop.to_string();
+                w.origin = Box::new(stop.into());
                 Wagon(w)
             }
-            value => Value::wagon(value, stop.to_string()),
+            value => Value::wagon(value, stop.into()),
         }
     }
 }
@@ -356,7 +354,7 @@ impl TryFrom<ValueWrapper<'_>> for Value {
             FlatValue::Null => Ok(Value::null()),
             FlatValue::Integer => {
                 let integer = value.data_as_integer().ok_or("Could not find integer")?;
-                Ok(Value::int(integer.data() as i64))
+                Ok(Value::int(integer.data()))
             }
             FlatValue::List => {
                 let list = value.data_as_list().ok_or("Could not find list")?;
@@ -557,22 +555,6 @@ impl From<bool> for Value {
 impl From<Dict> for Value {
     fn from(value: Dict) -> Self {
         Value::Dict(value)
-    }
-}
-
-impl Value {
-    pub(crate) fn from_json(value: &str) -> Result<Self, String> {
-        let json = parse(value);
-        let mut values = BTreeMap::new();
-        match json {
-            Ok(json) => {
-                for (key, value) in json.entries() {
-                    values.insert(key.into(), value.into());
-                }
-            }
-            Err(_) => return Err("Could not parse Dict".to_string()),
-        }
-        Ok(Value::dict(values))
     }
 }
 
@@ -987,7 +969,7 @@ impl rusqlite::types::ToSql for Value {
             Value::Float(f) => Ok(ToSqlOutput::from(f.as_f64())),
             Value::Bool(b) => Ok(ToSqlOutput::from(b.0)),
             Value::Text(t) => Ok(ToSqlOutput::from(t.0.clone())),
-            Value::Time(t) => Ok(ToSqlOutput::from(t.ms as i64)),
+            Value::Time(t) => Ok(ToSqlOutput::from(t.ms)),
             Value::Array(_) => Err(rusqlite::Error::InvalidQuery),
             Value::Dict(_) => Err(rusqlite::Error::InvalidQuery),
             Null => Ok(ToSqlOutput::from(rusqlite::types::Null)),

@@ -24,7 +24,7 @@ impl IndexScan {
 pub struct ScanIterator {
     index: usize,
     values: Vec<Value>,
-    storage: Option<ValueStore>
+    storage: Option<ValueStore>,
 }
 
 impl ScanIterator {
@@ -44,20 +44,23 @@ impl Iterator for ScanIterator {
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.values.is_empty() && self.load() {
-            return None
+            return None;
         }
         Some(self.values.remove(0))
     }
 }
 
 impl ValueIterator for ScanIterator {
-
     fn set_storage(&mut self, storage: ValueStore) {
         self.storage = Some(storage)
     }
 
     fn clone(&self) -> BoxedIterator {
-        Box::new(ScanIterator { index: self.index, values: vec![], storage: None })
+        Box::new(ScanIterator {
+            index: self.index,
+            values: vec![],
+            storage: None,
+        })
     }
 
     fn enrich(&mut self, _transforms: HashMap<String, Transform>) -> Option<BoxedIterator> {
@@ -68,12 +71,19 @@ impl ValueIterator for ScanIterator {
 impl RefHandler for ScanIterator {
     fn process(&self, _stop: usize, wagons: Vec<Train>) -> Vec<Train> {
         let mut values = vec![];
-        wagons.into_iter().filter(|w| w.last() == self.index).for_each(|mut t| values.append(t.values.take().unwrap().as_mut()));
+        wagons
+            .into_iter()
+            .filter(|w| w.last() == self.index)
+            .for_each(|mut t| values.append(t.values.as_mut()));
         vec![Train::new(values).mark(self.index)]
     }
 
     fn clone(&self) -> Box<dyn RefHandler + Send + 'static> {
-        Box::new(ScanIterator { index: self.index, values: vec![], storage: self.storage.clone() })
+        Box::new(ScanIterator {
+            index: self.index,
+            values: vec![],
+            storage: self.storage.clone(),
+        })
     }
 }
 
@@ -85,7 +95,10 @@ impl InputDerivable for IndexScan {
 
 impl OutputDerivable for IndexScan {
     fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Option<Layout> {
-        inputs.get(self.index.to_string().as_str()).cloned().cloned()
+        inputs
+            .get(self.index.to_string().as_str())
+            .cloned()
+            .cloned()
     }
 }
 
@@ -93,9 +106,12 @@ impl Algebra for IndexScan {
     type Iterator = ScanIterator;
 
     fn derive_iterator(&mut self) -> Self::Iterator {
-        ScanIterator { index: self.index, values: vec![], storage: None }
+        ScanIterator {
+            index: self.index,
+            values: vec![],
+            storage: None,
+        }
     }
-
 }
 
 #[derive(Debug, Eq, PartialEq, Hash)]
@@ -111,7 +127,9 @@ impl TableScan {
 
 impl Clone for TableScan {
     fn clone(&self) -> Self {
-        TableScan { name: self.name.clone() }
+        TableScan {
+            name: self.name.clone(),
+        }
     }
 }
 
@@ -131,10 +149,9 @@ impl Algebra for TableScan {
     type Iterator = EmptyIterator;
 
     fn derive_iterator(&mut self) -> Self::Iterator {
-        EmptyIterator{}
+        EmptyIterator {}
     }
 }
-
 
 #[cfg(test)]
 mod test {
@@ -154,15 +171,12 @@ mod test {
         let mut storage = ValueStore::new();
         let mut handler = scan.derive_iterator();
 
-        match train.values {
-            None => {},
-            Some(v) => storage.append(v)
-        }
+        storage.append(train.values);
 
         let mut train_2 = handler.drain_to_train(0);
 
-        assert_eq!(train_2.values.clone().unwrap(), transform(vec![3.into(), "test".into()]));
-        assert_ne!(train_2.values.take().unwrap(), transform(vec![8.into(), "test".into()]));
+        assert_eq!(train_2.values, transform(vec![3.into(), "test".into()]));
+        assert_ne!(train_2.values, transform(vec![8.into(), "test".into()]));
     }
 
     pub fn transform(values: Vec<Value>) -> Vec<Value> {

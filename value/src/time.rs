@@ -40,12 +40,7 @@ impl Time {
         &self,
         builder: &mut FlatBufferBuilder<'bldr>,
     ) -> WIPOffset<FlatTime<'bldr>> {
-        FlatTime::create(
-            builder,
-            &TimeArgs {
-                data: self.ms as i64,
-            },
-        )
+        FlatTime::create(builder, &TimeArgs { data: self.ms })
     }
 
     pub fn now() -> Time {
@@ -144,16 +139,7 @@ impl ops::Add<i64> for Time {
 
 impl PartialOrd for Time {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        match self.ms.partial_cmp(&other.ms) {
-            None => None,
-            Some(ord) => {
-                if ord == Ordering::Equal {
-                    self.ns.partial_cmp(&other.ns)
-                } else {
-                    Some(ord)
-                }
-            }
-        }
+        Some(self.cmp(other))
     }
 }
 

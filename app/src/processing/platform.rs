@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::thread::{sleep, Builder};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use crate::algebra::{Executor, IdentityIterator};
 use crate::optimize::OptimizeStrategy;
@@ -18,15 +18,14 @@ use crate::util::new_id;
 use crate::util::{new_channel, Rx, Tx};
 use crossbeam::channel;
 use crossbeam::channel::Receiver;
-use ctrlc::Error::System;
 pub use logos::Source;
 use parking_lot::RwLock;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error};
 
 const IDLE_TIMEOUT: Duration = Duration::from_nanos(10);
 
 // What: Transformations, Where: Windowing, When: Triggers, How: Accumulation
-
+/// Platform represents an indepentent action steps which handles data based on the 4 streaming operations from different inputs  
 pub(crate) struct Platform {
     id: usize,
     control: Receiver<Command>,

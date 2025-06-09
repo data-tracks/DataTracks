@@ -6,7 +6,6 @@ use axum::extract::{State, WebSocketUpgrade};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
-use serde::Deserialize;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::net::{IpAddr, SocketAddr};
@@ -88,6 +87,15 @@ pub enum DestinationState {
     Time(DestinationTimeState),
 }
 
+impl DestinationState {
+    fn name(&self) -> String {
+        match self {
+            DestinationState::Train(t) => t.name.clone(),
+            DestinationState::Time(t) => t.name.clone(),
+        }
+    }
+}
+
 pub enum RxWrapper {
     Train(Rx<Train>),
     Time(Rx<Time>),
@@ -131,13 +139,13 @@ impl DestinationState {
 }
 
 #[derive(Clone)]
-pub(crate) struct DestinationTrainState {
+pub struct DestinationTrainState {
     pub name: String,
     pub out: Tx<Train>,
 }
 
 #[derive(Clone)]
-pub(crate) struct DestinationTimeState {
+pub struct DestinationTimeState {
     pub name: String,
     pub out: Tx<Time>,
 }
@@ -148,6 +156,7 @@ pub async fn publish_ws(ws: WebSocketUpgrade, State(state): State<DestinationSta
 
 async fn handle_publish_socket(mut socket: WebSocket, state: DestinationState) {
     let rx = state.subscribe();
+    let name = state.name();
     loop {
         match rx.recv() {
             Ok(item) => match socket.send(Message::Text(item.clone())).await {
@@ -159,7 +168,8 @@ async fn handle_publish_socket(mut socket: WebSocket, state: DestinationState) {
                         }
                     }
 
-                    warn!("Failed to send message after retry: {}", err);
+                    warn!("Failed to send message after retry: {} in {}", err, name);
+
                     return;
                 }
             },

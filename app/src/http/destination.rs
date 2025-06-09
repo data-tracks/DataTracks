@@ -1,4 +1,4 @@
-use crate::http::util::{parse_addr, publish_ws, DestinationState, DestinationTrainState};
+use crate::http::util::{parse_addr, publish_ws, DestinationState};
 use crate::processing::destination::Destination;
 use crate::processing::option::Configurable;
 use crate::processing::plan::DestinationModel;
@@ -6,7 +6,7 @@ use crate::processing::station::Command;
 use crate::processing::Train;
 use crate::ui::ConfigModel;
 use crate::util::new_broadcast;
-use crate::util::{new_channel, Rx, Tx};
+use crate::util::Tx;
 use axum::routing::get;
 use axum::Router;
 use crossbeam::channel::{unbounded, Receiver, Sender};

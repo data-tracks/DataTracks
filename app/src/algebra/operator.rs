@@ -342,11 +342,10 @@ impl TupleOp {
                 let _right = operands.get(1).cloned().unwrap_or_default();
                 left
             }
-            Combine => {
-                let mut layout = Layout::default();
-                layout.type_ = OutputType::Tuple(Box::new(TupleType::from(operands)));
-                layout
-            }
+            Combine => Layout {
+                type_: OutputType::Tuple(Box::new(TupleType::from(operands))),
+                ..Default::default()
+            },
             TupleOp::KeyValue(n) => {
                 let _key = operands.first().cloned().unwrap_or_default();
                 let mut value = operands.get(1).cloned().unwrap_or_default();
@@ -393,7 +392,7 @@ impl TupleOp {
                 type_: OutputType::from(&l.literal.clone()),
                 ..Default::default()
             },
-            TupleOp::Context(c) => (*inputs.get(&c.name).unwrap()).clone(),
+            TupleOp::Context(c) => (*inputs.get(&c.name.to_string()).unwrap()).clone(),
         }
     }
 
@@ -685,12 +684,12 @@ impl Implementable<BoxedValueHandler> for LiteralOp {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ContextOp {
-    pub name: String,
+    pub name: Value,
 }
 
 impl ContextOp {
     pub fn new(name: String) -> Self {
-        ContextOp { name }
+        ContextOp { name: name.into() }
     }
 }
 
@@ -698,7 +697,7 @@ impl ValueHandler for ContextOp {
     fn process(&self, value: &Value) -> Value {
         match value {
             Wagon(w) => {
-                if w.origin == self.name {
+                if *w.origin == self.name {
                     *w.value.clone()
                 } else {
                     panic!("Could not process {:?}", w)
@@ -709,7 +708,7 @@ impl ValueHandler for ContextOp {
                     .values
                     .iter()
                     .filter(|v| match v {
-                        Wagon(w) => w.origin == self.name,
+                        Wagon(w) => *w.origin == self.name,
                         _ => false,
                     })
                     .cloned()
@@ -728,7 +727,7 @@ impl ValueHandler for ContextOp {
                 let map = BTreeMap::from_iter(
                     d.iter()
                         .filter(|(_k, v)| match v {
-                            Wagon(w) => w.origin == self.name,
+                            Wagon(w) => *w.origin == self.name,
                             _ => false,
                         })
                         .map(|(k, v)| match v {

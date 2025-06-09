@@ -9,25 +9,27 @@ fn get_values() -> Vec<Value> {
         Value::float(2.5),
         Value::text("hello"),
         Value::null(),
-        Value::time(350, 5).into(),
+        Value::time(350, 5),
         Value::date(305),
         Value::array(vec![3.into(), 7.into()]),
-        Value::dict_from_pairs(vec![
-            ("test", 7.into()),
-            ("hi", 5.into())
-        ]),
-        Value::wagon(Value::int(3), "test".to_string())]
+        Value::dict_from_pairs(vec![("test", 7.into()), ("hi", 5.into())]),
+        Value::wagon(Value::int(3), "test".into()),
+    ]
 }
 
 fn bench_serialize(c: &mut Criterion) {
     for value in get_values() {
-        c.bench_function(format!("serialize {:?}", value.type_()).as_str(), |b| b.iter(|| serialize_value(&value)));
+        c.bench_function(format!("serialize {:?}", value.type_()).as_str(), |b| {
+            b.iter(|| serialize_value(&value))
+        });
     }
 }
 
 fn bench_deserialize(c: &mut Criterion) {
     for value in get_values() {
-        c.bench_function(format!("deserialize {:?}", value.type_()).as_str(), |b| b.iter(|| deserialize_value(&serialize_value(&value))));
+        c.bench_function(format!("deserialize {:?}", value.type_()).as_str(), |b| {
+            b.iter(|| deserialize_value(&serialize_value(&value)))
+        });
     }
 }
 

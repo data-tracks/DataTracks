@@ -16,8 +16,13 @@ pub mod advertise_tests {
         ]];
         let result = vec![vec![1.into(), 2.into(), 3.into(), 1.into()]];
 
-        let mapping: HashMap<_, _> =
-            values.get(0).unwrap().clone().into_iter().zip(result.get(0).unwrap().clone().into_iter()).collect();
+        let mapping: HashMap<_, _> = values
+            .get(0)
+            .unwrap()
+            .clone()
+            .into_iter()
+            .zip(result.get(0).unwrap().clone().into_iter())
+            .collect();
 
         let source_id = 3;
         let destination_id = 4;
@@ -62,8 +67,8 @@ pub mod advertise_tests {
         }
 
         let results = clone.lock().unwrap();
-        for mut train in results.clone() {
-            let vals = train.values.take().unwrap();
+        for train in results.clone() {
+            let vals = train.values;
             assert_eq!(vals.clone(), *result.get(0).unwrap());
             assert_ne!(vals, vec!["companyA".into(), "companyB".into()]);
         }
