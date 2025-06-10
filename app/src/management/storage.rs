@@ -147,7 +147,7 @@ impl Storage {
     }
 
     pub fn create_plan(&mut self, create: Create) -> Result<(), String> {
-        let create_plan = create.create_type_as_create_plan().unwrap();
+        let create_plan = create.create_type_as_create_plan_request().unwrap();
         if create_plan.name().is_some() && create_plan.plan().is_some() {
             let plan = Plan::parse(create_plan.plan().unwrap());
 

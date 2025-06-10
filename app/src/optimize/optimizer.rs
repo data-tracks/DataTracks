@@ -83,7 +83,7 @@ impl ChangingVisitor<&mut AlgebraType> for RuleBasedOptimizer {
         match target {
             AlgebraType::Dual(_) => (),
             AlgebraType::IndexScan(_) => (),
-            AlgebraType::TableScan(_) => (),
+            AlgebraType::Scan(_) => (),
             AlgebraType::Project(ref mut p) => self.visit(&mut *p.input),
             AlgebraType::Filter(ref mut f) => self.visit(&mut *f.input),
             AlgebraType::Join(j) => {
@@ -109,7 +109,7 @@ fn add_set(mut target: AlgebraType) -> AlgSet {
     match target {
         AlgebraType::Dual(_) => AlgSet::new(target),
         AlgebraType::IndexScan(_) => AlgSet::new(target),
-        AlgebraType::TableScan(_) => AlgSet::new(target),
+        AlgebraType::Scan(_) => AlgSet::new(target),
         AlgebraType::Project(ref mut p) => {
             p.input = Box::new(AlgebraType::Set(add_set((*p.input).clone())));
             AlgSet::new(target)
@@ -147,7 +147,7 @@ fn remove_set(mut target: AlgebraType) -> AlgebraType {
     match &mut target {
         AlgebraType::Dual(_) => target,
         AlgebraType::IndexScan(_) => target,
-        AlgebraType::TableScan(_) => target,
+        AlgebraType::Scan(_) => target,
         AlgebraType::Project(ref mut p) => {
             p.input = Box::new(remove_set((*p.input).clone()));
             target
@@ -204,7 +204,7 @@ mod tests {
 
         match optimized {
             AlgebraType::Project(p) => match p.input.as_ref() {
-                AlgebraType::TableScan(_) => {}
+                AlgebraType::Scan(_) => {}
                 a => panic!("Expected project but got {:?}", a),
             },
             a => panic!("wrong algebra type {:?}", a),
@@ -223,7 +223,7 @@ mod tests {
 
         match optimized {
             AlgebraType::Filter(ref p) => match p.input.as_ref() {
-                AlgebraType::TableScan(_) => {}
+                AlgebraType::Scan(_) => {}
                 a => panic!("Expected filter but got {:?} in {:?}", a, optimized),
             },
             a => panic!("wrong algebra type {:?}", a),

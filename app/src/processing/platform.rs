@@ -25,7 +25,7 @@ use tracing::{debug, error};
 const IDLE_TIMEOUT: Duration = Duration::from_nanos(10);
 
 // What: Transformations, Where: Windowing, When: Triggers, How: Accumulation
-/// Platform represents an indepentent action steps which handles data based on the 4 streaming operations from different inputs  
+/// Platform represents an independent action steps which handles data based on the 4 streaming operations from different inputs  
 pub(crate) struct Platform {
     id: usize,
     control: Receiver<Command>,
@@ -197,12 +197,9 @@ fn when(
             // decide if we fire a window, discard or wait
             match when.select(windows, &current) {
                 trains if !trains.is_empty() => {
-                    let train = trains
-                        .into_iter()
-                        .map(|(_, t)| t)
-                        .reduce(|a, b| a.merge(b))
-                        .unwrap();
-                    what.execute(train);
+                    trains.into_iter().for_each(|(_, t)| what.execute(t));
+                    //debug!("{:?}", train);
+                    //what.execute(train);
                 }
                 _ => {}
             }

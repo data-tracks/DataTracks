@@ -1,7 +1,7 @@
 use parking_lot::Mutex;
 use redb::{Database, TableDefinition};
 use speedy::{Readable, Writable};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::fs;
 use std::sync::Arc;
 use tempfile::NamedTempFile;
@@ -100,13 +100,16 @@ impl SharedState {
     }
 
     pub(crate) fn drain(&mut self) -> Vec<Value> {
-        self.storage.cache.drain().map(|(_, v)| v).collect()
+        std::mem::take(&mut self.storage.cache)
+            .into_iter()
+            .map(|(_, val)| val)
+            .collect()
     }
 }
 
 struct CachedStorage {
     //storage: Storage,
-    cache: HashMap<Value, Value>,
+    cache: BTreeMap<Value, Value>,
     //counter: usize,
     //max: usize,
 }

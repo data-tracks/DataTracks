@@ -345,7 +345,7 @@ impl TryFrom<ValueWrapper<'_>> for Value {
             }
             FlatValue::Text => {
                 let string = value.data_as_text().ok_or("Could not find string")?;
-                Ok(string.data().ok_or("Could not find string")?.into())
+                Ok(string.data().into())
             }
             FlatValue::Float => {
                 let float = value.data_as_float().ok_or("Could not find float")?;
@@ -358,7 +358,7 @@ impl TryFrom<ValueWrapper<'_>> for Value {
             }
             FlatValue::List => {
                 let list = value.data_as_list().ok_or("Could not find list")?;
-                let list = list.data().ok_or("Could not find list")?;
+                let list = list.data();
                 Ok(Value::array(
                     list.iter()
                         .map(|v| v.try_into())

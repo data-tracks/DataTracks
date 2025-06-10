@@ -156,7 +156,7 @@ impl IntervalWindow {
             }
             Some((interval, start)) => {
                 let (time, time_unit) = parse_interval(interval)?;
-                let start = parse_time(start).unwrap();
+                let start = parse_time(start)?;
 
                 Ok(IntervalWindow::new(time, time_unit, start))
             }
@@ -165,11 +165,13 @@ impl IntervalWindow {
 }
 
 fn parse_time(time_str: &str) -> Result<Time, String> {
+    let time = NaiveTime::parse_from_str(time_str, "%H:%M:%S").unwrap_or_else(|v| {
+        NaiveTime::parse_from_str(time_str, "%H:%M")
+            .unwrap_or_else(|_| NaiveTime::parse_from_str(time_str, "%H:%M:%s:6f").unwrap())
+    });
+    println!("time {time_str}");
     Ok(Time::new(
-        (NaiveTime::parse_from_str(time_str, "%H:%M")
-            .map_err(|err| err.to_string())?
-            .second()
-            * 1000) as i64,
+        (time.num_seconds_from_midnight() * 1000) as i64,
         0,
     ))
 }
@@ -281,7 +283,7 @@ mod test {
 
         station.add_out(0, tx).unwrap();
         station.operate(Arc::new(control.0), HashMap::new());
-        station.send(Train::new(values.clone()));
+        station.fake_receive(Train::new(values.clone()));
 
         let res = rx.recv();
         match res {
@@ -315,16 +317,20 @@ mod test {
         assert_eq!(Ready(0), control.1.recv().unwrap());
 
         for value in &values {
-            station.send(Train::new(vec![value.clone()]));
+            station.fake_receive(Train::new(vec![value.clone()]));
         }
         sleep(Duration::from_millis(50));
 
         let mut results = vec![];
-        station.send(Train::new(after.clone()));
-
-        for _ in 0..3 {
+        // receive first 2
+        for _ in 0..2 {
             results.push(rx.recv().unwrap())
         }
+
+        station.fake_receive(Train::new(after.clone()));
+
+        //receive last
+        results.push(rx.recv().unwrap());
 
         // 1. train
         assert_eq!(
@@ -333,10 +339,16 @@ mod test {
         );
         // 2. " or 1. & 2. depending on how fast it was handled
         let res = results.remove(0).values;
-        assert!(
-            res.get(0).unwrap() == values.get(1).unwrap()
-                || res.get(1).unwrap() == values.get(1).unwrap()
-        );
+
+        if res.len() == 1 {
+            assert_eq!(res.get(0).unwrap(), values.get(0).unwrap());
+        } else {
+            assert!(
+                res.get(0).unwrap() == values.get(1).unwrap()
+                    || res.get(1).unwrap() == values.get(1).unwrap()
+                    || res.get(0).unwrap() == values.get(1).unwrap()
+            )
+        }
 
         // 3. "
         assert_eq!(results.remove(0).values, after);

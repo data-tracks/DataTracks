@@ -1,6 +1,6 @@
 use crate::algebra;
 use crate::algebra::AlgebraType::{
-    Aggregate, Dual, Filter, IndexScan, Join, Project, TableScan, Variable,
+    Aggregate, Dual, Filter, IndexScan, Join, Project, Scan, Variable,
 };
 use crate::algebra::Op::Tuple;
 use crate::algebra::TupleOp::Input;
@@ -219,7 +219,7 @@ fn handle_table(identifier: SqlIdentifier) -> Result<MaybeAliasAlg, String> {
                     .map_err(|_| "Could not parse number".to_string())
             })
             .map(|num| IndexScan(algebra::IndexScan::new(num)))?,
-        name => TableScan(algebra::Scan::new(name)),
+        name => Scan(algebra::Scan::new(name)),
     };
     if !names.is_empty() {
         let field = handle_field(Identifier(identifier), &vec![])?;

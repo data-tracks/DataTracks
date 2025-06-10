@@ -1,5 +1,5 @@
 use crate::{Text, Value};
-use chrono::{DateTime, Duration, TimeZone, Timelike, Utc};
+use chrono::{DateTime, Duration, NaiveTime, TimeZone, Timelike, Utc};
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use schemas::message_generated::protocol::{Time as FlatTime, TimeArgs};
 use serde::{Deserialize, Serialize};
@@ -109,14 +109,13 @@ impl Sub<Duration> for &Time {
 
 impl std::fmt::Display for Time {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let ns = self.ns;
-        let hours = self.ms / 3600;
-        let minutes = self.ms % 3600;
-        let seconds = self.ms % 60;
-        let mut string = format!("{:02}:{:02}:{:02}", hours, minutes, seconds);
-        if ns > 0 {
-            string.push_str(format!(".{:03}", ns).as_str());
-        }
+        let time = NaiveTime::from_num_seconds_from_midnight_opt((self.ms / 1000) as u32, self.ns)
+            .unwrap();
+        let string = if self.ns > 0 {
+            time.format("%H:%M:%S%.6f").to_string()
+        } else {
+            time.format("%H:%M:%S").to_string()
+        };
 
         write!(f, "{}", string)
     }

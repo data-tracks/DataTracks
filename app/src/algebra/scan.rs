@@ -1,12 +1,11 @@
-use crate::algebra::algebra::{Algebra, RefHandler, ValueIterator};
+use crate::algebra::algebra::{Algebra, ValueIterator};
 use crate::algebra::BoxedIterator;
 use crate::analyse::{InputDerivable, OutputDerivable};
 use crate::processing::transform::Transform;
-use crate::processing::{Layout, Train};
+use crate::processing::Layout;
 use crate::util::storage::ValueStore;
 use crate::util::EmptyIterator;
 use std::collections::{HashMap, VecDeque};
-use std::vec;
 use value::Value;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
@@ -67,25 +66,6 @@ impl ValueIterator for ScanIterator {
 
     fn enrich(&mut self, _transforms: HashMap<String, Transform>) -> Option<BoxedIterator> {
         None
-    }
-}
-
-impl RefHandler for ScanIterator {
-    fn process(&self, _stop: usize, wagons: Vec<Train>) -> Vec<Train> {
-        let mut values = vec![];
-        wagons
-            .into_iter()
-            .filter(|w| w.last() == self.index)
-            .for_each(|mut t| values.append(t.values.as_mut()));
-        vec![Train::new(values).mark(self.index)]
-    }
-
-    fn clone(&self) -> Box<dyn RefHandler + Send + 'static> {
-        Box::new(ScanIterator {
-            index: self.index,
-            values: VecDeque::new(),
-            storage: self.storage.clone(),
-        })
     }
 }
 
@@ -172,6 +152,7 @@ mod test {
 
         let storage = ValueStore::new();
         let mut handler = scan.derive_iterator();
+        handler.set_storage(storage.clone());
 
         storage.append(train.values);
 

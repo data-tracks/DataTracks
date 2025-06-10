@@ -472,7 +472,7 @@ mod tests {
 
         station.add_out(0, tx).unwrap();
         station.operate(Arc::new(control.0), HashMap::new());
-        station.send(Train::new(values.clone()));
+        station.fake_receive(Train::new(values.clone()));
 
         let res = rx.recv();
         match res {
@@ -511,7 +511,7 @@ mod tests {
 
         station.add_out(0, tx).unwrap();
         station.operate(Arc::new(control.0), HashMap::new());
-        station.send(Train::new(values.clone()));
+        station.fake_receive(Train::new(values.clone()));
 
         let res = rx.recv();
         match res {

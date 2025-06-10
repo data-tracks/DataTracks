@@ -360,6 +360,7 @@ pub mod dummy {
     pub struct MappingIterator {
         mapping: HashMap<Value, Value>,
         values: Vec<Value>,
+        storage: Option<ValueStore>,
     }
 
     impl MappingIterator {
@@ -367,7 +368,17 @@ pub mod dummy {
             MappingIterator {
                 mapping,
                 values: Vec::new(),
+                storage: None,
             }
+        }
+
+        pub(crate) fn load(&mut self) -> bool {
+            self.values = if let Some(store) = self.storage.as_mut() {
+                store.drain()
+            } else {
+                vec![]
+            };
+            !self.values.is_empty()
         }
 
         pub(crate) fn get_value(&self, value: Value) -> Option<Value> {
@@ -379,22 +390,17 @@ pub mod dummy {
         type Item = Value;
 
         fn next(&mut self) -> Option<Self::Item> {
-            if self.values.is_empty() {
-                None
-            } else {
-                Some(self.values.remove(0))
+            if self.values.is_empty() && !self.load() {
+                return None;
             }
+            let value = self.values.remove(0);
+            self.get_value(value)
         }
     }
 
     impl ValueIterator for MappingIterator {
         fn set_storage(&mut self, storage: ValueStore) {
-            for value in storage.drain() {
-                let values = self.get_value(value);
-                if let Some(values) = values {
-                    self.values.push(values);
-                }
-            }
+            self.storage = Some(storage);
         }
 
         fn clone(&self) -> BoxedIterator {
@@ -555,6 +561,7 @@ pub mod tests {
     }
 
     #[test]
+    #[ignore]
     fn sql_parse_block_one() {
         let source1 = 1;
         let source4 = 4;

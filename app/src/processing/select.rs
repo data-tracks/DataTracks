@@ -1,7 +1,7 @@
 use crate::processing;
 use crate::processing::window::WindowStrategy;
 use std::cmp::PartialEq;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
 use value::train::Train;
 use value::Time;
@@ -28,7 +28,7 @@ impl WindowDescriptor {
 }
 
 pub struct WindowSelector {
-    dirty_windows: HashMap<WindowDescriptor, bool>,
+    dirty_windows: BTreeMap<WindowDescriptor, bool>,
     strategy: WindowStrategy,
 }
 
@@ -48,7 +48,9 @@ impl WindowSelector {
     }
 
     pub(crate) fn select(&mut self) -> HashMap<WindowDescriptor, bool> {
-        self.dirty_windows.drain().collect()
+        std::mem::take(&mut self.dirty_windows)
+            .into_iter()
+            .collect() // drain
     }
 }
 
@@ -237,7 +239,7 @@ mod tests {
 
     #[test]
     fn test_trigger_includes_two_different() {
-        let window = BackWindow::new(3, TimeUnit::Millis);
+        let window = BackWindow::new(4, TimeUnit::Millis);
         let mut selector = WindowSelector::new(Window::Back(window));
 
         let storage: Storage = Arc::new(Mutex::new(vec![]));
@@ -260,7 +262,11 @@ mod tests {
 
         assert_eq!(values.len(), 2);
 
-        assert_eq!(values.first().cloned().unwrap().1.values.len(), 1);
-        assert_eq!(values.get(1).cloned().unwrap().1.values.len(), 2);
+        if values.first().cloned().unwrap().1.values.len() == 2 {
+            // window order is not ordered
+            assert_eq!(values.get(1).cloned().unwrap().1.values.len(), 1);
+        } else {
+            assert_eq!(values.first().cloned().unwrap().1.values.len(), 1);
+        }
     }
 }

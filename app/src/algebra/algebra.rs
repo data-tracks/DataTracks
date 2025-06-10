@@ -26,7 +26,7 @@ pub type BoxedValueLoader = Box<dyn ValueLoader + Send + 'static>;
 pub enum AlgebraType {
     Dual(Dual),
     IndexScan(IndexScan),
-    TableScan(Scan),
+    Scan(Scan),
     Project(Project),
     Filter(Filter),
     Join(Join),
@@ -41,7 +41,7 @@ impl AlgebraType {
         match self {
             AlgebraType::Dual(_) => Cost::new(1),
             AlgebraType::IndexScan(_) => Cost::new(1),
-            AlgebraType::TableScan(_) => Cost::new(1),
+            AlgebraType::Scan(_) => Cost::new(1),
             AlgebraType::Project(p) => Cost::new(1) + p.project.calc_cost() + p.input.calc_cost(),
             AlgebraType::Filter(f) => Cost::new(1) + f.condition.calc_cost() + f.input.calc_cost(),
             AlgebraType::Join(j) => Cost::new(2) + j.left.calc_cost() + j.right.calc_cost(),
@@ -67,7 +67,7 @@ impl AlgebraType {
     }
 
     pub fn table(name: String) -> AlgebraType {
-        AlgebraType::TableScan(Scan::new(name))
+        AlgebraType::Scan(Scan::new(name))
     }
 
     pub fn project(project: Operator, input: AlgebraType) -> AlgebraType {
@@ -90,7 +90,7 @@ impl InputDerivable for AlgebraType {
             AlgebraType::Aggregate(a) => a.derive_input_layout(),
             AlgebraType::Variable(v) => v.derive_input_layout(),
             AlgebraType::Dual(d) => d.derive_input_layout(),
-            AlgebraType::TableScan(t) => t.derive_input_layout(),
+            AlgebraType::Scan(t) => t.derive_input_layout(),
             AlgebraType::Set(s) => s.derive_input_layout(),
         }
     }
@@ -107,7 +107,7 @@ impl OutputDerivable for AlgebraType {
             AlgebraType::Aggregate(a) => a.derive_output_layout(inputs),
             AlgebraType::Variable(v) => v.derive_output_layout(inputs),
             AlgebraType::Dual(d) => d.derive_output_layout(inputs),
-            AlgebraType::TableScan(t) => t.derive_output_layout(inputs),
+            AlgebraType::Scan(t) => t.derive_output_layout(inputs),
             AlgebraType::Set(s) => s.initial.derive_output_layout(inputs),
         }
     }
@@ -132,7 +132,7 @@ impl Algebra for AlgebraType {
             AlgebraType::Aggregate(a) => Box::new(a.derive_iterator()),
             AlgebraType::Variable(s) => Box::new(s.derive_iterator()),
             AlgebraType::Dual(d) => Box::new(d.derive_iterator()),
-            AlgebraType::TableScan(t) => Box::new(t.derive_iterator()),
+            AlgebraType::Scan(t) => Box::new(t.derive_iterator()),
             AlgebraType::Set(s) => s.initial.derive_iterator(),
         }
     }
@@ -145,12 +145,6 @@ pub trait Algebra: Clone + InputDerivable + OutputDerivable {
 
 pub fn build_iterator(mut algebra: AlgebraType) -> Result<BoxedIterator, String> {
     Ok(algebra.derive_iterator())
-}
-
-pub trait RefHandler: Send {
-    fn process(&self, stop: usize, wagons: Vec<Train>) -> Vec<Train>;
-
-    fn clone(&self) -> Box<dyn RefHandler + Send + 'static>;
 }
 
 pub trait ValueHandler: Send {

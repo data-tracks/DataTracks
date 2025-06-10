@@ -1,8 +1,8 @@
 use crate::management::Storage;
 use flatbuffers::FlatBufferBuilder;
 use schemas::message_generated::protocol::{
-    Bind, BindArgs, Catalog, CatalogArgs, CreateType, GetType, Message, MessageArgs, Payload,
-    Plans, PlansArgs, Register, RegisterArgs, Status, StatusArgs,
+    BindRequest, BindRequestArgs, Catalog, CatalogArgs, CreateType, GetType, Message, MessageArgs,
+    Payload, Plans, PlansArgs, RegisterRequest, RegisterRequestArgs, Status, StatusArgs,
 };
 use std::sync::{Arc, Mutex};
 use tracing::{debug, info};
@@ -33,7 +33,7 @@ impl Api {
                         Self::build_status_response("No response".to_string())
                     }
                     CreateType(2_u8..=u8::MAX) => todo!(),
-                    CreateType::CreatePlan => {
+                    CreateType::CreatePlanRequest => {
                         info!("Received a CREATE PLAN");
                         match storage.lock().unwrap().create_plan(create) {
                             Ok(_) => Self::build_status_response("Created plan".to_string()),
@@ -42,10 +42,10 @@ impl Api {
                     }
                 }
             }
-            Payload::Register => {
+            Payload::RegisterRequest => {
                 debug!("Received a REGISTER");
 
-                handle_register(msg.data_as_register().unwrap(), storage, api)
+                handle_register(msg.data_as_register_request().unwrap(), storage, api)
             }
             Payload::Get => {
                 debug!("Received a GET");
@@ -67,7 +67,7 @@ impl Api {
                 let _values = msg.data_as_train().unwrap();
                 todo!()
             }
-            Payload::Bind => match msg.data_as_bind() {
+            Payload::BindRequest => match msg.data_as_bind_request() {
                 None => todo!(),
                 Some(b) => {
                     let mut storage = storage.lock().unwrap();
@@ -77,7 +77,7 @@ impl Api {
                     Self::build_bind_response(data_port as usize, watermark_port as usize)
                 }
             },
-            Payload::Unbind => match msg.data_as_unbind() {
+            Payload::UnbindRequest => match msg.data_as_unbind_request() {
                 None => todo!(),
                 Some(u) => {
                     let mut storage = storage.lock().unwrap();
@@ -114,9 +114,9 @@ impl Api {
     fn build_bind_response(data_port: usize, watermark_port: usize) -> Result<Vec<u8>, Vec<u8>> {
         let mut builder = FlatBufferBuilder::new();
 
-        let bind = Bind::create(
+        let bind = BindRequest::create(
             &mut builder,
-            &BindArgs {
+            &BindRequestArgs {
                 plan_id: data_port as u64,
                 stop_id: watermark_port as u64,
             },
@@ -124,7 +124,7 @@ impl Api {
         let msg = Message::create(
             &mut builder,
             &MessageArgs {
-                data_type: Payload::Bind,
+                data_type: Payload::BindRequest,
                 data: Some(bind.as_union_value()),
                 status: None,
             },
@@ -135,7 +135,7 @@ impl Api {
 }
 
 fn handle_register(
-    _request: Register,
+    _request: RegisterRequest,
     storage: Arc<Mutex<Storage>>,
     api: Arc<Mutex<Api>>,
 ) -> Result<Vec<u8>, Vec<u8>> {
@@ -159,10 +159,10 @@ fn handle_register(
     let plans = Plans::create(&mut builder, &PlansArgs { plans: Some(plans) });
     let catalog = Catalog::create(&mut builder, &CatalogArgs { plans: Some(plans) });
 
-    let register = Register::create(
+    let register = RegisterRequest::create(
         &mut builder,
-        &RegisterArgs {
-            id: Some(id as i64),
+        &RegisterRequestArgs {
+            id: Some(id as u64),
             catalog: Some(catalog),
         },
     )
@@ -171,7 +171,7 @@ fn handle_register(
     let msg = Message::create(
         &mut builder,
         &MessageArgs {
-            data_type: Payload::Register,
+            data_type: Payload::RegisterRequest,
             data: Some(register),
             status: None,
         },

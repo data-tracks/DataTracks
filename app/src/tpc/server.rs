@@ -3,7 +3,9 @@ use crossbeam::channel::{Receiver, Sender};
 
 use crate::util::deserialize_message;
 use flatbuffers::FlatBufferBuilder;
-use schemas::message_generated::protocol::{Message, MessageArgs, Payload, Register, RegisterArgs};
+use schemas::message_generated::protocol::{
+    Message, MessageArgs, Payload, RegisterRequest, RegisterRequestArgs,
+};
 use std::io;
 use std::io::Error;
 use std::net::{SocketAddr, ToSocketAddrs};
@@ -65,9 +67,9 @@ pub trait StreamUser: Clone {
 pub fn handle_register() -> Result<Vec<u8>, String> {
     let mut builder = FlatBufferBuilder::new();
 
-    let register = Register::create(
+    let register = RegisterRequest::create(
         &mut builder,
-        &RegisterArgs {
+        &RegisterRequestArgs {
             id: None,
             catalog: None,
             ..Default::default()
@@ -78,7 +80,7 @@ pub fn handle_register() -> Result<Vec<u8>, String> {
     let msg = Message::create(
         &mut builder,
         &MessageArgs {
-            data_type: Payload::Register,
+            data_type: Payload::RegisterRequest,
             data: Some(register),
             status: None,
         },

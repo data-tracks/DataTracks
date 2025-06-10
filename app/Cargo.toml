@@ -44,6 +44,7 @@ regex = "1.11.1"
 rstest = "0.25.0"
 criterion = "0.6.0"
 uuid = { version = "1.16.0", features = ["v4"] }
+tracing-test = "0.2.5"
 
 [dependencies.schemas]
 git = "https://github.com/data-tracks/TrackRails.git"

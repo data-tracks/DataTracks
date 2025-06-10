@@ -166,7 +166,7 @@ impl StreamUser for TpcSource {
                     // Deserialize FlatBuffers message
                     match deserialize_message(&buffer) {
                         Ok(msg) => match msg.data_type() {
-                            Payload::Register => {
+                            Payload::RegisterRequest => {
                                 info!("tpc registration");
                                 stream.write_all(&handle_register().unwrap()).await.unwrap();
                             }
