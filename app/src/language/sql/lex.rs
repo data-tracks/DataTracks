@@ -1,20 +1,20 @@
-use std::str::FromStr;
-use std::{mem, vec};
-
 use crate::algebra::Op::Tuple;
 use crate::algebra::{Op, TupleOp};
 use crate::language::sql::buffer::BufferedLexer;
 use crate::language::sql::lex::Token::{
-    As, BracketClose, Comma, From, GroupBy, Identifier, Limit, OrderBy, Select, Semi, Star, Text,
-    Time, Where, Window,
+    As, BracketClose, Comma, Emit, From, GroupBy, Identifier, Limit, OrderBy, Select, Semi, Star,
+    Text, Time, Where, Window,
 };
 use crate::language::sql::statement::{
-    SqlAlias, SqlIdentifier, SqlList, SqlOperator, SqlSelect, SqlStatement, SqlSymbol, SqlType,
-    SqlValue, SqlVariable, SqlWindow,
+    SqlAlias, SqlIdentifier, SqlList, SqlOperator, SqlSelect, SqlStatement, SqlSymbol, SqlTrigger,
+    SqlType, SqlValue, SqlVariable, SqlWindow,
 };
 use crate::util::TimeUnit::*;
 use crate::util::{TimeUnit, WindowType};
+use crate::TriggerType;
 use logos::{Lexer, Logos};
+use std::str::FromStr;
+use std::{mem, vec};
 use value;
 use value::ValType;
 
@@ -52,12 +52,30 @@ pub(crate) enum Token {
     Limit,
     #[regex("ORDER BY", ignore(case))]
     OrderBy,
-    #[regex("WINDOW", ignore(case))]
-    Window,
+    #[regex("EMIT", ignore(case))]
+    Emit,
     #[regex("THUMBLING", ignore(case))]
     Thumbling,
+    #[regex("SLIDING", ignore(case))]
+    Sliding,
+    #[regex("HOPPING", ignore(case))]
+    Hopping,
+    #[regex("SESSION", ignore(case))]
+    Session,
     #[regex("SIZE", ignore(case))]
     Size,
+    #[regex("OFFSET", ignore(case))]
+    Offset,
+    #[regex("ELEMENT", ignore(case))]
+    Element,
+    #[regex("WINDOW END", priority = 12, ignore(case))]
+    WindowEnd,
+    #[regex("WINDOW NEXT", priority = 12, ignore(case))]
+    WindowNext,
+    #[regex("WINDOW", priority = 10, ignore(case))]
+    Window,
+    #[regex("INTERVAL", ignore(case))]
+    Interval,
     #[regex(r"(?i)milis|miliseconds|milisecond", | _ | Millis)]
     #[regex(r"(?i)seconds|second", | _ | Seconds)]
     #[regex(r"(?i)minutes|minute|min", | _ | Minutes)]
@@ -106,8 +124,7 @@ pub(crate) enum Token {
     Divide,
     #[token("COUNT")]
     Count,
-    #[regex(r#"["]?[a-zA-Z_$][a-zA-Z_$0-9.]*["]?"#, | lex | lex.slice().trim_matches('"').to_owned()
-    )]
+    #[regex(r#"["]?[a-zA-Z_$][a-zA-Z_$0-9.]*["]?"#, | lex | lex.slice().trim_matches('"').to_owned())]
     Identifier(String),
 }
 
@@ -141,12 +158,13 @@ fn parse_select(lexer: &mut BufferedLexer, stops: &[Token]) -> Result<SqlStateme
             None,
             vec![],
             vec![],
+            None,
         )));
     }
 
     let froms = parse_expressions(
         lexer,
-        &[&[Semi, Where, GroupBy, Limit, OrderBy, Window], stops].concat(),
+        &[&[Semi, Where, GroupBy, Limit, OrderBy, Window, Emit], stops].concat(),
     )?;
 
     let mut last_end = lexer.consume_buffer();
@@ -154,7 +172,7 @@ fn parse_select(lexer: &mut BufferedLexer, stops: &[Token]) -> Result<SqlStateme
     if last_end == Ok(Where) {
         wheres = parse_expressions(
             lexer,
-            &[&[Semi, GroupBy, Limit, OrderBy, Window], stops].concat(),
+            &[&[Semi, GroupBy, Limit, OrderBy, Window, Emit], stops].concat(),
         )?;
 
         last_end = lexer.consume_buffer();
@@ -163,7 +181,7 @@ fn parse_select(lexer: &mut BufferedLexer, stops: &[Token]) -> Result<SqlStateme
     if last_end == Ok(Window) {
         window = Some(parse_window(
             lexer,
-            &[&[Semi, GroupBy, Limit, OrderBy], stops].concat(),
+            &[&[Semi, GroupBy, Limit, OrderBy, Emit], stops].concat(),
         )?);
 
         last_end = lexer.consume_buffer();
@@ -171,31 +189,89 @@ fn parse_select(lexer: &mut BufferedLexer, stops: &[Token]) -> Result<SqlStateme
 
     let mut groups = vec![];
     if last_end == Ok(GroupBy) {
-        groups = parse_expressions(lexer, &[&[Semi, Limit, OrderBy], stops].concat())?
+        groups = parse_expressions(lexer, &[&[Semi, Limit, OrderBy, Emit], stops].concat())?
+    }
+
+    let mut trigger = None;
+    if last_end == Ok(Emit) {
+        trigger = Some(parse_trigger(lexer, &[&[Semi], stops].concat())?);
+        last_end = lexer.consume_buffer();
     }
 
     Ok(SqlStatement::Select(SqlSelect::new(
-        fields, froms, window, wheres, groups,
+        fields, froms, window, wheres, groups, trigger,
     )))
 }
 
 fn parse_window(lexer: &mut BufferedLexer, _stops: &[Token]) -> Result<SqlWindow, String> {
     let _type = match lexer.next()? {
         Token::Thumbling => WindowType::Thumbling,
+        Token::Sliding => WindowType::Sliding,
+        Token::Hopping => WindowType::Hopping,
+        Token::Session => return Ok(SqlWindow::new(WindowType::Session, None, None)),
         _ => return Err(format!("Unexpected token {:?}", lexer.next()?)),
     };
-    lexer.next()?; // bracket open
-    lexer.next()?; // SIZE
-    let size = match lexer.next()? {
-        Token::Number(size) => size as usize,
-        _ => return Err("Invalid window size".to_string()),
+
+    let mut size = None;
+    let mut offset = None;
+
+    let mut value = lexer.next()?; // initial open brackets
+    while value != BracketClose {
+        value = lexer.next()?; // initial value
+
+        match value {
+            Token::Size => {
+                let amount = parse_number(lexer)? as usize;
+                let unit = parse_time_unit(lexer)?;
+                size = Some((amount, unit))
+            }
+            Token::Offset => {
+                let amount = parse_number(lexer)?;
+                let unit = parse_time_unit(lexer)?;
+                offset = Some((amount, unit))
+            }
+            _ => return Err(format!("Unexpected token {:?}", value)),
+        }
+        value = lexer.next()?; // bracket or comma
+    }
+
+    if size.is_none() {
+        return Err("Invalid window size".to_string());
+    }
+
+    Ok(SqlWindow::new(_type, size, offset))
+}
+
+fn parse_time_unit(lexer: &mut BufferedLexer) -> Result<TimeUnit, String> {
+    match lexer.next()? {
+        Time(time) => Ok(time),
+        _ => Err("Invalid time unit".to_string()),
+    }
+}
+
+fn parse_number(lexer: &mut BufferedLexer) -> Result<isize, String> {
+    match lexer.next()? {
+        Token::Number(size) => Ok(size as isize),
+        _ => Err("Invalid number".to_string()),
+    }
+}
+
+fn parse_trigger(lexer: &mut BufferedLexer, _stops: &[Token]) -> Result<SqlTrigger, String> {
+    let _type = match lexer.next()? {
+        Token::Element => TriggerType::Element,
+        Token::Interval => {
+            lexer.next()?;
+            let amount = parse_number(lexer)?;
+            let unit = parse_time_unit(lexer)?;
+            lexer.next()?;
+            return Ok(SqlTrigger::new(TriggerType::Interval(amount, unit)));
+        }
+        Token::WindowEnd => TriggerType::WindowEnd,
+        Token::WindowNext => TriggerType::WindowNext,
+        _ => return Err(format!("Unexpected trigger token {:?}", lexer.next()?)),
     };
-    let unit = match lexer.next()? {
-        Time(time) => time,
-        _ => return Err("Invalid window unit".to_string()),
-    }; // bracket close
-    lexer.next()?;
-    Ok(SqlWindow::new(_type, size, unit))
+
+    Ok(SqlTrigger::new(_type))
 }
 
 fn parse_expressions(
@@ -487,14 +563,14 @@ mod test {
 
     #[test]
     fn test_star() {
-        let query = &select("*", "$0", None, None, None);
+        let query = &select("*", "$0", None, None, None, None);
         test_query_diff(query, query);
     }
 
     #[test]
     fn test_table() {
-        let query = &select("name", "table", None, None, None);
-        let query_res = &select(&quote_identifier("name"), "table", None, None, None);
+        let query = &select("name", "table", None, None, None, None);
+        let query_res = &select(&quote_identifier("name"), "table", None, None, None, None);
         test_query_diff(query, query_res);
     }
 
@@ -530,7 +606,7 @@ mod test {
 
     #[test]
     fn test_single() {
-        let query = &select(&quote_identifier("name"), "$0", None, None, None);
+        let query = &select(&quote_identifier("name"), "$0", None, None, None, None);
         test_query_diff(query, query);
     }
 
@@ -539,6 +615,7 @@ mod test {
         let query = &select(
             &format!("{}, {}", quote_identifier("name"), quote_identifier("age")),
             "$0",
+            None,
             None,
             None,
             None,
@@ -559,6 +636,7 @@ mod test {
             None,
             None,
             None,
+            None,
         );
         test_query_diff(query, query);
     }
@@ -573,6 +651,7 @@ mod test {
                 quote_identifier("age")
             ),
             "$0, $1",
+            None,
             None,
             None,
             None,
@@ -593,6 +672,7 @@ mod test {
             None,
             None,
             None,
+            None,
         );
         test_query_diff(query, query);
     }
@@ -606,6 +686,7 @@ mod test {
                 quote_identifier("age")
             ),
             "$0",
+            None,
             None,
             None,
             None,
@@ -625,6 +706,7 @@ mod test {
             None,
             None,
             None,
+            None,
         );
         let res = &select(
             &format!(
@@ -633,6 +715,7 @@ mod test {
                 quote_identifier("age")
             ),
             "$0",
+            None,
             None,
             None,
             None,
@@ -652,6 +735,7 @@ mod test {
             None,
             None,
             None,
+            None,
         );
         test_query_diff(query, query);
     }
@@ -665,6 +749,7 @@ mod test {
                 quote_identifier("age")
             ),
             "$0",
+            None,
             None,
             None,
             None,
@@ -684,6 +769,7 @@ mod test {
             None,
             None,
             None,
+            None,
         );
         test_query_diff(query, query);
     }
@@ -697,6 +783,7 @@ mod test {
                 quote_identifier("age")
             ),
             "$0",
+            None,
             None,
             None,
             None,
@@ -716,6 +803,7 @@ mod test {
             None,
             None,
             None,
+            None,
         );
         test_query_diff(query, query);
     }
@@ -729,6 +817,7 @@ mod test {
                 quote_identifier("age")
             ),
             "$0",
+            None,
             None,
             None,
             None,
@@ -749,6 +838,7 @@ mod test {
             None,
             None,
             None,
+            None,
         );
         test_query_diff(query, query);
     }
@@ -759,6 +849,7 @@ mod test {
             &format!("{}", quote_identifier("name")),
             "$0",
             Some(&format!("{} = 3", quote_identifier("$0"))),
+            None,
             None,
             None,
         );
@@ -777,6 +868,7 @@ mod test {
             )),
             None,
             None,
+            None,
         );
         let res = &select(
             &format!("{}", quote_identifier("name")),
@@ -786,6 +878,7 @@ mod test {
                 quote_identifier("$0"),
                 quote_identifier("name")
             )),
+            None,
             None,
             None,
         );
@@ -804,6 +897,7 @@ mod test {
             )),
             None,
             None,
+            None,
         );
         test_query_diff(query, query);
     }
@@ -816,18 +910,82 @@ mod test {
             None,
             None,
             None,
+            None,
         );
         test_query_diff(query, query);
     }
 
+    /// Tumbling windows are a series of fixed-sized, non-overlapping and contiguous time intervals.
     #[test]
-    fn test_window() {
+    fn test_window_thumbling() {
         let query = &select(
             "COUNT(*)",
             "$0",
             None,
             None,
             Some("THUMBLING (SIZE 5 SECONDS)"),
+            None,
+        );
+        test_query_diff(query, query);
+    }
+
+    /// Hopping windows model scheduled overlapping windows. A hopping window specification consist of three parameters: the timeunit, the windowsize (how long each window lasts) and the hopsize (by how much each window moves forward relative to the previous one).
+    #[test]
+    fn test_window_hopping() {
+        let query = &select(
+            "COUNT(*)",
+            "$0",
+            None,
+            None,
+            Some("HOPPING (SIZE 5 SECONDS, OFFSET 2 SECONDS)"),
+            None,
+        );
+        test_query_diff(query, query);
+    }
+
+    /// Sliding windows consider windows of a specific size but accept any sort of overlap.
+    #[test]
+    fn test_window_sliding() {
+        let query = &select(
+            "COUNT(*)",
+            "$0",
+            None,
+            None,
+            Some("SLIDING (SIZE 5 SECONDS)"),
+            None,
+        );
+        test_query_diff(query, query);
+    }
+
+    /// Session windows have a dynamic size and use  connectionStart
+    /// to define the length of a specific window.
+    #[test]
+    fn test_window_session() {
+        let query = &select("COUNT(*)", "$0", None, None, Some("SESSION"), None);
+        test_query_diff(query, query);
+    }
+
+    #[test]
+    fn test_trigger_on_element() {
+        let query = &select("COUNT(*)", "$0", None, None, None, Some("ELEMENT"));
+        test_query_diff(query, query);
+    }
+
+    #[test]
+    fn test_trigger_on_window_end() {
+        let query = &select("COUNT(*)", "$0", None, None, None, Some("WINDOW END"));
+        test_query_diff(query, query);
+    }
+
+    #[test]
+    fn test_trigger_interval() {
+        let query = &select(
+            "COUNT(*)",
+            "$0",
+            None,
+            None,
+            Some("SESSION"),
+            Some("INTERVAL(5 SECONDS)"),
         );
         test_query_diff(query, query);
     }
@@ -838,6 +996,7 @@ mod test {
         wheres: Option<&str>,
         group_by: Option<&str>,
         window: Option<&str>,
+        trigger: Option<&str>,
     ) -> String {
         let mut select = format!("SELECT {} FROM {}", selects, from);
         if let Some(window) = window {
@@ -848,6 +1007,9 @@ mod test {
         }
         if let Some(group) = group_by {
             select += &format!(" GROUP BY {}", group);
+        }
+        if let Some(trigger) = trigger {
+            select += &format!(" EMIT {}", trigger);
         }
         select
     }

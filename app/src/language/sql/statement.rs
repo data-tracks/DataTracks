@@ -1,6 +1,8 @@
 use crate::algebra::{Op, TupleOp};
 use crate::language::statement::Statement;
 use crate::util::{TimeUnit, WindowType};
+use crate::TriggerType;
+use std::fmt::Display;
 use value::{ValType, Value};
 
 pub trait Sql: Statement {}
@@ -17,6 +19,7 @@ pub(crate) enum SqlStatement {
     Alias(SqlAlias),
     Variable(SqlVariable),
     Window(SqlWindow),
+    Trigger(SqlTrigger),
 }
 
 impl SqlStatement {
@@ -32,6 +35,7 @@ impl SqlStatement {
             SqlStatement::Variable(v) => v.dump(quote),
             SqlStatement::Type(t) => t.dump(quote),
             SqlStatement::Window(t) => t.dump(quote),
+            SqlStatement::Trigger(t) => t.dump(quote),
         }
     }
 
@@ -47,22 +51,66 @@ impl SqlStatement {
 #[derive(Debug, Clone)]
 pub struct SqlWindow {
     _type: WindowType,
-    size: usize,
-    unit: TimeUnit,
+    size: Option<(usize, TimeUnit)>,
+    offset: Option<(isize, TimeUnit)>,
 }
 
 impl SqlWindow {
-    pub fn new(_type: WindowType, size: usize, unit: TimeUnit) -> Self {
-        SqlWindow { _type, size, unit }
+    pub fn new(
+        _type: WindowType,
+        size: Option<(usize, TimeUnit)>,
+        offset: Option<(isize, TimeUnit)>,
+    ) -> Self {
+        SqlWindow {
+            _type,
+            size,
+            offset,
+        }
     }
 
     fn dump(&self, quote: &str) -> String {
-        format!(
-            "{} (SIZE {} {})",
-            self._type,
-            self.size,
-            self.unit.dump_full(quote)
-        )
+        let mut query = format!("{}", self._type);
+        let mut elements = vec![];
+        if let Some((size, unit)) = &self.size {
+            elements.push(("SIZE", (size.to_string(), unit)));
+        }
+
+        if let Some((offset, unit)) = &self.offset {
+            elements.push(("OFFSET", (offset.to_string(), unit)));
+        }
+
+        if !elements.is_empty() {
+            query += " (";
+            query += &elements
+                .iter()
+                .map(|(id, (amount, unit))| format!("{} {} {}", id, amount, unit.dump_full(quote)))
+                .collect::<Vec<_>>()
+                .join(", ");
+            query += ")";
+        }
+
+        query
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SqlTrigger {
+    type_: TriggerType,
+}
+
+impl SqlTrigger {
+    pub fn new(type_: TriggerType) -> Self {
+        SqlTrigger { type_ }
+    }
+
+    pub fn dump(&self, quote: &str) -> String {
+        self.type_.dump(quote)
+    }
+}
+
+impl Display for SqlTrigger {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "EMIT {}", self.type_)
     }
 }
 
@@ -246,6 +294,7 @@ pub(crate) struct SqlSelect {
     pub(crate) wheres: Vec<SqlStatement>,
     pub(crate) orders: Vec<SqlStatement>,
     pub(crate) groups: Vec<SqlStatement>,
+    pub(crate) trigger: Option<SqlTrigger>,
 }
 
 #[derive(Debug)]
@@ -296,6 +345,7 @@ impl SqlSelect {
         window: Option<SqlWindow>,
         wheres: Vec<SqlStatement>,
         groups: Vec<SqlStatement>,
+        trigger: Option<SqlTrigger>,
     ) -> SqlSelect {
         SqlSelect {
             columns,
@@ -304,6 +354,7 @@ impl SqlSelect {
             wheres,
             orders: vec![],
             groups,
+            trigger,
         }
     }
 }
@@ -343,6 +394,10 @@ impl Statement for SqlSelect {
                     .join(" AND ")
             )
             .as_str();
+        }
+
+        if let Some(trigger) = self.trigger.clone() {
+            select += format!(" EMIT {}", trigger.dump(quote)).as_str();
         }
 
         select
