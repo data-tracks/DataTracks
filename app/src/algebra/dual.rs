@@ -6,7 +6,7 @@ use crate::util::storage::ValueStore;
 use std::collections::HashMap;
 use value::Value;
 
-// "Dummy" table to query for constants, one row
+/// "Dummy" table to query for constants, one row
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Dual {}
 

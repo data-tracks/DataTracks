@@ -8,6 +8,7 @@ use crate::util::storage::ValueStore;
 use std::collections::HashMap;
 use value::Value;
 
+/// Applies filter operations like "WHERE name = 'Peter'"
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Filter {
     pub input: Box<AlgebraType>,

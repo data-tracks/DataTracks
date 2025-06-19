@@ -19,6 +19,7 @@ use value::Value::Null;
 
 type Agg = (AggOp, Operator);
 
+/// Aggregate operations like SUM, COUNT, AVG
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Aggregate {
     pub input: Box<AlgebraType>,

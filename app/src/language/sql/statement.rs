@@ -80,7 +80,7 @@ impl SqlWindow {
         }
 
         if !elements.is_empty() {
-            query += " (";
+            query += "(";
             query += &elements
                 .iter()
                 .map(|(id, (amount, unit))| format!("{} {} {}", id, amount, unit.dump_full(quote)))

@@ -16,11 +16,11 @@ impl Display for TriggerType {
 }
 
 impl TriggerType {
-    pub fn dump(&self, _quote: &str) -> String {
+    pub fn dump(&self, quote: &str) -> String {
         match self {
             TriggerType::Element => String::from("ELEMENT"),
             TriggerType::Interval(amount, unit) => {
-                format!("{} {}", amount, unit)
+                format!("INTERVAL({} {})", amount, unit.dump_full(quote))
             }
             TriggerType::WindowEnd => String::from("WINDOW END"),
             TriggerType::WindowNext => String::from("WINDOW NEXT"),

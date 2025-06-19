@@ -7,6 +7,7 @@ use std::collections::{HashMap, VecDeque};
 use value::train::Train;
 use value::Value;
 
+/// responsible for handling where and what of data points and hands them over to the next component
 pub struct Executor {
     iterator: BoxedIterator,
     sender: Sender,

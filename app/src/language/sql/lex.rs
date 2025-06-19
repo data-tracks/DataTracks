@@ -54,11 +54,11 @@ pub(crate) enum Token {
     OrderBy,
     #[regex("EMIT", ignore(case))]
     Emit,
-    #[regex("THUMBLING", ignore(case))]
+    #[regex("THUMBLING\\s*\\(", ignore(case))]
     Thumbling,
-    #[regex("SLIDING", ignore(case))]
+    #[regex("SLIDING\\s*\\(", ignore(case))]
     Sliding,
-    #[regex("HOPPING", ignore(case))]
+    #[regex("HOPPING\\s*\\(", ignore(case))]
     Hopping,
     #[regex("SESSION", ignore(case))]
     Session,
@@ -68,13 +68,13 @@ pub(crate) enum Token {
     Offset,
     #[regex("ELEMENT", ignore(case))]
     Element,
-    #[regex("WINDOW END", priority = 12, ignore(case))]
-    WindowEnd,
-    #[regex("WINDOW NEXT", priority = 12, ignore(case))]
-    WindowNext,
+    #[regex("END", priority = 12, ignore(case))]
+    End,
+    #[regex("NEXT", priority = 12, ignore(case))]
+    Next,
     #[regex("WINDOW", priority = 10, ignore(case))]
     Window,
-    #[regex("INTERVAL", ignore(case))]
+    #[regex("INTERVAL\\s*\\(", ignore(case))]
     Interval,
     #[regex(r"(?i)milis|miliseconds|milisecond", | _ | Millis)]
     #[regex(r"(?i)seconds|second", | _ | Seconds)]
@@ -189,7 +189,9 @@ fn parse_select(lexer: &mut BufferedLexer, stops: &[Token]) -> Result<SqlStateme
 
     let mut groups = vec![];
     if last_end == Ok(GroupBy) {
-        groups = parse_expressions(lexer, &[&[Semi, Limit, OrderBy, Emit], stops].concat())?
+        groups = parse_expressions(lexer, &[&[Semi, Limit, OrderBy, Emit], stops].concat())?;
+
+        last_end = lexer.consume_buffer();
     }
 
     let mut trigger = None;
@@ -208,14 +210,17 @@ fn parse_window(lexer: &mut BufferedLexer, _stops: &[Token]) -> Result<SqlWindow
         Token::Thumbling => WindowType::Thumbling,
         Token::Sliding => WindowType::Sliding,
         Token::Hopping => WindowType::Hopping,
-        Token::Session => return Ok(SqlWindow::new(WindowType::Session, None, None)),
+        Token::Session => {
+            lexer.next_buf().unwrap_or(Semi);
+            return Ok(SqlWindow::new(WindowType::Session, None, None));
+        }
         _ => return Err(format!("Unexpected token {:?}", lexer.next()?)),
     };
 
     let mut size = None;
     let mut offset = None;
 
-    let mut value = lexer.next()?; // initial open brackets
+    let mut value = Token::Null; // initial brackets
     while value != BracketClose {
         value = lexer.next()?; // initial value
 
@@ -260,14 +265,19 @@ fn parse_trigger(lexer: &mut BufferedLexer, _stops: &[Token]) -> Result<SqlTrigg
     let _type = match lexer.next()? {
         Token::Element => TriggerType::Element,
         Token::Interval => {
-            lexer.next()?;
             let amount = parse_number(lexer)?;
             let unit = parse_time_unit(lexer)?;
-            lexer.next()?;
+            lexer.next_buf()?;
             return Ok(SqlTrigger::new(TriggerType::Interval(amount, unit)));
         }
-        Token::WindowEnd => TriggerType::WindowEnd,
-        Token::WindowNext => TriggerType::WindowNext,
+        Window => {
+            let t = lexer.next()?;
+            match t {
+                Token::End => TriggerType::WindowEnd,
+                Token::Next => TriggerType::WindowNext,
+                _ => return Err(format!("Unexpected trigger window token end {:?}", t)),
+            }
+        }
         _ => return Err(format!("Unexpected trigger token {:?}", lexer.next()?)),
     };
 
@@ -923,7 +933,7 @@ mod test {
             "$0",
             None,
             None,
-            Some("THUMBLING (SIZE 5 SECONDS)"),
+            Some("THUMBLING(SIZE 5 SECONDS)"),
             None,
         );
         test_query_diff(query, query);
@@ -937,7 +947,7 @@ mod test {
             "$0",
             None,
             None,
-            Some("HOPPING (SIZE 5 SECONDS, OFFSET 2 SECONDS)"),
+            Some("HOPPING(SIZE 5 SECONDS, OFFSET 2 SECONDS)"),
             None,
         );
         test_query_diff(query, query);
@@ -951,7 +961,7 @@ mod test {
             "$0",
             None,
             None,
-            Some("SLIDING (SIZE 5 SECONDS)"),
+            Some("SLIDING(SIZE 5 SECONDS)"),
             None,
         );
         test_query_diff(query, query);
