@@ -1,6 +1,6 @@
 use crate::algebra::algebra::{Algebra, BoxedIterator, ValueIterator};
 use crate::algebra::implement::implement;
-use crate::algebra::{AlgebraType, BoxedValueHandler, Operator};
+use crate::algebra::{Algebraic, BoxedValueHandler, Operator};
 use crate::analyse::{InputDerivable, OutputDerivable};
 use crate::processing::transform::Transform;
 use crate::processing::Layout;
@@ -11,12 +11,12 @@ use value::Value;
 /// Applies filter operations like "WHERE name = 'Peter'"
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Filter {
-    pub input: Box<AlgebraType>,
+    pub input: Box<Algebraic>,
     pub condition: Operator,
 }
 
 impl Filter {
-    pub fn new(input: AlgebraType, condition: Operator) -> Self {
+    pub fn new(input: Algebraic, condition: Operator) -> Self {
         Filter {
             input: Box::new(input),
             condition,

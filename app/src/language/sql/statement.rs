@@ -1,7 +1,7 @@
 use crate::algebra::{Op, TupleOp};
 use crate::language::statement::Statement;
+use crate::util::TriggerType;
 use crate::util::{TimeUnit, WindowType};
-use crate::TriggerType;
 use std::fmt::Display;
 use value::{ValType, Value};
 

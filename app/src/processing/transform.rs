@@ -1,4 +1,4 @@
-use crate::algebra::{Algebra, AlgebraType, BoxedIterator, IndexScan, ValueIterator};
+use crate::algebra::{Algebra, Algebraic, BoxedIterator, IndexScan, ValueIterator};
 use crate::analyse::{InputDerivable, OutputDerivable, OutputDerivationStrategy};
 use crate::language::Language;
 use crate::optimize::OptimizeStrategy;
@@ -222,7 +222,7 @@ impl<T: Transformer> OutputDerivable for T {
 pub struct LanguageTransform {
     pub(crate) language: Language,
     pub(crate) query: String,
-    algebra: AlgebraType,
+    algebra: Algebraic,
 }
 
 impl Debug for LanguageTransform {
@@ -297,7 +297,7 @@ impl LanguageTransform {
     }
 }
 
-pub fn build_algebra(language: &Language, query: &str) -> Result<AlgebraType, String> {
+pub fn build_algebra(language: &Language, query: &str) -> Result<Algebraic, String> {
     match language {
         Language::Sql => language::sql::transform(query),
         Language::Mql => language::mql::transform(query),

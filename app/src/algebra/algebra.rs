@@ -5,6 +5,7 @@ use crate::algebra::join::Join;
 use crate::algebra::project::{Project, ProjectIter};
 use crate::algebra::scan::IndexScan;
 use crate::algebra::set::AlgSet;
+use crate::algebra::sort::Sort;
 use crate::algebra::union::Union;
 use crate::algebra::variable::VariableScan;
 use crate::algebra::{Operator, Scan};
@@ -14,6 +15,7 @@ use crate::processing::transform::Transform;
 use crate::processing::{Layout, Train};
 use crate::util::storage::ValueStore;
 use std::collections::HashMap;
+use std::ops::Mul;
 use value::Value;
 
 pub type BoxedIterator = Box<dyn ValueIterator<Item = Value> + Send + 'static>;
@@ -23,7 +25,7 @@ pub type BoxedValueHandler = Box<dyn ValueHandler + Send + 'static>;
 pub type BoxedValueLoader = Box<dyn ValueLoader + Send + 'static>;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
-pub enum AlgebraType {
+pub enum Algebraic {
     Dual(Dual),
     IndexScan(IndexScan),
     Scan(Scan),
@@ -34,28 +36,40 @@ pub enum AlgebraType {
     Aggregate(Aggregate),
     Variable(VariableScan),
     Set(AlgSet),
+    Sort(Sort),
 }
 
-impl AlgebraType {
+impl Mul for &Cost {
+    type Output = Cost;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        match (self, rhs) {
+            (Cost::Numeric(a), Cost::Numeric(b)) => Cost::Numeric(a.mul(b)),
+            (_, _) => Cost::Infinite,
+        }
+    }
+}
+
+impl Algebraic {
     pub(crate) fn calc_cost(&self) -> Cost {
         match self {
-            AlgebraType::Dual(_) => Cost::new(1),
-            AlgebraType::IndexScan(_) => Cost::new(1),
-            AlgebraType::Scan(_) => Cost::new(1),
-            AlgebraType::Project(p) => Cost::new(1) + p.project.calc_cost() + p.input.calc_cost(),
-            AlgebraType::Filter(f) => Cost::new(1) + f.condition.calc_cost() + f.input.calc_cost(),
-            AlgebraType::Join(j) => Cost::new(2) + j.left.calc_cost() + j.right.calc_cost(),
-            AlgebraType::Union(u) => {
+            Algebraic::Dual(_) => Cost::new(1),
+            Algebraic::IndexScan(_) => Cost::new(1),
+            Algebraic::Scan(_) => Cost::new(1),
+            Algebraic::Project(p) => Cost::new(1) + p.project.calc_cost() + p.input.calc_cost(),
+            Algebraic::Filter(f) => Cost::new(1) + f.condition.calc_cost() + f.input.calc_cost(),
+            Algebraic::Join(j) => Cost::new(2) + j.left.calc_cost() + j.right.calc_cost(),
+            Algebraic::Union(u) => {
                 Cost::new(u.inputs.len())
                     + u.inputs
                         .iter()
                         .fold(Cost::default(), |a, b| a * b.calc_cost())
             }
-            AlgebraType::Aggregate(a) => {
+            Algebraic::Aggregate(a) => {
                 Cost::new(1) + Cost::new(a.aggregates.len()) * a.input.calc_cost()
             }
-            AlgebraType::Variable(_) => Cost::new(1) + Cost::default(),
-            AlgebraType::Set(s) => s.set.iter().fold(Cost::default(), |a, b| {
+            Algebraic::Variable(_) => Cost::new(1) + Cost::default(),
+            Algebraic::Set(s) => s.set.iter().fold(Cost::default(), |a, b| {
                 let b = b.calc_cost();
                 if a < b {
                     a
@@ -63,77 +77,84 @@ impl AlgebraType {
                     b
                 }
             }),
+            Algebraic::Sort(s) => {
+                let cost = s.input.calc_cost();
+                &cost * &cost
+            }
         }
     }
 
-    pub fn table(name: String) -> AlgebraType {
-        AlgebraType::Scan(Scan::new(name))
+    pub fn table(name: String) -> Algebraic {
+        Algebraic::Scan(Scan::new(name))
     }
 
-    pub fn project(project: Operator, input: AlgebraType) -> AlgebraType {
-        AlgebraType::Project(Project::new(project, input))
+    pub fn project(project: Operator, input: Algebraic) -> Algebraic {
+        Algebraic::Project(Project::new(project, input))
     }
 
-    pub fn filter(condition: Operator, input: AlgebraType) -> AlgebraType {
-        AlgebraType::Filter(Filter::new(input, condition))
+    pub fn filter(condition: Operator, input: Algebraic) -> Algebraic {
+        Algebraic::Filter(Filter::new(input, condition))
     }
 }
 
-impl InputDerivable for AlgebraType {
+impl InputDerivable for Algebraic {
     fn derive_input_layout(&self) -> Option<Layout> {
         match self {
-            AlgebraType::IndexScan(s) => s.derive_input_layout(),
-            AlgebraType::Project(p) => p.derive_input_layout(),
-            AlgebraType::Filter(f) => f.derive_input_layout(),
-            AlgebraType::Join(j) => j.derive_input_layout(),
-            AlgebraType::Union(u) => u.derive_input_layout(),
-            AlgebraType::Aggregate(a) => a.derive_input_layout(),
-            AlgebraType::Variable(v) => v.derive_input_layout(),
-            AlgebraType::Dual(d) => d.derive_input_layout(),
-            AlgebraType::Scan(t) => t.derive_input_layout(),
-            AlgebraType::Set(s) => s.derive_input_layout(),
+            Algebraic::IndexScan(s) => s.derive_input_layout(),
+            Algebraic::Project(p) => p.derive_input_layout(),
+            Algebraic::Filter(f) => f.derive_input_layout(),
+            Algebraic::Join(j) => j.derive_input_layout(),
+            Algebraic::Union(u) => u.derive_input_layout(),
+            Algebraic::Aggregate(a) => a.derive_input_layout(),
+            Algebraic::Variable(v) => v.derive_input_layout(),
+            Algebraic::Dual(d) => d.derive_input_layout(),
+            Algebraic::Scan(t) => t.derive_input_layout(),
+            Algebraic::Set(s) => s.derive_input_layout(),
+            Algebraic::Sort(v) => v.input.derive_input_layout(),
         }
     }
 }
 
-impl OutputDerivable for AlgebraType {
+impl OutputDerivable for Algebraic {
     fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Option<Layout> {
         match self {
-            AlgebraType::IndexScan(s) => s.derive_output_layout(inputs),
-            AlgebraType::Project(p) => p.derive_output_layout(inputs),
-            AlgebraType::Filter(f) => f.derive_output_layout(inputs),
-            AlgebraType::Join(j) => j.derive_output_layout(inputs),
-            AlgebraType::Union(u) => u.derive_output_layout(inputs),
-            AlgebraType::Aggregate(a) => a.derive_output_layout(inputs),
-            AlgebraType::Variable(v) => v.derive_output_layout(inputs),
-            AlgebraType::Dual(d) => d.derive_output_layout(inputs),
-            AlgebraType::Scan(t) => t.derive_output_layout(inputs),
-            AlgebraType::Set(s) => s.initial.derive_output_layout(inputs),
+            Algebraic::IndexScan(s) => s.derive_output_layout(inputs),
+            Algebraic::Project(p) => p.derive_output_layout(inputs),
+            Algebraic::Filter(f) => f.derive_output_layout(inputs),
+            Algebraic::Join(j) => j.derive_output_layout(inputs),
+            Algebraic::Union(u) => u.derive_output_layout(inputs),
+            Algebraic::Aggregate(a) => a.derive_output_layout(inputs),
+            Algebraic::Variable(v) => v.derive_output_layout(inputs),
+            Algebraic::Dual(d) => d.derive_output_layout(inputs),
+            Algebraic::Scan(t) => t.derive_output_layout(inputs),
+            Algebraic::Set(s) => s.initial.derive_output_layout(inputs),
+            Algebraic::Sort(s) => s.derive_output_layout(inputs),
         }
     }
 }
 
-impl Algebra for AlgebraType {
+impl Algebra for Algebraic {
     type Iterator = BoxedIterator;
 
     fn derive_iterator(&mut self) -> Self::Iterator {
         match self {
-            AlgebraType::IndexScan(s) => Box::new(s.derive_iterator()),
-            AlgebraType::Project(p) => {
+            Algebraic::IndexScan(s) => Box::new(s.derive_iterator()),
+            Algebraic::Project(p) => {
                 let iter = Box::new(p.derive_iterator());
                 match *iter {
                     ProjectIter::ValueProjectIterator(p) => Box::new(p),
                     ProjectIter::ValueSetProjectIterator(p) => Box::new(p),
                 }
             }
-            AlgebraType::Filter(f) => Box::new(f.derive_iterator()),
-            AlgebraType::Join(j) => Box::new(j.derive_iterator()),
-            AlgebraType::Union(u) => Box::new(u.derive_iterator()),
-            AlgebraType::Aggregate(a) => Box::new(a.derive_iterator()),
-            AlgebraType::Variable(s) => Box::new(s.derive_iterator()),
-            AlgebraType::Dual(d) => Box::new(d.derive_iterator()),
-            AlgebraType::Scan(t) => Box::new(t.derive_iterator()),
-            AlgebraType::Set(s) => s.initial.derive_iterator(),
+            Algebraic::Filter(f) => Box::new(f.derive_iterator()),
+            Algebraic::Join(j) => Box::new(j.derive_iterator()),
+            Algebraic::Union(u) => Box::new(u.derive_iterator()),
+            Algebraic::Aggregate(a) => Box::new(a.derive_iterator()),
+            Algebraic::Variable(s) => Box::new(s.derive_iterator()),
+            Algebraic::Dual(d) => Box::new(d.derive_iterator()),
+            Algebraic::Scan(t) => Box::new(t.derive_iterator()),
+            Algebraic::Set(s) => s.initial.derive_iterator(),
+            Algebraic::Sort(s) => Box::new(s.derive_iterator()),
         }
     }
 }
@@ -143,7 +164,7 @@ pub trait Algebra: Clone + InputDerivable + OutputDerivable {
     fn derive_iterator(&mut self) -> Self::Iterator;
 }
 
-pub fn build_iterator(mut algebra: AlgebraType) -> Result<BoxedIterator, String> {
+pub fn build_iterator(mut algebra: Algebraic) -> Result<BoxedIterator, String> {
     Ok(algebra.derive_iterator())
 }
 

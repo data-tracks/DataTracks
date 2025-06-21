@@ -10,8 +10,8 @@ use crate::language::sql::statement::{
     SqlType, SqlValue, SqlVariable, SqlWindow,
 };
 use crate::util::TimeUnit::*;
+use crate::util::TriggerType;
 use crate::util::{TimeUnit, WindowType};
-use crate::TriggerType;
 use logos::{Lexer, Logos};
 use std::str::FromStr;
 use std::{mem, vec};
@@ -939,7 +939,11 @@ mod test {
         test_query_diff(query, query);
     }
 
-    /// Hopping windows model scheduled overlapping windows. A hopping window specification consist of three parameters: the timeunit, the windowsize (how long each window lasts) and the hopsize (by how much each window moves forward relative to the previous one).
+    /// Hopping windows model scheduled overlapping windows.
+    /// A hopping window specification consist of three parameters:
+    /// the timeunit,
+    /// the windowsize (how long each window lasts) and
+    /// the hopsize (by how much each window moves forward relative to the previous one).
     #[test]
     fn test_window_hopping() {
         let query = &select(

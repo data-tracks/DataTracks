@@ -1,4 +1,4 @@
-use crate::algebra::{AggOp, AlgebraType, Filter, Op, Operator, Project, TupleOp};
+use crate::algebra::{AggOp, Algebraic, Filter, Op, Operator, Project, TupleOp};
 use crate::optimize::rule::RuleBehavior;
 use crate::util::CreatingVisitor;
 use value::Value;
@@ -10,8 +10,8 @@ pub enum MergeRule {
 }
 
 impl RuleBehavior for MergeRule {
-    fn can_apply(&self, algebra: &AlgebraType) -> bool {
-        if let AlgebraType::Set(s) = algebra {
+    fn can_apply(&self, algebra: &Algebraic) -> bool {
+        if let Algebraic::Set(s) = algebra {
             let bool = s.set.iter().any(|a| match_rule_with_child(self, a));
             bool
         } else {
@@ -19,8 +19,8 @@ impl RuleBehavior for MergeRule {
         }
     }
 
-    fn apply(&self, algebra: &mut AlgebraType) -> Vec<AlgebraType> {
-        if let AlgebraType::Set(parent) = algebra {
+    fn apply(&self, algebra: &mut Algebraic) -> Vec<Algebraic> {
+        if let Algebraic::Set(parent) = algebra {
             let values = parent
                 .set
                 .iter()
@@ -34,19 +34,19 @@ impl RuleBehavior for MergeRule {
 }
 
 /// Match a specific rule with its child
-fn match_rule_with_child(rule: &MergeRule, algebra: &AlgebraType) -> bool {
+fn match_rule_with_child(rule: &MergeRule, algebra: &Algebraic) -> bool {
     match (rule, algebra) {
-        (MergeRule::Filter, AlgebraType::Filter(f)) => {
-            matches!(f.input.as_ref(), AlgebraType::Set(s) if match &(*s.initial) {
-                AlgebraType::Filter(other) => {
+        (MergeRule::Filter, Algebraic::Filter(f)) => {
+            matches!(f.input.as_ref(), Algebraic::Set(s) if match &(*s.initial) {
+                Algebraic::Filter(other) => {
                     f.condition.can_merge(&other.condition)
                 },
                 _ => false
             })
         }
-        (MergeRule::Project, AlgebraType::Project(p)) => {
-            matches!(p.input.as_ref(), AlgebraType::Set(s) if match &(*s.initial) {
-                AlgebraType::Project(other) => {
+        (MergeRule::Project, Algebraic::Project(p)) => {
+            matches!(p.input.as_ref(), Algebraic::Set(s) if match &(*s.initial) {
+                Algebraic::Project(other) => {
                     p.project.can_merge(&other.project)
                 },
                 _ => false
@@ -57,15 +57,15 @@ fn match_rule_with_child(rule: &MergeRule, algebra: &AlgebraType) -> bool {
 }
 
 /// Apply a specific rule to a child node
-fn apply_rule_to_child(rule: &MergeRule, algebra: &AlgebraType) -> Option<AlgebraType> {
+fn apply_rule_to_child(rule: &MergeRule, algebra: &Algebraic) -> Option<Algebraic> {
     match (rule, algebra) {
-        (MergeRule::Filter, AlgebraType::Filter(f)) => {
-            if let AlgebraType::Set(parent) = f.input.as_ref() {
+        (MergeRule::Filter, Algebraic::Filter(f)) => {
+            if let Algebraic::Set(parent) = f.input.as_ref() {
                 parent
                     .set
                     .iter()
                     .filter_map(|b| match b {
-                        AlgebraType::Filter(f_child) => Some(AlgebraType::Filter(Filter::new(
+                        Algebraic::Filter(f_child) => Some(Algebraic::Filter(Filter::new(
                             (*f_child.input).clone(),
                             Operator::new(
                                 Op::and(),
@@ -79,13 +79,13 @@ fn apply_rule_to_child(rule: &MergeRule, algebra: &AlgebraType) -> Option<Algebr
                 None
             }
         }
-        (MergeRule::Project, AlgebraType::Project(p)) => {
-            if let AlgebraType::Set(parent) = p.input.as_ref() {
+        (MergeRule::Project, Algebraic::Project(p)) => {
+            if let Algebraic::Set(parent) = p.input.as_ref() {
                 parent
                     .set
                     .iter()
                     .filter_map(|b| match b {
-                        AlgebraType::Project(p_child) => Some(AlgebraType::Project(Project::new(
+                        Algebraic::Project(p_child) => Some(Algebraic::Project(Project::new(
                             OperatorMerger::merge(&p_child.project, &mut p.project.clone()),
                             (*p_child.input).clone(),
                         ))),

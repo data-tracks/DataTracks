@@ -1,17 +1,17 @@
 use crate::algebra;
-use crate::algebra::AlgebraType::{
+use crate::algebra::Algebraic::{
     Aggregate, Dual, Filter, IndexScan, Join, Project, Scan, Variable,
 };
 use crate::algebra::Op::Tuple;
 use crate::algebra::TupleOp::Input;
-use crate::algebra::{AlgebraType, Op, Operator, VariableScan};
+use crate::algebra::{Algebraic, Op, Operator, VariableScan};
 use crate::language::sql::statement::SqlStatement::Identifier;
 use crate::language::sql::statement::{
     SqlIdentifier, SqlOperator, SqlSelect, SqlStatement, SqlVariable,
 };
 use value::Value;
 
-pub(crate) fn translate(query: SqlStatement) -> Result<AlgebraType, String> {
+pub(crate) fn translate(query: SqlStatement) -> Result<Algebraic, String> {
     let scan = match query {
         SqlStatement::Select(s) => handle_select(s)?,
         _ => Err("Could not translate SQL query".to_string())?,
@@ -124,7 +124,7 @@ fn handle_collection_operator(operator: SqlOperator) -> Result<MaybeAliasAlg, St
     match inputs.len() {
         1 => Ok(MaybeAliasAlg::aliased(
             op.dump(false).to_lowercase(),
-            AlgebraType::project(
+            Algebraic::project(
                 Operator::new(op, vec![]),
                 inputs.into_iter().next().unwrap().alg(),
             ),
@@ -234,27 +234,27 @@ fn handle_table(identifier: SqlIdentifier) -> Result<MaybeAliasAlg, String> {
 
 enum MaybeAliasAlg {
     Aliased(AliasedAlg),
-    Raw(AlgebraType),
+    Raw(Algebraic),
 }
 
 struct AliasedAlg {
     name: String,
-    alg: AlgebraType,
+    alg: Algebraic,
 }
 
 impl MaybeAliasAlg {
-    fn alg(&self) -> AlgebraType {
+    fn alg(&self) -> Algebraic {
         match self {
             MaybeAliasAlg::Aliased(a) => a.alg.clone(),
             MaybeAliasAlg::Raw(r) => r.clone(),
         }
     }
 
-    fn aliased(name: String, alg: AlgebraType) -> MaybeAliasAlg {
+    fn aliased(name: String, alg: Algebraic) -> MaybeAliasAlg {
         MaybeAliasAlg::Aliased(AliasedAlg { name, alg })
     }
 
-    fn raw(alg: AlgebraType) -> MaybeAliasAlg {
+    fn raw(alg: Algebraic) -> MaybeAliasAlg {
         MaybeAliasAlg::Raw(alg)
     }
 }

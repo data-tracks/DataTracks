@@ -1,4 +1,4 @@
-use crate::algebra::{Algebra, AlgebraType, BoxedIterator, ValueIterator};
+use crate::algebra::{Algebra, Algebraic, BoxedIterator, ValueIterator};
 use crate::analyse::{InputDerivable, OutputDerivable};
 use crate::processing::transform::Transform;
 use crate::processing::Layout;
@@ -8,7 +8,7 @@ use value::Value;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Union {
-    pub inputs: Vec<AlgebraType>,
+    pub inputs: Vec<Algebraic>,
     distinct: bool,
 }
 

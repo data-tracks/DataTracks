@@ -1,4 +1,4 @@
-use crate::algebra::{AlgSet, AlgebraType};
+use crate::algebra::{AlgSet, Algebraic};
 use crate::optimize::rule::Rule::{Impossible, Merge};
 use crate::optimize::rule::{Rule, RuleBehavior};
 use crate::optimize::rules::MergeRule;
@@ -10,8 +10,8 @@ pub enum OptimizeStrategy {
 }
 
 impl OptimizeStrategy {
-    pub(crate) fn apply(&mut self, raw: AlgebraType) -> AlgebraType {
-        let expandable = AlgebraType::Set(add_set(raw));
+    pub(crate) fn apply(&mut self, raw: Algebraic) -> Algebraic {
+        let expandable = Algebraic::Set(add_set(raw));
         let optimized = match self {
             OptimizeStrategy::RuleBased(o) => o.optimize(expandable.clone()),
         };
@@ -24,7 +24,7 @@ impl OptimizeStrategy {
 }
 
 pub trait Optimizer {
-    fn optimize(&mut self, raw: AlgebraType) -> Result<AlgebraType, String>;
+    fn optimize(&mut self, raw: Algebraic) -> Result<Algebraic, String>;
 }
 
 pub struct RuleBasedOptimizer {
@@ -47,7 +47,7 @@ impl RuleBasedOptimizer {
 }
 
 impl Optimizer for RuleBasedOptimizer {
-    fn optimize(&mut self, raw: AlgebraType) -> Result<AlgebraType, String> {
+    fn optimize(&mut self, raw: Algebraic) -> Result<Algebraic, String> {
         let rules = &self.rules.clone();
         let mut alg = raw.clone();
         let mut round = 0;
@@ -78,99 +78,104 @@ impl Optimizer for RuleBasedOptimizer {
     }
 }
 
-impl ChangingVisitor<&mut AlgebraType> for RuleBasedOptimizer {
-    fn visit(&self, target: &mut AlgebraType) {
+impl ChangingVisitor<&mut Algebraic> for RuleBasedOptimizer {
+    fn visit(&self, target: &mut Algebraic) {
         match target {
-            AlgebraType::Dual(_) => (),
-            AlgebraType::IndexScan(_) => (),
-            AlgebraType::Scan(_) => (),
-            AlgebraType::Project(ref mut p) => self.visit(&mut *p.input),
-            AlgebraType::Filter(ref mut f) => self.visit(&mut *f.input),
-            AlgebraType::Join(j) => {
+            Algebraic::Dual(_) => (),
+            Algebraic::IndexScan(_) => (),
+            Algebraic::Scan(_) => (),
+            Algebraic::Project(ref mut p) => self.visit(&mut *p.input),
+            Algebraic::Filter(ref mut f) => self.visit(&mut *f.input),
+            Algebraic::Join(j) => {
                 self.visit(&mut *j.left);
                 self.visit(&mut *j.right);
             }
-            AlgebraType::Union(u) => {
+            Algebraic::Union(u) => {
                 u.inputs.iter_mut().for_each(|i| self.visit(i));
             }
-            AlgebraType::Aggregate(a) => self.visit(&mut *a.input),
-            AlgebraType::Variable(_) => (),
-            AlgebraType::Set(ref mut s) => {
-                if self.current_rule.can_apply(&AlgebraType::Set(s.clone())) {
-                    let applied = self.current_rule.apply(&mut AlgebraType::Set(s.clone()));
+            Algebraic::Aggregate(a) => self.visit(&mut *a.input),
+            Algebraic::Variable(_) => (),
+            Algebraic::Set(ref mut s) => {
+                if self.current_rule.can_apply(&Algebraic::Set(s.clone())) {
+                    let applied = self.current_rule.apply(&mut Algebraic::Set(s.clone()));
                     s.set.extend(applied);
                 }
             }
+            Algebraic::Sort(v) => self.visit(&mut v.input),
         }
     }
 }
 
-fn add_set(mut target: AlgebraType) -> AlgSet {
+fn add_set(mut target: Algebraic) -> AlgSet {
     match target {
-        AlgebraType::Dual(_) => AlgSet::new(target),
-        AlgebraType::IndexScan(_) => AlgSet::new(target),
-        AlgebraType::Scan(_) => AlgSet::new(target),
-        AlgebraType::Project(ref mut p) => {
-            p.input = Box::new(AlgebraType::Set(add_set((*p.input).clone())));
+        Algebraic::Dual(_) => AlgSet::new(target),
+        Algebraic::IndexScan(_) => AlgSet::new(target),
+        Algebraic::Scan(_) => AlgSet::new(target),
+        Algebraic::Project(ref mut p) => {
+            p.input = Box::new(Algebraic::Set(add_set((*p.input).clone())));
             AlgSet::new(target)
         }
-        AlgebraType::Filter(ref mut f) => {
-            f.input = Box::new(AlgebraType::Set(add_set((*f.input).clone())));
+        Algebraic::Filter(ref mut f) => {
+            f.input = Box::new(Algebraic::Set(add_set((*f.input).clone())));
             AlgSet::new(target)
         }
-        AlgebraType::Join(ref mut j) => {
-            j.left = Box::new(AlgebraType::Set(add_set((*j.left).clone())));
-            j.right = Box::new(AlgebraType::Set(add_set((*j.right).clone())));
+        Algebraic::Join(ref mut j) => {
+            j.left = Box::new(Algebraic::Set(add_set((*j.left).clone())));
+            j.right = Box::new(Algebraic::Set(add_set((*j.right).clone())));
             AlgSet::new(target)
         }
-        AlgebraType::Union(ref mut u) => {
+        Algebraic::Union(ref mut u) => {
             u.inputs = u
                 .inputs
                 .iter()
-                .map(|u| AlgebraType::Set(add_set(u.clone())))
+                .map(|u| Algebraic::Set(add_set(u.clone())))
                 .collect();
             AlgSet::new(target)
         }
-        AlgebraType::Aggregate(ref mut a) => {
-            a.input = Box::new(AlgebraType::Set(add_set((*a.input).clone())));
+        Algebraic::Aggregate(ref mut a) => {
+            a.input = Box::new(Algebraic::Set(add_set((*a.input).clone())));
             AlgSet::new(target)
         }
-        AlgebraType::Variable(_) => AlgSet::new(target),
-        AlgebraType::Set(mut s) => {
-            s.initial = Box::new(AlgebraType::Set(add_set((*s.initial).clone())));
+        Algebraic::Variable(_) => AlgSet::new(target),
+        Algebraic::Set(mut s) => {
+            s.initial = Box::new(Algebraic::Set(add_set((*s.initial).clone())));
             s
+        }
+        Algebraic::Sort(ref mut s) => {
+            s.input = Box::new(Algebraic::Set(add_set((*s.input).clone())));
+            AlgSet::new(target)
         }
     }
 }
 
-fn remove_set(mut target: AlgebraType) -> AlgebraType {
+fn remove_set(mut target: Algebraic) -> Algebraic {
     match &mut target {
-        AlgebraType::Dual(_) => target,
-        AlgebraType::IndexScan(_) => target,
-        AlgebraType::Scan(_) => target,
-        AlgebraType::Project(ref mut p) => {
+        Algebraic::Dual(_) => target,
+        Algebraic::IndexScan(_) => target,
+        Algebraic::Scan(_) => target,
+        Algebraic::Project(ref mut p) => {
             p.input = Box::new(remove_set((*p.input).clone()));
             target
         }
-        AlgebraType::Filter(ref mut f) => {
+        Algebraic::Filter(ref mut f) => {
             f.input = Box::new(remove_set((*f.input).clone()));
             target
         }
-        AlgebraType::Join(ref mut j) => {
+        Algebraic::Join(ref mut j) => {
             j.left = Box::new(remove_set((*j.left).clone()));
             j.right = Box::new(remove_set((*j.right).clone()));
             target
         }
-        AlgebraType::Union(ref mut u) => {
+        Algebraic::Union(ref mut u) => {
             u.inputs = u.inputs.iter().map(|i| remove_set(i.clone())).collect();
             target
         }
-        AlgebraType::Aggregate(ref mut a) => {
+        Algebraic::Aggregate(ref mut a) => {
             a.input = Box::new(remove_set((*a.input).clone()));
             target
         }
-        AlgebraType::Variable(_) => target,
-        AlgebraType::Set(s) => {
+        Algebraic::Variable(_) => target,
+        Algebraic::Set(s) => {
             let mut best_cost = s.initial.calc_cost();
             let mut best = (*s.initial).clone();
             for a in &s.set {
@@ -182,29 +187,33 @@ fn remove_set(mut target: AlgebraType) -> AlgebraType {
             }
             remove_set(best)
         }
+        Algebraic::Sort(ref mut s) => {
+            s.input = Box::new(remove_set((*s.input).clone()));
+            target
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::algebra::{AlgebraType, Operator};
+    use crate::algebra::{Algebraic, Operator};
     use crate::optimize::optimizer::RuleBasedOptimizer;
     use crate::optimize::OptimizeStrategy;
     use std::vec;
 
     #[test]
     fn project_test() {
-        let scan = AlgebraType::project(
+        let scan = Algebraic::project(
             Operator::index(0, vec![Operator::input()]),
-            AlgebraType::project(Operator::input(), AlgebraType::table("table".to_string())),
+            Algebraic::project(Operator::input(), Algebraic::table("table".to_string())),
         );
 
         let optimizer = RuleBasedOptimizer::new();
         let optimized = OptimizeStrategy::RuleBased(optimizer).apply(scan);
 
         match optimized {
-            AlgebraType::Project(p) => match p.input.as_ref() {
-                AlgebraType::Scan(_) => {}
+            Algebraic::Project(p) => match p.input.as_ref() {
+                Algebraic::Scan(_) => {}
                 a => panic!("Expected project but got {:?}", a),
             },
             a => panic!("wrong algebra type {:?}", a),
@@ -213,17 +222,17 @@ mod tests {
 
     #[test]
     fn filter_test() {
-        let scan = AlgebraType::filter(
+        let scan = Algebraic::filter(
             Operator::index(0, vec![Operator::input()]),
-            AlgebraType::filter(Operator::input(), AlgebraType::table("table".to_string())),
+            Algebraic::filter(Operator::input(), Algebraic::table("table".to_string())),
         );
 
         let optimizer = RuleBasedOptimizer::new();
         let optimized = OptimizeStrategy::RuleBased(optimizer).apply(scan);
 
         match optimized {
-            AlgebraType::Filter(ref p) => match p.input.as_ref() {
-                AlgebraType::Scan(_) => {}
+            Algebraic::Filter(ref p) => match p.input.as_ref() {
+                Algebraic::Scan(_) => {}
                 a => panic!("Expected filter but got {:?} in {:?}", a, optimized),
             },
             a => panic!("wrong algebra type {:?}", a),

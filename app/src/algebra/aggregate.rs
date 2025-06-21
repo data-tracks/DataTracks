@@ -4,7 +4,7 @@ use crate::algebra::operator::{AggOp, IndexOp};
 use crate::algebra::Op::Tuple;
 use crate::algebra::TupleOp::{Index, Input};
 use crate::algebra::{
-    Algebra, AlgebraType, BoxedIterator, BoxedValueHandler, Op, Operator, ValueIterator,
+    Algebra, Algebraic, BoxedIterator, BoxedValueHandler, Op, Operator, ValueIterator,
 };
 use crate::analyse::{InputDerivable, OutputDerivable};
 use crate::processing::transform::Transform;
@@ -22,14 +22,14 @@ type Agg = (AggOp, Operator);
 /// Aggregate operations like SUM, COUNT, AVG
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Aggregate {
-    pub input: Box<AlgebraType>,
+    pub input: Box<Algebraic>,
     pub aggregates: Vec<Agg>,
     output_func: Operator,
     group: Operator,
 }
 
 impl Aggregate {
-    pub fn new(input: Box<AlgebraType>, func: Operator, group: Option<Operator>) -> Self {
+    pub fn new(input: Box<Algebraic>, func: Operator, group: Option<Operator>) -> Self {
         let (output_func, aggregates) = extract_aggs(func);
 
         Aggregate {

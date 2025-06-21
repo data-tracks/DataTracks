@@ -1,3 +1,5 @@
+pub use crate::algebra::order::Direction;
+pub use crate::algebra::order::Order;
 pub use crate::http::source::HttpSource;
 pub use debug::DebugDestination;
 pub use layout::ArrayType;

@@ -1,5 +1,5 @@
 use crate::algebra::algebra::Algebra;
-use crate::algebra::{AlgebraType, BoxedIterator, ValueIterator};
+use crate::algebra::{Algebraic, BoxedIterator, ValueIterator};
 use crate::analyse::{InputDerivable, OutputDerivable};
 use crate::processing::transform::Transform;
 use crate::processing::OutputType::Array;
@@ -10,8 +10,8 @@ use value::Value;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Join {
-    pub left: Box<AlgebraType>,
-    pub right: Box<AlgebraType>,
+    pub left: Box<Algebraic>,
+    pub right: Box<Algebraic>,
     left_hash: Option<fn(&Value) -> Value>,
     right_hash: Option<fn(&Value) -> Value>,
     out: Option<fn(Value, Value) -> Value>,
@@ -19,8 +19,8 @@ pub struct Join {
 
 impl Join {
     pub(crate) fn new(
-        left: AlgebraType,
-        right: AlgebraType,
+        left: Algebraic,
+        right: Algebraic,
         left_hash: fn(&Value) -> Value,
         right_hash: fn(&Value) -> Value,
         out: fn(Value, Value) -> Value,
@@ -204,7 +204,7 @@ mod test {
     use crate::algebra::algebra::Algebra;
     use crate::algebra::join::Join;
     use crate::algebra::scan::IndexScan;
-    use crate::algebra::{AlgebraType, ValueIterator};
+    use crate::algebra::{Algebraic, ValueIterator};
     use crate::util::storage::ValueStore;
     use value::{Dict, Value};
 
@@ -217,8 +217,8 @@ mod test {
         let right_scan = IndexScan::new(1);
 
         let mut join = Join::new(
-            AlgebraType::IndexScan(left_scan),
-            AlgebraType::IndexScan(right_scan),
+            Algebraic::IndexScan(left_scan),
+            Algebraic::IndexScan(right_scan),
             |val| val.clone(),
             |val| val.clone(),
             |left, right| Value::Dict(left.as_dict().unwrap().merge(right.as_dict().unwrap())),
@@ -251,8 +251,8 @@ mod test {
         let right_scan = IndexScan::new(1);
 
         let mut join = Join::new(
-            AlgebraType::IndexScan(left_scan),
-            AlgebraType::IndexScan(right_scan),
+            Algebraic::IndexScan(left_scan),
+            Algebraic::IndexScan(right_scan),
             |val| val.clone(),
             |val| val.clone(),
             |left, right| Value::Dict(left.as_dict().unwrap().merge(right.as_dict().unwrap())),

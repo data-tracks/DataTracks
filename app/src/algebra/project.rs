@@ -2,7 +2,7 @@ use crate::algebra::algebra::{Algebra, IdentityHandler, ValueHandler};
 use crate::algebra::function::Operator;
 use crate::algebra::implement::implement;
 use crate::algebra::operator::SetProjectIterator;
-use crate::algebra::{AlgebraType, BoxedIterator, Op, ValueIterator};
+use crate::algebra::{Algebraic, BoxedIterator, Op, ValueIterator};
 use crate::analyse::{InputDerivable, OutputDerivable};
 use crate::processing::transform::Transform;
 use crate::processing::Layout;
@@ -12,12 +12,12 @@ use value::Value;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Project {
-    pub input: Box<AlgebraType>,
+    pub input: Box<Algebraic>,
     pub project: Operator,
 }
 
 impl Project {
-    pub fn new(project: Operator, input: AlgebraType) -> Self {
+    pub fn new(project: Operator, input: Algebraic) -> Self {
         Project {
             input: Box::new(input),
             project,

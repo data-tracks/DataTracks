@@ -1,3 +1,4 @@
+use crate::algebra::order::Order;
 use crate::processing::layout::OutputType::{Any, Array, Boolean, Dict, Float, Integer, Text};
 use crate::processing::plan::PlanStage;
 use crate::processing::OutputType::Tuple;
@@ -22,6 +23,7 @@ pub struct Layout {
     pub nullable: bool,
     pub optional: bool,
     pub type_: OutputType,
+    pub order: Order,
 }
 
 impl Default for Layout {
@@ -32,6 +34,7 @@ impl Default for Layout {
             nullable: false,
             optional: false,
             type_: Any,
+            order: Order::None,
         }
     }
 }
@@ -144,6 +147,7 @@ impl Layout {
             nullable: false,
             optional: false,
             type_: Or(vec![left, right]),
+            order: Default::default(),
         }
     }
 
@@ -347,6 +351,7 @@ fn parse_field(type_: OutputType, reader: &mut BufferedReader) -> (Layout, Optio
             nullable,
             optional,
             type_,
+            order: Default::default(),
         },
         length,
     )

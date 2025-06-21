@@ -1,4 +1,4 @@
-use crate::algebra::{Algebra, AlgebraType};
+use crate::algebra::{Algebra, Algebraic};
 use crate::analyse::{InputDerivable, OutputDerivable};
 use crate::optimize::Rule;
 use crate::processing::Layout;
@@ -8,13 +8,13 @@ use std::hash::Hash;
 
 #[derive(Debug, Clone)]
 pub struct AlgSet {
-    pub initial: Box<AlgebraType>,
+    pub initial: Box<Algebraic>,
     pub rules: Vec<Rule>,
-    pub set: HashSet<AlgebraType>,
+    pub set: HashSet<Algebraic>,
 }
 
 impl AlgSet {
-    pub fn new(initial: AlgebraType) -> AlgSet {
+    pub fn new(initial: Algebraic) -> AlgSet {
         let set = HashSet::from_iter(vec![initial.clone()]);
         AlgSet {
             initial: Box::new(initial),

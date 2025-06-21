@@ -1,4 +1,4 @@
-use crate::algebra::{Algebra, AlgebraType, BoxedIterator, ValueIterator};
+use crate::algebra::{Algebra, Algebraic, BoxedIterator, ValueIterator};
 use crate::analyse::{InputDerivable, OutputDerivable};
 use crate::processing::transform::Transform;
 use crate::processing::Layout;
@@ -9,11 +9,11 @@ use value::Value;
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct VariableScan {
     name: String,
-    inputs: Vec<AlgebraType>,
+    inputs: Vec<Algebraic>,
 }
 
 impl VariableScan {
-    pub(crate) fn new(name: String, inputs: Vec<AlgebraType>) -> Self {
+    pub(crate) fn new(name: String, inputs: Vec<Algebraic>) -> Self {
         VariableScan { name, inputs }
     }
 }

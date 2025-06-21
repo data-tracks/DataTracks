@@ -1,4 +1,4 @@
-use crate::TimeUnit;
+use crate::util::TimeUnit;
 use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Clone)]
