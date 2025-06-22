@@ -7,6 +7,7 @@ pub enum TriggerType {
     Interval(isize, TimeUnit),
     WindowEnd,
     WindowNext,
+    Or(Box<Self>, Box<Self>),
 }
 
 impl Display for TriggerType {
@@ -24,6 +25,9 @@ impl TriggerType {
             }
             TriggerType::WindowEnd => String::from("WINDOW END"),
             TriggerType::WindowNext => String::from("WINDOW NEXT"),
+            TriggerType::Or(a, b) => {
+                format!("{}, {}", a.dump(quote), b.dump(quote))
+            }
         }
     }
 }

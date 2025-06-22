@@ -13,6 +13,7 @@ use crate::processing::watermark::WatermarkStrategy;
 use crate::processing::window::Window;
 use crate::util::{new_channel, new_id};
 use crate::util::{Rx, Tx};
+use crate::TriggerType;
 use crossbeam::channel;
 use crossbeam::channel::{unbounded, Receiver};
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
@@ -29,6 +30,7 @@ pub struct Station {
     pub outgoing: Sender,
     pub window: Window,
     pub transform: Option<Transform>,
+    pub trigger: TriggerType,
     pub block: Vec<usize>,
     pub inputs: Vec<usize>,
     pub layout: Layout,
@@ -53,6 +55,7 @@ impl Station {
             outgoing: Sender::default(),
             window: Window::default(),
             transform: None,
+            trigger: TriggerType::Element,
             block: vec![],
             inputs: vec![],
             layout: Layout::default(),
