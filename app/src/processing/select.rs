@@ -1,8 +1,10 @@
 use crate::processing;
 use crate::processing::window::WindowStrategy;
+use crate::util::TriggerType;
 use std::cmp::PartialEq;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
+use tracing::debug;
 use value::train::Train;
 use value::Time;
 
@@ -57,18 +59,18 @@ impl WindowSelector {
 pub struct TriggerSelector {
     triggered_windows: HashMap<WindowDescriptor, TriggerStatus>,
     pub(crate) storage: Storage,
-    fire_on: TriggerType,
+    trigger: TriggerType,
     fire_early: bool,
     fire_late: bool,
     re_fire: bool,
 }
 
 impl TriggerSelector {
-    pub(crate) fn new(storage: Storage) -> Self {
+    pub(crate) fn new(storage: Storage, trigger: TriggerType) -> Self {
         TriggerSelector {
             triggered_windows: Default::default(),
             storage,
-            fire_on: TriggerType::AfterWatermark,
+            trigger,
             fire_early: false,
             fire_late: false,
             re_fire: false,
@@ -84,23 +86,40 @@ impl TriggerSelector {
         windows.into_iter().for_each(|(window, _is_complete)| {
             let mut trigger = false;
             if let Some(status) = self.triggered_windows.get(&window) {
-                // have already seen this window
-                if self.re_fire && status == &TriggerStatus::Early && &window.to <= current {
+                // have already seen this window, are in window
+                if self.re_fire
+                    && current < &window.to
+                    && (matches!(self.trigger, TriggerType::Element))
+                {
                     // still early
+                    debug!("trigger early");
                     trigger = true;
-                } else if self.fire_late && status == &TriggerStatus::OnTime {
-                    // we fired on time already and re-fire late
-                    trigger = true;
-                    self.triggered_windows.insert(window, TriggerStatus::Late);
-                }
-            } else {
-                // have not seen this window
-                if &window.to <= current {
-                    // on time, did not fire yet
+                    self.triggered_windows.insert(window, TriggerStatus::Early);
+
+                    // are past the window, did not trigger yet or early
+                } else if current >= &window.to
+                    && (status == &TriggerStatus::Untriggered
+                        || (status == &TriggerStatus::Early
+                            && matches!(self.trigger, TriggerType::Element))
+                        || (self.re_fire))
+                {
+                    debug!("trigger onTime or refire");
                     trigger = true;
                     self.triggered_windows.insert(window, TriggerStatus::OnTime);
-                } else if self.fire_early {
+                }
+            } else {
+                // have not seen this window, are past it
+                if &window.to <= current
+                    && (matches!(self.trigger, TriggerType::Element)
+                        || matches!(self.trigger, TriggerType::WindowEnd))
+                {
+                    // on time, did not fire yet
+                    debug!("trigger onTime {:?}", self.triggered_windows);
+                    trigger = true;
+                    self.triggered_windows.insert(window, TriggerStatus::OnTime);
+                } else if self.fire_early || matches!(self.trigger, TriggerType::Element) {
                     // early fire
+                    debug!("fire early");
                     trigger = true;
                     self.triggered_windows.insert(window, TriggerStatus::Early);
                 }
@@ -130,13 +149,9 @@ impl TriggerSelector {
     }
 }
 
-pub enum TriggerType {
-    AfterWatermark,
-    OnElement,
-}
-
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum TriggerStatus {
+    Untriggered,
     Early,
     OnTime,
     Late,
@@ -148,6 +163,7 @@ mod tests {
     use crate::processing::window::Window::Non;
     use crate::processing::window::{BackWindow, NonWindow, Window};
     use crate::util::TimeUnit;
+    use crate::util::TriggerType;
     use std::sync::{Arc, Mutex};
     use value::train::Train;
     use value::Time;
@@ -165,7 +181,7 @@ mod tests {
         assert_eq!(windows.len(), 1);
 
         let storage: Storage = Arc::new(Mutex::new(vec![]));
-        let mut trigger = TriggerSelector::new(storage.clone());
+        let mut trigger = TriggerSelector::new(storage.clone(), TriggerType::Element);
         storage.lock().unwrap().push(train);
 
         trigger.select(windows, &Time::new(3, 3));
@@ -184,7 +200,7 @@ mod tests {
         assert_eq!(windows.len(), 1);
 
         let storage: Storage = Arc::new(Mutex::new(vec![]));
-        let mut trigger = TriggerSelector::new(storage.clone());
+        let mut trigger = TriggerSelector::new(storage.clone(), TriggerType::Element);
         storage.lock().unwrap().push(train);
 
         trigger.select(windows, &Time::new(5, 5));
@@ -243,7 +259,7 @@ mod tests {
         let mut selector = WindowSelector::new(Window::Back(window));
 
         let storage: Storage = Arc::new(Mutex::new(vec![]));
-        let mut trigger = TriggerSelector::new(storage.clone());
+        let mut trigger = TriggerSelector::new(storage.clone(), TriggerType::Element);
 
         let mut train = Train::new(vec![3.into()]);
         train.event_time = Time::new(3, 0);

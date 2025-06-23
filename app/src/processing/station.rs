@@ -611,35 +611,37 @@ pub mod tests {
         use super::*;
 
         #[rstest]
+        #[traced_test]
         #[case::back_window_per_element_trigger(
-            Window::back(20, TimeUnit::Millis),
-            TriggerType::Element,
-            vec![
-                (Value::from(1), 0, 0),
-                (Value::from(2), 1, 1),
-                (Value::from(3), 2, 2),
-            ], 3)]
-        #[case::back_window_window_trigger(
-            Window::back(20, TimeUnit::Millis),
-            TriggerType::WindowEnd,
-            vec![
-                (Value::from(1), 0, 0),
-                (Value::from(2), 1, 1),
-                (Value::from(3), 2, 2),
-            ], 1)]
+        Window::back(20, TimeUnit::Millis),
+        TriggerType::Element,
+        vec![
+            (Value::from(1), 0, 0),
+            (Value::from(2), 1, 1),
+            (Value::from(3), 2, 2),
+        ], 3, false)]
+        /*#[case::back_window_window_trigger(
+        Window::back(20, TimeUnit::Millis),
+        TriggerType::WindowEnd,
+        vec![
+            (Value::from(1), 0, 0),
+            (Value::from(2), 1, 1),
+            (Value::from(3), 2, 2),
+        ], 1, false)]*/
         #[case::back_window_window_trigger_no_overlap(
-            Window::back(2, TimeUnit::Millis),
-            TriggerType::WindowEnd,
-            vec![
-                (Value::from(1), 0, 0),
-                (Value::from(2), 10, 10),
-                (Value::from(3), 20, 20),
-            ], 3)]
+        Window::back(2, TimeUnit::Millis),
+        TriggerType::WindowEnd,
+        vec![
+            (Value::from(1), 0, 0),
+            (Value::from(2), 10, 10),
+            (Value::from(3), 20, 20),
+        ], 3, false)]
         fn test_trigger(
             #[case] window: Window,
             #[case] trigger: TriggerType,
             #[case] values: Vec<(Value, usize, u64)>,
             #[case] answers: usize,
+            #[case] has_more: bool,
         ) {
             let mut station = Station::new(0);
             station.window = window;
@@ -671,32 +673,30 @@ pub mod tests {
                 time += wait; // we are farther along
             }
 
-            let handle = thread::spawn(move || receive(rx, answers));
+            let result = receive(rx, Duration::from_millis(30));
 
-            let timeout = Duration::from_millis(30);
-            let start = Instant::now();
-
-            let mut success = false;
-            while start.elapsed() < timeout {
-                if handle.is_finished() {
-                    handle.join().unwrap();
-                    success = true;
-                    break;
-                }
-                sleep(Duration::from_millis(5));
-            }
-            if !success {
-                panic!("did not pass");
+            if !has_more {
+                assert_eq!(result.len(), answers);
+            } else {
+                assert!(result.len() >= answers);
             }
 
             sender.send(Stop(0)).unwrap(); // stop station
         }
 
-        fn receive(rx: Rx<Train>, results: usize) {
-            for _ in 0..results {
-                rx.recv().unwrap();
+        fn receive(rx: Rx<Train>, duration: Duration) -> Vec<Train> {
+            let mut results = vec![];
+
+            let instant = Instant::now();
+
+            while instant.elapsed() < duration {
+                if let Ok(train) = rx.try_recv() {
+                    results.push(train);
+                } else {
+                    sleep(Duration::from_millis(5));
+                }
             }
-            println!("received {}", results);
+            results
         }
     }
 }

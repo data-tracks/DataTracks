@@ -15,6 +15,7 @@ use crate::processing::watermark::WatermarkStrategy;
 use crate::processing::window::Window;
 use crate::processing::Train;
 use crate::util::new_id;
+use crate::util::TriggerType;
 use crate::util::{new_channel, Rx, Tx};
 use crossbeam::channel;
 use crossbeam::channel::Receiver;
@@ -34,6 +35,7 @@ pub(crate) struct Platform {
     transform: Option<Transform>,
     layout: Layout,
     window: Window,
+    trigger: TriggerType,
     watermark_strategy: WatermarkStrategy,
     stop: usize,
     blocks: Vec<usize>,
@@ -55,6 +57,7 @@ impl Platform {
         let inputs = station.inputs.clone();
         let control = station.control.clone();
         let layout = station.layout.clone();
+        let trigger = station.trigger.clone();
         let watermark_strategy = station.watermark_strategy.clone();
 
         (
@@ -67,6 +70,7 @@ impl Platform {
                 window,
                 layout,
                 stop,
+                trigger,
                 blocks,
                 inputs,
                 transforms,
@@ -103,7 +107,7 @@ impl Platform {
 
         let window_selector = Arc::new(RwLock::new(WindowSelector::new(self.window.clone())));
 
-        let trigger_selector = TriggerSelector::new(storage.clone());
+        let trigger_selector = TriggerSelector::new(storage.clone(), self.trigger.clone());
 
         let when_tx = when(
             watermark_strategy.clone(),
@@ -207,8 +211,6 @@ fn when(
             match when.select(windows, &current) {
                 trains if !trains.is_empty() => {
                     trains.into_iter().for_each(|(_, t)| what.execute(t));
-                    //debug!("{:?}", train);
-                    //what.execute(train);
                 }
                 _ => {}
             }
