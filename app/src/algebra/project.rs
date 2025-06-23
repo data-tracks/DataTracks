@@ -115,23 +115,20 @@ impl Algebra for Project {
     type Iterator = ProjectIter;
 
     fn derive_iterator(&mut self) -> ProjectIter {
-        match &self.project.op {
-            Op::Collection(_) => {
-                let op = self
-                    .project
-                    .operands
-                    .iter()
-                    .map(|o| implement(o))
-                    .collect::<Vec<_>>()
-                    .first()
-                    .map(|o| (*o).clone())
-                    .unwrap_or(IdentityHandler::new());
-                return ProjectIter::ValueSetProjectIterator(SetProjectIterator::new(
-                    self.input.derive_iterator(),
-                    op,
-                ));
-            }
-            _ => {}
+        if let Op::Collection(_) = &self.project.op {
+            let op = self
+                .project
+                .operands
+                .iter()
+                .map(|o| implement(o))
+                .collect::<Vec<_>>()
+                .first()
+                .map(|o| (*o).clone())
+                .unwrap_or(IdentityHandler::new());
+            return ProjectIter::ValueSetProjectIterator(SetProjectIterator::new(
+                self.input.derive_iterator(),
+                op,
+            ));
         }
 
         let project = implement(&self.project);

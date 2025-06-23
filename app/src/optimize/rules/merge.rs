@@ -188,10 +188,10 @@ impl OperatorMerger<'_> {
                 })
                 .expect("KeyValue matching name not found"),
             Op::Tuple(TupleOp::Literal(l)) => match &l.literal {
-                Value::Dict(d) => Operator::literal(d.get(&name).expect("Key not found").clone()),
+                Value::Dict(d) => Operator::literal(d.get(name).expect("Key not found").clone()),
                 Value::Wagon(w) => match w.value.as_ref() {
                     Value::Dict(d) => {
-                        Operator::literal(d.get(&name).expect("Key not found").clone())
+                        Operator::literal(d.get(name).expect("Key not found").clone())
                     }
                     _ => panic!("Unexpected Wagon value"),
                 },

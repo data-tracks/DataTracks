@@ -41,9 +41,8 @@ impl Operator {
     }
 
     pub fn contains_agg(&self) -> bool {
-        match &self.op {
-            Op::Agg(_) => return true,
-            _ => {}
+        if let Op::Agg(_) = &self.op {
+            return true;
         }
         self.operands.iter().any(|o| o.contains_agg())
     }

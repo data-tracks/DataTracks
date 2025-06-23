@@ -286,9 +286,8 @@ impl Storage {
             }
         }
         let mut lock = self.attachments.lock().unwrap();
-        match lock.remove(&source_id) {
-            None => error!("Could not remove"),
-            Some(_) => {}
+        if lock.remove(&source_id).is_none() {
+            error!("Could not remove")
         };
     }
 }

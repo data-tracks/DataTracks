@@ -8,7 +8,7 @@ use crate::value::Value::Null;
 use crate::Value::Wagon;
 use crate::{bool, wagon, Bool, Float, Int};
 use bytes::{BufMut, BytesMut};
-use flatbuffers::{FlatBufferBuilder, WIPOffset};
+use flatbuffers::{FlatBufferBuilder, ForwardsUOffset, Vector, WIPOffset};
 use json::JsonValue;
 use postgres::types::{IsNull, Type};
 use redb::{Key, TypeName};
@@ -334,6 +334,16 @@ impl Value {
     }
 }
 
+impl TryFrom<&Vector<'_, ForwardsUOffset<ValueWrapper<'_>>>> for Value {
+    type Error = String;
+
+    fn try_from(
+        value: &Vector<'_, ForwardsUOffset<ValueWrapper<'_>>>,
+    ) -> Result<Self, Self::Error> {
+        todo!()
+    }
+}
+
 impl TryFrom<ValueWrapper<'_>> for Value {
     type Error = String;
 
@@ -345,7 +355,9 @@ impl TryFrom<ValueWrapper<'_>> for Value {
             }
             FlatValue::Text => {
                 let string = value.data_as_text().ok_or("Could not find string")?;
-                Ok(string.data().into())
+                let data: &str = string.data();
+                let string = data.into();
+                Ok(string)
             }
             FlatValue::Float => {
                 let float = value.data_as_float().ok_or("Could not find float")?;

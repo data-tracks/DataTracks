@@ -69,7 +69,7 @@ impl ValueStore {
         values.into_iter().for_each(|v| {
             inner.counter += 1;
             let counter: Value = inner.counter.into();
-            inner.storage.write_value(counter.into(), v)
+            inner.storage.write_value(counter, v)
         });
     }
 
@@ -101,8 +101,7 @@ impl SharedState {
 
     pub(crate) fn drain(&mut self) -> Vec<Value> {
         std::mem::take(&mut self.storage.cache)
-            .into_iter()
-            .map(|(_, val)| val)
+            .into_values()
             .collect()
     }
 }

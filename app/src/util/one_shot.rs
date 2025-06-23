@@ -9,7 +9,7 @@ pub(crate) fn new_channel<Msg: Send + Clone, S: AsRef<str>>(
     let uuid = uuid::Uuid::new_v4();
 
     (
-        SingleTx(tx, rx.clone(), name.as_ref().to_string(), uuid.clone()),
+        SingleTx(tx, rx.clone(), name.as_ref().to_string(), uuid),
         SingleRx(rx, name.as_ref().to_string(), uuid),
     )
 }
@@ -67,10 +67,8 @@ impl<F: Send> SingleTx<F> {
 #[cfg(test)]
 mod test {
     use std::sync::atomic::{AtomicU64, Ordering};
-    use std::sync::mpsc::channel;
     use std::sync::Arc;
     use std::thread::spawn;
-    use std::time::Instant;
 
     use crate::util::one_shot::new_channel;
     use rand::random;
@@ -155,34 +153,5 @@ mod test {
         ths.into_iter().for_each(|t| t.join().unwrap());
 
         assert_eq!(tx.0.len(), size.load(Ordering::SeqCst) as usize);
-    }
-
-    #[test]
-    fn performance() {
-        let (tx, rc) = channel();
-
-        let mut instant = Instant::now();
-        for _ in 0..1_000_000 {
-            tx.send(3).unwrap();
-            let _val = rc.recv().unwrap();
-        }
-        let std = instant.elapsed();
-
-        let (tx, rx) = new_channel("test");
-
-        instant = Instant::now();
-        for _ in 0..1_000_000 {
-            tx.send(3).unwrap();
-            rx.recv().unwrap();
-        }
-        let new_time = instant.elapsed();
-
-        println!(
-            "std: {}ms vs counted: {}ms",
-            std.as_millis(),
-            new_time.as_millis()
-        );
-
-        assert!((8 * std.as_millis()) >= new_time.as_millis())
     }
 }

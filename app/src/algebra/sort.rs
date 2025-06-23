@@ -66,7 +66,7 @@ impl Iterator for SortIterator {
                 .push(val);
         }
 
-        let values = if self.direction == Direction::ASC {
+        let values = if self.direction == Direction::Asc {
             self.sorted.pop_first()
         } else {
             self.sorted.pop_last()

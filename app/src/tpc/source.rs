@@ -84,10 +84,7 @@ impl Source for TpcSource {
             .name("TPC Source".to_string())
             .spawn(move || {
                 let server = Server::new(url.clone(), port);
-                match server.start(clone, control, rx) {
-                    Ok(_) => {}
-                    Err(_) => {}
-                }
+                if server.start(clone, control, rx).is_ok() {}
             });
 
         match res {
@@ -164,8 +161,8 @@ impl StreamUser for TpcSource {
                     let mut buffer = vec![0; size];
                     stream.read(&mut buffer).await.unwrap();
                     // Deserialize FlatBuffers message
-                    match deserialize_message(&buffer) {
-                        Ok(msg) => match msg.data_type() {
+                    if let Ok(msg) = deserialize_message(&buffer) {
+                        match msg.data_type() {
                             Payload::RegisterRequest => {
                                 info!("tpc registration");
                                 stream.write_all(&handle_register().unwrap()).await.unwrap();
@@ -181,8 +178,7 @@ impl StreamUser for TpcSource {
                             _ => {
                                 todo!("other tpc payloads")
                             }
-                        },
-                        Err(_) => (),
+                        }
                     };
                 }
                 _ => {

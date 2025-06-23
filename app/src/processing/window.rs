@@ -199,7 +199,7 @@ impl NoneStrategy {
         NoneStrategy {}
     }
     pub(crate) fn mark(&mut self, train: &Train) -> Vec<(WindowDescriptor, bool)> {
-        vec![(WindowDescriptor::unbounded(train.event_time.clone()), true)]
+        vec![(WindowDescriptor::unbounded(train.event_time), true)]
     }
 }
 

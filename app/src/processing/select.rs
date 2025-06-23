@@ -21,8 +21,8 @@ impl WindowDescriptor {
 
     pub fn unbounded(time: Time) -> WindowDescriptor {
         WindowDescriptor {
-            from: time.clone(),
-            to: time.clone(),
+            from: time,
+            to: time,
         }
     }
 }

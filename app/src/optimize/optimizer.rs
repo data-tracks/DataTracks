@@ -32,12 +32,15 @@ pub struct RuleBasedOptimizer {
     current_rule: Rule,
 }
 
+impl Default for RuleBasedOptimizer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RuleBasedOptimizer {
     pub fn new() -> Self {
-        let mut rules: Vec<Rule> = Vec::new();
-
-        rules.push(Merge(MergeRule::Filter));
-        rules.push(Merge(MergeRule::Project));
+        let rules: Vec<Rule> = vec![Merge(MergeRule::Project), Merge(MergeRule::Filter)];
 
         RuleBasedOptimizer {
             rules,

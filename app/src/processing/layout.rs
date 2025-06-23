@@ -71,11 +71,7 @@ impl Layout {
                 other
                     .fields
                     .iter()
-                    .filter(|f| {
-                        f.name
-                            .as_ref()
-                            .map_or(true, |name| !this.contains_key(name))
-                    })
+                    .filter(|f| f.name.as_ref().is_none_or(|name| !this.contains_key(name)))
                     .for_each(|f| dict.push(f.clone()));
                 layout.type_ = Dict(Box::new(DictType::new(dict)))
             }
@@ -412,9 +408,7 @@ impl OutputType {
             Array(a) => {
                 match other {
                     Array(o) => {
-                        if let Err(e) = a.fields.accepts(&o.fields) {
-                            return Err(e);
-                        }
+                        a.fields.accepts(&o.fields)?;
                         if a.length.is_some() && o.length.is_none() {
                             return self.type_mismatch_error(other);
                         }
@@ -456,9 +450,10 @@ impl OutputType {
             Dict(d) => match other {
                 Dict(o) => {
                     if d.fields.iter().all(|field| {
-                        field.name.as_ref().map_or(true, |n| {
-                            o.get(n).map_or(false, |o| field.accepts(o).is_ok())
-                        })
+                        field
+                            .name
+                            .as_ref()
+                            .is_none_or(|n| o.get(n).is_some_and(|o| field.accepts(o).is_ok()))
                     }) {
                         return Ok(());
                     }
@@ -688,13 +683,13 @@ impl DictType {
     pub fn contains_key(&self, key: &str) -> bool {
         self.fields
             .iter()
-            .any(|f| f.name.as_ref().map_or(false, |n| n == key))
+            .any(|f| f.name.as_ref().is_some_and(|n| n == key))
     }
 
     pub fn get(&self, key: &str) -> Option<&Layout> {
         self.fields
             .iter()
-            .find(|f| f.name.as_ref().map_or(false, |n| n == key))
+            .find(|f| f.name.as_ref().is_some_and(|n| n == key))
     }
 
     pub fn names(&self) -> Vec<&str> {
@@ -713,7 +708,7 @@ impl DictType {
         self.fields.iter().all(|l| {
             l.name
                 .as_ref()
-                .map_or(true, |name| dict.get(name).map_or(false, |v| l.fits(v)))
+                .is_none_or(|name| dict.get(name).is_some_and(|v| l.fits(v)))
         })
     }
 }

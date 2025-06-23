@@ -62,20 +62,17 @@ impl StreamUser for TpcManagement {
 
                     let buffer = vec![0; size];
 
-                    match deserialize_message(&buffer) {
-                        Ok(msg) => {
-                            match Api::handle_message(self.storage.clone(), self.api.clone(), msg) {
-                                Ok(res) => match stream.write_all(&res).await {
-                                    Ok(_) => {}
-                                    Err(err) => error!("{}", err),
-                                },
-                                Err(err) => match stream.write_all(&err).await {
-                                    Ok(_) => {}
-                                    Err(err) => error!("{}", err),
-                                },
-                            }
+                    if let Ok(msg) = deserialize_message(&buffer) {
+                        match Api::handle_message(self.storage.clone(), self.api.clone(), msg) {
+                            Ok(res) => match stream.write_all(&res).await {
+                                Ok(_) => {}
+                                Err(err) => error!("{}", err),
+                            },
+                            Err(err) => match stream.write_all(&err).await {
+                                Ok(_) => {}
+                                Err(err) => error!("{}", err),
+                            },
                         }
-                        Err(_) => (),
                     };
                 }
                 _ => {

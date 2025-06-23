@@ -19,6 +19,6 @@ impl Order {
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Direction {
-    ASC,
-    DESC,
+    Asc,
+    Desc,
 }

@@ -137,9 +137,8 @@ impl Server {
                 let (stream, _) = listener.accept().await.map_err(|err| err.to_string())?;
 
                 if let Ok(cmd) = rx.try_recv() {
-                    match cmd {
-                        Command::Stop(s) => return Err(format!("Stopped {}", s)),
-                        _ => {}
+                    if let Command::Stop(s) = cmd {
+                        return Err(format!("Stopped {}", s));
                     }
                 }
 

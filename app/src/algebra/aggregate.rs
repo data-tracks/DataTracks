@@ -180,7 +180,7 @@ impl AggIterator {
             self.groups.entry(hash).or_default().push(value);
         }
 
-        for (_hash, values) in &self.groups {
+        for values in self.groups.values() {
             let mut aggregates = self
                 .aggregates
                 .iter()
@@ -194,7 +194,7 @@ impl AggIterator {
             }
             let mut end_values = vec![];
             // first we add grouped
-            if values.len() > 0 {
+            if !values.is_empty() {
                 end_values.push(values[0].clone());
             } else {
                 end_values.push(Null)

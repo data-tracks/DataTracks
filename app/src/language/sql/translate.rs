@@ -88,7 +88,7 @@ fn handle_select(query: SqlSelect) -> Result<MaybeAliasAlg, String> {
         _ => Operator::new(Op::combine(), projections),
     };
 
-    if function.contains_agg() || groups.len() > 0 {
+    if function.contains_agg() || !groups.is_empty() {
         let group = match groups.len() {
             1 => Some(groups.pop().unwrap()),
             0 => None,
@@ -119,7 +119,7 @@ fn handle_collection_operator(operator: SqlOperator) -> Result<MaybeAliasAlg, St
     let inputs = operator
         .operands
         .into_iter()
-        .map(|o| handle_from(o))
+        .map(handle_from)
         .collect::<Result<Vec<_>, _>>()?;
     match inputs.len() {
         1 => Ok(MaybeAliasAlg::aliased(

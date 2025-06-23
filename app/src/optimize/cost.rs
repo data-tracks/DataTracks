@@ -1,21 +1,16 @@
 use std::cmp::Ordering;
 use std::ops::{Add, Mul};
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub enum Cost {
     Numeric(usize),
+    #[default]
     Infinite,
 }
 
 impl Cost {
     pub(crate) fn new(value: usize) -> Self {
         Cost::Numeric(value)
-    }
-}
-
-impl Default for Cost {
-    fn default() -> Self {
-        Cost::Infinite
     }
 }
 
