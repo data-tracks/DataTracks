@@ -339,22 +339,26 @@ impl Debug for Command {
 
 #[cfg(test)]
 pub mod tests {
+    use crate::processing::window::Window;
     use std::collections::HashMap;
     use std::sync::Arc;
+    use std::thread;
     use std::thread::sleep;
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
 
     use crate::processing::plan::Plan;
-    use crate::processing::station::Command::{Okay, Ready, Threshold};
+    use crate::processing::station::Command::{Okay, Ready, Stop, Threshold};
     use crate::processing::station::{Command, Station};
     pub use crate::processing::tests::dict_values;
     use crate::processing::transform::{FuncTransform, Transform};
     use crate::util::Rx;
     use crate::util::{new_channel, Tx};
+    use crate::util::{TimeUnit, TriggerType};
     use crossbeam::channel::{unbounded, Receiver, Sender};
+    use rstest::rstest;
     use tracing_test::traced_test;
     use value::train::Train;
-    use value::{Dict, Value};
+    use value::{Dict, Time, Value};
 
     #[test]
     #[traced_test]
@@ -601,5 +605,98 @@ pub mod tests {
 
         let a_tx = Arc::new(c_tx);
         (station, train_sender, rx, c_rx, a_tx)
+    }
+
+    mod trigger {
+        use super::*;
+
+        #[rstest]
+        #[case::back_window_per_element_trigger(
+            Window::back(20, TimeUnit::Millis),
+            TriggerType::Element,
+            vec![
+                (Value::from(1), 0, 0),
+                (Value::from(2), 1, 1),
+                (Value::from(3), 2, 2),
+            ], 3)]
+        #[case::back_window_window_trigger(
+            Window::back(20, TimeUnit::Millis),
+            TriggerType::WindowEnd,
+            vec![
+                (Value::from(1), 0, 0),
+                (Value::from(2), 1, 1),
+                (Value::from(3), 2, 2),
+            ], 1)]
+        #[case::back_window_window_trigger_no_overlap(
+            Window::back(2, TimeUnit::Millis),
+            TriggerType::WindowEnd,
+            vec![
+                (Value::from(1), 0, 0),
+                (Value::from(2), 10, 10),
+                (Value::from(3), 20, 20),
+            ], 3)]
+        fn test_trigger(
+            #[case] window: Window,
+            #[case] trigger: TriggerType,
+            #[case] values: Vec<(Value, usize, u64)>,
+            #[case] answers: usize,
+        ) {
+            let mut station = Station::new(0);
+            station.window = window;
+            station.trigger = trigger;
+
+            let (tx, rx) = new_channel("Test", false);
+            station.add_out(0, tx).unwrap();
+
+            let (control_tx, control_rx) = unbounded();
+
+            let trains = values
+                .into_iter()
+                .map(|(val, mark, out)| {
+                    let mut train = Train::new(vec![val]);
+                    train.event_time = Time::new(mark as i64, 0);
+                    (train, out)
+                })
+                .collect::<Vec<(_, _)>>();
+
+            let sender = station.operate(Arc::new(control_tx), Default::default());
+            control_rx.recv().unwrap(); // wait for go from station
+            sender.send(Ready(0)).unwrap(); // start station
+
+            let mut time = 0;
+            for (train, out) in trains {
+                let wait = out - time;
+                sleep(Duration::from_millis(wait)); // wait util we can send train
+                station.fake_receive(train);
+                time += wait; // we are farther along
+            }
+
+            let handle = thread::spawn(move || receive(rx, answers));
+
+            let timeout = Duration::from_millis(30);
+            let start = Instant::now();
+
+            let mut success = false;
+            while start.elapsed() < timeout {
+                if handle.is_finished() {
+                    handle.join().unwrap();
+                    success = true;
+                    break;
+                }
+                sleep(Duration::from_millis(5));
+            }
+            if !success {
+                panic!("did not pass");
+            }
+
+            sender.send(Stop(0)).unwrap(); // stop station
+        }
+
+        fn receive(rx: Rx<Train>, results: usize) {
+            for _ in 0..results {
+                rx.recv().unwrap();
+            }
+            println!("received {}", results);
+        }
     }
 }

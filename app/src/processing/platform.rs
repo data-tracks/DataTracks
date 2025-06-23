@@ -75,6 +75,15 @@ impl Platform {
             control.0,
         )
     }
+
+    #[cfg(test)]
+    pub(crate) fn operate_test(&mut self) -> Receiver<Command> {
+        let (tx, rx) = channel::unbounded();
+
+        self.operate(Arc::new(tx));
+        rx
+    }
+
     pub(crate) fn operate(&mut self, control: Arc<channel::Sender<Command>>) {
         let process = optimize(
             self.stop,

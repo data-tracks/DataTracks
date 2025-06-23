@@ -41,6 +41,10 @@ impl Window {
         }
         Ok(Back(BackWindow::parse(stencil)?))
     }
+
+    pub fn back(amount: i64, unit: TimeUnit) -> Self {
+        Back(BackWindow::new(amount, unit))
+    }
 }
 
 #[derive(Clone, Default)]
