@@ -59,10 +59,26 @@ impl WatermarkStrategy {
     }
 }
 
-#[derive(Default)]
 pub struct MonotonicWatermark {
     last: Arc<Mutex<Time>>,
     observers: Arc<Mutex<HashMap<usize, Tx<Time>>>>,
+}
+
+impl Default for MonotonicWatermark {
+    fn default() -> Self {
+        #[cfg(test)]
+        {
+            return MonotonicWatermark {
+                last: Arc::new(Mutex::new(Time::new(0, 0))),
+                observers: Arc::new(Mutex::new(HashMap::new())),
+            };
+        }
+
+        MonotonicWatermark {
+            last: Arc::new(Mutex::new(Time::default())),
+            observers: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
 }
 
 impl Clone for MonotonicWatermark {

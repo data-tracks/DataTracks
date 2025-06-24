@@ -89,6 +89,18 @@ Due to counterparties there might be the a late ```Train``` arriving later at th
 {sql|SELECT $1 FROM $1}(f?)[3s]@watermark // all
 ```
 
+### SQL Syntax
+
+```sql
+SELECT *
+FROM $0
+WHERE id == "TEST"
+GROUP BY "salary"
+    WINDOW INTERVAL (5, SECONDS)
+    EMIT ELEMENT, WINDOW (END)
+    MARK LAST
+```
+
 ## License
 
 [GPLv3](https://www.gnu.org/licenses/)

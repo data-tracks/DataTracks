@@ -199,17 +199,18 @@ fn when(
                 }
             }
 
+            let current = watermark_strategy.current();
+
             // get all "changed" windows
-            let windows = where_.write().select();
+            let windows = where_.write().select(current);
             if windows.is_empty() {
                 continue;
             }
 
-            let current = watermark_strategy.current();
-
             // decide if we fire a window, discard or wait
             match when.select(windows, &current) {
                 trains if !trains.is_empty() => {
+                    debug!("trains {:?}", trains);
                     trains.into_iter().for_each(|(_, t)| what.execute(t));
                 }
                 _ => {}

@@ -1,5 +1,5 @@
 use crate::{Text, Value};
-use chrono::{DateTime, Duration, NaiveTime, TimeZone, Timelike, Utc};
+use chrono::{DateTime, Duration, TimeZone, Timelike, Utc};
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use schemas::message_generated::protocol::{Time as FlatTime, TimeArgs};
 use serde::{Deserialize, Serialize};
@@ -33,7 +33,7 @@ impl Time {
     }
 
     pub fn duration_since(&self, other: Time) -> Time {
-        Time::new(other.ms - self.ms, other.ns - self.ns)
+        Time::new(self.ms - other.ms, self.ns - other.ns)
     }
 
     pub(crate) fn flatternize<'bldr>(
@@ -109,8 +109,7 @@ impl Sub<Duration> for &Time {
 
 impl std::fmt::Display for Time {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let time = NaiveTime::from_num_seconds_from_midnight_opt((self.ms / 1000) as u32, self.ns)
-            .unwrap();
+        let time = Utc.timestamp_millis_opt(self.ms).unwrap();
         let string = if self.ns > 0 {
             time.format("%H:%M:%S%.6f").to_string()
         } else {

@@ -49,7 +49,8 @@ impl WindowSelector {
         })
     }
 
-    pub(crate) fn select(&mut self) -> HashMap<WindowDescriptor, bool> {
+    pub(crate) fn select(&mut self, current: Time) -> HashMap<WindowDescriptor, bool> {
+        self.dirty_windows.append(&mut self.strategy.sync(current));
         std::mem::take(&mut self.dirty_windows)
             .into_iter()
             .collect() // drain
@@ -114,7 +115,7 @@ impl TriggerSelector {
                         || matches!(self.trigger, TriggerType::WindowEnd))
                 {
                     // on time, did not fire yet
-                    debug!("trigger onTime {:?}", self.triggered_windows);
+                    debug!("@ {} trigger onTime {:?}", current, window);
                     trigger = true;
                     self.triggered_windows.insert(window, TriggerStatus::OnTime);
                 } else if self.fire_early || matches!(self.trigger, TriggerType::Element) {
@@ -177,7 +178,7 @@ mod tests {
         train.event_time = Time::new(3, 3);
 
         selector.mark(&train);
-        let windows = selector.select();
+        let windows = selector.select(train.event_time);
         assert_eq!(windows.len(), 1);
 
         let storage: Storage = Arc::new(Mutex::new(vec![]));
@@ -196,7 +197,7 @@ mod tests {
         train.event_time = Time::new(3, 3);
 
         selector.mark(&train);
-        let windows = selector.select();
+        let windows = selector.select(train.event_time);
         assert_eq!(windows.len(), 1);
 
         let storage: Storage = Arc::new(Mutex::new(vec![]));
@@ -215,7 +216,7 @@ mod tests {
         train.event_time = Time::new(3, 0);
 
         selector.mark(&train);
-        let windows = selector.select();
+        let windows = selector.select(train.event_time);
         assert_eq!(windows.len(), 1);
     }
 
@@ -230,9 +231,10 @@ mod tests {
 
         let mut train = Train::new(vec![3.into()]);
         train.event_time = Time::new(3, 0);
+        let time = train.event_time;
         selector.mark(&train);
 
-        let windows = selector.select();
+        let windows = selector.select(time);
         assert_eq!(windows.len(), 1);
     }
 
@@ -249,7 +251,7 @@ mod tests {
         train.event_time = Time::new(4, 0);
         selector.mark(&train);
 
-        let windows = selector.select();
+        let windows = selector.select(train.event_time);
         assert_eq!(windows.len(), 2);
     }
 
@@ -268,10 +270,13 @@ mod tests {
 
         let mut train = Train::new(vec![3.into()]);
         train.event_time = Time::new(4, 0);
+
+        let time = train.event_time;
+
         selector.mark(&train);
         storage.lock().unwrap().push(train);
 
-        let windows = selector.select();
+        let windows = selector.select(time);
         assert_eq!(windows.len(), 2);
 
         let values = trigger.select(windows, &Time::new(4, 0));

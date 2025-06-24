@@ -3,7 +3,9 @@ use crate::processing::window::Window::{Back, Interval, Non};
 use crate::processing::Train;
 use crate::util::TimeUnit;
 use chrono::{Duration, NaiveTime, Timelike};
-use value::Time;
+use std::collections::BTreeMap;
+use tracing::debug;
+use value::{Time, Value};
 
 #[derive(Clone)]
 pub enum Window {
@@ -44,6 +46,10 @@ impl Window {
 
     pub fn back(amount: i64, unit: TimeUnit) -> Self {
         Back(BackWindow::new(amount, unit))
+    }
+
+    pub fn interval(amount: i64, unit: TimeUnit, start: Time) -> Self {
+        Interval(IntervalWindow::new(amount, unit, start))
     }
 }
 
@@ -194,6 +200,15 @@ impl WindowStrategy {
             WindowStrategy::Interval(i) => i.mark(train),
         }
     }
+
+    /// checks if something unrelated to concrete data points changes, e.g. window ends
+    pub(crate) fn sync(&mut self, current: Time) -> BTreeMap<WindowDescriptor, bool> {
+        match self {
+            WindowStrategy::None(_) => BTreeMap::new(),
+            WindowStrategy::Back(_) => BTreeMap::new(),
+            WindowStrategy::Interval(i) => i.sync(current),
+        }
+    }
 }
 
 pub struct NoneStrategy {}
@@ -233,9 +248,32 @@ impl BackStrategy {
 pub struct IntervalStrategy {
     pub start: Time,
     pub millis_delta: i64,
+    current_window: usize, // which window we are currently in
 }
 
 impl IntervalStrategy {
+    pub(crate) fn sync(&mut self, current: Time) -> BTreeMap<WindowDescriptor, bool> {
+        let mut windows = BTreeMap::new();
+        loop {
+            let start = self.current_window as i64 * self.millis_delta;
+            let end = start + self.millis_delta;
+            if current.ms > end {
+                windows.insert(
+                    WindowDescriptor::new(
+                        Value::time(start, 0).as_time().unwrap(),
+                        Value::time(end, 0).as_time().unwrap(),
+                    ),
+                    false,
+                );
+                debug!("windows {windows:?}");
+                self.current_window += 1;
+            } else {
+                break;
+            }
+        }
+        BTreeMap::from(windows)
+    }
+
     pub(crate) fn mark(&self, train: &Train) -> Vec<(WindowDescriptor, bool)> {
         let elapsed = train.event_time.duration_since(self.start);
         let start_delta = elapsed.ms % self.millis_delta;
@@ -255,6 +293,7 @@ impl IntervalStrategy {
         Self {
             start: window.start,
             millis_delta: window.millis_delta,
+            current_window: 0,
         }
     }
 }
