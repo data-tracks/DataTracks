@@ -6,7 +6,10 @@ pub fn deserialize_message(buf: &[u8]) -> Result<Message, String> {
         InvalidFlatbuffer::MissingRequiredField {
             required,
             error_trace: _error_trace,
-        } => format!("missing required field {}", required),
+        } => format!(
+            "missing required field {}, trace {}",
+            required, _error_trace
+        ),
         InvalidFlatbuffer::InconsistentUnion {
             field,
             field_type,

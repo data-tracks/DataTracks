@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 use tokio::time::sleep;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 pub fn start_tpc(url: String, port: u16, storage: Arc<Mutex<Storage>>) {
     let res = thread::Builder::new()
@@ -54,26 +54,36 @@ pub struct TpcManagement {
 impl StreamUser for TpcManagement {
     async fn handle(&mut self, mut stream: TcpStream) {
         let mut len_buf = [0u8; 4];
+        warn!("read {}", len_buf.len());
 
         loop {
             match stream.read_exact(&mut len_buf).await {
                 Ok(()) => {
                     let size = u32::from_be_bytes(len_buf) as usize;
 
-                    let buffer = vec![0; size];
+                    let mut buffer = vec![0; size];
 
-                    if let Ok(msg) = deserialize_message(&buffer) {
-                        match Api::handle_message(self.storage.clone(), self.api.clone(), msg) {
-                            Ok(res) => match stream.write_all(&res).await {
-                                Ok(_) => {}
-                                Err(err) => error!("{}", err),
-                            },
-                            Err(err) => match stream.write_all(&err).await {
-                                Ok(_) => {}
-                                Err(err) => error!("{}", err),
-                            },
-                        }
+                    if let Err(err) = stream.read_exact(&mut buffer).await {
+                        warn!("error on reading stream {}", err);
                     };
+
+                    match deserialize_message(&buffer) {
+                        Ok(msg) => {
+                            match Api::handle_message(self.storage.clone(), self.api.clone(), msg) {
+                                Ok(res) => match stream.write_all(&res).await {
+                                    Ok(_) => {}
+                                    Err(err) => error!("{}", err),
+                                },
+                                Err(err) => match stream.write_all(&err).await {
+                                    Ok(_) => {}
+                                    Err(err) => error!("{}", err),
+                                },
+                            }
+                        }
+                        Err(e) => {
+                            warn!("could not deserialize message {}", e);
+                        }
+                    }
                 }
                 _ => {
                     sleep(Duration::from_millis(10)).await;
@@ -88,5 +98,44 @@ impl StreamUser for TpcManagement {
 
     fn control(&mut self) -> Sender<Command> {
         todo!()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::deserialize_message;
+    use flatbuffers::FlatBufferBuilder;
+    use schemas::message_generated::protocol::{
+        Message, MessageArgs, Payload, RegisterRequest, RegisterRequestArgs, Status, StatusArgs,
+    };
+
+    #[test]
+    fn register_serialize() {
+        let mut builder = FlatBufferBuilder::new();
+        let register = RegisterRequest::create(
+            &mut builder,
+            &RegisterRequestArgs {
+                id: None,
+                catalog: None,
+            },
+        )
+        .as_union_value();
+
+        let status = builder.create_string("");
+        let status = Status::create(&mut builder, &StatusArgs { msg: Some(status) });
+
+        let msg = Message::create(
+            &mut builder,
+            &MessageArgs {
+                data_type: Payload::RegisterRequest,
+                data: Some(register),
+                status: Some(status),
+            },
+        );
+
+        builder.finish(msg, None);
+        let msg = builder.finished_data().to_vec();
+
+        let msg = deserialize_message(msg.as_slice()).unwrap();
     }
 }

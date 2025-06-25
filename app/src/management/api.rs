@@ -168,12 +168,16 @@ fn handle_register(
     )
     .as_union_value();
 
+    let msg = builder.create_string("");
+
+    let status = Status::create(&mut builder, &StatusArgs { msg: Some(msg) });
+
     let msg = Message::create(
         &mut builder,
         &MessageArgs {
             data_type: Payload::RegisterRequest,
             data: Some(register),
-            status: None,
+            status: Some(status),
         },
     );
 
