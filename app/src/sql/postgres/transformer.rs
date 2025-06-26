@@ -107,6 +107,7 @@ pub struct PostgresIterator {
     statement: Statement,
     value_functions: ValueExtractor,
     values: Vec<value::Value>,
+    storage: ValueStore,
 }
 
 impl PostgresIterator {
@@ -127,6 +128,14 @@ impl PostgresIterator {
             statement,
             value_functions,
             values: vec![],
+            storage: Default::default(),
+        }
+    }
+
+    fn load(&mut self) {
+        for value in self.storage.drain() {
+            let values = &mut self.query_values(value);
+            self.values.append(values);
         }
     }
 
@@ -150,6 +159,7 @@ impl Iterator for PostgresIterator {
     type Item = value::Value;
 
     fn next(&mut self) -> Option<Self::Item> {
+        self.load();
         if self.values.is_empty() {
             None
         } else {
@@ -159,11 +169,8 @@ impl Iterator for PostgresIterator {
 }
 
 impl ValueIterator for PostgresIterator {
-    fn set_storage(&mut self, storage: ValueStore) {
-        for value in storage.drain() {
-            let values = &mut self.query_values(value);
-            self.values.append(values);
-        }
+    fn get_storage(&self) -> Vec<ValueStore> {
+        vec![self.storage.clone()]
     }
 
     fn clone(&self) -> BoxedIterator {

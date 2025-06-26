@@ -6,14 +6,14 @@ use schemas::message_generated::protocol::{
 };
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::ops;
 
 pub type MutWagonsFunc = Box<dyn FnMut(&mut Vec<Train>) -> Train>;
 
 #[derive(Clone, Debug, Deserialize, Serialize, Writable, Readable)]
 pub struct Train {
-    pub marks: HashMap<usize, Time>,
+    pub marks: BTreeMap<usize, Time>,
     pub values: Vec<Value>,
     pub event_time: Time,
 }
@@ -21,7 +21,7 @@ pub struct Train {
 impl Train {
     pub fn new(values: Vec<Value>) -> Self {
         Train {
-            marks: HashMap::new(),
+            marks: BTreeMap::new(),
             values,
             event_time: Time::now(),
         }

@@ -93,6 +93,7 @@ pub struct SqliteIterator {
     query: DynamicQuery,
     connector: SqliteConnector,
     values: Vec<Value>,
+    storage: ValueStore,
 }
 
 impl SqliteIterator {
@@ -101,6 +102,13 @@ impl SqliteIterator {
             query,
             connector,
             values: Vec::new(),
+            storage: ValueStore::new(),
+        }
+    }
+
+    fn load(&mut self) {
+        for value in self.storage.drain() {
+            self.values.append(&mut self.query_values(value));
         }
     }
 
@@ -130,6 +138,7 @@ impl Iterator for SqliteIterator {
     type Item = Value;
 
     fn next(&mut self) -> Option<Self::Item> {
+        self.load();
         if self.values.is_empty() {
             None
         } else {
@@ -139,10 +148,8 @@ impl Iterator for SqliteIterator {
 }
 
 impl ValueIterator for SqliteIterator {
-    fn set_storage(&mut self, storage: ValueStore) {
-        for value in storage.drain() {
-            self.values.append(&mut self.query_values(value));
-        }
+    fn get_storage(&self) -> Vec<ValueStore> {
+        vec![self.storage.clone()]
     }
 
     fn clone(&self) -> BoxedIterator {

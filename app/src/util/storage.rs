@@ -38,6 +38,10 @@ impl ValueStore {
         Self::new_with_values(vec![], 0)
     }
 
+    pub fn new_with_id(id: usize) -> Self {
+        Self::new_with_values(vec![], id)
+    }
+
     pub fn new_with_values(values: Vec<Value>, index: usize) -> Self {
         let store = ValueStore {
             inner: Arc::new(Mutex::new(SharedState::new(

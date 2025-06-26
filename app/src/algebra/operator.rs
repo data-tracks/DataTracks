@@ -151,8 +151,8 @@ fn unwind<'a>(value: Value) -> Vec<Value> {
 }
 
 impl ValueIterator for SetProjectIterator {
-    fn set_storage(&mut self, storage: ValueStore) {
-        self.input.set_storage(storage);
+    fn get_storage(&self) -> Vec<ValueStore> {
+        self.input.get_storage()
     }
 
     fn clone(&self) -> BoxedIterator {

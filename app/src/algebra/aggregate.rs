@@ -229,8 +229,8 @@ impl Iterator for AggIterator {
 }
 
 impl ValueIterator for AggIterator {
-    fn set_storage(&mut self, storage: ValueStore) {
-        self.input.set_storage(storage);
+    fn get_storage(&self) -> Vec<ValueStore> {
+        self.input.get_storage()
     }
 
     fn clone(&self) -> BoxedIterator {

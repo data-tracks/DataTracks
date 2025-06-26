@@ -232,8 +232,10 @@ fn optimize(
     sender: Sender,
 ) -> Executor {
     let enumerator = match transform {
-        Some(transform) => transform.optimize(transforms, Some(OptimizeStrategy::rule_based())),
-        None => Box::new(IdentityIterator::new()),
+        Some(transform) => {
+            Some(transform.optimize(transforms, Some(OptimizeStrategy::rule_based())))
+        }
+        None => None,
     };
     Executor::new(stop, enumerator, sender)
 }

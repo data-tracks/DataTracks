@@ -78,10 +78,15 @@ impl Iterator for UnionIterator {
 }
 
 impl ValueIterator for UnionIterator {
-    fn set_storage(&mut self, storage: ValueStore) {
-        for input in &mut self.inputs {
-            input.set_storage(storage.clone());
-        }
+    fn get_storage(&self) -> Vec<ValueStore> {
+        self.inputs
+            .iter()
+            .map(|x| x.get_storage())
+            .reduce(|mut a, mut b| {
+                a.append(&mut b);
+                a
+            })
+            .unwrap()
     }
 
     fn clone(&self) -> BoxedIterator {

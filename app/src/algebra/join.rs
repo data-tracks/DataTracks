@@ -136,9 +136,11 @@ impl JoinIterator {
 }
 
 impl ValueIterator for JoinIterator {
-    fn set_storage(&mut self, storage: ValueStore) {
-        self.left.set_storage(storage.clone());
-        self.right.set_storage(storage);
+    fn get_storage(&self) -> Vec<ValueStore> {
+        let mut left = self.left.get_storage();
+        let right = self.right.get_storage();
+        left.append(&mut right.to_vec());
+        left
     }
 
     fn clone(&self) -> BoxedIterator {

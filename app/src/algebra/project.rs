@@ -8,6 +8,7 @@ use crate::processing::transform::Transform;
 use crate::processing::Layout;
 use crate::util::storage::ValueStore;
 use std::collections::HashMap;
+use tracing::warn;
 use value::Value;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
@@ -42,8 +43,9 @@ impl Iterator for ProjectIter {
 }
 
 impl ValueIterator for ProjectIter {
-    fn set_storage(&mut self, _storage: ValueStore) {
-        unreachable!()
+    fn get_storage(&self) -> Vec<ValueStore> {
+        warn!("should not reach");
+        vec![]
     }
 
     fn clone(&self) -> BoxedIterator {
@@ -78,8 +80,8 @@ impl Iterator for ProjectIterator {
 }
 
 impl<'a> ValueIterator for ProjectIterator {
-    fn set_storage(&mut self, storage: ValueStore) {
-        self.input.set_storage(storage);
+    fn get_storage(&self) -> Vec<ValueStore> {
+        self.input.get_storage()
     }
 
     fn clone(&self) -> BoxedIterator {

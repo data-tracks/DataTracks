@@ -360,7 +360,7 @@ pub mod dummy {
     pub struct MappingIterator {
         mapping: HashMap<Value, Value>,
         values: Vec<Value>,
-        storage: Option<ValueStore>,
+        storage: ValueStore,
     }
 
     impl MappingIterator {
@@ -368,16 +368,12 @@ pub mod dummy {
             MappingIterator {
                 mapping,
                 values: Vec::new(),
-                storage: None,
+                storage: ValueStore::new_with_id(0),
             }
         }
 
         pub(crate) fn load(&mut self) -> bool {
-            self.values = if let Some(store) = self.storage.as_mut() {
-                store.drain()
-            } else {
-                vec![]
-            };
+            self.values = self.storage.drain();
             !self.values.is_empty()
         }
 
@@ -399,8 +395,8 @@ pub mod dummy {
     }
 
     impl ValueIterator for MappingIterator {
-        fn set_storage(&mut self, storage: ValueStore) {
-            self.storage = Some(storage);
+        fn get_storage(&self) -> Vec<ValueStore> {
+            vec![self.storage.clone()]
         }
 
         fn clone(&self) -> BoxedIterator {

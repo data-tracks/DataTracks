@@ -3,29 +3,38 @@ use crate::processing::transform::Transform;
 use crate::processing::Sender;
 use crate::util::storage::ValueStore;
 use crate::util::Tx;
+use rusqlite::Map;
 use std::collections::{HashMap, VecDeque};
 use tracing::warn;
 use value::train::Train;
 use value::Value;
 
+enum WhatStrategy {
+    Task(BoxedIterator, HashMap<usize, ValueStore>),
+    Direct,
+}
+
 /// responsible for handling where and what of data points and hands them over to the next component
 pub struct Executor {
-    iterator: BoxedIterator,
+    what: WhatStrategy,
     sender: Sender,
-    storage: ValueStore,
     stop: usize,
 }
 
 impl Executor {
-    pub fn new(stop: usize, mut iterator: BoxedIterator, sender: Sender) -> Self {
-        let storage = ValueStore::new();
-        iterator.set_storage(storage.clone());
-        Executor {
-            iterator,
-            sender,
-            storage,
-            stop,
-        }
+    pub fn new(stop: usize, mut iterator: Option<BoxedIterator>, sender: Sender) -> Self {
+        let what = match iterator {
+            Some(i) => {
+                let mut map = HashMap::new();
+                for store in i.get_storage() {
+                    map.insert(store.index, store);
+                }
+                WhatStrategy::Task(i, map)
+            }
+            None => WhatStrategy::Direct,
+        };
+
+        Executor { sender, what, stop }
     }
 
     pub(crate) fn attach(&mut self, num: usize, train_observer: Tx<Train>) {
@@ -42,49 +51,59 @@ impl Executor {
             return;
         }
 
-        let train = train.mark(self.stop);
+        let train = match &mut self.what {
+            WhatStrategy::Task(iter, storages) => {
+                let marks = train.marks.clone();
+                let event_time = train.event_time;
 
-        let marks = train.marks.clone();
-        let event_time = train.event_time;
+                // load values
+                storages
+                    .get_mut(&train.last())
+                    .unwrap()
+                    .append(train.values);
 
-        self.storage.append(train.values);
-
-        let mut train = self.iterator.drain_to_train(self.stop);
-        train.event_time = event_time;
-        train.marks = marks;
+                let mut train = iter.drain_to_train(self.stop);
+                train.event_time = event_time;
+                train.marks = marks;
+                train
+            }
+            WhatStrategy::Direct => train,
+        };
 
         if train.values.is_empty() {
-            warn!("Train is empty");
+            warn!("Train is empty {}", self.stop);
             return;
         }
+
+        let train = train.mark(self.stop); // mark current as last stop
 
         self.sender.send(train.flag(self.stop));
     }
 }
 
+pub struct Direct {
+    sender: Sender,
+    stop: usize,
+}
+
 #[derive(Clone, Default)]
 pub struct IdentityIterator {
     values: VecDeque<Value>,
-    storage: Option<ValueStore>,
+    storage: ValueStore,
 }
 
 impl IdentityIterator {
     pub fn new() -> Self {
         IdentityIterator {
             values: Default::default(),
-            storage: None,
+            storage: ValueStore::new(),
         }
     }
 
     fn load(&mut self) {
-        match self.storage.as_mut() {
-            None => {}
-            Some(s) => {
-                s.drain().into_iter().for_each(|v| {
-                    self.values.push_back(v);
-                });
-            }
-        }
+        self.drain().into_iter().for_each(|v| {
+            self.values.push_back(v);
+        });
     }
 }
 
@@ -103,8 +122,8 @@ impl Iterator for IdentityIterator {
 }
 
 impl ValueIterator for IdentityIterator {
-    fn set_storage(&mut self, storage: ValueStore) {
-        self.storage = Some(storage);
+    fn get_storage(&self) -> Vec<ValueStore> {
+        vec![self.storage.clone()]
     }
 
     fn drain_to_train(&mut self, _stop: usize) -> Train {

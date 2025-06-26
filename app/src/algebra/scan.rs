@@ -23,18 +23,13 @@ impl IndexScan {
 pub struct ScanIterator {
     index: usize,
     values: VecDeque<Value>,
-    storage: Option<ValueStore>,
+    storage: ValueStore,
 }
 
 impl ScanIterator {
     pub(crate) fn load(&mut self) -> bool {
-        match &self.storage {
-            None => true,
-            Some(store) => {
-                self.values = VecDeque::from(store.drain());
-                self.values.is_empty()
-            }
-        }
+        self.values = VecDeque::from(self.storage.drain());
+        self.values.is_empty()
     }
 }
 
@@ -50,17 +45,15 @@ impl Iterator for ScanIterator {
 }
 
 impl ValueIterator for ScanIterator {
-    fn set_storage(&mut self, storage: ValueStore) {
-        if storage.index == self.index {
-            self.storage = Some(storage);
-        }
+    fn get_storage(&self) -> Vec<ValueStore> {
+        vec![self.storage.clone()]
     }
 
     fn clone(&self) -> BoxedIterator {
         Box::new(ScanIterator {
             index: self.index,
             values: VecDeque::new(),
-            storage: None,
+            storage: ValueStore::new(),
         })
     }
 
@@ -88,10 +81,11 @@ impl Algebra for IndexScan {
     type Iterator = ScanIterator;
 
     fn derive_iterator(&mut self) -> Self::Iterator {
+        let storage = ValueStore::new_with_id(self.index);
         ScanIterator {
             index: self.index,
             values: VecDeque::new(),
-            storage: None,
+            storage,
         }
     }
 }
@@ -141,7 +135,6 @@ mod test {
     use crate::algebra::scan::IndexScan;
     use crate::algebra::ValueIterator;
     use crate::processing::Train;
-    use crate::util::storage::ValueStore;
     use value::Value;
 
     #[test]
@@ -150,9 +143,8 @@ mod test {
 
         let mut scan = IndexScan::new(0);
 
-        let storage = ValueStore::new();
         let mut handler = scan.derive_iterator();
-        handler.set_storage(storage.clone());
+        let storage = handler.get_storage().first().unwrap();
 
         storage.append(train.values);
 

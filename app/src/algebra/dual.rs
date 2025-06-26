@@ -72,8 +72,8 @@ impl Iterator for DualIterator {
 }
 
 impl ValueIterator for DualIterator {
-    fn set_storage(&mut self, _storage: ValueStore) {
-        // nothing on purpose
+    fn get_storage(&self) -> Vec<ValueStore> {
+        vec![]
     }
 
     fn clone(&self) -> BoxedIterator {
