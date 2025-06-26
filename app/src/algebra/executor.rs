@@ -4,6 +4,7 @@ use crate::processing::Sender;
 use crate::util::storage::ValueStore;
 use crate::util::Tx;
 use std::collections::{HashMap, VecDeque};
+use tracing::warn;
 use value::train::Train;
 use value::Value;
 
@@ -36,6 +37,11 @@ impl Executor {
     }
 
     pub fn execute(&mut self, train: Train) {
+        if train.values.is_empty() {
+            warn!("Train is empty incoming");
+            return;
+        }
+
         let train = train.mark(self.stop);
 
         let marks = train.marks.clone();
@@ -46,6 +52,11 @@ impl Executor {
         let mut train = self.iterator.drain_to_train(self.stop);
         train.event_time = event_time;
         train.marks = marks;
+
+        if train.values.is_empty() {
+            warn!("Train is empty");
+            return;
+        }
 
         self.sender.send(train.flag(self.stop));
     }

@@ -6,7 +6,7 @@ use std::fs;
 use std::sync::Arc;
 use tempfile::NamedTempFile;
 use thiserror::Error;
-use tracing::error;
+use tracing::{error, warn};
 use value::Value;
 
 /// Error type for storage operations
@@ -66,6 +66,7 @@ impl ValueStore {
     pub(crate) fn append(&self, values: Vec<Value>) {
         let mut inner = self.inner.lock();
 
+        warn!("values {:?}", values);
         values.into_iter().for_each(|v| {
             inner.counter += 1;
             let counter: Value = inner.counter.into();

@@ -54,7 +54,6 @@ pub struct TpcManagement {
 impl StreamUser for TpcManagement {
     async fn handle(&mut self, mut stream: TcpStream) {
         let mut len_buf = [0u8; 4];
-        warn!("read {}", len_buf.len());
 
         loop {
             match stream.read_exact(&mut len_buf).await {
@@ -106,7 +105,8 @@ mod test {
     use crate::deserialize_message;
     use flatbuffers::FlatBufferBuilder;
     use schemas::message_generated::protocol::{
-        Message, MessageArgs, Payload, RegisterRequest, RegisterRequestArgs, Status, StatusArgs,
+        Message, MessageArgs, OkStatus, OkStatusArgs, Payload, RegisterRequest,
+        RegisterRequestArgs, Status,
     };
 
     #[test]
@@ -121,14 +121,14 @@ mod test {
         )
         .as_union_value();
 
-        let status = builder.create_string("");
-        let status = Status::create(&mut builder, &StatusArgs { msg: Some(status) });
+        let status = OkStatus::create(&mut builder, &OkStatusArgs {}).as_union_value();
 
         let msg = Message::create(
             &mut builder,
             &MessageArgs {
                 data_type: Payload::RegisterRequest,
                 data: Some(register),
+                status_type: Status::OkStatus,
                 status: Some(status),
             },
         );

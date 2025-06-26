@@ -2,7 +2,7 @@ use crate::{Time, Value};
 use flatbuffers::FlatBufferBuilder;
 use redb::TypeName;
 use schemas::message_generated::protocol::{
-    Message, MessageArgs, Payload, Train as FlatTrain, TrainArgs,
+    Message, MessageArgs, OkStatus, OkStatusArgs, Payload, Status, Train as FlatTrain, TrainArgs,
 };
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
@@ -85,12 +85,15 @@ impl From<Train> for Vec<u8> {
         };
         let data = FlatTrain::create(&mut builder, &args);
 
+        let status = OkStatus::create(&mut builder, &OkStatusArgs {}).as_union_value();
+
         let message = Message::create(
             &mut builder,
             &MessageArgs {
                 data_type: Payload::Train,
                 data: Some(data.as_union_value()),
-                status: None,
+                status_type: Status::OkStatus,
+                status: Some(status),
             },
         );
 

@@ -4,7 +4,8 @@ use crossbeam::channel::{Receiver, Sender};
 use crate::util::deserialize_message;
 use flatbuffers::FlatBufferBuilder;
 use schemas::message_generated::protocol::{
-    Message, MessageArgs, Payload, RegisterRequest, RegisterRequestArgs,
+    Message, MessageArgs, OkStatus, OkStatusArgs, Payload, RegisterRequest, RegisterRequestArgs,
+    Status,
 };
 use std::io;
 use std::io::Error;
@@ -72,17 +73,19 @@ pub fn handle_register() -> Result<Vec<u8>, String> {
         &RegisterRequestArgs {
             id: None,
             catalog: None,
-            ..Default::default()
         },
     )
     .as_union_value();
+
+    let status = OkStatus::create(&mut builder, &OkStatusArgs {}).as_union_value();
 
     let msg = Message::create(
         &mut builder,
         &MessageArgs {
             data_type: Payload::RegisterRequest,
             data: Some(register),
-            status: None,
+            status_type: Status::OkStatus,
+            status: Some(status),
         },
     );
 

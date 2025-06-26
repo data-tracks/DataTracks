@@ -2,7 +2,8 @@ use crate::management::Storage;
 use flatbuffers::FlatBufferBuilder;
 use schemas::message_generated::protocol::{
     BindRequest, BindRequestArgs, Catalog, CatalogArgs, CreateType, GetType, Message, MessageArgs,
-    Payload, Plans, PlansArgs, RegisterRequest, RegisterRequestArgs, Status, StatusArgs,
+    OkStatus, OkStatusArgs, Payload, Plans, PlansArgs, RegisterRequest, RegisterRequestArgs,
+    Status,
 };
 use std::sync::{Arc, Mutex};
 use tracing::{debug, info};
@@ -98,12 +99,13 @@ impl Api {
         let mut builder = FlatBufferBuilder::new();
         let status = builder.create_string(&status);
 
-        let status = Status::create(&mut builder, &StatusArgs { msg: Some(status) });
+        let status = OkStatus::create(&mut builder, &OkStatusArgs {}).as_union_value();
         let msg = Message::create(
             &mut builder,
             &MessageArgs {
                 data_type: Default::default(),
                 data: None,
+                status_type: Status::OkStatus,
                 status: Some(status),
             },
         );
@@ -121,12 +123,16 @@ impl Api {
                 stop_id: watermark_port as u64,
             },
         );
+
+        let status = OkStatus::create(&mut builder, &OkStatusArgs {}).as_union_value();
+
         let msg = Message::create(
             &mut builder,
             &MessageArgs {
                 data_type: Payload::BindRequest,
                 data: Some(bind.as_union_value()),
-                status: None,
+                status_type: Status::OkStatus,
+                status: Some(status),
             },
         );
         builder.finish(msg, None);
@@ -168,15 +174,14 @@ fn handle_register(
     )
     .as_union_value();
 
-    let msg = builder.create_string("");
-
-    let status = Status::create(&mut builder, &StatusArgs { msg: Some(msg) });
+    let status = OkStatus::create(&mut builder, &OkStatusArgs {}).as_union_value();
 
     let msg = Message::create(
         &mut builder,
         &MessageArgs {
             data_type: Payload::RegisterRequest,
             data: Some(register),
+            status_type: Status::OkStatus,
             status: Some(status),
         },
     );
