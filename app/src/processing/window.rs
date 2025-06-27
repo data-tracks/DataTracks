@@ -179,7 +179,7 @@ fn parse_time(time_str: &str) -> Result<Time, String> {
         NaiveTime::parse_from_str(time_str, "%H:%M")
             .unwrap_or_else(|_| NaiveTime::parse_from_str(time_str, "%H:%M:%s:6f").unwrap())
     });
-    println!("time {time_str}");
+
     Ok(Time::new(
         (time.num_seconds_from_midnight() * 1000) as i64,
         0,
