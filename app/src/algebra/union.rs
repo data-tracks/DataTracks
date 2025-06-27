@@ -78,10 +78,10 @@ impl Iterator for UnionIterator {
 }
 
 impl ValueIterator for UnionIterator {
-    fn get_storage(&self) -> Vec<ValueStore> {
+    fn get_storages(&self) -> Vec<ValueStore> {
         self.inputs
             .iter()
-            .map(|x| x.get_storage())
+            .map(|x| x.get_storages())
             .reduce(|mut a, mut b| {
                 a.append(&mut b);
                 a

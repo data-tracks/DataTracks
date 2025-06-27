@@ -497,82 +497,107 @@ pub mod tests {
         let (mut station, train_sender, rx, c_rx, a_tx) = create_test_station(10);
         let _sender = station.operate(Arc::clone(&a_tx), HashMap::new());
 
-        for _ in 0..500 {
-            train_sender.send(Train::new(dict_values(vec![Value::int(3)])));
+        for i in 0..500 {
+            train_sender.send(Train::new(dict_values(vec![Value::int(i)])));
         }
         station.operate(Arc::clone(&a_tx), HashMap::new());
-        for _ in 0..500 {
-            train_sender.send(Train::new(dict_values(vec![Value::int(3)])));
+        for i in 0..500 {
+            train_sender.send(Train::new(dict_values(vec![Value::int(500 + i)])));
         }
 
         // the station should open a platform, the station starts another platform,  the threshold should be reached and after some time be balanced
         for state in vec![Ready(0), Ready(0)] {
             assert_eq!(state, c_rx.recv().unwrap())
         }
-        let mut values = vec![];
+        let mut trains = vec![];
 
-        while values.len() < 1_000 {
-            values.push(rx.recv().unwrap())
+        while trains.iter().map(|v: &Train| v.values.len()).sum::<usize>() < 1_000 {
+            trains.push(rx.recv().unwrap())
         }
-        assert_eq!(values.len(), 1_000)
+
+        assert_eq!(
+            trains.iter().map(|t| t.values.len()).sum::<usize>(),
+            1_000,
+            "{:?}",
+            trains.last().unwrap()
+        )
     }
 
-    // fix for parameterized
-    mod overhead_tests {
-        use crate::processing::station::tests::create_test_station;
-        use crate::processing::station::tests::Value;
-        use crate::processing::station::Command;
-        use crate::processing::station::Command::Ready;
-        pub use crate::processing::tests::dict_values;
-        use crate::processing::Train;
-        use rstest::rstest;
-        use std::collections::HashMap;
-        use std::sync::Arc;
-        use std::time::Instant;
+    fn run_minimal_overhead(name: &str, values: Vec<Value>) {
+        let (mut station, train_sender, rx, c_rx, a_tx) = create_test_station(0);
+        let sender = station.operate(Arc::clone(&a_tx), HashMap::new());
 
-        #[rstest]
-        #[case("Int", dict_values(vec![Value::int(3)]))]
-        #[case("Float", dict_values(vec![Value::float(1.2)]))]
-        #[case("Text", dict_values(vec![Value::text("test")]))]
-        #[case("Bool", dict_values(vec![Value::bool(true)]))]
-        #[case("Array", dict_values(vec![Value::array([1.2.into(), 1.2.into()].into())]))]
-        #[case("Dict", dict_values(vec![Value::dict_from_kv("age", 25.into())]))]
-        pub fn minimal_overhead(#[case] name: &str, #[case] values: Vec<Value>) {
-            let (mut station, train_sender, rx, c_rx, a_tx) = create_test_station(0);
+        let mut trains = vec![];
+        let amount = 100;
 
-            let sender = station.operate(Arc::clone(&a_tx), HashMap::new());
+        for _ in 0..amount {
+            trains.push(Train::new(values.clone()));
+        }
 
-            let mut trains = vec![];
+        // the station should open a platform
+        for state in vec![Ready(0)] {
+            assert_eq!(state, c_rx.recv().unwrap())
+        }
 
-            let amount = 10;
+        let mut values = vec![];
+        let time = Instant::now();
 
-            for _ in 0..amount {
-                trains.push(Train::new(values.clone()));
-            }
+        for train in trains {
+            train_sender.send(train);
+        }
 
-            // the station should open a platform
-            for state in vec![Ready(0)] {
-                assert_eq!(state, c_rx.recv().unwrap())
-            }
-            let time = Instant::now();
+        while values.iter().map(|t: &Train| t.values.len()).sum::<usize>() < amount {
+            values.push(rx.recv().unwrap());
+        }
 
-            for train in trains {
-                train_sender.send(train);
-            }
+        let elapsed = time.elapsed().as_nanos();
+        println!(
+            "time {}: {} nanos, per entry {}ns",
+            name,
+            elapsed,
+            elapsed as usize / amount
+        );
 
-            for i in 0..amount {
-                println!("{i}");
-                let val = rx.recv();
-            }
+        sender.send(Stop(0)).unwrap();
+    }
 
-            let elapsed = time.elapsed().as_nanos();
-            println!(
-                "time {}: {} nanos, per entry {}ns",
-                name,
-                elapsed,
-                elapsed / amount
+    mod overhead {
+        use super::*;
+
+        #[test]
+        fn minimal_overhead_int() {
+            run_minimal_overhead("Int", dict_values(vec![Value::int(3)]));
+        }
+
+        #[test]
+        fn minimal_overhead_float() {
+            run_minimal_overhead("Float", dict_values(vec![Value::float(1.2)]));
+        }
+
+        #[test]
+        fn minimal_overhead_text() {
+            run_minimal_overhead("Text", dict_values(vec![Value::text("test")]));
+        }
+
+        #[test]
+        fn minimal_overhead_bool() {
+            run_minimal_overhead("Bool", dict_values(vec![Value::bool(true)]));
+        }
+
+        #[test]
+        fn minimal_overhead_array() {
+            run_minimal_overhead(
+                "Array",
+                dict_values(vec![Value::array([1.2.into(), 1.2.into()].into())]),
             );
-            sender.send(Command::Stop(0)).unwrap();
+        }
+
+        #[test]
+        fn minimal_overhead_dict() {
+            run_minimal_overhead(
+                "Dict",
+                dict_values(vec![Value::dict_from_kv("age", 25.into())]),
+            );
         }
     }
 

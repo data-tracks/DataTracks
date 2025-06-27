@@ -3,7 +3,6 @@ use crate::processing::transform::Transform;
 use crate::processing::Sender;
 use crate::util::storage::ValueStore;
 use crate::util::Tx;
-use rusqlite::Map;
 use std::collections::{HashMap, VecDeque};
 use tracing::warn;
 use value::train::Train;
@@ -26,7 +25,7 @@ impl Executor {
         let what = match iterator {
             Some(i) => {
                 let mut map = HashMap::new();
-                for store in i.get_storage() {
+                for store in i.get_storages() {
                     map.insert(store.index, store);
                 }
                 WhatStrategy::Task(i, map)
@@ -122,7 +121,7 @@ impl Iterator for IdentityIterator {
 }
 
 impl ValueIterator for IdentityIterator {
-    fn get_storage(&self) -> Vec<ValueStore> {
+    fn get_storages(&self) -> Vec<ValueStore> {
         vec![self.storage.clone()]
     }
 

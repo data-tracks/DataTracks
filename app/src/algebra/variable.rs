@@ -63,7 +63,7 @@ impl Iterator for BareVariableIterator {
 }
 
 impl ValueIterator for BareVariableIterator {
-    fn get_storage(&self) -> Vec<ValueStore> {
+    fn get_storages(&self) -> Vec<ValueStore> {
         unreachable!("Not correctly enriched")
     }
 
@@ -98,7 +98,7 @@ impl VariableIterator {
         inputs: Vec<BoxedIterator>,
         mut transform: BoxedIterator,
     ) -> Self {
-        let store = transform.get_storage().pop().unwrap();
+        let store = transform.get_storages().pop().unwrap();
 
         VariableIterator {
             inputs,
@@ -140,10 +140,10 @@ impl Iterator for VariableIterator {
 }
 
 impl ValueIterator for VariableIterator {
-    fn get_storage(&self) -> Vec<ValueStore> {
+    fn get_storages(&self) -> Vec<ValueStore> {
         self.inputs
             .iter()
-            .map(|v| v.get_storage())
+            .map(|v| v.get_storages())
             .reduce(|mut a, mut b| {
                 a.append(&mut b);
                 a

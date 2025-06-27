@@ -43,7 +43,7 @@ impl Iterator for ProjectIter {
 }
 
 impl ValueIterator for ProjectIter {
-    fn get_storage(&self) -> Vec<ValueStore> {
+    fn get_storages(&self) -> Vec<ValueStore> {
         warn!("should not reach");
         vec![]
     }
@@ -80,8 +80,8 @@ impl Iterator for ProjectIterator {
 }
 
 impl<'a> ValueIterator for ProjectIterator {
-    fn get_storage(&self) -> Vec<ValueStore> {
-        self.input.get_storage()
+    fn get_storages(&self) -> Vec<ValueStore> {
+        self.input.get_storages()
     }
 
     fn clone(&self) -> BoxedIterator {

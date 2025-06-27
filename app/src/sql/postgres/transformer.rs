@@ -169,7 +169,7 @@ impl Iterator for PostgresIterator {
 }
 
 impl ValueIterator for PostgresIterator {
-    fn get_storage(&self) -> Vec<ValueStore> {
+    fn get_storages(&self) -> Vec<ValueStore> {
         vec![self.storage.clone()]
     }
 

@@ -413,8 +413,8 @@ impl Iterator for FuncIter {
 }
 
 impl ValueIterator for FuncIter {
-    fn get_storage(&self) -> Vec<ValueStore> {
-        self.input.get_storage()
+    fn get_storages(&self) -> Vec<ValueStore> {
+        self.input.get_storages()
     }
 
     fn clone(&self) -> BoxedIterator {
@@ -443,7 +443,6 @@ mod tests {
     use crate::processing::transform::Transform::Func;
     use crate::processing::transform::{build_algebra, FuncTransform};
     use crate::util::new_channel;
-    use crate::util::storage::ValueStore;
     use crossbeam::channel::unbounded;
     use std::collections::HashMap;
     use std::sync::Arc;
@@ -675,8 +674,11 @@ mod tests {
         match transform {
             Ok(mut t) => {
                 for (i, input) in inputs.into_iter().enumerate() {
-                    let storage = ValueStore::new_with_values(input, i);
-                    t.set_storage(storage);
+                    t.get_storages()
+                        .iter_mut()
+                        .find(|s| s.index == i)
+                        .unwrap()
+                        .append(input)
                 }
 
                 let result = t.drain_to_train(0);
@@ -691,8 +693,7 @@ mod tests {
         let transform = build_iterator(transform.unwrap());
         match transform {
             Ok(mut t) => {
-                let storage = ValueStore::new_with_values(input, 0);
-                t.set_storage(storage);
+                t.get_storages().first().unwrap().append(input);
 
                 let result = t.drain_to_train(0);
                 assert_eq!(result.values, output);
@@ -707,8 +708,7 @@ mod tests {
 
         match transform {
             Ok(mut t) => {
-                let storage = ValueStore::new_with_values(input, 0);
-                t.set_storage(storage);
+                t.get_storages().first().unwrap().append(input);
 
                 let result = t.drain_to_train(0);
                 let result = result.values;

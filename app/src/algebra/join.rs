@@ -136,9 +136,9 @@ impl JoinIterator {
 }
 
 impl ValueIterator for JoinIterator {
-    fn get_storage(&self) -> Vec<ValueStore> {
-        let mut left = self.left.get_storage();
-        let right = self.right.get_storage();
+    fn get_storages(&self) -> Vec<ValueStore> {
+        let mut left = self.left.get_storages();
+        let right = self.right.get_storages();
         left.append(&mut right.to_vec());
         left
     }
@@ -207,7 +207,6 @@ mod test {
     use crate::algebra::join::Join;
     use crate::algebra::scan::IndexScan;
     use crate::algebra::{Algebraic, ValueIterator};
-    use crate::util::storage::ValueStore;
     use value::{Dict, Value};
 
     #[test]
@@ -228,13 +227,16 @@ mod test {
 
         let mut handle = join.derive_iterator();
 
-        let mut left = ValueStore::new_with_values(left, 0);
-        left.set_source(0);
-        let mut right = ValueStore::new_with_values(right, 0);
-        right.set_source(1);
-
-        handle.set_storage(left);
-        handle.set_storage(right);
+        let storages = handle.get_storages();
+        storages.iter().for_each(|val| {
+            if val.index == 0 {
+                val.append(left.clone())
+            } else if val.index == 1 {
+                val.append(right.clone())
+            } else {
+                panic!("Incorrect index")
+            }
+        });
 
         let res = handle.drain_to_train(3);
         assert_eq!(
@@ -262,13 +264,16 @@ mod test {
 
         let mut handle = join.derive_iterator();
 
-        let mut left = ValueStore::new_with_values(left, 0);
-        left.set_source(0);
-        let mut right = ValueStore::new_with_values(right, 0);
-        right.set_source(1);
-
-        handle.set_storage(left);
-        handle.set_storage(right);
+        let storages = handle.get_storages();
+        storages.iter().for_each(|val| {
+            if val.index == 0 {
+                val.append(left.clone())
+            } else if val.index == 1 {
+                val.append(right.clone())
+            } else {
+                panic!("Incorrect index")
+            }
+        });
 
         let res = handle.drain_to_train(3);
         assert_eq!(

@@ -45,7 +45,7 @@ impl Iterator for ScanIterator {
 }
 
 impl ValueIterator for ScanIterator {
-    fn get_storage(&self) -> Vec<ValueStore> {
+    fn get_storages(&self) -> Vec<ValueStore> {
         vec![self.storage.clone()]
     }
 
@@ -144,7 +144,8 @@ mod test {
         let mut scan = IndexScan::new(0);
 
         let mut handler = scan.derive_iterator();
-        let storage = handler.get_storage().first().unwrap();
+        let binding = handler.get_storages();
+        let storage = binding.first().unwrap();
 
         storage.append(train.values);
 

@@ -137,6 +137,7 @@ impl TriggerSelector {
     }
 
     fn get_trains(&self, window: WindowDescriptor) -> Option<Train> {
+        println!("window: {:?}", window);
         let storage = self.storage.lock().unwrap();
         let is_same = window.to == window.from;
         storage

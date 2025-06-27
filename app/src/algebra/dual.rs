@@ -72,7 +72,7 @@ impl Iterator for DualIterator {
 }
 
 impl ValueIterator for DualIterator {
-    fn get_storage(&self) -> Vec<ValueStore> {
+    fn get_storages(&self) -> Vec<ValueStore> {
         vec![]
     }
 

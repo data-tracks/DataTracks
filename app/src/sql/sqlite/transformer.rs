@@ -148,7 +148,7 @@ impl Iterator for SqliteIterator {
 }
 
 impl ValueIterator for SqliteIterator {
-    fn get_storage(&self) -> Vec<ValueStore> {
+    fn get_storages(&self) -> Vec<ValueStore> {
         vec![self.storage.clone()]
     }
 

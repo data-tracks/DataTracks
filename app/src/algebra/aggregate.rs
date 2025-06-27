@@ -229,8 +229,8 @@ impl Iterator for AggIterator {
 }
 
 impl ValueIterator for AggIterator {
-    fn get_storage(&self) -> Vec<ValueStore> {
-        self.input.get_storage()
+    fn get_storages(&self) -> Vec<ValueStore> {
+        self.input.get_storages()
     }
 
     fn clone(&self) -> BoxedIterator {

@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::{sleep, Builder};
 use std::time::Duration;
 
-use crate::algebra::{Executor, IdentityIterator};
+use crate::algebra::Executor;
 use crate::optimize::OptimizeStrategy;
 use crate::processing::layout::Layout;
 use crate::processing::select::{TriggerSelector, WindowSelector};
@@ -22,6 +22,7 @@ use crossbeam::channel::Receiver;
 pub use logos::Source;
 use parking_lot::RwLock;
 use tracing::{debug, error};
+use tracing_subscriber::fmt::format;
 
 const IDLE_TIMEOUT: Duration = Duration::from_nanos(10);
 
@@ -110,6 +111,7 @@ impl Platform {
         let trigger_selector = TriggerSelector::new(storage.clone(), self.trigger.clone());
 
         let when_tx = when(
+            self.stop,
             watermark_strategy.clone(),
             window_selector.clone(),
             trigger_selector,
@@ -170,6 +172,7 @@ impl Platform {
 }
 
 fn when(
+    stop: usize,
     watermark_strategy: WatermarkStrategy,
     where_: Arc<RwLock<WindowSelector>>,
     mut when: TriggerSelector,
@@ -184,39 +187,41 @@ fn when(
     // - which window?
     // apply transformation
     // send out
-    let result = Builder::new().name(String::from("when")).spawn(move || {
-        loop {
-            if let Ok(cmd) = rx.try_recv() {
-                match cmd {
-                    Command::Stop(_) => return,
-                    Attach(num, (observe, _)) => {
-                        what.attach(num, observe.clone());
+    let result = Builder::new()
+        .name(String::from(format!("when {}", stop)))
+        .spawn(move || {
+            loop {
+                if let Ok(cmd) = rx.try_recv() {
+                    match cmd {
+                        Command::Stop(_) => return,
+                        Attach(num, (observe, _)) => {
+                            what.attach(num, observe.clone());
+                        }
+                        Detach(num) => {
+                            what.detach(num);
+                        }
+                        _ => {}
                     }
-                    Detach(num) => {
-                        what.detach(num);
+                }
+
+                let current = watermark_strategy.current();
+
+                // get all "changed" windows
+                let windows = where_.write().select(current);
+                if windows.is_empty() {
+                    continue;
+                }
+
+                // decide if we fire a window, discard or wait
+                match when.select(windows, &current) {
+                    trains if !trains.is_empty() => {
+                        debug!("trains {:?}", trains);
+                        trains.into_iter().for_each(|(_, t)| what.execute(t));
                     }
                     _ => {}
                 }
             }
-
-            let current = watermark_strategy.current();
-
-            // get all "changed" windows
-            let windows = where_.write().select(current);
-            if windows.is_empty() {
-                continue;
-            }
-
-            // decide if we fire a window, discard or wait
-            match when.select(windows, &current) {
-                trains if !trains.is_empty() => {
-                    debug!("trains {:?}", trains);
-                    trains.into_iter().for_each(|(_, t)| what.execute(t));
-                }
-                _ => {}
-            }
-        }
-    });
+        });
     match result {
         Ok(_) => {}
         Err(err) => error!("{}", err),

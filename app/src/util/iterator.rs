@@ -15,7 +15,7 @@ impl Iterator for EmptyIterator {
 }
 
 impl ValueIterator for EmptyIterator {
-    fn get_storage(&self) -> Vec<ValueStore> {
+    fn get_storages(&self) -> Vec<ValueStore> {
         vec![]
     }
 
