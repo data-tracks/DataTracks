@@ -86,7 +86,10 @@ impl TriggerSelector {
         let mut trains = vec![];
         windows.into_iter().for_each(|(window, _is_complete)| {
             let mut trigger = false;
-            if let Some(status) = self.triggered_windows.get(&window) {
+            if window.to == window.from {
+                // we re-trigger same windows always
+                trigger = true;
+            } else if let Some(status) = self.triggered_windows.get(&window) {
                 // have already seen this window, are in window
                 if self.re_fire
                     && current < &window.to
