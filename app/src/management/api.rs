@@ -1,10 +1,6 @@
 use crate::management::Storage;
 use flatbuffers::FlatBufferBuilder;
-use schemas::message_generated::protocol::{
-    BindRequest, BindRequestArgs, Catalog, CatalogArgs, CreateType, GetType, Message, MessageArgs,
-    OkStatus, OkStatusArgs, Payload, Plans, PlansArgs, RegisterRequest, RegisterRequestArgs,
-    Status,
-};
+use schemas::message_generated::protocol::{BindRequest, BindRequestArgs, Catalog, CatalogArgs, CreateType, GetType, Message, MessageArgs, OkStatus, OkStatusArgs, Payload, Plans, PlansArgs, RegisterRequest, RegisterRequestArgs, RegisterResponse, RegisterResponseArgs, Status};
 use std::sync::{Arc, Mutex};
 use tracing::{debug, info};
 
@@ -165,9 +161,9 @@ fn handle_register(
     let plans = Plans::create(&mut builder, &PlansArgs { plans: Some(plans) });
     let catalog = Catalog::create(&mut builder, &CatalogArgs { plans: Some(plans) });
 
-    let register = RegisterRequest::create(
+    let register = RegisterResponse::create(
         &mut builder,
-        &RegisterRequestArgs {
+        &RegisterResponseArgs {
             id: Some(id as u64),
             catalog: Some(catalog),
         },

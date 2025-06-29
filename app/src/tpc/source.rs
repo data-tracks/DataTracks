@@ -9,7 +9,7 @@ use crate::ui::{ConfigModel, StringModel};
 use crate::util::Tx;
 use crate::util::{deserialize_message, new_id};
 use crossbeam::channel::{unbounded, Receiver, Sender};
-use schemas::message_generated::protocol::Payload;
+use schemas::message_generated::protocol::{Payload, RegisterRequest};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -169,7 +169,8 @@ impl StreamUser for TpcSource {
                             }
                             Payload::Train => {
                                 let msg = msg.data_as_train().unwrap();
-
+                                
+                                info!("tpc train: {:?}", msg);
                                 match msg.try_into() {
                                     Ok(train) => self.send(train),
                                     Err(err) => warn!("error transformation {}", err),
