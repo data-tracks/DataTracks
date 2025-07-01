@@ -21,7 +21,7 @@ pub struct Executor {
 }
 
 impl Executor {
-    pub fn new(stop: usize, mut iterator: Option<BoxedIterator>, sender: Sender) -> Self {
+    pub fn new(stop: usize, iterator: Option<BoxedIterator>, sender: Sender) -> Self {
         let what = match iterator {
             Some(i) => {
                 let mut map = HashMap::new();

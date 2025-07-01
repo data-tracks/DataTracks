@@ -96,7 +96,7 @@ impl VariableIterator {
     pub(crate) fn new(
         name: Value,
         inputs: Vec<BoxedIterator>,
-        mut transform: BoxedIterator,
+        transform: BoxedIterator,
     ) -> Self {
         let store = transform.get_storages().pop().unwrap();
 
