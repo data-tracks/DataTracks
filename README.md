@@ -4,6 +4,8 @@
 
 # 🚂 DataTracks
 
+[![🫸 Push Continuous Integration](https://github.com/data-tracks/DataTracks/actions/workflows/push.yml/badge.svg)](https://github.com/data-tracks/DataTracks/actions/workflows/push.yml)
+
 ### Blazingly fast stream processing that tracks!
 
 DataTracks is a streaming engine, which simplifies the setup up and management of data stream processing, whether the
