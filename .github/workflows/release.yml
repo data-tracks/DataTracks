@@ -13,16 +13,22 @@ on:
         description: 'Name of Release'
         required: true
         type: string
-      draft:
-        description: 'Draft Release'
-        required: false
-        type: boolean
-        default: true
       description:
         description: 'Description Text'
         required: false
         type: string
         default: ""
+      draft:
+        description: 'Draft Release'
+        required: false
+        type: boolean
+        default: true
+      prerelease:
+        description: 'Prerelease'
+        required: false
+        type: boolean
+        default: true
+
 
 jobs:
   release:
@@ -32,12 +38,12 @@ jobs:
     steps:
       # Step 1: Create Release
       - name: Create Release
-        uses: actions/create-release@v1
+        uses: softprops/action-gh-release@v2
         id: create_release
         with:
           draft: ${{ inputs.draft }}
           prerelease: false
-          release_name: ${{ inputs.name }}
+          name: ${{ inputs.name }}
           tag_name: ${{ inputs.version }}
           body: ${{ inputs.description }}
         env:
