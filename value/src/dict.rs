@@ -61,7 +61,7 @@ impl Dict {
     pub fn prefix_all(&mut self, prefix: &str) {
         self.values.iter().for_each(|(name, _field)| {
             self.alternative
-                .insert(format!("{}{}", prefix, name), name.clone());
+                .insert(format!("{prefix}{name}"), name.clone());
         });
     }
 

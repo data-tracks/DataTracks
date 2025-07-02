@@ -197,7 +197,6 @@ fn parse_select(lexer: &mut BufferedLexer, stops: &[Token]) -> Result<SqlStateme
     let mut trigger = None;
     if last_end == Ok(Emit) {
         trigger = Some(parse_trigger(lexer, &[&[Semi], stops].concat())?);
-        last_end = lexer.consume_buffer();
     }
 
     Ok(SqlStatement::Select(SqlSelect::new(

@@ -5,18 +5,17 @@ use std::process::{Command, Stdio};
 
 const UI_TARGET: &str = "../target/ui";
 
-
 fn main() {
-    println!("cargo:warning=Building with test-specific features enabled!");
     let dir = Path::new(UI_TARGET);
     match fs::create_dir_all(dir) {
         Ok(_) => {}
-        Err(err) => println!("error: {}", err),
+        Err(err) => println!("error: {err}"),
     }
 
     // if ui folder is empty, try to rerun
     if fs::read_dir(UI_TARGET).unwrap().next().is_none() {
-        println!("Ui does not exist, building...");
+        println!("cargo:warn=Trying to rebuild UI...");
+
         build_ui();
     }
 }
@@ -32,7 +31,7 @@ fn build_ui() {
     // to changes in certain source files, e.g., println!("cargo:rerun-if-changed=ui/angular-app/src");
 
     // --- 4. Check for External Dependencies (Node.js, npm, Angular CLI) ---
-    println!("cargo:warning=Checking for Node.js, pnpm, and Angular CLI...");
+    println!("cargo:info=Checking for Node.js, pnpm, and Angular CLI...");
     if check_command("node", "Node.js is not installed or not in PATH. Please install Node.js (which includes pnpm) to build the Angular UI.").is_err() {
         println!("Build.rs was not able to build UI.");
         return;
@@ -43,7 +42,7 @@ fn build_ui() {
     }
 
     // --- 5. Install Angular Dependencies ---
-    println!("cargo:warning=Installing Angular UI dependencies (npm install)...");
+    println!("cargo:info=Installing Angular UI dependencies (npm install)...");
     //println!("dir {:?}", angular_ui_path);
     run_command(
         Command::new("pnpm").arg("install").current_dir("../ui"), // Run npm install in the Angular submodule directory
@@ -52,7 +51,7 @@ fn build_ui() {
     .expect("pnpm install failed");
 
     // --- 6. Build Angular UI for Production ---
-    println!("cargo:warning=Building Angular UI for production (ng build)...");
+    println!("cargo:info=Building Angular UI for production (ng build)...");
     run_command(
         Command::new("pnpm")
             .arg("build")
@@ -66,7 +65,7 @@ fn build_ui() {
     .expect("ng build failed");
 
     // --- 7. Copy Built Angular Assets ---
-    println!("cargo:warning=Copying Angular UI assets to Rust static directory...");
+    println!("cargo:info=Copying Angular UI assets to Rust static directory...");
 
     let mut options = CopyOptions::new();
     options.overwrite = true; // Overwrite existing files in the destination
@@ -75,12 +74,12 @@ fn build_ui() {
     copy("../ui/dist/track-view.ng/browser", UI_TARGET, &options).unwrap();
 
     // --- 8. Clean Up Temporary Build Directory ---
-    println!("cargo:warning=Cleaning up temporary Angular build directory...");
+    println!("cargo:info=Cleaning up temporary Angular build directory...");
     if Path::new("../ui/dist").exists() {
         fs::remove_dir_all(Path::new("../ui/dist")).unwrap();
     }
 
-    println!("cargo:warning=Angular UI build complete!");
+    println!("cargo:info=Angular UI build complete!");
 }
 // --- Helper Functions ---
 
