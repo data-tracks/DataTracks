@@ -84,7 +84,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'pnpm'
 
       # Step 2: Set up Rust
       - name: Set up Rust

@@ -1,6 +1,6 @@
 on: [push]
 
-name: 🫸 Push Continuous integration
+name: 🫸 Push Continuous Integration
 
 jobs:
 

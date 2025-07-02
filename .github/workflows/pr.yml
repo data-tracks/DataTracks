@@ -1,6 +1,6 @@
 on: [pull_request]
 
-name: 📝 Pull Request Continuous integration
+name: 📝 Pull Request Continuous Integration
 
 jobs:
   check:
