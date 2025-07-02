@@ -27,7 +27,7 @@ on:
         description: 'Prerelease'
         required: false
         type: boolean
-        default: true
+        default: false
 
 
 jobs:
@@ -42,7 +42,7 @@ jobs:
         id: create_release
         with:
           draft: ${{ inputs.draft }}
-          prerelease: false
+          prerelease: ${{ inputs.prerelease }}
           name: ${{ inputs.name }}
           tag_name: ${{ inputs.version }}
           body: ${{ inputs.description }}
@@ -118,7 +118,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         with:
           upload_url: ${{ needs.release.outputs.release_url }}
-          asset_path: target/${{ matrix.target }}/release/data_tracks${{ matrix.ending }}
-          asset_name: data_tracks-${{ matrix.target }}${{ matrix.ending }}
+          asset_path: target/${{ matrix.target }}/release/data-tracks${{ matrix.ending }}
+          asset_name: data-tracks-${{ matrix.target }}${{ matrix.ending }}
           asset_content_type: ${{ matrix.content_type }}
 
