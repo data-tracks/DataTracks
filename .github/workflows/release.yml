@@ -1,4 +1,5 @@
-name: 🫗 Release
+name: release
+run-name: 🫗 Release "${{inputs.name}}" Version "${{inputs.version}}"
 permissions:
   "contents": "write"
 
