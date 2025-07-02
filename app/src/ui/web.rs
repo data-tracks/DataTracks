@@ -26,7 +26,7 @@ use tracing::{debug, error, info};
 /*curl --header "Content-Type: application/json" --request POST --json '{"name":"wordcount"}' http://localhost:2666/plans/start*/
 
 // Embed the entire directory
-static ASSETS_DIR: Dir<'_> = include_dir!("./ui/dist");
+static ASSETS_DIR: Dir<'_> = include_dir!("./target/ui");
 
 pub fn start_web(storage: Arc<Mutex<Storage>>) {
     // Create a new Tokio runtime

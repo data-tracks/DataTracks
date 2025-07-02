@@ -22,7 +22,6 @@ use crossbeam::channel::Receiver;
 pub use logos::Source;
 use parking_lot::RwLock;
 use tracing::{debug, error};
-use tracing_subscriber::fmt::format;
 
 const IDLE_TIMEOUT: Duration = Duration::from_nanos(10);
 

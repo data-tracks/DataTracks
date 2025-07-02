@@ -6,7 +6,7 @@ use std::fs;
 use std::sync::Arc;
 use tempfile::NamedTempFile;
 use thiserror::Error;
-use tracing::{error, warn};
+use tracing::error;
 use value::Value;
 
 /// Error type for storage operations

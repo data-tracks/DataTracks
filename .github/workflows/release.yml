@@ -9,6 +9,10 @@ on:
         description: 'Version of Release'
         required: true
         type: string
+      name:
+        description: 'Name of Release'
+        required: true
+        type: string
       draft:
         description: 'Draft Release'
         required: false
@@ -33,7 +37,7 @@ jobs:
         with:
           draft: ${{ inputs.draft }}
           prerelease: false
-          release_name: ${{ inputs.version }}
+          release_name: ${{ inputs.name }}
           tag_name: ${{ inputs.version }}
           body: ${{ inputs.description }}
         env:
@@ -66,6 +70,8 @@ jobs:
       # Step 1: Checkout the code
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          submodules: 'true'
 
       # Step 2: Set up Rust
       - name: Set up Rust

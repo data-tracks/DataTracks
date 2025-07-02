@@ -1,6 +1,6 @@
 use crate::management::Storage;
 use flatbuffers::FlatBufferBuilder;
-use schemas::message_generated::protocol::{BindRequest, BindRequestArgs, Catalog, CatalogArgs, CreateType, GetType, Message, MessageArgs, OkStatus, OkStatusArgs, Payload, Plans, PlansArgs, RegisterRequest, RegisterRequestArgs, RegisterResponse, RegisterResponseArgs, Status};
+use schemas::message_generated::protocol::{BindRequest, BindRequestArgs, Catalog, CatalogArgs, CreateType, GetType, Message, MessageArgs, OkStatus, OkStatusArgs, Payload, Plans, PlansArgs, RegisterRequest, RegisterResponse, RegisterResponseArgs, Status};
 use std::sync::{Arc, Mutex};
 use tracing::{debug, info};
 
