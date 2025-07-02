@@ -1,13 +1,23 @@
+use fs_extra::dir::{copy, CopyOptions};
+use std::fs;
 use std::path::Path;
 use std::process::{Command, Stdio};
-use fs_extra::dir::{copy, CopyOptions};
 
 const UI_TARGET: &str = "../target/ui";
 
+
 fn main() {
-    if !Path::new(UI_TARGET).exists() {
+    println!("cargo:warning=Building with test-specific features enabled!");
+    let dir = Path::new(UI_TARGET);
+    match fs::create_dir_all(dir) {
+        Ok(_) => {}
+        Err(err) => println!("error: {}", err),
+    }
+
+    // if ui folder is empty, try to rerun
+    if fs::read_dir(UI_TARGET).unwrap().next().is_none() {
         println!("Ui does not exist, building...");
-        build_ui();        
+        build_ui();
     }
 }
 
@@ -23,20 +33,23 @@ fn build_ui() {
 
     // --- 4. Check for External Dependencies (Node.js, npm, Angular CLI) ---
     println!("cargo:warning=Checking for Node.js, pnpm, and Angular CLI...");
-    check_command("node", "Node.js is not installed or not in PATH. Please install Node.js (which includes pnpm) to build the Angular UI.")
-        .expect("Node.js check failed");
-    check_command("pnpm", "pnpm is not installed or not in PATH. Please install Node.js (which includes pnpm) to build the Angular UI.")
-        .expect("npm check failed");
+    if check_command("node", "Node.js is not installed or not in PATH. Please install Node.js (which includes pnpm) to build the Angular UI.").is_err() {
+        println!("Build.rs was not able to build UI.");
+        return;
+    }
+    if check_command("pnpm", "pnpm is not installed or not in PATH. Please install Node.js (which includes pnpm) to build the Angular UI.").is_err() {
+        println!("Build.rs was not able to build UI.");
+        return;
+    }
 
     // --- 5. Install Angular Dependencies ---
     println!("cargo:warning=Installing Angular UI dependencies (npm install)...");
     //println!("dir {:?}", angular_ui_path);
     run_command(
-        Command::new("pnpm")
-            .arg("install")
-            .current_dir("../ui"), // Run npm install in the Angular submodule directory
+        Command::new("pnpm").arg("install").current_dir("../ui"), // Run npm install in the Angular submodule directory
         "Failed to install Angular UI dependencies",
-    ).expect("pnpm install failed");
+    )
+    .expect("pnpm install failed");
 
     // --- 6. Build Angular UI for Production ---
     println!("cargo:warning=Building Angular UI for production (ng build)...");
@@ -49,24 +62,23 @@ fn build_ui() {
             //.arg("dist")
             .current_dir("../ui"), // Run ng build in the Angular submodule directory
         "Failed to build Angular UI",
-    ).expect("ng build failed");
+    )
+    .expect("ng build failed");
 
     // --- 7. Copy Built Angular Assets ---
     println!("cargo:warning=Copying Angular UI assets to Rust static directory...");
-    
 
     let mut options = CopyOptions::new();
     options.overwrite = true; // Overwrite existing files in the destination
     options.copy_inside = true; // Copy the *contents* of angular_dist_browser_path into static_output_dir
 
-    copy( "../ui/dist/browser", UI_TARGET, &options).unwrap();
-    
+    copy("../ui/dist/track-view.ng/browser", UI_TARGET, &options).unwrap();
+
     // --- 8. Clean Up Temporary Build Directory ---
     println!("cargo:warning=Cleaning up temporary Angular build directory...");
     if Path::new("../ui/dist").exists() {
-        std::fs::remove_dir_all( Path::new("../ui/dist")).unwrap();
+        fs::remove_dir_all(Path::new("../ui/dist")).unwrap();
     }
-
 
     println!("cargo:warning=Angular UI build complete!");
 }
@@ -84,14 +96,18 @@ fn check_command(cmd: &str, error_msg: &str) -> Result<(), String> {
             if output.status.success() {
                 Ok(())
             } else {
-                Err(format!("{}: Command failed with status {:?}", error_msg, output.status))
+                Err(format!(
+                    "{}: Command failed with status {:?}",
+                    error_msg, output.status
+                ))
             }
         })
 }
 
 // Helper function to run a command and check its success
 fn run_command(command: &mut Command, error_msg: &str) -> Result<(), String> {
-    let output = command.output()
+    let output = command
+        .output()
         .map_err(|e| format!("{}: {}", error_msg, e))?;
 
     if output.status.success() {
@@ -100,7 +116,13 @@ fn run_command(command: &mut Command, error_msg: &str) -> Result<(), String> {
         Ok(())
     } else {
         // Print stderr to Cargo's warning stream for error details
-        eprintln!("cargo:warning=Error: {}", String::from_utf8_lossy(&output.stderr));
-        Err(format!("{}: Command failed with status {:?}", error_msg, output.status))
+        eprintln!(
+            "cargo:warning=Error: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        Err(format!(
+            "{}: Command failed with status {:?}",
+            error_msg, output.status
+        ))
     }
 }

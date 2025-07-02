@@ -749,6 +749,7 @@ dependencies = [
  "flatbuffers",
  "fs_extra",
  "include_dir",
+ "log",
  "logos",
  "mime_guess",
  "parking_lot",
