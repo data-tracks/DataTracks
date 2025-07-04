@@ -1,5 +1,10 @@
 on: [push]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+
 name: 🫸 Push Continuous Integration
 
 jobs:

@@ -30,8 +30,10 @@ jobs:
       release_url: ${{ steps.create_release.outputs.upload_url }}
       version: ${{ steps.get-version.outputs.version }}
     steps:
-      - name: Extract version from app/Cargo.toml
+      - name: Checkout to get Cargo.toml
         uses: actions/checkout@v4
+
+      - name: Extract version from app/Cargo.toml
         id: get-version
         run: |
             VERSION=$(grep '^version' app/Cargo.toml | head -n 1 | sed -E 's/version *= *"(.*)"/\1/')
