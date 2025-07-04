@@ -1,5 +1,4 @@
-name: release
-run-name: 🫗 Release DataTracks
+name: 🫗 Release DataTracks
 permissions:
   "contents": "write"
 
@@ -36,8 +35,8 @@ jobs:
       - name: Extract version from app/Cargo.toml
         id: get-version
         run: |
-            VERSION=$(grep '^version' app/Cargo.toml | head -n 1 | sed -E 's/version *= *"(.*)"/\1/')
-            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          VERSION=$(grep '^version' app/Cargo.toml | head -n 1 | sed -E 's/version *= *"(.*)"/\1/')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
