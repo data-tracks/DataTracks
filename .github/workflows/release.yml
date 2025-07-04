@@ -1,19 +1,11 @@
 name: release
-run-name: 🫗 Release "${{inputs.name}}" Version "${{inputs.version}}"
+run-name: 🫗 Release DataTracks
 permissions:
   "contents": "write"
 
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Version of Release'
-        required: true
-        type: string
-      name:
-        description: 'Name of Release'
-        required: true
-        type: string
       description:
         description: 'Description Text'
         required: false
@@ -36,16 +28,23 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       release_url: ${{ steps.create_release.outputs.upload_url }}
+      version: ${{ steps.get-version.outputs.version }}
     steps:
-      # Step 1: Create Release
+      - name: Extract version from app/Cargo.toml
+        uses: actions/checkout@v4
+        id: get-version
+        run: |
+            VERSION=$(grep '^version' app/Cargo.toml | head -n 1 | sed -E 's/version *= *"(.*)"/\1/')
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         id: create_release
         with:
           draft: ${{ inputs.draft }}
           prerelease: ${{ inputs.prerelease }}
-          name: ${{ inputs.name }}
-          tag_name: ${{ inputs.version }}
+          name: Release ${{ steps.get-version.outputs.version }}
+          tag_name: ${{ steps.get-version.outputs.version }}
           body: ${{ inputs.description }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
