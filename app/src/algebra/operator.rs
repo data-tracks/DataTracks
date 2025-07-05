@@ -49,7 +49,7 @@ impl Op {
     pub(crate) fn derive_output_layout(
         &self,
         operands: Vec<Layout>,
-        inputs: HashMap<String, &Layout>,
+        inputs: HashMap<String, Layout>,
     ) -> Layout {
         match self {
             Agg(a) => a.derive_output_layout(operands, inputs),
@@ -87,7 +87,7 @@ impl CollectionOp {
     pub(crate) fn derive_output_layout(
         &self,
         operands: Vec<Layout>,
-        _inputs: HashMap<String, &Layout>,
+        _inputs: HashMap<String, Layout>,
     ) -> Layout {
         match self {
             Unwind => operands.first().cloned().unwrap_or_default(),
@@ -333,7 +333,7 @@ impl TupleOp {
     pub(crate) fn derive_output_layout(
         &self,
         operands: Vec<Layout>,
-        inputs: HashMap<String, &Layout>,
+        inputs: HashMap<String, Layout>,
     ) -> Layout {
         match self {
             Plus | Minus | Multiplication | Division => {
@@ -474,7 +474,7 @@ impl BinaryOp {
     pub(crate) fn derive_output_layout(
         &self,
         operands: Vec<Layout>,
-        _inputs: HashMap<String, &Layout>,
+        _inputs: HashMap<String, Layout>,
     ) -> Layout {
         match self {
             BinaryOp::Cast => match operands.get(1) {
@@ -547,7 +547,7 @@ impl AggOp {
     pub(crate) fn derive_output_layout(
         &self,
         _operands: Vec<Layout>,
-        _inputs: HashMap<String, &Layout>,
+        _inputs: HashMap<String, Layout>,
     ) -> Layout {
         match self {
             Count => Layout::from(OutputType::Integer),
@@ -1040,6 +1040,6 @@ mod tests {
         assert_eq!(op.derive_input_layout().unwrap(), layout);
 
         let array = Layout::tuple(vec![Some("key1".to_string()), Some("key2".to_string())]);
-        assert_eq!(op.derive_output_layout(HashMap::new()).unwrap(), array);
+        assert_eq!(op.derive_output_layout(HashMap::new(), ).unwrap(), array);
     }
 }

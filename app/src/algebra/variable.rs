@@ -1,5 +1,5 @@
-use crate::algebra::{Algebra, Algebraic, BoxedIterator, ValueIterator};
-use crate::analyse::{InputDerivable, OutputDerivable};
+use crate::algebra::root::{AlgInputDerivable, AlgOutputDerivable, AlgebraRoot};
+use crate::algebra::{Algebra, BoxedIterator, ValueIterator};
 use crate::processing::transform::Transform;
 use crate::processing::Layout;
 use crate::util::storage::ValueStore;
@@ -8,38 +8,52 @@ use value::Value;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct VariableScan {
+    id: usize,
     name: String,
-    inputs: Vec<Algebraic>,
 }
 
 impl VariableScan {
-    pub(crate) fn new(name: String, inputs: Vec<Algebraic>) -> Self {
-        VariableScan { name, inputs }
+    pub(crate) fn new(id: usize, name: String) -> Self {
+        VariableScan { id, name }
     }
 }
 
-impl InputDerivable for VariableScan {
-    fn derive_input_layout(&self) -> Option<Layout> {
+impl AlgInputDerivable for VariableScan {
+    fn derive_input_layout(&self, _root: &AlgebraRoot) -> Option<Layout> {
         Some(Layout::default())
     }
 }
 
-impl OutputDerivable for VariableScan {
-    fn derive_output_layout(&self, _inputs: HashMap<String, &Layout>) -> Option<Layout> {
+impl AlgOutputDerivable for VariableScan {
+    fn derive_output_layout(
+        &self,
+        _inputs: HashMap<String, Layout>,
+        _root: &AlgebraRoot,
+    ) -> Option<Layout> {
         Some(Layout::default())
     }
 }
 
 impl Algebra for VariableScan {
     type Iterator = BareVariableIterator;
-    fn derive_iterator(&mut self) -> Self::Iterator {
-        BareVariableIterator::new(
+
+    fn id(&self) -> usize {
+        self.id
+    }
+
+    fn replace_id(self, id: usize) -> Self {
+        Self { id, ..self }
+    }
+
+    fn derive_iterator(&self, root: &AlgebraRoot) -> Result<Self::Iterator, String> {
+        Ok(BareVariableIterator::new(
             self.name.clone(),
-            self.inputs
-                .iter_mut()
-                .map(|i| i.derive_iterator())
-                .collect(),
-        )
+            root.get_children(self.id())
+                .iter()
+                .map(|i| i.derive_iterator(root))
+                .into_iter()
+                .collect::<Result<Vec<_>, String>>()?,
+        ))
     }
 }
 
@@ -93,11 +107,7 @@ pub struct VariableIterator {
 }
 
 impl VariableIterator {
-    pub(crate) fn new(
-        name: Value,
-        inputs: Vec<BoxedIterator>,
-        transform: BoxedIterator,
-    ) -> Self {
+    pub(crate) fn new(name: Value, inputs: Vec<BoxedIterator>, transform: BoxedIterator) -> Self {
         let store = transform.get_storages().pop().unwrap();
 
         VariableIterator {

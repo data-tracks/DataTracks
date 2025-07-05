@@ -829,7 +829,7 @@ mod test {
         let station_2 = plan.stations.get(&2).unwrap();
         assert_eq!(station_2.derive_input_layout(), Layout::default());
         assert_eq!(
-            station_2.derive_output_layout(single_key("1", &Layout::default())),
+            station_2.derive_output_layout(single_key("1", Layout::default())),
             Layout::default()
         );
     }
@@ -890,7 +890,7 @@ mod test {
         assert!(plan.layouts_match().is_ok());
     }
 
-    fn single_key<'a>(key: &str, value: &'a Layout) -> HashMap<String, &'a Layout> {
+    fn single_key<'a>(key: &str, value: Layout) -> HashMap<String, Layout> {
         HashMap::from([(key.to_string(), value)])
     }
 }

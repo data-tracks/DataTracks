@@ -1,4 +1,4 @@
-use crate::algebra::{Algebra, Algebraic, BoxedIterator, IndexScan, ValueIterator};
+use crate::algebra::{AlgebraRoot, BoxedIterator, ValueIterator};
 use crate::analyse::{InputDerivable, OutputDerivable, OutputDerivationStrategy};
 use crate::language::Language;
 use crate::optimize::OptimizeStrategy;
@@ -11,7 +11,7 @@ use crate::processing::transform::Transform::{Func, Lang, Postgres, SQLite};
 use crate::processing::Layout;
 use crate::sql::{PostgresTransformer, SqliteTransformer};
 use crate::util::storage::ValueStore;
-use crate::{algebra, language};
+use crate::language;
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use schemas::message_generated::protocol::{
     LanguageTransform as FlatLanguageTransform, Transform as FlatTransform,
@@ -77,12 +77,12 @@ impl Transform {
         }
     }
 
-    pub fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Option<Layout> {
+    pub fn derive_output_layout(&self, inputs: HashMap<String,Layout>) -> Option<Layout> {
         match self {
             Func(f) => f.derive_output_layout(),
             Lang(l) => l.derive_output_layout(inputs),
-            SQLite(c) => c.derive_output_layout(inputs),
-            Postgres(p) => p.derive_output_layout(inputs),
+            SQLite(c) => c.derive_output_layout(inputs, ),
+            Postgres(p) => p.derive_output_layout(inputs, ),
             #[cfg(test)]
             DummyDB(_) => todo!(),
         }
@@ -128,11 +128,15 @@ impl Transform {
         match self {
             Func(f) => f.derive_iter(),
             Lang(f) => {
-                let optimized = match optimizer {
-                    None => f.algebra.clone(),
-                    Some(mut o) => o.apply(f.algebra.clone()),
+                let root = f.algebra.clone();
+                let mut optimized = if let Some(mut strategy) = optimizer {
+                    strategy.apply(root).unwrap()
+                }else {
+                    root
                 };
-                let mut initial = algebra::build_iterator(optimized).unwrap();
+
+
+                let mut initial = optimized.derive_iterator().unwrap();
                 let iter = initial.enrich(transforms);
                 if let Some(iter) = iter {
                     iter
@@ -213,16 +217,16 @@ pub trait Transformer: Clone + Sized + Configurable + InputDerivable + OutputDer
 }
 
 impl<T: Transformer> OutputDerivable for T {
-    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Option<Layout> {
+    fn derive_output_layout(&self, inputs: HashMap<String, Layout>) -> Option<Layout> {
         self.get_output_derivation_strategy()
-            .derive_output_layout(inputs)
+            .derive_output_layout(inputs, )
     }
 }
 
 pub struct LanguageTransform {
     pub(crate) language: Language,
     pub(crate) query: String,
-    algebra: Algebraic,
+    algebra: AlgebraRoot,
 }
 
 impl Debug for LanguageTransform {
@@ -288,7 +292,7 @@ impl LanguageTransform {
         self.algebra.derive_input_layout()
     }
 
-    pub(crate) fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Option<Layout> {
+    pub(crate) fn derive_output_layout(&self, inputs: HashMap<String, Layout>) -> Option<Layout> {
         self.algebra.derive_output_layout(inputs)
     }
 
@@ -297,7 +301,7 @@ impl LanguageTransform {
     }
 }
 
-pub fn build_algebra(language: &Language, query: &str) -> Result<Algebraic, String> {
+pub fn build_algebra(language: &Language, query: &str) -> Result<AlgebraRoot, String> {
     match language {
         Language::Sql => language::sql::transform(query),
         Language::Mql => language::mql::transform(query),
@@ -390,11 +394,11 @@ pub struct FuncIter {
 
 impl FuncIter {
     fn new(func: Arc<dyn Fn(i64, Value) -> Value + Send + Sync>) -> Self {
-        let mut scan = IndexScan::new(0);
-        let iter = scan.derive_iterator();
+        let mut scan = AlgebraRoot::new_scan_index(0);
+        let input = scan.derive_iterator().unwrap();
 
         FuncIter {
-            input: Box::new(iter),
+            input,
             func,
         }
     }
@@ -436,7 +440,6 @@ impl ValueIterator for FuncIter {
 
 #[cfg(test)]
 mod tests {
-    use crate::algebra::build_iterator;
     use crate::language::Language;
     use crate::processing::station::Station;
     use crate::processing::tests::dict_values;
@@ -669,7 +672,7 @@ mod tests {
 
     fn check_sql_implement_join(query: &str, inputs: Vec<Vec<Value>>, output: Vec<Value>) {
         let transform = build_algebra(&Language::Sql, query);
-        let transform = build_iterator(transform.unwrap());
+        let transform = transform.unwrap().derive_iterator();
 
         match transform {
             Ok(mut t) => {
@@ -690,7 +693,7 @@ mod tests {
 
     fn check_sql_implement(query: &str, input: Vec<Value>, output: Vec<Value>) {
         let transform = build_algebra(&Language::Sql, query);
-        let transform = build_iterator(transform.unwrap());
+        let transform = transform.unwrap().derive_iterator();
         match transform {
             Ok(mut t) => {
                 t.get_storages().first().unwrap().append(input);
@@ -704,7 +707,7 @@ mod tests {
 
     fn check_sql_implement_unordered(query: &str, input: Vec<Value>, output: Vec<Value>) {
         let transform = build_algebra(&Language::Sql, query);
-        let transform = build_iterator(transform.unwrap());
+        let transform = transform.unwrap().derive_iterator();
 
         match transform {
             Ok(mut t) => {

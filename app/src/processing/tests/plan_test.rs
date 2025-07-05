@@ -5,7 +5,7 @@ pub mod dummy {
     use std::thread::{sleep, spawn};
     use std::time::Duration;
 
-    use crate::algebra::{BoxedIterator, ValueIterator};
+    use crate::algebra::{AlgebraRoot, BoxedIterator, ValueIterator};
     use crate::analyse::{InputDerivable, OutputDerivationStrategy};
     use crate::processing::destination::Destination;
     use crate::processing::option::Configurable;

@@ -129,13 +129,13 @@ impl Operator {
 }
 
 impl OutputDerivable for Operator {
-    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Option<Layout> {
+    fn derive_output_layout(&self, inputs: HashMap<String, Layout>) -> Option<Layout> {
         Some(
             self.op.derive_output_layout(
                 self.operands
                     .iter()
                     .cloned()
-                    .map(|o| o.derive_output_layout(inputs.clone()).unwrap())
+                    .map(|o| o.derive_output_layout(inputs.clone(), ).unwrap())
                     .collect(),
                 inputs,
             ),

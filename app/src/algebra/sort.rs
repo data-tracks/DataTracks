@@ -1,5 +1,5 @@
-use crate::algebra::{Algebra, Algebraic, BoxedIterator, BoxedValueHandler, ValueIterator};
-use crate::analyse::{InputDerivable, OutputDerivable};
+use crate::algebra::root::{AlgInputDerivable, AlgOutputDerivable, AlgebraRoot};
+use crate::algebra::{Algebra, BoxedIterator, BoxedValueHandler, ValueIterator};
 use crate::processing::transform::Transform;
 use crate::processing::{Direction, Layout, Order};
 use crate::util::storage::ValueStore;
@@ -8,42 +8,55 @@ use value::Value;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Sort {
-    pub input: Box<Algebraic>,
+    id: usize,
     pub order: Order,
 }
 
-impl InputDerivable for Sort {
-    fn derive_input_layout(&self) -> Option<Layout> {
-        self.input.derive_input_layout()
+impl AlgInputDerivable for Sort {
+    fn derive_input_layout(&self, root: &AlgebraRoot) -> Option<Layout> {
+        root.get_child(self.id).unwrap().derive_input_layout(root)
     }
 }
 
-impl OutputDerivable for Sort {
-    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Option<Layout> {
-        let child_output = self.input.derive_output_layout(inputs);
-        child_output.map(|mut layout| {
-            layout.order = self.order.clone();
-            layout
-        })
+impl AlgOutputDerivable for Sort {
+    fn derive_output_layout(
+        &self,
+        inputs: HashMap<String, Layout>,
+        root: &AlgebraRoot,
+    ) -> Option<Layout> {
+        Some(
+            root.get_child(self.id)?
+                .derive_output_layout(inputs, root)?,
+        )
     }
 }
 
 impl Algebra for Sort {
     type Iterator = SortIterator;
 
-    fn derive_iterator(&mut self) -> Self::Iterator {
+    fn id(&self) -> usize {
+        self.id
+    }
+
+    fn replace_id(self, id: usize) -> Self {
+        Self { id, ..self }
+    }
+
+    fn derive_iterator(&self, root: &AlgebraRoot) -> Result<Self::Iterator, String> {
         let res = self.order.derive_handler();
 
-        if let Some((handler, dir)) = res {
-            SortIterator {
-                direction: dir,
-                input: self.input.derive_iterator(),
-                handler,
-                sorted: BTreeMap::new(),
-            }
-        } else {
-            panic!("Shouldn't happen");
-        }
+        res.map(|(handler, dir)| SortIterator {
+            direction: dir,
+            input: root
+                .get_child(self.id)
+                .ok_or("No child in Sort.")
+                .unwrap()
+                .derive_iterator(root)
+                .unwrap(),
+            handler,
+            sorted: BTreeMap::new(),
+        })
+        .ok_or(String::from("Could not derive iterator"))
     }
 }
 

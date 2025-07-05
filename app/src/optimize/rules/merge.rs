@@ -1,4 +1,6 @@
-use crate::algebra::{AggOp, Algebraic, Filter, Op, Operator, Project, TupleOp};
+use crate::algebra::{
+    AggOp, Algebra, AlgebraRoot, Algebraic, Filter, Op, Operator, Project, TupleOp,
+};
 use crate::optimize::rule::RuleBehavior;
 use crate::util::CreatingVisitor;
 use value::Value;
@@ -10,21 +12,28 @@ pub enum MergeRule {
 }
 
 impl RuleBehavior for MergeRule {
-    fn can_apply(&self, algebra: &Algebraic) -> bool {
-        if let Algebraic::Set(s) = algebra {
-            let bool = s.set.iter().any(|a| match_rule_with_child(self, a));
+    fn can_apply(&self, id: usize, root: &AlgebraRoot) -> bool {
+        if let Some(Algebraic::Set(s)) = root.get_node(id) {
+            let bool = root
+                .get_children(s.id())
+                .iter()
+                .any(|a| match_rule_with_child(self, a, root));
             bool
         } else {
             false
         }
     }
 
-    fn apply(&self, algebra: &mut Algebraic) -> Vec<Algebraic> {
-        if let Algebraic::Set(parent) = algebra {
-            let values = parent
-                .set
+    fn apply(&self, id: usize, root: &mut AlgebraRoot) -> Vec<Algebraic> {
+        if let Some(Algebraic::Set(parent)) = root.get_node(id)  {
+            let values = root
+                .get_children(parent.id())
+                .into_iter()
+                .cloned()
+                .collect::<Vec<_>>();
+            let values = values
                 .iter()
-                .filter_map(|a| apply_rule_to_child(self, a))
+                .filter_map(|a| apply_rule_to_child(self, a, root))
                 .collect();
             values
         } else {
@@ -34,10 +43,10 @@ impl RuleBehavior for MergeRule {
 }
 
 /// Match a specific rule with its child
-fn match_rule_with_child(rule: &MergeRule, algebra: &Algebraic) -> bool {
+fn match_rule_with_child(rule: &MergeRule, algebra: &Algebraic, root: &AlgebraRoot) -> bool {
     match (rule, algebra) {
         (MergeRule::Filter, Algebraic::Filter(f)) => {
-            matches!(f.input.as_ref(), Algebraic::Set(s) if match &(*s.initial) {
+            matches!(root.get_child(f.id()).unwrap(), Algebraic::Set(s) if match &(*s.initial) {
                 Algebraic::Filter(other) => {
                     f.condition.can_merge(&other.condition)
                 },
@@ -45,7 +54,7 @@ fn match_rule_with_child(rule: &MergeRule, algebra: &Algebraic) -> bool {
             })
         }
         (MergeRule::Project, Algebraic::Project(p)) => {
-            matches!(p.input.as_ref(), Algebraic::Set(s) if match &(*s.initial) {
+            matches!(root.get_child(p.id()).unwrap(), Algebraic::Set(s) if match &(*s.initial) {
                 Algebraic::Project(other) => {
                     p.project.can_merge(&other.project)
                 },
@@ -57,16 +66,24 @@ fn match_rule_with_child(rule: &MergeRule, algebra: &Algebraic) -> bool {
 }
 
 /// Apply a specific rule to a child node
-fn apply_rule_to_child(rule: &MergeRule, algebra: &Algebraic) -> Option<Algebraic> {
+fn apply_rule_to_child(
+    rule: &MergeRule,
+    algebra: &Algebraic,
+    root: &mut AlgebraRoot,
+) -> Option<Algebraic> {
     match (rule, algebra) {
         (MergeRule::Filter, Algebraic::Filter(f)) => {
-            if let Algebraic::Set(parent) = f.input.as_ref() {
-                parent
-                    .set
+            if let Some(Algebraic::Set(parent)) = root.get_child(f.id()) {
+                let values = root
+                    .get_children(parent.id())
+                    .into_iter()
+                    .cloned()
+                    .collect::<Vec<_>>();
+                values
                     .iter()
                     .filter_map(|b| match b {
                         Algebraic::Filter(f_child) => Some(Algebraic::Filter(Filter::new(
-                            (*f_child.input).clone(),
+                            root.new_id(),
                             Operator::new(
                                 Op::and(),
                                 vec![f.condition.clone(), f_child.condition.clone()],
@@ -80,14 +97,18 @@ fn apply_rule_to_child(rule: &MergeRule, algebra: &Algebraic) -> Option<Algebrai
             }
         }
         (MergeRule::Project, Algebraic::Project(p)) => {
-            if let Algebraic::Set(parent) = p.input.as_ref() {
-                parent
-                    .set
+            if let Some(Algebraic::Set(parent)) = root.get_child(p.id()) {
+                let values = root
+                    .get_children(parent.id())
+                    .into_iter()
+                    .cloned()
+                    .collect::<Vec<_>>();
+                values
                     .iter()
                     .filter_map(|b| match b {
                         Algebraic::Project(p_child) => Some(Algebraic::Project(Project::new(
+                            root.new_id(),
                             OperatorMerger::merge(&p_child.project, &mut p.project.clone()),
-                            (*p_child.input).clone(),
                         ))),
                         _ => None,
                     })

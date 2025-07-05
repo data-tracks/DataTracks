@@ -1,5 +1,5 @@
-use crate::algebra::{Algebra, Algebraic, BoxedIterator, ValueIterator};
-use crate::analyse::{InputDerivable, OutputDerivable};
+use crate::algebra::root::{AlgInputDerivable, AlgOutputDerivable, AlgebraRoot};
+use crate::algebra::{Algebra, BoxedIterator, ValueIterator};
 use crate::processing::transform::Transform;
 use crate::processing::Layout;
 use crate::util::storage::ValueStore;
@@ -8,16 +8,16 @@ use value::Value;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Union {
-    pub inputs: Vec<Algebraic>,
+    id: usize,
     distinct: bool,
 }
 
-impl InputDerivable for Union {
-    fn derive_input_layout(&self) -> Option<Layout> {
-        let input = self
-            .inputs
+impl AlgInputDerivable for Union {
+    fn derive_input_layout(&self, root: &AlgebraRoot) -> Option<Layout> {
+        let input = root
+            .get_children(self.id)
             .iter()
-            .map(|x| x.derive_input_layout())
+            .map(|x| x.derive_input_layout(root))
             .collect::<Option<Vec<_>>>()?;
         Some(
             input
@@ -27,28 +27,43 @@ impl InputDerivable for Union {
     }
 }
 
-impl OutputDerivable for Union {
-    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Option<Layout> {
-        self.inputs.first().unwrap().derive_output_layout(inputs)
+impl AlgOutputDerivable for Union {
+    fn derive_output_layout(
+        &self,
+        inputs: HashMap<String, Layout>,
+        root: &AlgebraRoot,
+    ) -> Option<Layout> {
+        root.get_children(self.id)
+            .first()
+            .unwrap()
+            .derive_output_layout(inputs, root)
     }
 }
 
 impl Algebra for Union {
     type Iterator = UnionIterator;
 
-    fn derive_iterator(&mut self) -> Self::Iterator {
-        let inputs: Vec<_> = self
-            .inputs
-            .iter_mut()
+    fn id(&self) -> usize {
+        self.id
+    }
+
+    fn replace_id(self, id: usize) -> Self {
+        Self { id, ..self }
+    }
+
+    fn derive_iterator(&self, root: &AlgebraRoot) -> Result<Self::Iterator, String> {
+        let inputs: Vec<_> = root
+            .get_children(self.id)
+            .iter()
             .by_ref()
-            .map(|i| i.derive_iterator())
+            .map(|i| i.derive_iterator(root).unwrap())
             .collect();
         if !inputs.is_empty() {
-            UnionIterator {
+            Ok(UnionIterator {
                 inputs,
                 distinct: self.distinct,
                 index: 0,
-            }
+            })
         } else {
             panic!("Cannot derive empty union iterator");
         }

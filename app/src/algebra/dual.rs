@@ -1,5 +1,5 @@
+use crate::algebra::root::{AlgInputDerivable, AlgOutputDerivable, AlgebraRoot};
 use crate::algebra::{Algebra, BoxedIterator, ValueIterator};
-use crate::analyse::{InputDerivable, OutputDerivable};
 use crate::processing::transform::Transform;
 use crate::processing::{Layout, OutputType};
 use crate::util::storage::ValueStore;
@@ -8,28 +8,28 @@ use value::Value;
 
 /// "Dummy" table to query for constants, one row
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
-pub struct Dual {}
+pub struct Dual {
+    id: usize,
+}
 
 impl Dual {
-    pub fn new() -> Self {
-        Dual {}
+    pub fn new(id: usize) -> Self {
+        Dual { id }
     }
 }
 
-impl Default for Dual {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl InputDerivable for Dual {
-    fn derive_input_layout(&self) -> Option<Layout> {
+impl AlgInputDerivable for Dual {
+    fn derive_input_layout(&self, _root: &AlgebraRoot) -> Option<Layout> {
         Some(Layout::default())
     }
 }
 
-impl OutputDerivable for Dual {
-    fn derive_output_layout(&self, _inputs: HashMap<String, &Layout>) -> Option<Layout> {
+impl AlgOutputDerivable for Dual {
+    fn derive_output_layout(
+        &self,
+        _inputs: HashMap<String, Layout>,
+        _root: &AlgebraRoot,
+    ) -> Option<Layout> {
         Some(Layout::from(OutputType::Integer))
     }
 }
@@ -37,8 +37,16 @@ impl OutputDerivable for Dual {
 impl Algebra for Dual {
     type Iterator = DualIterator;
 
-    fn derive_iterator(&mut self) -> Self::Iterator {
-        DualIterator::new()
+    fn id(&self) -> usize {
+        self.id
+    }
+
+    fn replace_id(self, id: usize) -> Self {
+        Self { id }
+    }
+
+    fn derive_iterator(&self, _root: &AlgebraRoot) -> Result<Self::Iterator, String> {
+        Ok(DualIterator::new())
     }
 }
 
