@@ -33,6 +33,26 @@ jobs:
       - name: Build documentation
         run: |
           cargo doc --no-deps
+
+      - name: Create root index.html for redirection
+        run: |
+          CRATE_NAME=$(grep -m 1 '^name\s*=' Cargo.toml | sed -E 's/name\s*=\s*"(.*)"/\1/')
+          echo "Discovered crate name: $CRATE_NAME" # For debugging in logs
+
+  
+          echo "<!DOCTYPE html>" > target/doc/index.html
+          echo "<html>" >> target/doc/index.html
+          echo "<head>" >> target/doc/index.html
+          echo "  <meta charset=\"utf-8\">" >> target/doc/index.html
+          echo "  <meta http-equiv=\"refresh\" content=\"0; url=./$CRATE_NAME/\">" >> target/doc/index.html
+          echo "  <link rel=\"canonical\" href=\"./$CRATE_NAME/\">" >> target/doc/index.html
+          echo "  <title>Redirecting to Documentation</title>" >> target/doc/index.html
+          echo "</head>" >> target/doc/index.html
+          echo "<body>" >> target/doc/index.html
+          echo "  <p>If you are not redirected automatically, follow this <a href=\"./$CRATE_NAME/\">link to the documentation</a>.</p>" >> target/doc/index.html
+          echo "</body>" >> target/doc/index.html
+          echo "</html>" >> target/doc/index.html
+
       - name: Setup Pages
         id: pages
         uses: actions/configure-pages@v5
@@ -40,7 +60,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./target/doc/data_tracks
+          path: ./target/doc
 
       - name: Deploy to GitHub Pages
         id: deployment
