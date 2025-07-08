@@ -22,7 +22,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          submodules: 'true'
+          submodules: recursive
           token: ${{ secrets.TRACKVIEW }}
 
       - name: Install Rust toolchain
