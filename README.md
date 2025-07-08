@@ -1,5 +1,5 @@
 <p align="center">
-<img alt="Logo" height="300" src="https://github.com/data-tracks/assets/blob/main/logo/logo-transparent.png?raw=true" title="DataTrack" width="300"/>
+<img alt="Logo" height="300" src="https://github.com/data-tracks/assets/blob/main/logo/logo.png?raw=true" title="DataTrack" width="300"/>
 </p>
 
 # 🚂 DataTracks
