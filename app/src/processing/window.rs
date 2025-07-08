@@ -175,7 +175,7 @@ impl IntervalWindow {
 }
 
 fn parse_time(time_str: &str) -> Result<Time, String> {
-    let time = NaiveTime::parse_from_str(time_str, "%H:%M:%S").unwrap_or_else(|v| {
+    let time = NaiveTime::parse_from_str(time_str, "%H:%M:%S").unwrap_or_else(|_| {
         NaiveTime::parse_from_str(time_str, "%H:%M")
             .unwrap_or_else(|_| NaiveTime::parse_from_str(time_str, "%H:%M:%s:6f").unwrap())
     });

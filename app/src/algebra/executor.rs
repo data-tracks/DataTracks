@@ -1,12 +1,10 @@
-use crate::algebra::{BoxedIterator, ValueIterator};
-use crate::processing::transform::Transform;
+use crate::algebra::BoxedIterator;
 use crate::processing::Sender;
 use crate::util::storage::ValueStore;
 use crate::util::Tx;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap};
 use tracing::warn;
 use value::train::Train;
-use value::Value;
 
 enum WhatStrategy {
     Task(BoxedIterator, HashMap<usize, ValueStore>),
@@ -80,64 +78,3 @@ impl Executor {
     }
 }
 
-pub struct Direct {
-    sender: Sender,
-    stop: usize,
-}
-
-#[derive(Clone, Default)]
-pub struct IdentityIterator {
-    values: VecDeque<Value>,
-    storage: ValueStore,
-}
-
-impl IdentityIterator {
-    pub fn new() -> Self {
-        IdentityIterator {
-            values: Default::default(),
-            storage: ValueStore::new(),
-        }
-    }
-
-    fn load(&mut self) {
-        self.drain().into_iter().for_each(|v| {
-            self.values.push_back(v);
-        });
-    }
-}
-
-impl Iterator for IdentityIterator {
-    type Item = Value;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.values.is_empty() {
-            self.load();
-            if self.values.is_empty() {
-                return None;
-            }
-        }
-        self.values.pop_front()
-    }
-}
-
-impl ValueIterator for IdentityIterator {
-    fn get_storages(&self) -> Vec<ValueStore> {
-        vec![self.storage.clone()]
-    }
-
-    fn drain_to_train(&mut self, _stop: usize) -> Train {
-        self.load();
-        Train::new(self.values.drain(..).collect())
-    }
-
-    fn clone(&self) -> BoxedIterator {
-        Box::new(IdentityIterator {
-            values: self.values.clone(),
-            storage: self.storage.clone(),
-        })
-    }
-
-    fn enrich(&mut self, _transforms: HashMap<String, Transform>) -> Option<BoxedIterator> {
-        None
-    }
-}

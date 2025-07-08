@@ -338,7 +338,7 @@ impl TryFrom<&Vector<'_, ForwardsUOffset<ValueWrapper<'_>>>> for Value {
     type Error = String;
 
     fn try_from(
-        value: &Vector<'_, ForwardsUOffset<ValueWrapper<'_>>>,
+        _value: &Vector<'_, ForwardsUOffset<ValueWrapper<'_>>>,
     ) -> Result<Self, Self::Error> {
         todo!()
     }

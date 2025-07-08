@@ -1,38 +1,34 @@
-use crate::algebra;
-use crate::algebra::Algebraic::{
-    Aggregate, Dual, Filter, IndexScan, Join, Project, Scan, Variable,
-};
 use crate::algebra::Op::Tuple;
 use crate::algebra::TupleOp::Input;
-use crate::algebra::{Algebraic, Op, Operator, VariableScan};
+use crate::algebra::{AlgebraRoot, Op, Operator};
 use crate::language::sql::statement::SqlStatement::Identifier;
 use crate::language::sql::statement::{
     SqlIdentifier, SqlOperator, SqlSelect, SqlStatement, SqlVariable,
 };
-use value::Value;
 
-pub(crate) fn translate(query: SqlStatement) -> Result<Algebraic, String> {
-    let scan = match query {
+pub(crate) fn translate(query: SqlStatement) -> Result<AlgebraRoot, String> {
+    let alg = match query {
         SqlStatement::Select(s) => handle_select(s)?,
         _ => Err("Could not translate SQL query".to_string())?,
     };
-    Ok(scan.alg())
+    Ok(alg)
 }
 
-fn handle_select(query: SqlSelect) -> Result<MaybeAliasAlg, String> {
-    let mut sources: Vec<MaybeAliasAlg> = query
+fn handle_select(query: SqlSelect) -> Result<AlgebraRoot, String> {
+    let froms = query
         .froms
         .into_iter()
         .map(handle_from)
-        .collect::<Result<Vec<_>, _>>()?;
-    let aliases = sources
-        .iter()
-        .filter(|s| matches!(s, MaybeAliasAlg::Aliased(_)))
-        .map(|s| match s {
-            MaybeAliasAlg::Aliased(name) => name.name.clone(),
-            MaybeAliasAlg::Raw(_) => unreachable!(),
-        })
-        .collect();
+        .collect::<Result<Vec<_>, String>>();
+
+    let mut root = match froms {
+        Ok(f) => f.into_iter().collect::<Option<AlgebraRoot>>().unwrap_or(AlgebraRoot::dual()),
+        Err(_) => AlgebraRoot::dual()
+    };
+
+
+    let aliases = root.aliases();
+
     let mut projections: Vec<Operator> = query
         .columns
         .into_iter()
@@ -49,39 +45,22 @@ fn handle_select(query: SqlSelect) -> Result<MaybeAliasAlg, String> {
         .map(|g| handle_field(g, &aliases))
         .collect::<Result<Vec<_>, _>>()?;
 
-    let node = {
-        if sources.is_empty() {
-            Dual(algebra::Dual::new())
-        } else {
-            let mut join = sources.remove(0).alg();
-            while !sources.is_empty() {
-                let right = sources.remove(0).alg();
-                join = Join(algebra::Join::new(
-                    join,
-                    right,
-                    |_v| Value::bool(true),
-                    |_v| Value::bool(true),
-                    |l, r| Value::array(vec![l, r]),
-                ));
-            }
-            join
-        }
-    };
+    if root.ends().len() > 1 {
+        root.join_cross();
+    }
 
-    let mut node = match filters.len() {
-        0 => node,
-        1 => Filter(algebra::Filter::new(node, filters.pop().unwrap())),
-        _ => Filter(algebra::Filter::new(
-            node,
-            Operator::new(Op::and(), filters),
-        )),
+    // add filter
+    match filters.len() {
+        0 => {}
+        1 => root.filter(filters.pop().unwrap()),
+        _ => root.filter(Operator::new(Op::and(), filters)),
     };
 
     let function = match projections.len() {
         1 => {
             let function = projections.pop().unwrap();
             match function.op {
-                Tuple(Input(_)) => return Ok(MaybeAliasAlg::Raw(node)),
+                Tuple(Input(_)) => return Ok(root),
                 ref _o => function.clone(),
             }
         }
@@ -95,16 +74,15 @@ fn handle_select(query: SqlSelect) -> Result<MaybeAliasAlg, String> {
             _ => Some(Operator::combine(groups)),
         };
 
-        node = Aggregate(algebra::Aggregate::new(Box::new(node), function, group));
-        return Ok(MaybeAliasAlg::Raw(node));
+        root.aggregate(function, group);
+        return Ok(root);
     }
 
-    Ok(MaybeAliasAlg::raw(Project(algebra::Project::new(
-        function, node,
-    ))))
+    root.project(function);
+    Ok(root)
 }
 
-fn handle_from(from: SqlStatement) -> Result<MaybeAliasAlg, String> {
+fn handle_from(from: SqlStatement) -> Result<AlgebraRoot, String> {
     match from {
         Identifier(i) => handle_table(i),
         SqlStatement::Variable(v) => handle_variable(v),
@@ -114,36 +92,38 @@ fn handle_from(from: SqlStatement) -> Result<MaybeAliasAlg, String> {
     }
 }
 
-fn handle_collection_operator(operator: SqlOperator) -> Result<MaybeAliasAlg, String> {
+fn handle_collection_operator(operator: SqlOperator) -> Result<AlgebraRoot, String> {
     let op = operator.operator;
-    let inputs = operator
+    let froms = operator
         .operands
         .into_iter()
         .map(handle_from)
-        .collect::<Result<Vec<_>, _>>()?;
-    match inputs.len() {
-        1 => Ok(MaybeAliasAlg::aliased(
-            op.dump(false).to_lowercase(),
-            Algebraic::project(
-                Operator::new(op, vec![]),
-                inputs.into_iter().next().unwrap().alg(),
-            ),
-        )),
-        _ => unreachable!(),
-    }
+        .collect::<Result<Vec<_>, _>>();
+
+    let root:Option<AlgebraRoot> = match froms {
+        Ok(v) => v.into_iter().collect(),
+        Err(_) => None
+    };
+
+    let mut root = root.ok_or("Could not handle operator".to_string())?;
+    let name = op.dump(false);
+    root.project(Operator::new(op, vec![]));
+
+    root.alias(name.to_lowercase());
+    Ok(root)
 }
 
-fn handle_variable(variable: SqlVariable) -> Result<MaybeAliasAlg, String> {
-    let inputs = variable
+fn handle_variable(variable: SqlVariable) -> Result<AlgebraRoot, String> {
+    let root: Option<AlgebraRoot> = variable
         .inputs
         .into_iter()
-        .map(|i| handle_from(i).unwrap().alg())
+        .map(|i| handle_from(i).unwrap())
         .collect();
+    let mut root = root.ok_or("Could not handle variable".to_string())?;
 
-    Ok(MaybeAliasAlg::aliased(
-        variable.name.clone(),
-        Variable(VariableScan::new(variable.name, inputs)),
-    ))
+    root.variable(variable.name.clone());
+    root.alias(variable.name);
+    Ok(root)
 }
 
 fn handle_field(column: SqlStatement, aliases: &Vec<String>) -> Result<Operator, String> {
@@ -208,9 +188,9 @@ fn handle_field(column: SqlStatement, aliases: &Vec<String>) -> Result<Operator,
     }
 }
 
-fn handle_table(identifier: SqlIdentifier) -> Result<MaybeAliasAlg, String> {
+fn handle_table(identifier: SqlIdentifier) -> Result<AlgebraRoot, String> {
     let mut names = identifier.names.clone();
-    let scan = match names.remove(0) {
+    let mut root = match names.remove(0) {
         name if name.starts_with('$') => name
             .strip_prefix('$')
             .ok_or("Prefix not found".to_string())
@@ -218,43 +198,14 @@ fn handle_table(identifier: SqlIdentifier) -> Result<MaybeAliasAlg, String> {
                 rest.parse::<usize>()
                     .map_err(|_| "Could not parse number".to_string())
             })
-            .map(|num| IndexScan(algebra::IndexScan::new(num)))?,
-        name => Scan(algebra::Scan::new(name)),
+            .map(|num| AlgebraRoot::new_scan_index(num))?,
+        name => AlgebraRoot::new_scan_name(name),
     };
     if !names.is_empty() {
         let field = handle_field(Identifier(identifier), &vec![])?;
-        Ok(MaybeAliasAlg::aliased(
-            names.last().unwrap().clone(),
-            Project(algebra::Project::new(field, scan)),
-        ))
-    } else {
-        Ok(MaybeAliasAlg::Raw(scan))
-    }
-}
-
-enum MaybeAliasAlg {
-    Aliased(AliasedAlg),
-    Raw(Algebraic),
-}
-
-struct AliasedAlg {
-    name: String,
-    alg: Algebraic,
-}
-
-impl MaybeAliasAlg {
-    fn alg(&self) -> Algebraic {
-        match self {
-            MaybeAliasAlg::Aliased(a) => a.alg.clone(),
-            MaybeAliasAlg::Raw(r) => r.clone(),
-        }
+        root.project(field);
+        root.alias(names.last().unwrap().clone());
     }
 
-    fn aliased(name: String, alg: Algebraic) -> MaybeAliasAlg {
-        MaybeAliasAlg::Aliased(AliasedAlg { name, alg })
-    }
-
-    fn raw(alg: Algebraic) -> MaybeAliasAlg {
-        MaybeAliasAlg::Raw(alg)
-    }
+    Ok(root)
 }

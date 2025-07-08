@@ -205,11 +205,11 @@ impl Station {
         })
     }
 
-    pub fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Layout {
+    pub fn derive_output_layout(&self, inputs: HashMap<String, Layout>) -> Layout {
         if let Some(transform) = self.transform.clone() {
             transform.derive_output_layout(inputs).unwrap_or_default()
         } else {
-            inputs.values().next().cloned().cloned().unwrap_or_default()
+            inputs.values().next().cloned().unwrap_or_default()
         }
     }
 
@@ -354,6 +354,7 @@ pub mod tests {
     use crate::util::{new_channel, Tx};
     use crate::util::{TimeUnit, TriggerType};
     use crossbeam::channel::{unbounded, Receiver, Sender};
+    use tracing::debug;
     use tracing_test::traced_test;
     use value::train::Train;
     use value::{Dict, Time, Value};
@@ -514,6 +515,7 @@ pub mod tests {
         while trains.iter().map(|v: &Train| v.values.len()).sum::<usize>() < 1_000 {
             trains.push(rx.recv().unwrap())
         }
+        debug!("{:?}", trains);
 
         assert_eq!(
             trains.iter().map(|t| t.values.len()).sum::<usize>(),

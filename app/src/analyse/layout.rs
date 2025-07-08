@@ -10,7 +10,7 @@ pub trait InputDerivable {
 }
 
 pub trait OutputDerivable {
-    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Option<Layout>;
+    fn derive_output_layout(&self, inputs: HashMap<String, Layout>) -> Option<Layout>;
 }
 
 #[derive(Clone, Debug, PartialEq, Default)]
@@ -36,15 +36,13 @@ impl OutputDerivationStrategy {
     pub fn combined(strategies: Vec<OutputDerivationStrategy>) -> Self {
         Combined(CombinedStrategy::new(strategies))
     }
-}
 
-impl OutputDerivable for OutputDerivationStrategy {
-    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Option<Layout> {
+    pub fn derive_output_layout(&self, inputs: HashMap<String, Layout>) -> Option<Layout> {
         match self {
-            QueryBased(strategy) => strategy.derive_output_layout(inputs),
+            QueryBased(strategy) => strategy.derive_output_layout(),
             ContentBased => todo!(),
             UserDefined(layout) => Some(layout.clone()),
-            External(e) => e.derive_output_layout(inputs),
+            External(e) => e.derive_output_layout(),
             Combined(comb) => comb.derive_output_layout(inputs),
             Undefined => Some(Layout::default()),
         }
@@ -70,10 +68,7 @@ impl QueryBasedStrategy {
             language,
         })
     }
-}
-
-impl OutputDerivable for QueryBasedStrategy {
-    fn derive_output_layout(&self, _inputs: HashMap<String, &Layout>) -> Option<Layout> {
+    fn derive_output_layout(&self) -> Option<Layout> {
         Some(self.layout.clone())
     }
 }
@@ -87,10 +82,8 @@ impl CombinedStrategy {
     pub fn new(strategies: Vec<OutputDerivationStrategy>) -> Self {
         CombinedStrategy { strategies }
     }
-}
 
-impl OutputDerivable for CombinedStrategy {
-    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Option<Layout> {
+    fn derive_output_layout(&self, inputs: HashMap<String, Layout>) -> Option<Layout> {
         Some(self.strategies.iter().fold(Layout::default(), |a, b| {
             a.merge(&b.derive_output_layout(inputs.clone()).unwrap())
         }))
@@ -100,15 +93,15 @@ impl OutputDerivable for CombinedStrategy {
 #[derive(Clone, Debug, PartialEq)]
 pub struct ExternalStrategy {}
 
-impl OutputDerivable for ExternalStrategy {
-    fn derive_output_layout(&self, _inputs: HashMap<String, &Layout>) -> Option<Layout> {
+impl ExternalStrategy {
+    fn derive_output_layout(&self) -> Option<Layout> {
         todo!()
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::analyse::{OutputDerivable, OutputDerivationStrategy};
+    use crate::analyse::{OutputDerivationStrategy};
     use crate::language::Language;
     use crate::processing::transform::build_algebra;
     use crate::processing::Layout;

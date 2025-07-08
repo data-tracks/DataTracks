@@ -91,9 +91,8 @@ impl Api {
         Self::build_status_response("Empty message".to_string())
     }
 
-    fn build_status_response(status: String) -> Result<Vec<u8>, Vec<u8>> {
+    fn build_status_response(_status: String) -> Result<Vec<u8>, Vec<u8>> {
         let mut builder = FlatBufferBuilder::new();
-        let status = builder.create_string(&status);
 
         let status = OkStatus::create(&mut builder, &OkStatusArgs {}).as_union_value();
         let msg = Message::create(

@@ -1,6 +1,6 @@
 use crate::algebra::algebra::Algebra;
-use crate::algebra::{Algebraic, BoxedIterator, ValueIterator};
-use crate::analyse::{InputDerivable, OutputDerivable};
+use crate::algebra::root::{AlgInputDerivable, AlgOutputDerivable, AlgebraRoot};
+use crate::algebra::{BoxedIterator, ValueIterator};
 use crate::processing::transform::Transform;
 use crate::processing::OutputType::Array;
 use crate::processing::{ArrayType, Layout};
@@ -10,27 +10,24 @@ use value::Value;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Join {
-    pub left: Box<Algebraic>,
-    pub right: Box<Algebraic>,
-    left_hash: Option<fn(&Value) -> Value>,
-    right_hash: Option<fn(&Value) -> Value>,
-    out: Option<fn(Value, Value) -> Value>,
+    id: usize,
+    left_hash: fn(&Value) -> Value,
+    right_hash: fn(&Value) -> Value,
+    out: fn(Value, Value) -> Value,
 }
 
 impl Join {
     pub(crate) fn new(
-        left: Algebraic,
-        right: Algebraic,
+        id: usize,
         left_hash: fn(&Value) -> Value,
         right_hash: fn(&Value) -> Value,
         out: fn(Value, Value) -> Value,
     ) -> Self {
         Join {
-            left: Box::new(left),
-            right: Box::new(right),
-            left_hash: Some(left_hash),
-            right_hash: Some(right_hash),
-            out: Some(out),
+            id,
+            left_hash,
+            right_hash,
+            out,
         }
     }
 }
@@ -167,18 +164,30 @@ impl ValueIterator for JoinIterator {
     }
 }
 
-impl InputDerivable for Join {
-    fn derive_input_layout(&self) -> Option<Layout> {
-        let left = self.left.derive_input_layout()?;
-        let right = self.right.derive_input_layout()?;
+impl AlgInputDerivable for Join {
+    fn derive_input_layout(&self, root: &AlgebraRoot) -> Option<Layout> {
+        let children = root.get_children(self.id());
+        let left = children.first().unwrap().derive_input_layout(root)?;
+        let right = children.get(1).unwrap().derive_input_layout(root)?;
         Some(left.merge(&right))
     }
 }
 
-impl OutputDerivable for Join {
-    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Option<Layout> {
-        let left = self.left.derive_output_layout(inputs.clone())?;
-        let right = self.right.derive_output_layout(inputs)?;
+impl AlgOutputDerivable for Join {
+    fn derive_output_layout(
+        &self,
+        inputs: HashMap<String, Layout>,
+        root: &AlgebraRoot,
+    ) -> Option<Layout> {
+        let children = root.get_children(self.id());
+        let left = children
+            .first()
+            .unwrap()
+            .derive_output_layout(inputs.clone(), root)?;
+        let right = children
+            .get(1)
+            .unwrap()
+            .derive_output_layout(inputs, root)?;
 
         Some(Layout {
             type_: Array(Box::new(ArrayType::new(left.merge(&right), Some(2)))),
@@ -190,23 +199,38 @@ impl OutputDerivable for Join {
 impl Algebra for Join {
     type Iterator = JoinIterator;
 
-    fn derive_iterator(&mut self) -> Self::Iterator {
-        let left_hash = self.left_hash.take().unwrap();
-        let right_hash = self.right_hash.take().unwrap();
-        let out = self.out.take().unwrap();
+    fn id(&self) -> usize {
+        self.id
+    }
 
-        let left = self.left.derive_iterator();
-        let right = self.right.derive_iterator();
-        JoinIterator::new(left_hash, right_hash, out, left, right)
+    fn replace_id(self, id: usize) -> Self {
+        Self{
+            id,
+            ..self
+        }
+    }
+
+    fn derive_iterator(&self, root: &AlgebraRoot) -> Result<Self::Iterator, String> {
+        let left_hash = self.left_hash.clone();
+        let right_hash = self.right_hash.clone();
+        let out = self.out.clone();
+
+        let children = root.get_children(self.id());
+        let left = children
+            .get(0)
+            .ok_or("Join has no left child.")?
+            .derive_iterator(root)?;
+        let right = children
+            .get(1)
+            .ok_or("Join has no right child.")?
+            .derive_iterator(root)?;
+        Ok(JoinIterator::new(left_hash, right_hash, out, left, right))
     }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::algebra::algebra::Algebra;
-    use crate::algebra::join::Join;
-    use crate::algebra::scan::IndexScan;
-    use crate::algebra::{Algebraic, ValueIterator};
+    use crate::algebra::{AlgebraRoot};
     use value::{Dict, Value};
 
     #[test]
@@ -214,18 +238,12 @@ mod test {
         let left = transform(vec![3.into(), 5.5.into()]);
         let right = transform(vec![5.5.into(), "test".into()]);
 
-        let left_scan = IndexScan::new(0);
-        let right_scan = IndexScan::new(1);
+        let mut root = AlgebraRoot::new_scan_index(0);
 
-        let mut join = Join::new(
-            Algebraic::IndexScan(left_scan),
-            Algebraic::IndexScan(right_scan),
-            |val| val.clone(),
-            |val| val.clone(),
-            |left, right| Value::Dict(left.as_dict().unwrap().merge(right.as_dict().unwrap())),
-        );
+        root.scan_index(1);
+        root.join_natural();
 
-        let mut handle = join.derive_iterator();
+        let mut handle = root.derive_iterator().unwrap();
 
         let storages = handle.get_storages();
         storages.iter().for_each(|val| {
@@ -251,18 +269,12 @@ mod test {
         let left = transform(vec![3.into(), 5.5.into()]);
         let right = transform(vec![5.5.into(), 5.5.into()]);
 
-        let left_scan = IndexScan::new(0);
-        let right_scan = IndexScan::new(1);
+        let mut root = AlgebraRoot::new_scan_index(0);
+        root.scan_index(1);
+        root.join_natural();
 
-        let mut join = Join::new(
-            Algebraic::IndexScan(left_scan),
-            Algebraic::IndexScan(right_scan),
-            |val| val.clone(),
-            |val| val.clone(),
-            |left, right| Value::Dict(left.as_dict().unwrap().merge(right.as_dict().unwrap())),
-        );
 
-        let mut handle = join.derive_iterator();
+        let mut handle = root.derive_iterator().unwrap();
 
         let storages = handle.get_storages();
         storages.iter().for_each(|val| {

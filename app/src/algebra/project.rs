@@ -2,27 +2,24 @@ use crate::algebra::algebra::{Algebra, IdentityHandler, ValueHandler};
 use crate::algebra::function::Operator;
 use crate::algebra::implement::implement;
 use crate::algebra::operator::SetProjectIterator;
-use crate::algebra::{Algebraic, BoxedIterator, Op, ValueIterator};
+use crate::algebra::root::{AlgInputDerivable, AlgOutputDerivable, AlgebraRoot};
+use crate::algebra::{BoxedIterator, Op, ValueIterator};
 use crate::analyse::{InputDerivable, OutputDerivable};
 use crate::processing::transform::Transform;
 use crate::processing::Layout;
 use crate::util::storage::ValueStore;
 use std::collections::HashMap;
-use tracing::warn;
 use value::Value;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Project {
-    pub input: Box<Algebraic>,
+    id: usize,
     pub project: Operator,
 }
 
 impl Project {
-    pub fn new(project: Operator, input: Algebraic) -> Self {
-        Project {
-            input: Box::new(input),
-            project,
-        }
+    pub fn new(id: usize, project: Operator) -> Self {
+        Project { id, project }
     }
 }
 
@@ -44,8 +41,10 @@ impl Iterator for ProjectIter {
 
 impl ValueIterator for ProjectIter {
     fn get_storages(&self) -> Vec<ValueStore> {
-        warn!("should not reach");
-        vec![]
+        match self {
+            ProjectIter::ValueProjectIterator(p) => p.get_storages(),
+            ProjectIter::ValueSetProjectIterator(s) => s.get_storages(),
+        }
     }
 
     fn clone(&self) -> BoxedIterator {
@@ -101,14 +100,18 @@ impl<'a> ValueIterator for ProjectIterator {
     }
 }
 
-impl InputDerivable for Project {
-    fn derive_input_layout(&self) -> Option<Layout> {
+impl AlgInputDerivable for Project {
+    fn derive_input_layout(&self, _root: &AlgebraRoot) -> Option<Layout> {
         self.project.derive_input_layout()
     }
 }
 
-impl OutputDerivable for Project {
-    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Option<Layout> {
+impl AlgOutputDerivable for Project {
+    fn derive_output_layout(
+        &self,
+        inputs: HashMap<String, Layout>,
+        _root: &AlgebraRoot,
+    ) -> Option<Layout> {
         self.project.derive_output_layout(inputs)
     }
 }
@@ -116,7 +119,18 @@ impl OutputDerivable for Project {
 impl Algebra for Project {
     type Iterator = ProjectIter;
 
-    fn derive_iterator(&mut self) -> ProjectIter {
+    fn id(&self) -> usize {
+        self.id
+    }
+
+    fn replace_id(self, id: usize) -> Self {
+        Self {
+            id,
+            ..self
+        }
+    }
+
+    fn derive_iterator(&self, root: &AlgebraRoot) -> Result<Self::Iterator, String> {
         if let Op::Collection(_) = &self.project.op {
             let op = self
                 .project
@@ -127,14 +141,24 @@ impl Algebra for Project {
                 .first()
                 .map(|o| (*o).clone())
                 .unwrap_or(IdentityHandler::new());
-            return ProjectIter::ValueSetProjectIterator(SetProjectIterator::new(
-                self.input.derive_iterator(),
-                op,
-            ));
+            Ok(ProjectIter::ValueSetProjectIterator(
+                SetProjectIterator::new(
+                    root.get_child(self.id)
+                        .ok_or("No child in Project.")?
+                        .derive_iterator(root)?,
+                    op,
+                ),
+            ))
+        } else {
+            let project = implement(&self.project);
+            let input = root
+                .get_child(self.id)
+                .ok_or("No child in Project.")?
+                .derive_iterator(root)?;
+            Ok(ProjectIter::ValueProjectIterator(ProjectIterator {
+                input,
+                project,
+            }))
         }
-
-        let project = implement(&self.project);
-        let input = self.input.derive_iterator();
-        ProjectIter::ValueProjectIterator(ProjectIterator { input, project })
     }
 }

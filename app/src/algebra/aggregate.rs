@@ -1,10 +1,11 @@
 use crate::algebra::algebra::BoxedValueLoader;
 use crate::algebra::function::Implementable;
 use crate::algebra::operator::{AggOp, IndexOp};
+use crate::algebra::root::{AlgInputDerivable, AlgOutputDerivable, AlgebraRoot};
 use crate::algebra::Op::Tuple;
 use crate::algebra::TupleOp::{Index, Input};
 use crate::algebra::{
-    Algebra, Algebraic, BoxedIterator, BoxedValueHandler, Op, Operator, ValueIterator,
+    Algebra, BoxedIterator, BoxedValueHandler, Op, Operator, ValueIterator,
 };
 use crate::analyse::{InputDerivable, OutputDerivable};
 use crate::processing::transform::Transform;
@@ -22,18 +23,18 @@ type Agg = (AggOp, Operator);
 /// Aggregate operations like SUM, COUNT, AVG
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Aggregate {
-    pub input: Box<Algebraic>,
+    id: usize,
     pub aggregates: Vec<Agg>,
     output_func: Operator,
     group: Operator,
 }
 
 impl Aggregate {
-    pub fn new(input: Box<Algebraic>, func: Operator, group: Option<Operator>) -> Self {
+    pub fn new(id: usize, func: Operator, group: Option<Operator>) -> Self {
         let (output_func, aggregates) = extract_aggs(func);
 
         Aggregate {
-            input,
+            id,
             aggregates,
             group: group.unwrap_or(Operator::literal(Value::bool(true))),
             output_func,
@@ -73,14 +74,14 @@ fn extract(operator: &mut Operator, aggs: &mut Vec<Agg>) {
 
 impl Hash for Aggregate {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.input.hash(state);
+        //self..hash(state);
         state.write_usize(self.aggregates.len());
         self.group.hash(state);
     }
 }
 
-impl InputDerivable for Aggregate {
-    fn derive_input_layout(&self) -> Option<Layout> {
+impl AlgInputDerivable for Aggregate {
+    fn derive_input_layout(&self, _root: &AlgebraRoot) -> Option<Layout> {
         let ags = self
             .aggregates
             .iter()
@@ -94,8 +95,12 @@ impl InputDerivable for Aggregate {
     }
 }
 
-impl OutputDerivable for Aggregate {
-    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Option<Layout> {
+impl AlgOutputDerivable for Aggregate {
+    fn derive_output_layout(
+        &self,
+        inputs: HashMap<String, Layout>,
+        _root: &AlgebraRoot,
+    ) -> Option<Layout> {
         if self.aggregates.len() == 1 {
             let op = self.aggregates[0]
                 .1
@@ -114,20 +119,36 @@ impl OutputDerivable for Aggregate {
 impl Algebra for Aggregate {
     type Iterator = AggIterator;
 
-    fn derive_iterator(&mut self) -> Self::Iterator {
-        let iter = self.input.derive_iterator();
+    fn id(&self) -> usize {
+        self.id
+    }
+
+    fn replace_id(self, id: usize) -> Self {
+        Self{
+            id,
+            aggregates: self.aggregates,
+            output_func: self.output_func,
+            group: self.group,
+        }
+    }
+
+    fn derive_iterator(&self, root: &AlgebraRoot) -> Result<Self::Iterator, String> {
+        let iter = root
+            .get_child(self.id())
+            .ok_or("No child in aggregate")?
+            .derive_iterator(root)?;
         let group = self.group.implement().unwrap();
         let aggregates = self
             .aggregates
             .iter()
             .map(|(a, o)| (a.implement().unwrap(), o.implement().unwrap()))
             .collect();
-        AggIterator::new(
+        Ok(AggIterator::new(
             iter,
             aggregates,
             self.output_func.implement().unwrap(),
             group,
-        )
+        ))
     }
 }
 
@@ -188,7 +209,7 @@ impl AggIterator {
                 .collect::<Vec<_>>();
 
             for value in values {
-                for (ref mut agg, op) in &mut aggregates {
+                for (agg, op) in &mut aggregates {
                     agg.load(&op.process(value))
                 }
             }

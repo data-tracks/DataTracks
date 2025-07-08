@@ -724,7 +724,7 @@ impl Plan {
                     }
                     let mut inputs = HashMap::new();
                     stations.into_iter().for_each(|(num, _station)| {
-                        inputs.insert(num.to_string(), layouts.get(&num).unwrap());
+                        inputs.insert(num.to_string(), layouts.get(&num).unwrap().clone());
                     });
 
                     let current = station.derive_input_layout();

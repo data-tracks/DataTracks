@@ -1,4 +1,6 @@
-use crate::algebra::{AggOp, Algebraic, Filter, Op, Operator, Project, TupleOp};
+use crate::algebra::{
+    AggOp, Algebra, AlgebraRoot, Algebraic, Filter, Op, Operator, Project, TupleOp,
+};
 use crate::optimize::rule::RuleBehavior;
 use crate::util::CreatingVisitor;
 use value::Value;
@@ -10,93 +12,98 @@ pub enum MergeRule {
 }
 
 impl RuleBehavior for MergeRule {
-    fn can_apply(&self, algebra: &Algebraic) -> bool {
-        if let Algebraic::Set(s) = algebra {
-            let bool = s.set.iter().any(|a| match_rule_with_child(self, a));
-            bool
+    fn can_apply(&self, node_id: usize, root: &AlgebraRoot) -> bool {
+        if let Some(alg) = root.get_node(node_id) {
+            match_rule_with_child(self, alg, root)
         } else {
             false
         }
     }
 
-    fn apply(&self, algebra: &mut Algebraic) -> Vec<Algebraic> {
-        if let Algebraic::Set(parent) = algebra {
-            let values = parent
-                .set
-                .iter()
-                .filter_map(|a| apply_rule_to_child(self, a))
-                .collect();
-            values
-        } else {
-            unreachable!("apply should only be called with AlgebraType::Set")
-        }
+    fn apply(&self, node_id: usize, root: &mut AlgebraRoot) -> Vec<Algebraic> {
+        apply_rule_to_child(self, node_id, root);
+        vec![]
     }
 }
 
 /// Match a specific rule with its child
-fn match_rule_with_child(rule: &MergeRule, algebra: &Algebraic) -> bool {
+fn match_rule_with_child(rule: &MergeRule, algebra: &Algebraic, root: &AlgebraRoot) -> bool {
     match (rule, algebra) {
-        (MergeRule::Filter, Algebraic::Filter(f)) => {
-            matches!(f.input.as_ref(), Algebraic::Set(s) if match &(*s.initial) {
-                Algebraic::Filter(other) => {
-                    f.condition.can_merge(&other.condition)
-                },
-                _ => false
-            })
+        (MergeRule::Filter, Algebraic::Filter(f)) => match root.get_child(f.id()).unwrap() {
+            Algebraic::Filter(other) => f.condition.can_merge(&other.condition),
+            _ => false,
+        },
+        (MergeRule::Project, Algebraic::Project(p)) => match root.get_child(p.id()).unwrap() {
+            Algebraic::Project(other) => p.project.can_merge(&other.project),
+            _ => false,
+        },
+        _ => {
+            println!("{:?} {:?}", algebra, rule);
+            false
         }
-        (MergeRule::Project, Algebraic::Project(p)) => {
-            matches!(p.input.as_ref(), Algebraic::Set(s) if match &(*s.initial) {
-                Algebraic::Project(other) => {
-                    p.project.can_merge(&other.project)
-                },
-                _ => false
-            })
-        }
-        _ => false,
     }
 }
 
 /// Apply a specific rule to a child node
-fn apply_rule_to_child(rule: &MergeRule, algebra: &Algebraic) -> Option<Algebraic> {
-    match (rule, algebra) {
+fn apply_rule_to_child(rule: &MergeRule, id: usize, root: &mut AlgebraRoot) {
+    let node = match root.get_node(id) {
+        None => return,
+        Some(n) => n.clone(),
+    };
+    match (rule, node) {
         (MergeRule::Filter, Algebraic::Filter(f)) => {
-            if let Algebraic::Set(parent) = f.input.as_ref() {
-                parent
-                    .set
-                    .iter()
-                    .filter_map(|b| match b {
-                        Algebraic::Filter(f_child) => Some(Algebraic::Filter(Filter::new(
-                            (*f_child.input).clone(),
-                            Operator::new(
-                                Op::and(),
-                                vec![f.condition.clone(), f_child.condition.clone()],
-                            ),
-                        ))),
-                        _ => None,
-                    })
-                    .next()
+            let child = if let Some(child) = root.get_child(f.id()) {
+                child.clone()
             } else {
-                None
+                return;
+            };
+            match child {
+                Algebraic::Filter(f_child) => {
+                    let new_id = root.new_id();
+                    let alg = Algebraic::Filter(Filter::new(
+                        new_id,
+                        Operator::new(
+                            Op::and(),
+                            vec![f.condition.clone(), f_child.condition.clone()],
+                        ),
+                    ));
+
+                    root.add_to_set(id, new_id);
+                    root.add_node(alg);
+
+                    if let Some(child) = root.get_child(f_child.id()) {
+                        root.add_child(new_id, child.id())
+                    }
+                }
+                _ => {}
             }
         }
         (MergeRule::Project, Algebraic::Project(p)) => {
-            if let Algebraic::Set(parent) = p.input.as_ref() {
-                parent
-                    .set
-                    .iter()
-                    .filter_map(|b| match b {
-                        Algebraic::Project(p_child) => Some(Algebraic::Project(Project::new(
-                            OperatorMerger::merge(&p_child.project, &mut p.project.clone()),
-                            (*p_child.input).clone(),
-                        ))),
-                        _ => None,
-                    })
-                    .next()
+            let child = if let Some(child) = root.get_child(p.id()) {
+                child.clone()
             } else {
-                None
+                return;
+            };
+
+            match child {
+                Algebraic::Project(p_child) => {
+                    let new_id = root.new_id();
+                    let alg = Algebraic::Project(Project::new(
+                        new_id,
+                        OperatorMerger::merge(&p_child.project, &mut p.project.clone()),
+                    ));
+
+                    root.add_to_set(id, new_id);
+                    root.add_node(alg);
+
+                    if let Some(child) = root.get_child(p_child.id()) {
+                        root.add_child(new_id, child.id())
+                    }
+                }
+                _ => {}
             }
         }
-        _ => None,
+        _ => {}
     }
 }
 

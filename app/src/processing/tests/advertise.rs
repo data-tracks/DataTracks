@@ -48,7 +48,7 @@ pub mod advertise_tests {
         let transformation: &mut _ = plan.get_transformation("comp").unwrap();
 
         match transformation {
-            Transform::DummyDB(ref mut d) => {
+            Transform::DummyDB(d) => {
                 d.add_mapping(mapping);
             }
             _ => panic!(),

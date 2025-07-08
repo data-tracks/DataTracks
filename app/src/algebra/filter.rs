@@ -1,7 +1,8 @@
 use crate::algebra::algebra::{Algebra, BoxedIterator, ValueIterator};
 use crate::algebra::implement::implement;
-use crate::algebra::{Algebraic, BoxedValueHandler, Operator};
-use crate::analyse::{InputDerivable, OutputDerivable};
+use crate::algebra::root::{AlgInputDerivable, AlgOutputDerivable, AlgebraRoot};
+use crate::algebra::{BoxedValueHandler, Operator};
+use crate::analyse::InputDerivable;
 use crate::processing::transform::Transform;
 use crate::processing::Layout;
 use crate::util::storage::ValueStore;
@@ -11,16 +12,13 @@ use value::Value;
 /// Applies filter operations like "WHERE name = 'Peter'"
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Filter {
-    pub input: Box<Algebraic>,
+    id: usize,
     pub condition: Operator,
 }
 
 impl Filter {
-    pub fn new(input: Algebraic, condition: Operator) -> Self {
-        Filter {
-            input: Box::new(input),
-            condition,
-        }
+    pub fn new(id: usize, condition: Operator) -> Self {
+        Filter { id, condition }
     }
 }
 
@@ -69,26 +67,43 @@ impl ValueIterator for FilterIterator {
     }
 }
 
-impl InputDerivable for Filter {
-    fn derive_input_layout(&self) -> Option<Layout> {
-        self.input
-            .derive_input_layout()
-            .map(|l| l.merge(&self.condition.derive_input_layout().unwrap_or_default()))
+impl AlgInputDerivable for Filter {
+    fn derive_input_layout(&self, _root: &AlgebraRoot) -> Option<Layout> {
+        self.condition.derive_input_layout()
     }
 }
 
-impl OutputDerivable for Filter {
-    fn derive_output_layout(&self, inputs: HashMap<String, &Layout>) -> Option<Layout> {
-        self.input.derive_output_layout(inputs)
+impl AlgOutputDerivable for Filter {
+    fn derive_output_layout(
+        &self,
+        inputs: HashMap<String, Layout>,
+        root: &AlgebraRoot,
+    ) -> Option<Layout> {
+        root.get_child(self.id())?
+            .derive_output_layout(inputs, root)
     }
 }
 
 impl Algebra for Filter {
     type Iterator = FilterIterator;
 
-    fn derive_iterator(&mut self) -> FilterIterator {
+    fn id(&self) -> usize {
+        self.id
+    }
+
+    fn replace_id(self, id: usize) -> Self {
+        Self {
+            id,
+            ..self
+        }
+    }
+
+    fn derive_iterator(&self, root: &AlgebraRoot) -> Result<Self::Iterator, String> {
         let condition = implement(&self.condition);
-        let input = self.input.derive_iterator();
-        FilterIterator { input, condition }
+        let input = root
+            .get_child(self.id())
+            .ok_or("No child in Filter")?
+            .derive_iterator(root)?;
+        Ok(FilterIterator { input, condition })
     }
 }

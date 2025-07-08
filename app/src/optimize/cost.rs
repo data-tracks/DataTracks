@@ -28,7 +28,7 @@ impl PartialOrd for Cost {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match (self, other) {
             (Cost::Numeric(a), Cost::Numeric(b)) => a.partial_cmp(b),
-            (Cost::Infinite, Cost::Infinite) => None,
+            (Cost::Infinite, Cost::Infinite) => Some(Ordering::Equal),
             (Cost::Infinite, Cost::Numeric(_)) => Some(Ordering::Greater),
             (Cost::Numeric(_), Cost::Infinite) => Some(Ordering::Less),
         }
