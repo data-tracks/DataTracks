@@ -1,0 +1,42 @@
+name: 🧾Deploy Rust Docs to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+  release:
+    types: [published] # Trigger on a new GitHub Release being published
+  workflow_dispatch: # This enables manual triggering from the GitHub UI
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write # Required to deploy to GitHub Pages
+      id-token: write # Required for OpenID Connect (OIDC) authentication with GitHub Pages
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Build documentation
+        run: |
+          cargo doc --no-deps
+      - name: Setup Pages
+        id: pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./target/doc/data_tracks
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
