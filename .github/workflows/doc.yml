@@ -36,7 +36,7 @@ jobs:
 
       - name: Create root index.html for redirection
         run: |
-          CRATE_NAME=$(grep -m 1 '^name\s*=' Cargo.toml | sed -E 's/name\s*=\s*"(.*)"/\1/')
+          CRATE_NAME=data_tracks
           echo "Discovered crate name: $CRATE_NAME" # For debugging in logs
 
   
