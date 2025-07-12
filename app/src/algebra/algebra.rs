@@ -187,8 +187,7 @@ pub trait Algebra: Clone + AlgInputDerivable + AlgOutputDerivable {
     fn id(&self) -> usize;
     fn replace_id(self, id: usize) -> Self;
     fn derive_iterator(&self, root: &AlgebraRoot) -> Result<Self::Iterator, String>;
-
-
+    
 }
 
 pub trait ValueHandler: Send {

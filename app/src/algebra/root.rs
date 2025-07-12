@@ -1,14 +1,13 @@
 use crate::algebra;
 use crate::algebra::Algebraic::{Aggregate, Dual, IndexScan, Join, Scan, Variable};
-use crate::algebra::{
-    AlgSet, Algebra, Algebraic, BoxedIterator, Filter, Operator, Project, VariableScan,
-};
+use crate::algebra::{AlgSet, Algebra, Algebraic, BoxedIterator, Filter, Operator, Project, VariableScan};
 use crate::optimize::Cost;
 use crate::processing::Layout;
 use std::collections::{HashMap, HashSet};
 #[cfg(test)]
 use tracing::info;
 use value::Value;
+use crate::algebra::visitor::{PlainVisitor, Visitor};
 
 #[derive(Clone, Debug)]
 pub struct AlgebraRoot {
@@ -318,7 +317,30 @@ impl AlgebraRoot {
             .get(self.ends.last()?)?
             .derive_output_layout(inputs, self)
     }
+
+    pub fn traverse(&self, visitor: &mut dyn PlainVisitor){
+        for end in &self.ends {
+            self.traverse_alg(end, visitor);
+        }
+    }
+
+    fn traverse_alg(&self, id: &usize, visitor: &mut dyn PlainVisitor) {
+        if let None = self.nodes.get(id) {
+            return
+        } else if let Some(alg) = self.nodes.get(id) {
+            visitor.visit(&alg);
+        }
+
+
+        if let None = self.connection.get(id) {} else if let Some(id) = self.connection.get(id) {
+            id.iter().for_each(|id| {
+                self.traverse_alg(id, visitor);
+            })
+        }
+    }
 }
+
+
 
 impl FromIterator<AlgebraRoot> for Option<AlgebraRoot> {
     fn from_iter<T: IntoIterator<Item = AlgebraRoot>>(iter: T) -> Self {
