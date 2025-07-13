@@ -3,7 +3,7 @@ name = "value"
 version = "0.1.0"
 edition = "2021"
 
-[dependencies.schemas]
+[dependencies.track-rails]
 git = "https://github.com/data-tracks/TrackRails.git"
 branch = "generated"
 

@@ -3,11 +3,11 @@ use crate::algebra::sort::Sort;
 use crate::algebra::union::Union;
 
 
-pub trait PlainVisitor{
+pub trait Visitor {
     fn visit(&mut self, alg: &Algebraic);
 }
 
-pub trait Visitor: PlainVisitor {
+pub trait TypeVisitor {
     fn visit(&mut self, alg: &Algebraic){
         match alg {
             Algebraic::Dual(d) => self.visit_dual(d),

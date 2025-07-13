@@ -1,6 +1,6 @@
 use crate::management::Storage;
-use flatbuffers::FlatBufferBuilder;
-use schemas::message_generated::protocol::{BindRequest, BindRequestArgs, Catalog, CatalogArgs, CreateType, GetType, Message, MessageArgs, OkStatus, OkStatusArgs, Payload, Plans, PlansArgs, RegisterRequest, RegisterResponse, RegisterResponseArgs, Status};
+use flatbuffers::{FlatBufferBuilder, ForwardsUOffset};
+use track_rails::message_generated::protocol::{BindRequest, BindRequestArgs, Catalog, CatalogArgs, CreateType, GetType, Message, MessageArgs, OkStatus, OkStatusArgs, Payload, Plans, PlansArgs, RegisterRequest, RegisterResponse, RegisterResponseArgs, Status};
 use std::sync::{Arc, Mutex};
 use tracing::{debug, info};
 
@@ -160,10 +160,14 @@ fn handle_register(
     let plans = Plans::create(&mut builder, &PlansArgs { plans: Some(plans) });
     let catalog = Catalog::create(&mut builder, &CatalogArgs { plans: Some(plans) });
 
+    let permissions = builder.create_vector::<ForwardsUOffset<&str>>(&vec![]); // todo add permissions
+
+
     let register = RegisterResponse::create(
         &mut builder,
         &RegisterResponseArgs {
             id: Some(id as u64),
+            permissions: Some(permissions),
             catalog: Some(catalog),
         },
     )

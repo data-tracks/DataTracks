@@ -1,5 +1,5 @@
 use flatbuffers::InvalidFlatbuffer;
-use schemas::message_generated::protocol::Message;
+use track_rails::message_generated::protocol::Message;
 
 pub fn deserialize_message(buf: &[u8]) -> Result<Message, String> {
     flatbuffers::root::<Message>(buf).map_err(|e| match e {

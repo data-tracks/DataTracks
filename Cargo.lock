@@ -759,7 +759,6 @@ dependencies = [
  "reqwest",
  "rumqttd",
  "rusqlite",
- "schemas",
  "serde",
  "serde_json",
  "speedy",
@@ -770,6 +769,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "tracing-test",
+ "track-rails",
  "uuid",
  "value",
 ]
@@ -2784,14 +2784,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "schemas"
-version = "0.0.1"
-source = "git+https://github.com/data-tracks/TrackRails.git?branch=generated#cd70521278212db21ecb304d40347a4bc5b0fdfe"
-dependencies = [
- "flatbuffers",
-]
-
-[[package]]
 name = "scopeguard"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3527,6 +3519,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "track-rails"
+version = "0.0.2"
+source = "git+https://github.com/data-tracks/TrackRails.git?branch=generated#42a37796458bf11d577e5149f6cdf39f2f8dd44e"
+dependencies = [
+ "flatbuffers",
+]
+
+[[package]]
 name = "try-lock"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3685,11 +3685,11 @@ dependencies = [
  "rumqttc",
  "rumqttd",
  "rusqlite",
- "schemas",
  "serde",
  "serde_json",
  "speedy",
  "tracing",
+ "track-rails",
 ]
 
 [[package]]

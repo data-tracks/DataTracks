@@ -16,7 +16,7 @@ use rumqttc::{Event, Incoming};
 use rumqttd::protocol::Publish;
 use rumqttd::Notification;
 use rusqlite::types::{FromSqlResult, ToSqlOutput, ValueRef};
-use schemas::message_generated::protocol::{
+use track_rails::message_generated::protocol::{
     Null as FlatNull, NullArgs, Value as FlatValue, ValueWrapper, ValueWrapperArgs,
 };
 use serde::{Deserialize, Serialize};

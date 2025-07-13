@@ -44,7 +44,7 @@ criterion = "0.6.0"
 uuid = { version = "1.16.0", features = ["v4"] }
 tracing-test = "0.2.5"
 
-[dependencies.schemas]
+[dependencies.track-rails]
 git = "https://github.com/data-tracks/TrackRails.git"
 branch = "generated"
 

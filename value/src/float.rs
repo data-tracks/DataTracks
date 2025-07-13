@@ -1,7 +1,7 @@
 use crate::int::Int;
 use crate::{Bool, Text};
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
-use schemas::message_generated::protocol::{Float as FlatFloat, FloatArgs};
+use track_rails::message_generated::protocol::{Float as FlatFloat, FloatArgs};
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 use std::cmp::min;

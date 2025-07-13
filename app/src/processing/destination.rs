@@ -12,7 +12,7 @@ use crate::tpc::TpcDestination;
 use crate::util::Tx;
 use crossbeam::channel::Sender;
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
-use schemas::message_generated::protocol::{Destination as FlatDestination, DestinationArgs};
+use track_rails::message_generated::protocol::{Destination as FlatDestination, DestinationArgs};
 use serde_json::{Map, Value};
 #[cfg(test)]
 use std::sync::Mutex;

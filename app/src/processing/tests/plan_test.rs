@@ -842,29 +842,6 @@ pub mod tests {
     }
 
     #[test]
-    fn wordcount_test() {
-        let values = vec![vec!["Hey there".into(), "how are you".into()]];
-        let res: Vec<Vec<Value>> = vec![vec![
-            "Hey".into(),
-            "there".into(),
-            "how".into(),
-            "are".into(),
-            "you".into(),
-        ]];
-        let source = 1;
-        let destination = 5;
-
-        test_single_in_out(
-            "1{sql|SELECT * FROM UNWIND(SELECT SPLIT($0, '\\s+') FROM $0)}",
-            values.clone(),
-            res.clone(),
-            source,
-            destination,
-            false,
-        );
-    }
-
-    #[test]
     fn group_test() {
         let values = vec![vec!["Hey".into(), "Hallo".into(), "Hey".into()]];
         let res: Vec<Vec<Value>> = vec![vec![
@@ -882,19 +859,6 @@ pub mod tests {
             destination,
             false,
         );
-    }
-
-    #[test]
-    fn wordcount_group_test() {
-        let values = vec![vec!["Hey Hallo".into(), "Hey".into()]];
-        let res: Vec<Vec<Value>> = vec![vec![
-            vec!["Hey".into(), 2.into()].into(),
-            vec!["Hallo".into(), 1.into()].into(),
-        ]];
-        let source = 1;
-        let destination = 5;
-
-        test_single_in_out("1{sql|SELECT unwind, COUNT(*) FROM UNWIND(SELECT SPLIT($0, '\\s+') FROM $0) GROUP BY unwind}", values.clone(), res.clone(), source, destination, false);
     }
 
     #[test]
@@ -1023,7 +987,7 @@ pub mod tests {
         );
     }
 
-    fn test_single_in_out(
+    pub(crate) fn test_single_in_out(
         query: &str,
         values: Vec<Vec<Value>>,
         res: Vec<Vec<Value>>,

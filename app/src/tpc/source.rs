@@ -9,7 +9,7 @@ use crate::ui::{ConfigModel, StringModel};
 use crate::util::Tx;
 use crate::util::{deserialize_message, new_id};
 use crossbeam::channel::{unbounded, Receiver, Sender};
-use schemas::message_generated::protocol::{Payload};
+use track_rails::message_generated::protocol::{Payload};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::sync::Arc;

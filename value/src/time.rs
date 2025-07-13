@@ -1,7 +1,7 @@
 use crate::{Text, Value};
 use chrono::{DateTime, Duration, TimeZone, Timelike, Utc};
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
-use schemas::message_generated::protocol::{Time as FlatTime, TimeArgs};
+use track_rails::message_generated::protocol::{Time as FlatTime, TimeArgs};
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 use std::cmp::Ordering;

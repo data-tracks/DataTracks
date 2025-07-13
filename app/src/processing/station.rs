@@ -1,4 +1,4 @@
-use schemas::message_generated::protocol::StationArgs;
+use track_rails::message_generated::protocol::StationArgs;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
@@ -17,7 +17,7 @@ use crate::util::{Rx, Tx};
 use crossbeam::channel;
 use crossbeam::channel::{unbounded, Receiver};
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
-use schemas::message_generated::protocol::Station as FlatStation;
+use track_rails::message_generated::protocol::Station as FlatStation;
 use tracing::{debug, error};
 use value::train::Train;
 use value::Time;

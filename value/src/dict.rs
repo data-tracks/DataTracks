@@ -1,7 +1,7 @@
 use crate::value::Value;
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use json::parse;
-use schemas::message_generated::protocol::{
+use track_rails::message_generated::protocol::{
     Document, DocumentArgs, KeyValue, KeyValueArgs, Text, TextArgs, Value as FlatValue,
 };
 use serde::{Deserialize, Serialize};

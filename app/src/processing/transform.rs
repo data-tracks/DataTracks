@@ -13,10 +13,10 @@ use crate::sql::{PostgresTransformer, SqliteTransformer};
 use crate::util::storage::ValueStore;
 use crate::language;
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
-use schemas::message_generated::protocol::{
+use track_rails::message_generated::protocol::{
     LanguageTransform as FlatLanguageTransform, Transform as FlatTransform,
 };
-use schemas::message_generated::protocol::{LanguageTransformArgs, TransformArgs, TransformType};
+use track_rails::message_generated::protocol::{LanguageTransformArgs, TransformArgs, TransformType};
 use serde_json::Map;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};

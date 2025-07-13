@@ -1,5 +1,5 @@
 use crate::algebra::{Algebra, AlgebraRoot, Algebraic};
-use crate::algebra::visitor::{PlainVisitor};
+use crate::algebra::visitor::{Visitor};
 
 pub struct Purger{
     visited: Vec<usize>
@@ -15,7 +15,7 @@ impl Purger {
     }
 }
 
-impl PlainVisitor for Purger {
+impl Visitor for Purger {
     fn visit(&mut self, alg: &Algebraic){
         self.visited.push(alg.id());
     }
@@ -24,7 +24,7 @@ impl PlainVisitor for Purger {
 #[cfg(test)]
 mod tests{
     use crate::algebra::AlgebraRoot;
-    use crate::algebra::purge::Purger;
+    use crate::algebra::analyse::purge::Purger;
 
     #[test]
     fn test_basic() {
@@ -35,8 +35,6 @@ mod tests{
         purger.purge(&mut root);
 
         assert_eq!(purger.visited, vec![0]);
-
     }
-
-
+    
 }

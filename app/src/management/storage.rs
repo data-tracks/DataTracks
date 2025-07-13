@@ -9,7 +9,7 @@ use crate::util::new_channel;
 use crate::util::Tx;
 use axum::routing::get;
 use axum::Router;
-use schemas::message_generated::protocol::Create;
+use track_rails::message_generated::protocol::Create;
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::sync::Mutex;

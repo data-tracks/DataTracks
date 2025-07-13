@@ -1,7 +1,7 @@
 use crate::{Time, Value};
 use flatbuffers::FlatBufferBuilder;
 use redb::TypeName;
-use schemas::message_generated::protocol::{
+use track_rails::message_generated::protocol::{
     Message, MessageArgs, OkStatus, OkStatusArgs, Payload, Status, Train as FlatTrain, TrainArgs,
 };
 use serde::{Deserialize, Serialize};
@@ -104,11 +104,11 @@ impl From<Train> for Vec<u8> {
     }
 }
 
-impl TryFrom<schemas::message_generated::protocol::Train<'_>> for Train {
+impl TryFrom<track_rails::message_generated::protocol::Train<'_>> for Train {
     type Error = String;
 
     fn try_from(
-        value: schemas::message_generated::protocol::Train<'_>,
+        value: track_rails::message_generated::protocol::Train<'_>,
     ) -> Result<Self, Self::Error> {
         let _topic = value.topic();
 

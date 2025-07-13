@@ -11,14 +11,14 @@ use crate::util::new_id;
 use core::default::Default;
 use crossbeam::channel::{unbounded, Receiver, Sender};
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
-use schemas::message_generated::protocol::KeyValueU64StationArgs;
-use schemas::message_generated::protocol::{
+use track_rails::message_generated::protocol::KeyValueU64StationArgs;
+use track_rails::message_generated::protocol::{
     KeyValueStringTransform, KeyValueStringTransformArgs, KeyValueU64Destination,
     KeyValueU64DestinationArgs, KeyValueU64Source, KeyValueU64SourceArgs, KeyValueU64Station,
     PlanStatus,
 };
-use schemas::message_generated::protocol::{KeyValueU64VecU64, KeyValueU64VecU64Args};
-use schemas::message_generated::protocol::{Plan as FlatPlan, PlanArgs};
+use track_rails::message_generated::protocol::{KeyValueU64VecU64, KeyValueU64VecU64Args};
+use track_rails::message_generated::protocol::{Plan as FlatPlan, PlanArgs};
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize, Serializer};
 use serde_json::{Map, Value};
@@ -405,7 +405,7 @@ impl Plan {
     pub(crate) fn flatterize<'builder>(
         &self,
         builder: &mut FlatBufferBuilder<'builder>,
-    ) -> WIPOffset<schemas::message_generated::protocol::Plan<'builder>> {
+    ) -> WIPOffset<track_rails::message_generated::protocol::Plan<'builder>> {
         // Serialize strings
         let name = builder.create_string(&self.name);
         let id = self.id as u64;

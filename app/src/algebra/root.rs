@@ -7,7 +7,7 @@ use std::collections::{HashMap, HashSet};
 #[cfg(test)]
 use tracing::info;
 use value::Value;
-use crate::algebra::visitor::{PlainVisitor, Visitor};
+use crate::algebra::visitor::{Visitor, TypeVisitor};
 
 #[derive(Clone, Debug)]
 pub struct AlgebraRoot {
@@ -318,13 +318,13 @@ impl AlgebraRoot {
             .derive_output_layout(inputs, self)
     }
 
-    pub fn traverse(&self, visitor: &mut dyn PlainVisitor){
+    pub fn traverse(&self, visitor: &mut dyn Visitor){
         for end in &self.ends {
             self.traverse_alg(end, visitor);
         }
     }
 
-    fn traverse_alg(&self, id: &usize, visitor: &mut dyn PlainVisitor) {
+    fn traverse_alg(&self, id: &usize, visitor: &mut dyn Visitor) {
         if let None = self.nodes.get(id) {
             return
         } else if let Some(alg) = self.nodes.get(id) {

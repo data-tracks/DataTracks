@@ -1,6 +1,6 @@
 use crate::value::Value;
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
-use schemas::message_generated::protocol::{List, ListArgs};
+use track_rails::message_generated::protocol::{List, ListArgs};
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 use std::fmt::Formatter;

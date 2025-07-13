@@ -104,7 +104,7 @@ impl StreamUser for TpcManagement {
 mod test {
     use crate::util::deserialize_message;
     use flatbuffers::FlatBufferBuilder;
-    use schemas::message_generated::protocol::{
+    use track_rails::message_generated::protocol::{
         Message, MessageArgs, OkStatus, OkStatusArgs, Payload, RegisterRequest,
         RegisterRequestArgs, Status,
     };
