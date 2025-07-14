@@ -30,7 +30,7 @@ fn startup(url: String, port: u16, storage: Arc<Mutex<Storage>>) {
     let management = TpcManagement {
         interrupt: tx.clone(),
         control: rx.clone(),
-        api: Arc::new(Mutex::new(Api::default())),
+        api: Arc::new(Mutex::new(Api::admin())),
         storage: Arc::clone(&storage),
     };
     info!(

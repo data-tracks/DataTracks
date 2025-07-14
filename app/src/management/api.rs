@@ -1,16 +1,25 @@
 use crate::management::Storage;
-use flatbuffers::{FlatBufferBuilder, ForwardsUOffset};
+use flatbuffers::{FlatBufferBuilder};
 use track_rails::message_generated::protocol::{BindRequest, BindRequestArgs, Catalog, CatalogArgs, CreateType, GetType, Message, MessageArgs, OkStatus, OkStatusArgs, Payload, Plans, PlansArgs, RegisterRequest, RegisterResponse, RegisterResponseArgs, Status};
 use std::sync::{Arc, Mutex};
 use tracing::{debug, info};
+use crate::management::permission::ApiPermission;
 
 #[derive(Debug, Default)]
 pub struct Api {
     clients: Vec<isize>,
     count: isize,
+    permissions: Vec<ApiPermission>
 }
 
 impl Api {
+    pub(crate) fn admin() -> Api {
+        Api{
+            permissions: vec![ApiPermission::Admin],
+            ..Default::default()
+        }
+    }
+
     pub fn handle_message(
         storage: Arc<Mutex<Storage>>,
         api: Arc<Mutex<Api>>,
@@ -160,8 +169,12 @@ fn handle_register(
     let plans = Plans::create(&mut builder, &PlansArgs { plans: Some(plans) });
     let catalog = Catalog::create(&mut builder, &CatalogArgs { plans: Some(plans) });
 
-    let permissions = builder.create_vector::<ForwardsUOffset<&str>>(&vec![]); // todo add permissions
+    let permissions = api.permissions.iter().map(|p| {
+        let str = p.to_string();
+        builder.create_string(&str)
+    }).collect::<Vec<_>>();
 
+    let permissions = builder.create_vector(&permissions);
 
     let register = RegisterResponse::create(
         &mut builder,
@@ -178,7 +191,7 @@ fn handle_register(
     let msg = Message::create(
         &mut builder,
         &MessageArgs {
-            data_type: Payload::RegisterRequest,
+            data_type: Payload::RegisterResponse,
             data: Some(register),
             status_type: Status::OkStatus,
             status: Some(status),

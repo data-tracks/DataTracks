@@ -6,3 +6,4 @@ mod api;
 mod engine;
 mod management;
 mod storage;
+mod permission;
