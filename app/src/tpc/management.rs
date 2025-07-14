@@ -9,6 +9,7 @@ use std::thread;
 use std::time::Duration;
 use tokio::time::sleep;
 use tracing::{debug, error, info, warn};
+use track_rails::message_generated::protocol::Payload;
 
 pub fn start_tpc(url: String, port: u16, storage: Arc<Mutex<Storage>>) {
     let res = thread::Builder::new()
@@ -68,6 +69,11 @@ impl StreamUser for TpcManagement {
 
                     match deserialize_message(&buffer) {
                         Ok(msg) => {
+                            if matches!(msg.data_type(), Payload::Disconnect) {
+                                info!("Disconnected from server");
+                                return;
+                            }
+                            
                             match Api::handle_message(self.storage.clone(), self.api.clone(), msg) {
                                 Ok(res) => match stream.write_all(&res).await {
                                     Ok(_) => {}

@@ -22,6 +22,7 @@ use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
 use tower_http::cors::CorsLayer;
 use tracing::{debug, error, info};
+use track_rails::message_generated::protocol::Payload;
 /*curl --header "Content-Type: application/json" --request POST --json '{"name":"wordcount","plan":"0--1{sql|SELECT * FROM $0}--2\nIn\nHttp{\"url\": \"localhost\", \"port\": \"3666\"}:0\nOut\nHttp{\"url\": \"localhost\", \"port\": \"4666\"}:2"}' http://localhost:2666/plans/create*/
 /*curl --header "Content-Type: application/json" --request POST --json '{"name":"wordcount"}' http://localhost:2666/plans/start*/
 
@@ -121,12 +122,21 @@ async fn handle_socket(state: WebState, mut socket: WebSocket) {
                 info!("Received: {}", text);
             }
             Message::Binary(bin) => {
-                let message = deserialize_message(bin.as_ref());
+                let message = match deserialize_message(bin.as_ref()) {
+                    Ok(msg) => msg,
+                    Err(err) => continue
+                };
                 info!("Received message: {:?}", message);
+
+                if matches!(message.data_type(), Payload::Disconnect) {
+                    info!("Disconnected from server");
+                    return;
+                }
+
                 let _res = match Api::handle_message(
                     state.storage.clone(),
                     state.api.clone(),
-                    message.unwrap(),
+                    message,
                 ) {
                     Ok(msg) => socket.send(Message::from(msg)),
                     Err(err) => socket.send(Message::from(err)),
