@@ -1,8 +1,9 @@
 use crate::management::Storage;
 use flatbuffers::{FlatBufferBuilder};
-use track_rails::message_generated::protocol::{BindRequest, BindRequestArgs, Catalog, CatalogArgs, CreateType, GetType, Message, MessageArgs, OkStatus, OkStatusArgs, Payload, Plans, PlansArgs, RegisterRequest, RegisterResponse, RegisterResponseArgs, Status};
+use track_rails::message_generated::protocol::{BindRequest, BindRequestArgs, Catalog, CatalogArgs, CreatePlanRequest, CreatePlanResponse, CreatePlanResponseArgs, Message, MessageArgs, OkStatus, OkStatusArgs, Payload, Plans, PlansArgs, RegisterRequest, RegisterResponse, RegisterResponseArgs, Status};
 use std::sync::{Arc, Mutex};
 use tracing::{debug, info};
+use track_rails::message_generated::protocol;
 use crate::management::permission::ApiPermission;
 
 #[derive(Debug, Default)]
@@ -30,43 +31,23 @@ impl Api {
                 debug!("Received a NONE");
                 Self::empty_msg()
             }
-            Payload::Create => {
-                debug!("Received a CREATE");
-                let create = msg.data_as_create().unwrap();
-                match create.create_type_type() {
-                    CreateType::NONE => {
-                        info!("Received a NONE");
-                        Self::build_status_response("No response".to_string())
-                    }
-                    CreateType(2_u8..=u8::MAX) => todo!(),
-                    CreateType::CreatePlanRequest => {
-                        info!("Received a CREATE PLAN");
-                        match storage.lock().unwrap().create_plan(create) {
-                            Ok(_) => Self::build_status_response("Created plan".to_string()),
-                            Err(err) => Self::build_status_response(err),
-                        }
-                    }
-                }
+            Payload::CreatePlanRequest => {
+                info!("Received a CREATE PLAN");
+                Self::handle_create_plan(&storage, msg.data_as_create_plan_request().unwrap())
             }
             Payload::RegisterRequest => {
                 debug!("Received a REGISTER");
-
                 handle_register(msg.data_as_register_request().unwrap(), storage, api)
             }
-            Payload::Get => {
+            Payload::RegisterResponse => {
+                todo!()
+            }
+            Payload::GetPlansRequest => {
                 debug!("Received a GET");
-                let get = msg.data_as_get().unwrap();
-
-                match get.get_type_type() {
-                    GetType::NONE => Self::empty_msg(),
-                    GetType(3_u8..=u8::MAX) => todo!(),
-                    GetType::GetPlans => {
-                        todo!()
-                    }
-                    GetType::GetPlan => {
-                        todo!()
-                    }
-                }
+                todo!();
+            }
+            Payload::GetPlanRequest => {
+                todo!()
             }
             Payload::Train => {
                 debug!("Received a Train");
@@ -92,7 +73,30 @@ impl Api {
                     Self::empty_msg()
                 }
             },
-            Payload(4_u8..=u8::MAX) => todo!(),
+            _ => todo!(),
+        }
+    }
+
+    fn handle_create_plan(storage: &Arc<Mutex<Storage>>, create: CreatePlanRequest) -> Result<Vec<u8>, Vec<u8>> {
+        match storage.lock().unwrap().create_plan(create) {
+            Ok(id) => {
+                let mut builder = FlatBufferBuilder::new();
+
+                let create = CreatePlanResponse::create(&mut builder, &CreatePlanResponseArgs{ id: id as u64 }).as_union_value();
+
+                let status = OkStatus::create(&mut builder, &OkStatusArgs{}).as_union_value();
+
+                let message = protocol::Message::create(&mut builder, &MessageArgs{
+                    data: Some(create),
+                    status_type: Status::OkStatus,
+                    data_type: Payload::CreatePlanResponse,
+                    status: Some(status),
+                });
+
+                builder.finish(message, None);
+                Ok(builder.finished_data().to_vec())
+            },
+            Err(err) => Self::build_status_response(err),
         }
     }
 

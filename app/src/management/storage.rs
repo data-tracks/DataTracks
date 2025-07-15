@@ -9,7 +9,7 @@ use crate::util::new_channel;
 use crate::util::Tx;
 use axum::routing::get;
 use axum::Router;
-use track_rails::message_generated::protocol::Create;
+use track_rails::message_generated::protocol::{CreatePlanRequest};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -146,8 +146,7 @@ impl Storage {
         (tx, water_tx)
     }
 
-    pub fn create_plan(&mut self, create: Create) -> Result<(), String> {
-        let create_plan = create.create_type_as_create_plan_request().unwrap();
+    pub fn create_plan(&mut self, create_plan: CreatePlanRequest) -> Result<usize, String> {
         if create_plan.name().is_some() && create_plan.plan().is_some() {
             let plan = Plan::parse(create_plan.plan().unwrap());
 
@@ -156,9 +155,11 @@ impl Storage {
                 Err(_) => todo!(),
             };
 
+            let id = plan.id;
+
             plan.set_name(create_plan.name().unwrap().to_string());
             self.add_plan(plan);
-            Ok(())
+            Ok(id)
         } else {
             Err("No name provided with create plan".to_string())
         }

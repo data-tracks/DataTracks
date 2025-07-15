@@ -1,9 +1,7 @@
 #[cfg(test)]
 mod test{
+    use crate::processing::tests::plan_test::tests::test_single_in_out;
     use value::Value;
-    use crate::processing::Plan;
-    use crate::processing::station::Command::{Ready, Stop};
-    use crate::processing::tests::plan_test::tests::{dump, test_single_in_out};
 
     #[test]
     fn wordcount_test() {
