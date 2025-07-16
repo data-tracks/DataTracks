@@ -18,6 +18,7 @@ use std::time::Duration;
 use tokio::runtime::Runtime;
 use tracing::{debug, error, info};
 
+#[derive(Clone)]
 pub struct MqttDestination {
     id: usize,
     port: u16,

@@ -1,6 +1,6 @@
 use crate::processing::option::Configurable;
 use crate::processing::plan::SourceModel;
-use crate::processing::source::Source;
+use crate::processing::source::{Source, Sources};
 use crate::processing::station::Command;
 use crate::processing::Train;
 use crate::tpc::server::{handle_register, StreamUser, TcpStream};
@@ -17,6 +17,7 @@ use std::thread;
 use std::time::Duration;
 use tokio::time::sleep;
 use tracing::{debug, error, info, warn};
+use crate::processing::source::Sources::Tpc;
 
 #[derive(Clone)]
 pub struct TpcSource {
@@ -115,7 +116,7 @@ impl Source for TpcSource {
         }
     }
 
-    fn from(configs: HashMap<String, ConfigModel>) -> Result<Box<dyn Source>, String>
+    fn from(configs: HashMap<String, ConfigModel>) -> Result<Sources, String>
     where
         Self: Sized,
     {
@@ -130,7 +131,7 @@ impl Source for TpcSource {
             return Err(String::from("Could not create TpcSource."));
         };
 
-        Ok(Box::new(TpcSource::new(url.to_owned(), port as u16)))
+        Ok(Tpc(TpcSource::new(url.to_owned(), port as u16)))
     }
 
     fn serialize_default() -> Result<SourceModel, ()>

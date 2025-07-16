@@ -7,7 +7,7 @@ use std::collections::{HashMap, HashSet};
 #[cfg(test)]
 use tracing::info;
 use value::Value;
-use crate::algebra::visitor::{Visitor, TypeVisitor};
+use crate::algebra::visitor::{Visitor};
 
 #[derive(Clone, Debug)]
 pub struct AlgebraRoot {

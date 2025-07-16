@@ -10,7 +10,7 @@ pub mod dummy {
     use crate::processing::destination::Destination;
     use crate::processing::option::Configurable;
     use crate::processing::plan::{DestinationModel, SourceModel};
-    use crate::processing::source::Source;
+    use crate::processing::source::{Source, Sources};
     use crate::processing::station::Command;
     use crate::processing::station::Command::{Ready, Stop};
     use crate::processing::transform::{Transform, Transformer};
@@ -23,6 +23,7 @@ pub mod dummy {
     use value::train::Train;
     use value::Value;
 
+    #[derive(Clone)]
     pub struct DummySource {
         id: usize,
         values: Option<Vec<Vec<Value>>>,
@@ -170,7 +171,7 @@ pub mod dummy {
             }
         }
 
-        fn from(_configs: HashMap<String, ConfigModel>) -> Result<Box<dyn Source>, String>
+        fn from(_configs: HashMap<String, ConfigModel>) -> Result<Sources, String>
         where
             Self: Sized,
         {
@@ -184,6 +185,7 @@ pub mod dummy {
         }
     }
 
+    #[derive(Clone)]
     pub struct DummyDestination {
         id: usize,
         result_size: usize,
@@ -411,7 +413,7 @@ pub mod dummy {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::processing::destination::Destination;
+    use crate::processing::destination::{Destination, Destinations};
     use crate::processing::plan::Plan;
     use crate::processing::station::Command::{Ready, Stop};
     use crate::processing::station::Station;
@@ -424,6 +426,8 @@ pub mod tests {
     use std::time::{Duration, SystemTime};
     use std::vec;
     use value::{Dict, Value};
+    use crate::processing::source::Sources;
+    use crate::processing::source::Sources::Dummy;
 
     pub fn dict_values(values: Vec<Value>) -> Vec<Value> {
         let mut dicts = vec![];
@@ -653,12 +657,12 @@ pub mod tests {
 
         plan.build(0, station);
 
-        plan.add_source(Box::new(source));
+        plan.add_source(Sources::Dummy(source));
         plan.connect_in_out(0, id);
 
         let destination = DummyDestination::new(length);
         let dest_id = destination.id();
-        plan.add_destination(Box::new(destination));
+        plan.add_destination(Destinations::Dummy(destination));
         plan.connect_in_out(0, dest_id);
 
         plan.operate().unwrap();

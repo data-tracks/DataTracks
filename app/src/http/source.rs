@@ -1,7 +1,7 @@
 use crate::http::util::{parse_addr, receive, receive_ws};
 use crate::processing::option::Configurable;
 use crate::processing::plan::SourceModel;
-use crate::processing::source::Source;
+use crate::processing::source::{Source, Sources};
 use crate::processing::station::Command;
 use crate::processing::Train;
 use crate::ui::ConfigModel;
@@ -19,6 +19,7 @@ use tokio::runtime::Runtime;
 use tower_http::cors::CorsLayer;
 use tracing::error;
 use tracing::log::debug;
+use crate::processing::source::Sources::Http;
 
 // ws: npx wscat -c ws://127.0.0.1:3666/ws/data
 // messages like: curl --json '{"website": "linuxize.com"}' localhost:5555/data/isabel
@@ -151,7 +152,7 @@ impl Source for HttpSource {
         }
     }
 
-    fn from(configs: HashMap<String, ConfigModel>) -> Result<Box<dyn Source>, String> {
+    fn from(configs: HashMap<String, ConfigModel>) -> Result<Sources, String> {
         let port = match configs.get("port") {
             Some(port) => match port {
                 ConfigModel::String(port) => port.string.parse::<u16>().unwrap(),
@@ -164,7 +165,7 @@ impl Source for HttpSource {
             Some(ConfigModel::String(url)) => url.string.clone(),
             _ => return Err(String::from("Could not create HttpSource.")),
         };
-        Ok(Box::new(HttpSource::new(url, port)))
+        Ok(Http(HttpSource::new(url, port)))
     }
 
     fn serialize_default() -> Result<SourceModel, ()> {

@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
 use crate::mqtt::MqttSource;
@@ -17,19 +18,61 @@ use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use track_rails::message_generated::protocol::{Source as FlatSource, SourceArgs};
 use serde_json::{Map, Value};
 use value::train::Train;
+use crate::processing::source::Sources::{Http, Lite, Mqtt, Tpc};
+#[cfg(test)]
+use crate::processing::source::Sources::Dummy;
 
-pub fn parse_source(type_: &str, options: Map<String, Value>) -> Result<Box<dyn Source>, String> {
-    let source: Box<dyn Source> = match type_.to_ascii_lowercase().as_str() {
-        "mqtt" => Box::new(MqttSource::parse(options)?),
-        "sqlite" => Box::new(LiteSource::parse(options)?),
-        "http" => Box::new(HttpSource::parse(options)?),
-        "tpc" => Box::new(TpcSource::parse(options)?),
+pub fn parse_source(type_: &str, options: Map<String, Value>) -> Result<Sources, String> {
+    let source = match type_.to_ascii_lowercase().as_str() {
+        "mqtt" => Mqtt(MqttSource::parse(options)?),
+        "sqlite" => Lite(LiteSource::parse(options)?),
+        "http" => Http(HttpSource::parse(options)?),
+        "tpc" => Tpc(TpcSource::parse(options)?),
         #[cfg(test)]
-        "dummy" => Box::new(DummySource::parse(options)?),
+        "dummy" => Dummy(DummySource::parse(options)?),
         _ => Err(format!("Invalid type: {}", type_))?,
     };
     Ok(source)
 }
+
+#[derive(Clone)]
+pub enum Sources{
+    Mqtt(MqttSource),
+    Lite(LiteSource),
+    Http(HttpSource),
+    Tpc(TpcSource),
+    #[cfg(test)]
+    Dummy(DummySource),
+}
+
+impl Deref for Sources{
+    type Target = dyn Source;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Sources::Mqtt(m) => m,
+            Sources::Lite(s) => s,
+            Sources::Http(h) => h,
+            Sources::Tpc(t) => t,
+            #[cfg(test)]
+            Sources::Dummy(d) => d
+        }
+    }
+}
+
+impl DerefMut for Sources{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        match self {
+            Sources::Mqtt(m) => m,
+            Sources::Lite(s) => s,
+            Sources::Http(h) => h,
+            Sources::Tpc(t) => t,
+            #[cfg(test)]
+            Sources::Dummy(d) => d
+        }
+    }
+}
+
 
 pub trait Source: Send + Sync + Configurable {
     fn parse(options: Map<String, Value>) -> Result<Self, String>
@@ -68,7 +111,7 @@ pub trait Source: Send + Sync + Configurable {
 
     fn serialize(&self) -> SourceModel;
 
-    fn from(configs: HashMap<String, ConfigModel>) -> Result<Box<dyn Source>, String>
+    fn from(configs: HashMap<String, ConfigModel>) -> Result<Sources, String>
     where
         Self: Sized;
 

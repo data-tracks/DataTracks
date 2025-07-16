@@ -1,7 +1,7 @@
-use crate::processing::destination::{parse_destination, Destination};
+use crate::processing::destination::{parse_destination, Destinations};
 use crate::processing::option::Configurable;
 use crate::processing::plan::Status::Stopped;
-use crate::processing::source::{parse_source, Source};
+use crate::processing::source::{parse_source, Sources};
 use crate::processing::station::{Command, Station};
 use crate::processing::transform;
 #[cfg(test)]
@@ -37,8 +37,8 @@ pub struct Plan {
     pub lines: HashMap<usize, Vec<usize>>,
     pub stations: HashMap<usize, Station>,
     pub stations_to_in_outs: HashMap<usize, Vec<usize>>,
-    pub sources: HashMap<usize, Box<dyn Source>>,
-    pub destinations: HashMap<usize, Box<dyn Destination>>,
+    pub sources: HashMap<usize, Sources>,
+    pub destinations: HashMap<usize, Destinations>,
     pub controls: HashMap<usize, Vec<Sender<Command>>>,
     pub control_receiver: (Arc<Sender<Command>>, Receiver<Command>),
     pub status: Status,
@@ -49,6 +49,25 @@ pub struct Plan {
 impl Plan {
     pub(crate) fn get_result(&self, id: usize) -> Arc<Mutex<Vec<Train>>> {
         self.destinations.get(&id).unwrap().get_result_handle()
+    }
+}
+
+impl Clone for Plan {
+    fn clone(&self) -> Self {
+        let (tx, rx) = unbounded();
+        Plan{
+            id: self.id,
+            name: self.name.clone(),
+            lines: self.lines.clone(),
+            stations: self.stations.clone(),
+            stations_to_in_outs: self.stations_to_in_outs.clone(),
+            sources: self.sources.clone(),
+            destinations: self.destinations.clone(),
+            controls: self.controls.clone(),
+            control_receiver: (Arc::new(tx), rx),
+            status: Status::Running,
+            transforms: self.transforms.clone(),
+        }
     }
 }
 
@@ -112,7 +131,7 @@ impl Plan {
 
         if !self.sources.is_empty() {
             dump += "\nIn\n";
-            let mut sorted = self.sources.values().collect::<Vec<&Box<dyn Source>>>();
+            let mut sorted = self.sources.values().cloned().collect::<Vec<_>>();
             sorted.sort_by_key(|s| s.name());
             dump += &sorted
                 .into_iter()
@@ -142,7 +161,7 @@ impl Plan {
             let mut sorted = self
                 .destinations
                 .values()
-                .collect::<Vec<&Box<dyn Destination>>>();
+                .collect::<Vec<_>>();
             sorted.sort_by_key(|s| s.name());
             dump += &sorted
                 .into_iter()
@@ -614,12 +633,12 @@ impl Plan {
             .push(in_out);
     }
 
-    pub(crate) fn add_source(&mut self, source: Box<dyn Source>) {
+    pub(crate) fn add_source(&mut self, source: Sources) {
         let id = source.id();
         self.sources.insert(id, source);
     }
 
-    pub(crate) fn add_destination(&mut self, destination: Box<dyn Destination>) {
+    pub(crate) fn add_destination(&mut self, destination: Destinations) {
         let id = destination.id();
         self.destinations.insert(id, destination);
     }

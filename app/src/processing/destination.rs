@@ -1,3 +1,4 @@
+use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
 use crate::http::destination::HttpDestination;
@@ -17,21 +18,62 @@ use serde_json::{Map, Value};
 #[cfg(test)]
 use std::sync::Mutex;
 use value::train::Train;
+use crate::processing::destination::Destinations::{Http, Lite, Mqtt, Tpc};
+#[cfg(test)]
+use crate::processing::destination::Destinations::Dummy;
 
 pub fn parse_destination(
     type_: &str,
     options: Map<String, Value>,
-) -> Result<Box<dyn Destination>, String> {
-    let destination: Box<dyn Destination> = match type_.to_ascii_lowercase().as_str() {
-        "mqtt" => Box::new(MqttDestination::parse(options)?),
-        "sqlite" => Box::new(LiteDestination::parse(options)?),
-        "http" => Box::new(HttpDestination::parse(options)?),
-        "tpc" => Box::new(TpcDestination::parse(options)?),
+) -> Result<Destinations, String> {
+    let destination = match type_.to_ascii_lowercase().as_str() {
+        "mqtt" => Mqtt(MqttDestination::parse(options)?),
+        "sqlite" => Lite(LiteDestination::parse(options)?),
+        "http" => Http(HttpDestination::parse(options)?),
+        "tpc" => Tpc(TpcDestination::parse(options)?),
         #[cfg(test)]
-        "dummy" => Box::new(DummyDestination::parse(options)?),
+        "dummy" => Dummy(DummyDestination::parse(options)?),
         _ => Err(format!("Invalid type: {}", type_))?,
     };
     Ok(destination)
+}
+
+#[derive(Clone)]
+pub enum Destinations{
+    Mqtt(MqttDestination),
+    Lite(LiteDestination),
+    Http(HttpDestination),
+    Tpc(TpcDestination),
+    #[cfg(test)]
+    Dummy(DummyDestination),
+}
+
+impl Deref for Destinations{
+    type Target = dyn Destination;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Mqtt(m) => m,
+            Lite(l) => l,
+            Http(h) => h,
+            Tpc(t) => t,
+            #[cfg(test)]
+            Dummy(d) => d
+        }
+    }
+}
+
+impl DerefMut for Destinations{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        match self {
+            Mqtt(m) => m,
+            Lite(l) => l,
+            Http(h) => h,
+            Tpc(t) => t,
+            #[cfg(test)]
+            Dummy(d) => d
+        }
+    }
 }
 
 pub trait Destination: Send + Configurable + Sync {

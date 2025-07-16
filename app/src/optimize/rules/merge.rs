@@ -1,3 +1,4 @@
+use tracing::debug;
 use crate::algebra::{
     AggOp, Algebra, AlgebraRoot, Algebraic, Filter, Op, Operator, Project, TupleOp,
 };
@@ -38,7 +39,7 @@ fn match_rule_with_child(rule: &MergeRule, algebra: &Algebraic, root: &AlgebraRo
             _ => false,
         },
         _ => {
-            println!("{:?} {:?}", algebra, rule);
+            debug!("{:?} {:?}", algebra, rule);
             false
         }
     }

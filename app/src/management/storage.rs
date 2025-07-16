@@ -1,8 +1,8 @@
 use crate::http::util;
 use crate::http::util::{parse_addr, DestinationState};
-use crate::processing::destination::Destination;
+use crate::processing::destination::{Destination, Destinations};
 use crate::processing::plan::Status;
-use crate::processing::source::Source;
+use crate::processing::source::{Source, Sources};
 use crate::processing::station::Command;
 use crate::processing::{transform, Plan, Train};
 use crate::util::new_channel;
@@ -165,12 +165,30 @@ impl Storage {
         }
     }
 
+    pub fn delete_plan(&mut self, id: usize) -> Result<(), String> {
+        let mut plans = self.plans.lock().unwrap();
+        plans.remove(&id).ok_or(format!("No plan with id {}", id)).map(|_| ())
+    }
+
+    pub fn get_plans_by_name<S: AsRef<str>>(&self, name: S) -> Vec<Plan> {
+        if name.as_ref().trim().is_empty() || name.as_ref().trim() == "*" {
+            return self.plans.lock().unwrap().clone().iter().map(|(_, plan)| plan.clone()).collect();
+        }
+
+        self.plans.lock().unwrap().iter()
+            .filter(|(_, p)|{
+                p.name.matches(name.as_ref()).next().is_some()
+            })
+            .map(|(_,p)|p.clone())
+            .collect()
+    }
+
     pub fn add_plan(&mut self, plan: Plan) {
         let mut plans = self.plans.lock().unwrap();
         plans.insert(plan.id, plan);
     }
 
-    pub fn add_source(&mut self, plan_id: usize, stop_id: usize, source: Box<dyn Source>) {
+    pub fn add_source(&mut self, plan_id: usize, stop_id: usize, source: Sources) {
         let mut plans = self.plans.lock().unwrap();
         let id = source.id();
         if let Some(p) = plans.get_mut(&plan_id) {
@@ -183,7 +201,7 @@ impl Storage {
         &mut self,
         plan_id: usize,
         stop_id: usize,
-        destination: Box<dyn Destination>,
+        destination: Destinations,
     ) {
         let mut plans = self.plans.lock().unwrap();
         let id = destination.id();

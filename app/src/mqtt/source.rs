@@ -1,7 +1,7 @@
 use crate::mqtt::broker;
 use crate::processing::option::Configurable;
 use crate::processing::plan::SourceModel;
-use crate::processing::source::Source;
+use crate::processing::source::{Source, Sources};
 use crate::processing::station::Command;
 use crate::processing::station::Command::Ready;
 use crate::processing::{plan, Train};
@@ -18,9 +18,11 @@ use std::{str, thread};
 use tokio::runtime::Runtime;
 use tracing::{debug, error, info, warn};
 use value::{Dict, Value};
+use crate::processing::source::Sources::Mqtt;
 
 // mosquitto_sub -h 127.0.0.1 -p 8888 -t "test/topic2" -i "id"
 // mosquitto_pub -h 127.0.0.1 -p 6666 -t "test/topic2" -m "Hello fromtods2" -i "testclient"
+#[derive(Clone)]
 pub struct MqttSource {
     id: usize,
     url: String,
@@ -155,7 +157,7 @@ impl Source for MqttSource {
         }
     }
 
-    fn from(configs: HashMap<String, ConfigModel>) -> Result<Box<dyn Source>, String> {
+    fn from(configs: HashMap<String, ConfigModel>) -> Result<Sources, String> {
         let port = if let Some(port) = configs.get("port") {
             port.as_int()?
         } else {
@@ -167,7 +169,7 @@ impl Source for MqttSource {
             return Err(String::from("Could not create MqttSource."));
         };
 
-        Ok(Box::new(MqttSource::new(url.to_owned(), port as u16)))
+        Ok(Mqtt(MqttSource::new(url.to_owned(), port as u16)))
     }
 
     fn serialize_default() -> Result<SourceModel, ()> {

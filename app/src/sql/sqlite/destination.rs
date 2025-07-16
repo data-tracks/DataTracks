@@ -17,6 +17,7 @@ use std::time::Duration;
 use tokio::runtime::Runtime;
 use tracing::error;
 
+#[derive(Clone)]
 pub struct LiteDestination {
     id: usize,
     sender: Tx<Train>,

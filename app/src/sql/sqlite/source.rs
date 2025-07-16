@@ -1,6 +1,6 @@
 use crate::processing::option::Configurable;
 use crate::processing::plan::SourceModel;
-use crate::processing::source::Source;
+use crate::processing::source::{Source, Sources};
 use crate::processing::station::Command;
 use crate::processing::station::Command::{Ready, Stop};
 use crate::processing::{plan, Train};
@@ -14,7 +14,9 @@ use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
+use crate::processing::source::Sources::Lite;
 
+#[derive(Clone)]
 pub struct LiteSource {
     id: usize,
     connector: SqliteConnector,
@@ -115,7 +117,7 @@ impl Source for LiteSource {
         }
     }
 
-    fn from(configs: HashMap<String, ConfigModel>) -> Result<Box<dyn Source>, String>
+    fn from(configs: HashMap<String, ConfigModel>) -> Result<Sources, String>
     where
         Self: Sized,
     {
@@ -130,7 +132,7 @@ impl Source for LiteSource {
             return Err(String::from("Could not create MqttSource."));
         };
 
-        Ok(Box::new(LiteSource::new(path, query)))
+        Ok(Lite(LiteSource::new(path, query)))
     }
 
     fn serialize_default() -> Result<SourceModel, ()>
