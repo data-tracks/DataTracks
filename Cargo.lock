@@ -3533,8 +3533,8 @@ dependencies = [
 
 [[package]]
 name = "track-rails"
-version = "0.0.6"
-source = "git+https://github.com/data-tracks/TrackRails.git?branch=generated#0b34bdf0f6fd713dc1bb02a02eb1a50b0aff6f99"
+version = "0.0.7"
+source = "git+https://github.com/data-tracks/TrackRails.git?branch=generated#b665bdd2a93af916e7b214bedfac29edaff15a4f"
 dependencies = [
  "flatbuffers",
 ]

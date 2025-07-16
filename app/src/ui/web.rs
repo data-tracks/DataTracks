@@ -124,7 +124,7 @@ async fn handle_socket(state: WebState, mut socket: WebSocket) {
             Message::Binary(bin) => {
                 let message = match deserialize_message(bin.as_ref()) {
                     Ok(msg) => msg,
-                    Err(err) => continue
+                    Err(_) => continue
                 };
                 info!("Received message: {:?}", message);
 

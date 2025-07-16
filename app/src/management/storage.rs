@@ -152,7 +152,7 @@ impl Storage {
 
             let mut plan = match plan {
                 Ok(plan) => plan,
-                Err(_) => todo!(),
+                Err(err) => return Err(err.to_string()),
             };
 
             let id = plan.id;
@@ -237,6 +237,17 @@ impl Storage {
                     Ok(_) => {}
                     Err(err) => error!("{}", err),
                 }
+            }
+        }
+    }
+
+    pub fn stop_plan(&mut self, id: usize) {
+        let mut lock = self.plans.lock().unwrap();
+        let plan = lock.get_mut(&id);
+        match plan {
+            None => {}
+            Some(p) => {
+                p.halt();
             }
         }
     }

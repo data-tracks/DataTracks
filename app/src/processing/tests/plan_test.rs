@@ -415,6 +415,7 @@ pub mod dummy {
 pub mod tests {
     use crate::processing::destination::{Destination, Destinations};
     use crate::processing::plan::Plan;
+    use crate::processing::source::Sources;
     use crate::processing::station::Command::{Ready, Stop};
     use crate::processing::station::Station;
     use crate::processing::tests::plan_test::dummy::{DummyDestination, DummySource};
@@ -426,8 +427,6 @@ pub mod tests {
     use std::time::{Duration, SystemTime};
     use std::vec;
     use value::{Dict, Value};
-    use crate::processing::source::Sources;
-    use crate::processing::source::Sources::Dummy;
 
     pub fn dict_values(values: Vec<Value>) -> Vec<Value> {
         let mut dicts = vec![];

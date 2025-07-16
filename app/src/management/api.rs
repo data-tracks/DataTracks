@@ -1,6 +1,6 @@
 use crate::management::Storage;
 use flatbuffers::{FlatBufferBuilder};
-use track_rails::message_generated::protocol::{BindRequest, BindRequestArgs, Catalog, CatalogArgs, CreatePlanRequest, CreatePlanResponse, CreatePlanResponseArgs, DeletePlanRequest, DeletePlanResponse, DeletePlanResponseArgs, FilterType, GetPlansRequest, Message, MessageArgs, OkStatus, OkStatusArgs, Payload, Plans, PlansArgs, RegisterRequest, RegisterResponse, RegisterResponseArgs, Status};
+use track_rails::message_generated::protocol::{BindRequest, BindRequestArgs, Catalog, CatalogArgs, CreatePlanRequest, CreatePlanResponse, CreatePlanResponseArgs, DeletePlanRequest, DeletePlanResponse, DeletePlanResponseArgs, FilterType, GetPlansRequest, Message, MessageArgs, OkStatus, OkStatusArgs, Payload, Plans, PlansArgs, RegisterRequest, RegisterResponse, RegisterResponseArgs, StartPlanRequest, StartPlanResponse, StartPlanResponseArgs, Status, StopPlanRequest, StopPlanRequestArgs, StopPlanResponse, StopPlanResponseArgs};
 use std::sync::{Arc, Mutex};
 use tracing::{debug, info};
 use tracing::field::debug;
@@ -43,6 +43,14 @@ impl Api {
             Payload::RegisterRequest => {
                 debug!("Received a REGISTER");
                 handle_register(msg.data_as_register_request().unwrap(), storage, api)
+            }
+            Payload::StartPlanRequest => {
+                debug!("Received a START PLAN");
+                handle_start_plan(msg.data_as_start_plan_request().unwrap(), storage, api)
+            }
+            Payload::StopPlanRequest => {
+                debug!("Received a STOP PLAN");
+                handle_stop_plan(msg.data_as_stop_plan_request().unwrap(), storage, api)
             }
             Payload::RegisterResponse => {
                 todo!()
@@ -111,6 +119,48 @@ impl Api {
         builder.finish(msg, None);
         Ok(builder.finished_data().to_vec())
     }
+}
+
+fn handle_stop_plan(rx: StopPlanRequest, storage: Arc<Mutex<Storage>>, api: Arc<Mutex<Api>>) -> Result<Vec<u8>, Vec<u8>> {
+    let id = rx.id() as usize;
+    let mut storage = storage.lock().unwrap();
+    storage.stop_plan(id);
+
+    let mut builder = FlatBufferBuilder::new();
+
+    let start = StopPlanResponse::create(&mut builder, &StopPlanResponseArgs{ already_stopped: false });
+    let status = OkStatus::create(&mut builder, &OkStatusArgs {});
+
+    let msg = Message::create(&mut builder, &MessageArgs{
+        data_type: Payload::StopPlanResponse,
+        data: Some(start.as_union_value()),
+        status_type: Status::OkStatus,
+        status: Some(status.as_union_value()),
+    });
+
+    builder.finish(msg, None);
+    Ok(builder.finished_data().to_vec())
+}
+
+fn handle_start_plan(rx: StartPlanRequest, storage: Arc<Mutex<Storage>>, api: Arc<Mutex<Api>>) -> Result<Vec<u8>, Vec<u8>> {
+    let id = rx.id() as usize;
+    let mut storage = storage.lock().unwrap();
+    storage.start_plan(id);
+
+    let mut builder = FlatBufferBuilder::new();
+
+    let start = StartPlanResponse::create(&mut builder, &StartPlanResponseArgs{ already_running: false });
+    let status = OkStatus::create(&mut builder, &OkStatusArgs {});
+
+    let msg = Message::create(&mut builder, &MessageArgs{
+        data_type: Payload::StartPlanResponse,
+        data: Some(start.as_union_value()),
+        status_type: Status::OkStatus,
+        status: Some(status.as_union_value()),
+    });
+
+    builder.finish(msg, None);
+    Ok(builder.finished_data().to_vec())
 }
 
 fn handle_get_plans(storage: &Arc<Mutex<Storage>>, rx: GetPlansRequest) -> Result<Vec<u8>, Vec<u8>> {
