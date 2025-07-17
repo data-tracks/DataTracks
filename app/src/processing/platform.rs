@@ -18,7 +18,7 @@ use crate::util::new_id;
 use crate::util::TriggerType;
 use crate::util::{new_channel, Rx, Tx};
 use crossbeam::channel;
-use crossbeam::channel::Receiver;
+use crossbeam::channel::{Receiver, SendError};
 pub use logos::Source;
 use parking_lot::RwLock;
 use tracing::{debug, error};
@@ -116,10 +116,16 @@ impl Platform {
             // are we struggling to handle incoming?
             let current = self.receiver.len();
             if current > threshold && !too_high {
-                control.send(Threshold(stop)).unwrap();
+                match control.send(Threshold(stop)) {
+                    Err(err) => error!("Failed to send stop signal {}", err),
+                    _ => {}
+                }
                 too_high = true;
             } else if current < threshold && too_high {
-                control.send(Okay(stop)).unwrap();
+                match control.send(Okay(stop)) {
+                    Err(err) => error!("Failed to send stop signal {}", err),
+                    _ => {}
+                }
                 too_high = false;
             }
 

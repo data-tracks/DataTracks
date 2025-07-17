@@ -1,10 +1,11 @@
 use crate::management::Storage;
 use flatbuffers::{FlatBufferBuilder};
-use track_rails::message_generated::protocol::{BindRequest, BindRequestArgs, Catalog, CatalogArgs, CreatePlanRequest, CreatePlanResponse, CreatePlanResponseArgs, DeletePlanRequest, DeletePlanResponse, DeletePlanResponseArgs, FilterType, GetPlansRequest, Message, MessageArgs, OkStatus, OkStatusArgs, Payload, Plans, PlansArgs, RegisterRequest, RegisterResponse, RegisterResponseArgs, StartPlanRequest, StartPlanResponse, StartPlanResponseArgs, Status, StopPlanRequest, StopPlanRequestArgs, StopPlanResponse, StopPlanResponseArgs};
+use track_rails::message_generated::protocol::{BindRequest, BindRequestArgs, Catalog, CatalogArgs, CreatePlanRequest, CreatePlanResponse, CreatePlanResponseArgs, DeletePlanRequest, DeletePlanResponse, DeletePlanResponseArgs, ErrorStatus, ErrorStatusArgs, FilterType, GetPlansRequest, Message, MessageArgs, OkStatus, OkStatusArgs, Payload, Plans, PlansArgs, RegisterRequest, RegisterResponse, RegisterResponseArgs, StartPlanRequest, StartPlanResponse, StartPlanResponseArgs, Status as ProtStatus, StopPlanRequest, StopPlanResponse, StopPlanResponseArgs};
 use std::sync::{Arc, Mutex};
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 use tracing::field::debug;
 use track_rails::message_generated::protocol;
+use crate::management::api::Status::Error;
 use crate::management::permission::ApiPermission;
 
 #[derive(Debug, Default)]
@@ -52,9 +53,6 @@ impl Api {
                 debug!("Received a STOP PLAN");
                 handle_stop_plan(msg.data_as_stop_plan_request().unwrap(), storage, api)
             }
-            Payload::RegisterResponse => {
-                todo!()
-            }
             Payload::GetPlansRequest => {
                 debug!("Received a GET");
                 handle_get_plans(&storage, msg.data_as_get_plans_request().unwrap())
@@ -68,7 +66,10 @@ impl Api {
                 todo!()
             }
             Payload::BindRequest => match msg.data_as_bind_request() {
-                None => todo!(),
+                None => {
+                    warn!("Received a BIND request");
+                    build_status_response(Error(String::from("Incorrect Request")))
+                },
                 Some(b) => {
                     let mut storage = storage.lock().unwrap();
                     let (data_port, watermark_port) =
@@ -78,7 +79,7 @@ impl Api {
                 }
             },
             Payload::UnbindRequest => match msg.data_as_unbind_request() {
-                None => todo!(),
+                None => build_status_response(Status::Error(String::from("Incorrect Request"))),
                 Some(u) => {
                     let mut storage = storage.lock().unwrap();
                     storage.detach(0, u.plan_id() as usize, u.stop_id() as usize);
@@ -86,12 +87,12 @@ impl Api {
                     Self::empty_msg()
                 }
             },
-            _ => todo!(),
+            _ => build_status_response(Status::Error(String::from("Invalid Request"))),
         }
     }
 
     fn empty_msg<'a>() -> Result<Vec<u8>, Vec<u8>> {
-        build_status_response("Empty message".to_string())
+        build_status_response(Status::Error("Empty message".to_string()))
     }
 
     fn build_bind_response(data_port: usize, watermark_port: usize) -> Result<Vec<u8>, Vec<u8>> {
@@ -112,7 +113,7 @@ impl Api {
             &MessageArgs {
                 data_type: Payload::BindRequest,
                 data: Some(bind.as_union_value()),
-                status_type: Status::OkStatus,
+                status_type: ProtStatus::OkStatus,
                 status: Some(status),
             },
         );
@@ -134,7 +135,7 @@ fn handle_stop_plan(rx: StopPlanRequest, storage: Arc<Mutex<Storage>>, api: Arc<
     let msg = Message::create(&mut builder, &MessageArgs{
         data_type: Payload::StopPlanResponse,
         data: Some(start.as_union_value()),
-        status_type: Status::OkStatus,
+        status_type: ProtStatus::OkStatus,
         status: Some(status.as_union_value()),
     });
 
@@ -155,7 +156,7 @@ fn handle_start_plan(rx: StartPlanRequest, storage: Arc<Mutex<Storage>>, api: Ar
     let msg = Message::create(&mut builder, &MessageArgs{
         data_type: Payload::StartPlanResponse,
         data: Some(start.as_union_value()),
-        status_type: Status::OkStatus,
+        status_type: ProtStatus::OkStatus,
         status: Some(status.as_union_value()),
     });
 
@@ -184,7 +185,7 @@ fn handle_get_plans(storage: &Arc<Mutex<Storage>>, rx: GetPlansRequest) -> Resul
             let msg = Message::create(&mut builder, &MessageArgs{
                 data_type: Payload::Catalog,
                 data: Some(catalog.as_union_value()),
-                status_type: Status::OkStatus,
+                status_type: ProtStatus::OkStatus,
                 status: Some(status),
             });
 
@@ -205,7 +206,7 @@ fn handle_create_plan(storage: &Arc<Mutex<Storage>>, create: CreatePlanRequest) 
 
             let message = protocol::Message::create(&mut builder, &MessageArgs{
                 data: Some(create),
-                status_type: Status::OkStatus,
+                status_type: ProtStatus::OkStatus,
                 data_type: Payload::CreatePlanResponse,
                 status: Some(status),
             });
@@ -213,23 +214,41 @@ fn handle_create_plan(storage: &Arc<Mutex<Storage>>, create: CreatePlanRequest) 
             builder.finish(message, None);
             Ok(builder.finished_data().to_vec())
         },
-        Err(err) => build_status_response(err),
+        Err(err) => build_status_response(Error(err)),
     }
 }
 
-fn build_status_response(_status: String) -> Result<Vec<u8>, Vec<u8>> {
+fn build_status_response(status: Status) -> Result<Vec<u8>, Vec<u8>> {
     let mut builder = FlatBufferBuilder::new();
 
-    let status = OkStatus::create(&mut builder, &OkStatusArgs {}).as_union_value();
-    let msg = Message::create(
-        &mut builder,
-        &MessageArgs {
-            data_type: Default::default(),
-            data: None,
-            status_type: Status::OkStatus,
-            status: Some(status),
-        },
-    );
+    let msg = match status {
+        Status::Ok => {
+            let status = OkStatus::create(&mut builder, &OkStatusArgs {}).as_union_value();
+            Message::create(
+                &mut builder,
+                &MessageArgs {
+                    data_type: Default::default(),
+                    data: None,
+                    status_type: ProtStatus::OkStatus,
+                    status: Some(status),
+                },
+            )
+        }
+        Status::Error(err) => {
+            let msg = builder.create_string(&err);
+            let status = ErrorStatus::create(&mut builder, &ErrorStatusArgs { code: 0, msg: Some(msg) }).as_union_value();
+            Message::create(
+                &mut builder,
+                &MessageArgs {
+                    data_type: Default::default(),
+                    data: None,
+                    status_type: ProtStatus::ErrorStatus,
+                    status: Some(status),
+                },
+            )
+        }
+    };
+
     builder.finish(msg, None);
     Ok(builder.finished_data().to_vec())
 }
@@ -245,7 +264,7 @@ fn handle_delete_plan(storage: &Arc<Mutex<Storage>>, rx: DeletePlanRequest) -> R
 
             let message = Message::create(&mut builder, &MessageArgs{
                 data: Some(create),
-                status_type: Status::OkStatus,
+                status_type: ProtStatus::OkStatus,
                 data_type: Payload::DeletePlanResponse,
                 status: Some(status),
             });
@@ -253,7 +272,7 @@ fn handle_delete_plan(storage: &Arc<Mutex<Storage>>, rx: DeletePlanRequest) -> R
             builder.finish(message, None);
             Ok(builder.finished_data().to_vec())
         },
-        Err(err) => build_status_response(err),
+        Err(err) => build_status_response(Error(err)),
     }
 }
 
@@ -306,11 +325,16 @@ fn handle_register(
         &MessageArgs {
             data_type: Payload::RegisterResponse,
             data: Some(register),
-            status_type: Status::OkStatus,
+            status_type: ProtStatus::OkStatus,
             status: Some(status),
         },
     );
 
     builder.finish(msg, None);
     Ok(builder.finished_data().to_vec())
+}
+
+enum Status {
+    Ok,
+    Error(String),
 }

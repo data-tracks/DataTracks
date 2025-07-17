@@ -27,7 +27,7 @@ impl Sender {
 
     pub fn send(&self, train: Train) {
         for out in &self.outs {
-            if out.1.len() > 100 {
+            if out.1.len() > 10_000 {
                 warn!("too large {}, size {}", out.1.name(), out.1.len());
             }
             out.1.send(train.clone());

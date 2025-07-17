@@ -2,11 +2,8 @@ use crate::processing::station::Command;
 use crossbeam::channel::{Receiver, Sender};
 
 use crate::util::deserialize_message;
-use flatbuffers::FlatBufferBuilder;
-use track_rails::message_generated::protocol::{
-    Message, MessageArgs, OkStatus, OkStatusArgs, Payload, RegisterRequest, RegisterRequestArgs,
-    Status,
-};
+use flatbuffers::{FlatBufferBuilder, WIPOffset};
+use track_rails::message_generated::protocol::{Message, MessageArgs, OkStatus, OkStatusArgs, Payload, RegisterRequest, RegisterRequestArgs, RegisterResponse, RegisterResponseArgs, Status};
 use std::io;
 use std::io::Error;
 use std::net::{SocketAddr, ToSocketAddrs};
@@ -68,10 +65,16 @@ pub trait StreamUser: Clone {
 pub fn handle_register() -> Result<Vec<u8>, String> {
     let mut builder = FlatBufferBuilder::new();
 
-    let register = RegisterRequest::create(
+    let permissions:Vec<WIPOffset<&str>> = vec![];
+
+    let permissions = builder.create_vector(&permissions);
+
+
+    let register = RegisterResponse::create(
         &mut builder,
-        &RegisterRequestArgs {
-            id: None,
+        &RegisterResponseArgs {
+            id: Some(0),
+            permissions: Some(permissions),
             catalog: None,
         },
     )
@@ -82,7 +85,7 @@ pub fn handle_register() -> Result<Vec<u8>, String> {
     let msg = Message::create(
         &mut builder,
         &MessageArgs {
-            data_type: Payload::RegisterRequest,
+            data_type: Payload::RegisterResponse,
             data: Some(register),
             status_type: Status::OkStatus,
             status: Some(status),

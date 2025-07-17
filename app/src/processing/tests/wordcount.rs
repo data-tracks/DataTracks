@@ -39,4 +39,5 @@ mod test{
         test_single_in_out("1{sql|SELECT unwind, COUNT(*) FROM UNWIND(SELECT SPLIT($0, '\\s+') FROM $0) GROUP BY unwind}", values.clone(), res.clone(), source, destination, false);
     }
 
+
 }
