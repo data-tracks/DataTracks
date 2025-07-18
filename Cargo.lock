@@ -455,9 +455,9 @@ checksum = "37b2a672a2cb129a2e41c10b1224bb368f9f37a2b16b612598138befd7b37eb5"
 
 [[package]]
 name = "cc"
-version = "1.2.29"
+version = "1.2.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c1599538de2394445747c8cf7935946e3cc27e9625f889d979bfb2aaf569362"
+checksum = "deec109607ca693028562ed836a5f1c4b8bd77755c4e132fc5ce11b0b6211ae7"
 dependencies = [
  "jobserver",
  "libc",
@@ -759,6 +759,7 @@ dependencies = [
  "reqwest",
  "rumqttd",
  "rusqlite",
+ "rusty-tracks",
  "serde",
  "serde_json",
  "speedy",
@@ -769,7 +770,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "tracing-test",
- "track-rails",
+ "track-rails 0.0.7 (git+https://github.com/data-tracks/TrackRails.git?branch=generated)",
  "uuid",
  "value",
 ]
@@ -2771,6 +2772,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a0d197bd2c9dc6e53b84da9556a69ba4cdfab8619eb41a8bd1cc2027a0f6b1d"
 
 [[package]]
+name = "rusty-tracks"
+version = "0.0.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a7ff3c205645223e50257eb2275935214aa2971c992490c451fd0ecf4c746511"
+dependencies = [
+ "flatbuffers",
+ "tracing",
+ "track-rails 0.0.7 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "ryu"
 version = "1.0.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2861,9 +2873,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.140"
+version = "1.0.141"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "20068b6e96dc6c9bd23e01df8827e6c7e1f2fddd43c21810382803c136b99373"
+checksum = "30b9eff21ebe718216c6ec64e1d9ac57087aad11efc64e32002bce4a0d4c03d3"
 dependencies = [
  "itoa",
  "memchr",
@@ -3534,6 +3546,15 @@ dependencies = [
 [[package]]
 name = "track-rails"
 version = "0.0.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd2d4bdcc22d7716fd5685ed59295c590386198920e27a272ae0a0a3cd3d9a60"
+dependencies = [
+ "flatbuffers",
+]
+
+[[package]]
+name = "track-rails"
+version = "0.0.7"
 source = "git+https://github.com/data-tracks/TrackRails.git?branch=generated#b665bdd2a93af916e7b214bedfac29edaff15a4f"
 dependencies = [
  "flatbuffers",
@@ -3702,7 +3723,7 @@ dependencies = [
  "serde_json",
  "speedy",
  "tracing",
- "track-rails",
+ "track-rails 0.0.7 (git+https://github.com/data-tracks/TrackRails.git?branch=generated)",
 ]
 
 [[package]]

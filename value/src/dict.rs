@@ -1,15 +1,15 @@
 use crate::value::Value;
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use json::parse;
-use track_rails::message_generated::protocol::{
-    Document, DocumentArgs, KeyValue, KeyValueArgs, Text, TextArgs, Value as FlatValue,
-};
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 use std::collections::btree_map::{IntoIter, Keys, Values};
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
+use track_rails::message_generated::protocol::{
+    Document, DocumentArgs, KeyValue, KeyValueArgs, Text, TextArgs, Value as FlatValue,
+};
 
 #[derive(
     Eq, Clone, Debug, Default, Serialize, Deserialize, Ord, PartialOrd, Readable, Writable,

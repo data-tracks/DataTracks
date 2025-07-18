@@ -1,20 +1,20 @@
 use crate::processing::option::Configurable;
 use crate::processing::plan::SourceModel;
+use crate::processing::source::Sources::Lite;
 use crate::processing::source::{Source, Sources};
 use crate::processing::station::Command;
 use crate::processing::station::Command::{Ready, Stop};
-use crate::processing::{plan, Train};
+use crate::processing::{Train, plan};
 use crate::sql::sqlite::connection::SqliteConnector;
 use crate::ui::ConfigModel;
-use crate::util::new_id;
 use crate::util::Tx;
-use crossbeam::channel::{unbounded, Sender};
+use crate::util::new_id;
+use crossbeam::channel::{Sender, unbounded};
 use rusqlite::params;
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
-use crate::processing::source::Sources::Lite;
 
 #[derive(Clone)]
 pub struct LiteSource {

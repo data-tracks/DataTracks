@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use std::thread::{sleep, Builder};
+use std::thread::{Builder, sleep};
 use std::time::Duration;
 
 use crate::algebra::Executor;
 use crate::optimize::OptimizeStrategy;
+use crate::processing::Train;
 use crate::processing::layout::Layout;
 use crate::processing::select::{TriggerSelector, WindowSelector};
 use crate::processing::sender::Sender;
@@ -13,12 +14,11 @@ use crate::processing::station::{Command, Station};
 use crate::processing::transform::Transform;
 use crate::processing::watermark::WatermarkStrategy;
 use crate::processing::window::Window;
-use crate::processing::Train;
-use crate::util::new_id;
 use crate::util::TriggerType;
-use crate::util::{new_channel, Rx, Tx};
+use crate::util::new_id;
+use crate::util::{Rx, Tx, new_channel};
 use crossbeam::channel;
-use crossbeam::channel::{Receiver, SendError};
+use crossbeam::channel::Receiver;
 pub use logos::Source;
 use parking_lot::RwLock;
 use tracing::{debug, error};
@@ -79,7 +79,6 @@ impl Platform {
             control.0,
         )
     }
-
 
     pub(crate) fn operate(&mut self, control: Arc<channel::Sender<Command>>) {
         let process = optimize(

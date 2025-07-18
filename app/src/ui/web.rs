@@ -11,13 +11,13 @@ use crate::util::deserialize_message;
 use axum::body::Body;
 use axum::extract::ws::{Message, WebSocket};
 use axum::extract::{Path, State, WebSocketUpgrade};
-use axum::http::{header, Response, StatusCode};
+use axum::http::{Response, StatusCode, header};
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use include_dir::{include_dir, Dir};
+use include_dir::{Dir, include_dir};
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
 use tower_http::cors::CorsLayer;
@@ -124,7 +124,7 @@ async fn handle_socket(state: WebState, mut socket: WebSocket) {
             Message::Binary(bin) => {
                 let message = match deserialize_message(bin.as_ref()) {
                     Ok(msg) => msg,
-                    Err(_) => continue
+                    Err(_) => continue,
                 };
                 info!("Received message: {:?}", message);
 
@@ -133,15 +133,12 @@ async fn handle_socket(state: WebState, mut socket: WebSocket) {
                     return;
                 }
 
-                let _res = match Api::handle_message(
-                    state.storage.clone(),
-                    state.api.clone(),
-                    message,
-                ) {
-                    Ok(msg) => socket.send(Message::from(msg)),
-                    Err(err) => socket.send(Message::from(err)),
-                }
-                .await;
+                let _res =
+                    match Api::handle_message(state.storage.clone(), state.api.clone(), message) {
+                        Ok(msg) => socket.send(Message::from(msg)),
+                        Err(err) => socket.send(Message::from(err)),
+                    }
+                    .await;
             }
             Message::Close(_) => {
                 error!("Client disconnected");

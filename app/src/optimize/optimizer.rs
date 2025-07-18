@@ -43,7 +43,10 @@ impl Default for RuleBasedOptimizer {
 
 impl RuleBasedOptimizer {
     pub fn new() -> Self {
-        let rules= vec![Merge(MergeRule::Project), Merge(MergeRule::Filter)].into_iter().map(|r| (r, Vec::new())).collect();
+        let rules = vec![Merge(MergeRule::Project), Merge(MergeRule::Filter)]
+            .into_iter()
+            .map(|r| (r, Vec::new()))
+            .collect();
 
         RuleBasedOptimizer {
             rules,
@@ -116,7 +119,7 @@ impl ChangingVisitor<&mut Algebraic> for RuleBasedOptimizer {
         for id in alternatives {
             if id == target {
                 // current node
-                continue
+                continue;
             }
 
             // hand the rule to all alternatives
@@ -188,7 +191,6 @@ impl ChangingVisitor<&mut Algebraic> for RuleBasedOptimizer {
                 }
             }
         }
-
     }
 }
 
@@ -201,7 +203,7 @@ impl ChangingVisitor<&mut AlgSet> for RuleBasedOptimizer {
 
         if self.current_rule.can_apply(target, root) {
             self.current_rule.apply(target, root);
-           
+
             self.current_applied.push(target);
         } else {
             self.visited_sets.insert(target);
@@ -212,8 +214,8 @@ impl ChangingVisitor<&mut AlgSet> for RuleBasedOptimizer {
 #[cfg(test)]
 mod tests {
     use crate::algebra::{Algebra, AlgebraRoot, Algebraic, Operator};
-    use crate::optimize::optimizer::RuleBasedOptimizer;
     use crate::optimize::OptimizeStrategy;
+    use crate::optimize::optimizer::RuleBasedOptimizer;
     use std::vec;
 
     #[test]

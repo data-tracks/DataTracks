@@ -1,15 +1,15 @@
 use crate::algebra::order::Order;
-use crate::processing::layout::OutputType::{Any, Array, Boolean, Dict, Float, Integer, Text};
-use crate::processing::plan::PlanStage;
 use crate::processing::OutputType::Tuple;
 use crate::processing::Train;
+use crate::processing::layout::OutputType::{Any, Array, Boolean, Dict, Float, Integer, Text};
+use crate::processing::plan::PlanStage;
 use crate::util::BufferedReader;
+use OutputType::{And, Or};
 use std::cmp::min;
 use std::hash::{Hash, Hasher};
 use std::iter::zip;
 use tracing::warn;
 use value::{ValType, Value};
-use OutputType::{And, Or};
 
 const ARRAY_OPEN: char = '[';
 const ARRAY_CLOSE: char = ']';
@@ -405,48 +405,58 @@ impl OutputType {
                 }
             },
             Any => Ok(()),
-            Array(a) => {
-                match other {
-                    Array(o) => {
-                        a.fields.accepts(&o.fields)?;
-                        if a.length.is_some() && o.length.is_none() {
-                            return self.type_mismatch_error(other);
-                        }
-                        if a.length.is_none() && o.length.is_none() {
-                            return self.type_mismatch_error(other);
-                        }
-                        if a.length.unwrap() <= o.length.unwrap() {
-                            return Err(format!("Type mismatch {:?} with length {} cannot accept {:?} with length {}", a, a.length.unwrap(), o, o.length.unwrap()));
-                        }
-                        Ok(())
+            Array(a) => match other {
+                Array(o) => {
+                    a.fields.accepts(&o.fields)?;
+                    if a.length.is_some() && o.length.is_none() {
+                        return self.type_mismatch_error(other);
                     }
-                    Tuple(t) => {
-                        if let Some(length) = a.length {
-                            if length > t.fields.len() as i32 {
-                                return Err(format!("Type mismatch {:?} with length {} cannot accept {:?} with length {}", a, length, t, t.fields.len()));
-                            }
-                        }
-
-                        if t.fields.iter().all(|t| a.fields.accepts(t).is_ok()) {
-                            return Ok(());
-                        }
-                        self.type_mismatch_error(other)
+                    if a.length.is_none() && o.length.is_none() {
+                        return self.type_mismatch_error(other);
                     }
-                    And(a) => {
-                        if a.iter().all(|v| self.accepts(v).is_ok()) {
-                            return Ok(());
-                        }
-                        self.type_mismatch_error(other)
+                    if a.length.unwrap() <= o.length.unwrap() {
+                        return Err(format!(
+                            "Type mismatch {:?} with length {} cannot accept {:?} with length {}",
+                            a,
+                            a.length.unwrap(),
+                            o,
+                            o.length.unwrap()
+                        ));
                     }
-                    Or(o) => {
-                        if o.iter().any(|v| self.accepts(v).is_ok()) {
-                            return Ok(());
-                        }
-                        self.type_mismatch_error(other)
-                    }
-                    _ => self.type_mismatch_error(other),
+                    Ok(())
                 }
-            }
+                Tuple(t) => {
+                    if let Some(length) = a.length {
+                        if length > t.fields.len() as i32 {
+                            return Err(format!(
+                                "Type mismatch {:?} with length {} cannot accept {:?} with length {}",
+                                a,
+                                length,
+                                t,
+                                t.fields.len()
+                            ));
+                        }
+                    }
+
+                    if t.fields.iter().all(|t| a.fields.accepts(t).is_ok()) {
+                        return Ok(());
+                    }
+                    self.type_mismatch_error(other)
+                }
+                And(a) => {
+                    if a.iter().all(|v| self.accepts(v).is_ok()) {
+                        return Ok(());
+                    }
+                    self.type_mismatch_error(other)
+                }
+                Or(o) => {
+                    if o.iter().any(|v| self.accepts(v).is_ok()) {
+                        return Ok(());
+                    }
+                    self.type_mismatch_error(other)
+                }
+                _ => self.type_mismatch_error(other),
+            },
             Dict(d) => match other {
                 Dict(o) => {
                     if d.fields.iter().all(|field| {
@@ -509,7 +519,10 @@ impl OutputType {
                     if let Some(length) = o.length {
                         if length < t.fields.len() as i32 {
                             // incoming array is shorter than current tuple
-                            return Err(format!("Type mismatch {:?} cannot accept {:?} as incoming is shorter than this station", t, o));
+                            return Err(format!(
+                                "Type mismatch {:?} cannot accept {:?} as incoming is shorter than this station",
+                                t, o
+                            ));
                         }
                     } else {
                         return self.type_mismatch_error(other);
@@ -721,9 +734,9 @@ pub struct ShadowKey {
 
 #[cfg(test)]
 mod test {
+    use crate::processing::OutputType::Tuple;
     use crate::processing::layout::Layout;
     use crate::processing::layout::OutputType::{Array, Dict, Float, Integer, Text};
-    use crate::processing::OutputType::Tuple;
     use crate::processing::{Plan, TupleType};
     use std::collections::HashMap;
     use std::vec;

@@ -16,9 +16,6 @@ use rumqttc::{Event, Incoming};
 use rumqttd::protocol::Publish;
 use rumqttd::Notification;
 use rusqlite::types::{FromSqlResult, ToSqlOutput, ValueRef};
-use track_rails::message_generated::protocol::{
-    Null as FlatNull, NullArgs, Value as FlatValue, ValueWrapper, ValueWrapperArgs,
-};
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 use std::cmp::{Ordering, PartialEq};
@@ -29,6 +26,9 @@ use std::hash::{Hash, Hasher};
 use std::ops::{Add, AddAssign, Div, Mul, Sub};
 use std::str;
 use tracing::debug;
+use track_rails::message_generated::protocol::{
+    Null as FlatNull, NullArgs, Value as FlatValue, ValueWrapper, ValueWrapperArgs,
+};
 
 #[derive(Clone, Debug, Serialize, Deserialize, Ord, PartialOrd, Readable, Writable)]
 pub enum Value {

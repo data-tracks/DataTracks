@@ -1,26 +1,28 @@
 use crate::algebra::{AlgebraRoot, BoxedIterator, ValueIterator};
 use crate::analyse::{InputDerivable, OutputDerivable, OutputDerivationStrategy};
+use crate::language;
 use crate::language::Language;
 use crate::optimize::OptimizeStrategy;
+use crate::processing::Layout;
 use crate::processing::option::Configurable;
 #[cfg(test)]
 use crate::processing::tests::DummyDatabase;
 #[cfg(test)]
 use crate::processing::transform::Transform::DummyDB;
 use crate::processing::transform::Transform::{Func, Lang, Postgres, SQLite};
-use crate::processing::Layout;
 use crate::sql::{PostgresTransformer, SqliteTransformer};
 use crate::util::storage::ValueStore;
-use crate::language;
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
-use track_rails::message_generated::protocol::{
-    LanguageTransform as FlatLanguageTransform, Transform as FlatTransform,
-};
-use track_rails::message_generated::protocol::{LanguageTransformArgs, TransformArgs, TransformType};
 use serde_json::Map;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
+use track_rails::message_generated::protocol::{
+    LanguageTransform as FlatLanguageTransform, Transform as FlatTransform,
+};
+use track_rails::message_generated::protocol::{
+    LanguageTransformArgs, TransformArgs, TransformType,
+};
 use value::Value;
 
 #[derive(Debug, PartialEq)]
@@ -77,12 +79,12 @@ impl Transform {
         }
     }
 
-    pub fn derive_output_layout(&self, inputs: HashMap<String,Layout>) -> Option<Layout> {
+    pub fn derive_output_layout(&self, inputs: HashMap<String, Layout>) -> Option<Layout> {
         match self {
             Func(f) => f.derive_output_layout(),
             Lang(l) => l.derive_output_layout(inputs),
-            SQLite(c) => c.derive_output_layout(inputs, ),
-            Postgres(p) => p.derive_output_layout(inputs, ),
+            SQLite(c) => c.derive_output_layout(inputs),
+            Postgres(p) => p.derive_output_layout(inputs),
             #[cfg(test)]
             DummyDB(_) => todo!(),
         }
@@ -131,18 +133,13 @@ impl Transform {
                 let root = f.algebra.clone();
                 let mut optimized = if let Some(mut strategy) = optimizer {
                     strategy.apply(root).unwrap()
-                }else {
+                } else {
                     root
                 };
 
-
                 let mut initial = optimized.derive_iterator().unwrap();
                 let iter = initial.enrich(transforms);
-                if let Some(iter) = iter {
-                    iter
-                } else {
-                    initial
-                }
+                if let Some(iter) = iter { iter } else { initial }
             }
             SQLite(c) => c.optimize(transforms),
             Postgres(p) => p.optimize(transforms),
@@ -219,7 +216,7 @@ pub trait Transformer: Clone + Sized + Configurable + InputDerivable + OutputDer
 impl<T: Transformer> OutputDerivable for T {
     fn derive_output_layout(&self, inputs: HashMap<String, Layout>) -> Option<Layout> {
         self.get_output_derivation_strategy()
-            .derive_output_layout(inputs, )
+            .derive_output_layout(inputs)
     }
 }
 
@@ -397,10 +394,7 @@ impl FuncIter {
         let mut scan = AlgebraRoot::new_scan_index(0);
         let input = scan.derive_iterator().unwrap();
 
-        FuncIter {
-            input,
-            func,
-        }
+        FuncIter { input, func }
     }
 }
 
@@ -444,7 +438,7 @@ mod tests {
     use crate::processing::station::Station;
     use crate::processing::tests::dict_values;
     use crate::processing::transform::Transform::Func;
-    use crate::processing::transform::{build_algebra, FuncTransform};
+    use crate::processing::transform::{FuncTransform, build_algebra};
     use crate::util::new_channel;
     use crossbeam::channel::unbounded;
     use std::collections::HashMap;

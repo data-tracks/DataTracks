@@ -1,9 +1,9 @@
-use tracing::debug;
 use crate::algebra::{
     AggOp, Algebra, AlgebraRoot, Algebraic, Filter, Op, Operator, Project, TupleOp,
 };
 use crate::optimize::rule::RuleBehavior;
 use crate::util::CreatingVisitor;
+use tracing::debug;
 use value::Value;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]

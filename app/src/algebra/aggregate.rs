@@ -1,19 +1,17 @@
+use crate::algebra::Op::Tuple;
+use crate::algebra::TupleOp::{Index, Input};
 use crate::algebra::algebra::BoxedValueLoader;
 use crate::algebra::function::Implementable;
 use crate::algebra::operator::{AggOp, IndexOp};
 use crate::algebra::root::{AlgInputDerivable, AlgOutputDerivable, AlgebraRoot};
-use crate::algebra::Op::Tuple;
-use crate::algebra::TupleOp::{Index, Input};
-use crate::algebra::{
-    Algebra, BoxedIterator, BoxedValueHandler, Op, Operator, ValueIterator,
-};
+use crate::algebra::{Algebra, BoxedIterator, BoxedValueHandler, Op, Operator, ValueIterator};
 use crate::analyse::{InputDerivable, OutputDerivable};
-use crate::processing::transform::Transform;
 use crate::processing::OutputType::Array;
+use crate::processing::transform::Transform;
 use crate::processing::{ArrayType, Layout};
 use crate::util::storage::ValueStore;
-use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
+use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use value::Value;
 use value::Value::Null;
@@ -124,7 +122,7 @@ impl Algebra for Aggregate {
     }
 
     fn replace_id(self, id: usize) -> Self {
-        Self{
+        Self {
             id,
             aggregates: self.aggregates,
             output_func: self.output_func,

@@ -8,7 +8,6 @@ pub struct AlgSet {
     pub alternatives: Vec<usize>,
 }
 
-
 impl AlgSet {
     pub fn new(clone_id: usize) -> AlgSet {
         AlgSet {
@@ -30,7 +29,7 @@ impl AlgSet {
         }
         if let Some(id) = alg {
             Some((id, costs))
-        }else {
+        } else {
             None
         }
     }

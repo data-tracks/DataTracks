@@ -1,24 +1,16 @@
-use crate::processing::destination::{parse_destination, Destinations};
-use crate::processing::option::Configurable;
-use crate::processing::plan::Status::Stopped;
-use crate::processing::source::{parse_source, Sources};
-use crate::processing::station::{Command, Station};
-use crate::processing::transform;
 #[cfg(test)]
 use crate::processing::Train;
+use crate::processing::destination::{Destinations, parse_destination};
+use crate::processing::option::Configurable;
+use crate::processing::plan::Status::Stopped;
+use crate::processing::source::{Sources, parse_source};
+use crate::processing::station::{Command, Station};
+use crate::processing::transform;
 use crate::ui::{ConfigContainer, ConfigModel};
 use crate::util::new_id;
 use core::default::Default;
-use crossbeam::channel::{unbounded, Receiver, Sender};
+use crossbeam::channel::{Receiver, Sender, unbounded};
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
-use track_rails::message_generated::protocol::KeyValueU64StationArgs;
-use track_rails::message_generated::protocol::{
-    KeyValueStringTransform, KeyValueStringTransformArgs, KeyValueU64Destination,
-    KeyValueU64DestinationArgs, KeyValueU64Source, KeyValueU64SourceArgs, KeyValueU64Station,
-    PlanStatus,
-};
-use track_rails::message_generated::protocol::{KeyValueU64VecU64, KeyValueU64VecU64Args};
-use track_rails::message_generated::protocol::{Plan as FlatPlan, PlanArgs};
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize, Serializer};
 use serde_json::{Map, Value};
@@ -30,6 +22,14 @@ use std::sync::Mutex;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 use tracing::error;
+use track_rails::message_generated::protocol::KeyValueU64StationArgs;
+use track_rails::message_generated::protocol::{
+    KeyValueStringTransform, KeyValueStringTransformArgs, KeyValueU64Destination,
+    KeyValueU64DestinationArgs, KeyValueU64Source, KeyValueU64SourceArgs, KeyValueU64Station,
+    PlanStatus,
+};
+use track_rails::message_generated::protocol::{KeyValueU64VecU64, KeyValueU64VecU64Args};
+use track_rails::message_generated::protocol::{Plan as FlatPlan, PlanArgs};
 
 pub struct Plan {
     pub id: usize,
@@ -55,7 +55,7 @@ impl Plan {
 impl Clone for Plan {
     fn clone(&self) -> Self {
         let (tx, rx) = unbounded();
-        Plan{
+        Plan {
             id: self.id,
             name: self.name.clone(),
             lines: self.lines.clone(),
@@ -158,10 +158,7 @@ impl Plan {
 
         if !self.destinations.is_empty() {
             dump += "\nOut\n";
-            let mut sorted = self
-                .destinations
-                .values()
-                .collect::<Vec<_>>();
+            let mut sorted = self.destinations.values().collect::<Vec<_>>();
             sorted.sort_by_key(|s| s.name());
             dump += &sorted
                 .into_iter()

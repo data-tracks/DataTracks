@@ -70,7 +70,6 @@ impl ValueStore {
     pub(crate) fn append(&self, values: Vec<Value>) {
         let mut inner = self.inner.lock();
 
-   
         values.into_iter().for_each(|v| {
             inner.counter += 1;
             let counter: Value = inner.counter.into();

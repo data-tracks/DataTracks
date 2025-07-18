@@ -3,7 +3,6 @@ use crossbeam::channel::{Receiver, Sender};
 
 use crate::util::deserialize_message;
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
-use track_rails::message_generated::protocol::{Message, MessageArgs, OkStatus, OkStatusArgs, Payload, RegisterRequest, RegisterRequestArgs, RegisterResponse, RegisterResponseArgs, Status};
 use std::io;
 use std::io::Error;
 use std::net::{SocketAddr, ToSocketAddrs};
@@ -12,6 +11,10 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
 use tracing::{error, info};
+use track_rails::message_generated::protocol::{
+    Message, MessageArgs, OkStatus, OkStatusArgs, Payload, RegisterResponse, RegisterResponseArgs,
+    Status,
+};
 
 pub struct Server {
     addr: SocketAddr,
@@ -65,10 +68,9 @@ pub trait StreamUser: Clone {
 pub fn handle_register() -> Result<Vec<u8>, String> {
     let mut builder = FlatBufferBuilder::new();
 
-    let permissions:Vec<WIPOffset<&str>> = vec![];
+    let permissions: Vec<WIPOffset<&str>> = vec![];
 
     let permissions = builder.create_vector(&permissions);
-
 
     let register = RegisterResponse::create(
         &mut builder,

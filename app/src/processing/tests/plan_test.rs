@@ -7,6 +7,7 @@ pub mod dummy {
 
     use crate::algebra::{BoxedIterator, ValueIterator};
     use crate::analyse::{InputDerivable, OutputDerivationStrategy};
+    use crate::processing::Layout;
     use crate::processing::destination::Destination;
     use crate::processing::option::Configurable;
     use crate::processing::plan::{DestinationModel, SourceModel};
@@ -14,14 +15,13 @@ pub mod dummy {
     use crate::processing::station::Command;
     use crate::processing::station::Command::{Ready, Stop};
     use crate::processing::transform::{Transform, Transformer};
-    use crate::processing::Layout;
     use crate::ui::ConfigModel;
     use crate::util::storage::ValueStore;
-    use crate::util::{new_channel, new_id, Rx, Tx};
-    use crossbeam::channel::{unbounded, Sender};
+    use crate::util::{Rx, Tx, new_channel, new_id};
+    use crossbeam::channel::{Sender, unbounded};
     use serde_json::Map;
-    use value::train::Train;
     use value::Value;
+    use value::train::Train;
 
     #[derive(Clone)]
     pub struct DummySource {
@@ -413,6 +413,7 @@ pub mod dummy {
 
 #[cfg(test)]
 pub mod tests {
+    use crate::processing::Train;
     use crate::processing::destination::{Destination, Destinations};
     use crate::processing::plan::Plan;
     use crate::processing::source::Sources;
@@ -420,7 +421,6 @@ pub mod tests {
     use crate::processing::station::Station;
     use crate::processing::tests::plan_test::dummy::{DummyDestination, DummySource};
     use crate::processing::transform::{FuncTransform, Transform};
-    use crate::processing::Train;
     use crate::util::new_channel;
     use std::any::Any;
     use std::thread::sleep;
@@ -1027,13 +1027,15 @@ pub mod tests {
 
         // wait for startup else whe risk grabbing the lock too early
         for _command in 0..4 {
-            assert!(vec![
-                Ready(source),
-                Ready(destination),
-                Stop(source),
-                Stop(destination)
-            ]
-            .contains(&plan.control_receiver.1.recv().unwrap()));
+            assert!(
+                vec![
+                    Ready(source),
+                    Ready(destination),
+                    Stop(source),
+                    Stop(destination)
+                ]
+                .contains(&plan.control_receiver.1.recv().unwrap())
+            );
         }
 
         let lock = result.lock().unwrap();

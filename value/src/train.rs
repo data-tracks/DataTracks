@@ -1,13 +1,13 @@
 use crate::{Time, Value};
 use flatbuffers::FlatBufferBuilder;
 use redb::TypeName;
-use track_rails::message_generated::protocol::{
-    Message, MessageArgs, OkStatus, OkStatusArgs, Payload, Status, Train as FlatTrain, TrainArgs,
-};
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 use std::collections::BTreeMap;
 use std::ops;
+use track_rails::message_generated::protocol::{
+    Message, MessageArgs, OkStatus, OkStatusArgs, Payload, Status, Train as FlatTrain, TrainArgs,
+};
 
 pub type MutWagonsFunc = Box<dyn FnMut(&mut Vec<Train>) -> Train>;
 

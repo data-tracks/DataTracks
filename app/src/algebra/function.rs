@@ -1,7 +1,7 @@
-use crate::algebra::algebra::BoxedValueLoader;
-use crate::algebra::operator::{AggOp, InputOp, LiteralOp, NameOp, Op};
 use crate::algebra::Op::Tuple;
 use crate::algebra::TupleOp::{Combine, Context, Input, Literal, Name};
+use crate::algebra::algebra::BoxedValueLoader;
+use crate::algebra::operator::{AggOp, InputOp, LiteralOp, NameOp, Op};
 use crate::algebra::{BoxedValueHandler, ContextOp, TupleOp};
 use crate::analyse::{InputDerivable, OutputDerivable};
 use crate::optimize::Cost;
@@ -135,7 +135,7 @@ impl OutputDerivable for Operator {
                 self.operands
                     .iter()
                     .cloned()
-                    .map(|o| o.derive_output_layout(inputs.clone(), ).unwrap())
+                    .map(|o| o.derive_output_layout(inputs.clone()).unwrap())
                     .collect(),
                 inputs,
             ),

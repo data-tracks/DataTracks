@@ -1,23 +1,30 @@
 use crate::management::Storage;
-use flatbuffers::{FlatBufferBuilder};
-use track_rails::message_generated::protocol::{BindRequest, BindRequestArgs, Catalog, CatalogArgs, CreatePlanRequest, CreatePlanResponse, CreatePlanResponseArgs, DeletePlanRequest, DeletePlanResponse, DeletePlanResponseArgs, ErrorStatus, ErrorStatusArgs, FilterType, GetPlansRequest, Message, MessageArgs, OkStatus, OkStatusArgs, Payload, Plans, PlansArgs, RegisterRequest, RegisterResponse, RegisterResponseArgs, StartPlanRequest, StartPlanResponse, StartPlanResponseArgs, Status as ProtStatus, StopPlanRequest, StopPlanResponse, StopPlanResponseArgs};
-use std::sync::{Arc, Mutex};
-use tracing::{debug, info, warn};
-use tracing::field::debug;
-use track_rails::message_generated::protocol;
 use crate::management::api::Status::Error;
 use crate::management::permission::ApiPermission;
+use flatbuffers::FlatBufferBuilder;
+use std::sync::{Arc, Mutex};
+use tracing::field::debug;
+use tracing::{debug, info, warn};
+use track_rails::message_generated::protocol;
+use track_rails::message_generated::protocol::{
+    BindRequest, BindRequestArgs, Catalog, CatalogArgs, CreatePlanRequest, CreatePlanResponse,
+    CreatePlanResponseArgs, DeletePlanRequest, DeletePlanResponse, DeletePlanResponseArgs,
+    ErrorStatus, ErrorStatusArgs, FilterType, GetPlansRequest, Message, MessageArgs, OkStatus,
+    OkStatusArgs, Payload, Plans, PlansArgs, RegisterRequest, RegisterResponse,
+    RegisterResponseArgs, StartPlanRequest, StartPlanResponse, StartPlanResponseArgs,
+    Status as ProtStatus, StopPlanRequest, StopPlanResponse, StopPlanResponseArgs,
+};
 
 #[derive(Debug, Default)]
 pub struct Api {
     clients: Vec<isize>,
     count: isize,
-    permissions: Vec<ApiPermission>
+    permissions: Vec<ApiPermission>,
 }
 
 impl Api {
     pub(crate) fn admin() -> Api {
-        Api{
+        Api {
             permissions: vec![ApiPermission::Admin],
             ..Default::default()
         }
@@ -69,7 +76,7 @@ impl Api {
                 None => {
                     warn!("Received a BIND request");
                     build_status_response(Error(String::from("Incorrect Request")))
-                },
+                }
                 Some(b) => {
                     let mut storage = storage.lock().unwrap();
                     let (data_port, watermark_port) =
@@ -122,72 +129,108 @@ impl Api {
     }
 }
 
-fn handle_stop_plan(rx: StopPlanRequest, storage: Arc<Mutex<Storage>>, api: Arc<Mutex<Api>>) -> Result<Vec<u8>, Vec<u8>> {
+fn handle_stop_plan(
+    rx: StopPlanRequest,
+    storage: Arc<Mutex<Storage>>,
+    _api: Arc<Mutex<Api>>,
+) -> Result<Vec<u8>, Vec<u8>> {
     let id = rx.id() as usize;
     let mut storage = storage.lock().unwrap();
     storage.stop_plan(id);
 
     let mut builder = FlatBufferBuilder::new();
 
-    let start = StopPlanResponse::create(&mut builder, &StopPlanResponseArgs{ already_stopped: false });
+    let start = StopPlanResponse::create(
+        &mut builder,
+        &StopPlanResponseArgs {
+            already_stopped: false,
+        },
+    );
     let status = OkStatus::create(&mut builder, &OkStatusArgs {});
 
-    let msg = Message::create(&mut builder, &MessageArgs{
-        data_type: Payload::StopPlanResponse,
-        data: Some(start.as_union_value()),
-        status_type: ProtStatus::OkStatus,
-        status: Some(status.as_union_value()),
-    });
+    let msg = Message::create(
+        &mut builder,
+        &MessageArgs {
+            data_type: Payload::StopPlanResponse,
+            data: Some(start.as_union_value()),
+            status_type: ProtStatus::OkStatus,
+            status: Some(status.as_union_value()),
+        },
+    );
 
     builder.finish(msg, None);
     Ok(builder.finished_data().to_vec())
 }
 
-fn handle_start_plan(rx: StartPlanRequest, storage: Arc<Mutex<Storage>>, api: Arc<Mutex<Api>>) -> Result<Vec<u8>, Vec<u8>> {
+fn handle_start_plan(
+    rx: StartPlanRequest,
+    storage: Arc<Mutex<Storage>>,
+    _api: Arc<Mutex<Api>>,
+) -> Result<Vec<u8>, Vec<u8>> {
     let id = rx.id() as usize;
     let mut storage = storage.lock().unwrap();
     storage.start_plan(id);
 
     let mut builder = FlatBufferBuilder::new();
 
-    let start = StartPlanResponse::create(&mut builder, &StartPlanResponseArgs{ already_running: false });
+    let start = StartPlanResponse::create(
+        &mut builder,
+        &StartPlanResponseArgs {
+            already_running: false,
+        },
+    );
     let status = OkStatus::create(&mut builder, &OkStatusArgs {});
 
-    let msg = Message::create(&mut builder, &MessageArgs{
-        data_type: Payload::StartPlanResponse,
-        data: Some(start.as_union_value()),
-        status_type: ProtStatus::OkStatus,
-        status: Some(status.as_union_value()),
-    });
+    let msg = Message::create(
+        &mut builder,
+        &MessageArgs {
+            data_type: Payload::StartPlanResponse,
+            data: Some(start.as_union_value()),
+            status_type: ProtStatus::OkStatus,
+            status: Some(status.as_union_value()),
+        },
+    );
 
     builder.finish(msg, None);
     Ok(builder.finished_data().to_vec())
 }
 
-fn handle_get_plans(storage: &Arc<Mutex<Storage>>, rx: GetPlansRequest) -> Result<Vec<u8>, Vec<u8>> {
+fn handle_get_plans(
+    storage: &Arc<Mutex<Storage>>,
+    rx: GetPlansRequest,
+) -> Result<Vec<u8>, Vec<u8>> {
     let filter = rx.name().unwrap();
     match filter.filter_type_type() {
         FilterType(_) => {
             let by_name = filter.filter_type_as_by_name().unwrap();
 
-            let plans = storage.lock().unwrap().get_plans_by_name(by_name.name().unwrap_or("*"));
+            let plans = storage
+                .lock()
+                .unwrap()
+                .get_plans_by_name(by_name.name().unwrap_or("*"));
 
             let mut builder = FlatBufferBuilder::new();
-            let plans = plans.into_iter().map(|p| p.flatterize(&mut builder)).collect::<Vec<_>>();
+            let plans = plans
+                .into_iter()
+                .map(|p| p.flatterize(&mut builder))
+                .collect::<Vec<_>>();
             let plans = builder.create_vector(&plans);
 
-            let plans = Plans::create(&mut builder, &PlansArgs{ plans: Some(plans) });
+            let plans = Plans::create(&mut builder, &PlansArgs { plans: Some(plans) });
 
             let catalog = Catalog::create(&mut builder, &CatalogArgs { plans: Some(plans) });
 
             let status = OkStatus::create(&mut builder, &OkStatusArgs {}).as_union_value();
 
-            let msg = Message::create(&mut builder, &MessageArgs{
-                data_type: Payload::Catalog,
-                data: Some(catalog.as_union_value()),
-                status_type: ProtStatus::OkStatus,
-                status: Some(status),
-            });
+            let msg = Message::create(
+                &mut builder,
+                &MessageArgs {
+                    data_type: Payload::Catalog,
+                    data: Some(catalog.as_union_value()),
+                    status_type: ProtStatus::OkStatus,
+                    status: Some(status),
+                },
+            );
 
             builder.finish(msg, None);
             Ok(builder.finished_data().to_vec())
@@ -195,25 +238,33 @@ fn handle_get_plans(storage: &Arc<Mutex<Storage>>, rx: GetPlansRequest) -> Resul
     }
 }
 
-fn handle_create_plan(storage: &Arc<Mutex<Storage>>, create: CreatePlanRequest) -> Result<Vec<u8>, Vec<u8>> {
+fn handle_create_plan(
+    storage: &Arc<Mutex<Storage>>,
+    create: CreatePlanRequest,
+) -> Result<Vec<u8>, Vec<u8>> {
     match storage.lock().unwrap().create_plan(create) {
         Ok(id) => {
             let mut builder = FlatBufferBuilder::new();
 
-            let create = CreatePlanResponse::create(&mut builder, &CreatePlanResponseArgs{ id: id as u64 }).as_union_value();
+            let create =
+                CreatePlanResponse::create(&mut builder, &CreatePlanResponseArgs { id: id as u64 })
+                    .as_union_value();
 
-            let status = OkStatus::create(&mut builder, &OkStatusArgs{}).as_union_value();
+            let status = OkStatus::create(&mut builder, &OkStatusArgs {}).as_union_value();
 
-            let message = protocol::Message::create(&mut builder, &MessageArgs{
-                data: Some(create),
-                status_type: ProtStatus::OkStatus,
-                data_type: Payload::CreatePlanResponse,
-                status: Some(status),
-            });
+            let message = protocol::Message::create(
+                &mut builder,
+                &MessageArgs {
+                    data: Some(create),
+                    status_type: ProtStatus::OkStatus,
+                    data_type: Payload::CreatePlanResponse,
+                    status: Some(status),
+                },
+            );
 
             builder.finish(message, None);
             Ok(builder.finished_data().to_vec())
-        },
+        }
         Err(err) => build_status_response(Error(err)),
     }
 }
@@ -236,7 +287,14 @@ fn build_status_response(status: Status) -> Result<Vec<u8>, Vec<u8>> {
         }
         Status::Error(err) => {
             let msg = builder.create_string(&err);
-            let status = ErrorStatus::create(&mut builder, &ErrorStatusArgs { code: 0, msg: Some(msg) }).as_union_value();
+            let status = ErrorStatus::create(
+                &mut builder,
+                &ErrorStatusArgs {
+                    code: 0,
+                    msg: Some(msg),
+                },
+            )
+            .as_union_value();
             Message::create(
                 &mut builder,
                 &MessageArgs {
@@ -253,25 +311,32 @@ fn build_status_response(status: Status) -> Result<Vec<u8>, Vec<u8>> {
     Ok(builder.finished_data().to_vec())
 }
 
-fn handle_delete_plan(storage: &Arc<Mutex<Storage>>, rx: DeletePlanRequest) -> Result<Vec<u8>, Vec<u8>> {
+fn handle_delete_plan(
+    storage: &Arc<Mutex<Storage>>,
+    rx: DeletePlanRequest,
+) -> Result<Vec<u8>, Vec<u8>> {
     match storage.lock().unwrap().delete_plan(rx.id() as usize) {
         Ok(_) => {
             let mut builder = FlatBufferBuilder::new();
 
-            let create = DeletePlanResponse::create(&mut builder, &DeletePlanResponseArgs{}).as_union_value();
+            let create = DeletePlanResponse::create(&mut builder, &DeletePlanResponseArgs {})
+                .as_union_value();
 
-            let status = OkStatus::create(&mut builder, &OkStatusArgs{}).as_union_value();
+            let status = OkStatus::create(&mut builder, &OkStatusArgs {}).as_union_value();
 
-            let message = Message::create(&mut builder, &MessageArgs{
-                data: Some(create),
-                status_type: ProtStatus::OkStatus,
-                data_type: Payload::DeletePlanResponse,
-                status: Some(status),
-            });
+            let message = Message::create(
+                &mut builder,
+                &MessageArgs {
+                    data: Some(create),
+                    status_type: ProtStatus::OkStatus,
+                    data_type: Payload::DeletePlanResponse,
+                    status: Some(status),
+                },
+            );
 
             builder.finish(message, None);
             Ok(builder.finished_data().to_vec())
-        },
+        }
         Err(err) => build_status_response(Error(err)),
     }
 }
@@ -301,10 +366,14 @@ fn handle_register(
     let plans = Plans::create(&mut builder, &PlansArgs { plans: Some(plans) });
     let catalog = Catalog::create(&mut builder, &CatalogArgs { plans: Some(plans) });
 
-    let permissions = api.permissions.iter().map(|p| {
-        let str = p.to_string();
-        builder.create_string(&str)
-    }).collect::<Vec<_>>();
+    let permissions = api
+        .permissions
+        .iter()
+        .map(|p| {
+            let str = p.to_string();
+            builder.create_string(&str)
+        })
+        .collect::<Vec<_>>();
 
     let permissions = builder.create_vector(&permissions);
 

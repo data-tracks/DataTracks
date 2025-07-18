@@ -1,9 +1,9 @@
 use crate::analyse::OutputDerivationStrategy::{QueryBased, Undefined};
 use crate::language::Language;
-use crate::processing::transform::build_algebra;
 use crate::processing::Layout;
-use std::collections::HashMap;
+use crate::processing::transform::build_algebra;
 use OutputDerivationStrategy::{Combined, ContentBased, External, UserDefined};
+use std::collections::HashMap;
 
 pub trait InputDerivable {
     fn derive_input_layout(&self) -> Option<Layout>;
@@ -101,10 +101,10 @@ impl ExternalStrategy {
 
 #[cfg(test)]
 mod tests {
-    use crate::analyse::{OutputDerivationStrategy};
+    use crate::analyse::OutputDerivationStrategy;
     use crate::language::Language;
-    use crate::processing::transform::build_algebra;
     use crate::processing::Layout;
+    use crate::processing::transform::build_algebra;
     use std::collections::HashMap;
 
     #[test]

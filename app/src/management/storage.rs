@@ -1,15 +1,14 @@
 use crate::http::util;
-use crate::http::util::{parse_addr, DestinationState};
+use crate::http::util::{DestinationState, parse_addr};
 use crate::processing::destination::{Destination, Destinations};
 use crate::processing::plan::Status;
 use crate::processing::source::{Source, Sources};
 use crate::processing::station::Command;
-use crate::processing::{transform, Plan, Train};
-use crate::util::new_channel;
+use crate::processing::{Plan, Train, transform};
 use crate::util::Tx;
-use axum::routing::get;
+use crate::util::new_channel;
 use axum::Router;
-use track_rails::message_generated::protocol::{CreatePlanRequest};
+use axum::routing::get;
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -18,6 +17,7 @@ use tokio::sync::oneshot;
 use tokio::sync::oneshot::Sender;
 use tower_http::cors::CorsLayer;
 use tracing::error;
+use track_rails::message_generated::protocol::CreatePlanRequest;
 use value::Time;
 
 #[derive(Default)]
@@ -167,19 +167,30 @@ impl Storage {
 
     pub fn delete_plan(&mut self, id: usize) -> Result<(), String> {
         let mut plans = self.plans.lock().unwrap();
-        plans.remove(&id).ok_or(format!("No plan with id {}", id)).map(|_| ())
+        plans
+            .remove(&id)
+            .ok_or(format!("No plan with id {}", id))
+            .map(|_| ())
     }
 
     pub fn get_plans_by_name<S: AsRef<str>>(&self, name: S) -> Vec<Plan> {
         if name.as_ref().trim().is_empty() || name.as_ref().trim() == "*" {
-            return self.plans.lock().unwrap().clone().iter().map(|(_, plan)| plan.clone()).collect();
+            return self
+                .plans
+                .lock()
+                .unwrap()
+                .clone()
+                .iter()
+                .map(|(_, plan)| plan.clone())
+                .collect();
         }
 
-        self.plans.lock().unwrap().iter()
-            .filter(|(_, p)|{
-                p.name.matches(name.as_ref()).next().is_some()
-            })
-            .map(|(_,p)|p.clone())
+        self.plans
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(_, p)| p.name.matches(name.as_ref()).next().is_some())
+            .map(|(_, p)| p.clone())
             .collect()
     }
 
@@ -197,12 +208,7 @@ impl Storage {
         }
     }
 
-    pub fn add_destination(
-        &mut self,
-        plan_id: usize,
-        stop_id: usize,
-        destination: Destinations,
-    ) {
+    pub fn add_destination(&mut self, plan_id: usize, stop_id: usize, destination: Destinations) {
         let mut plans = self.plans.lock().unwrap();
         let id = destination.id();
         if let Some(p) = plans.get_mut(&plan_id) {

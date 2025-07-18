@@ -3,6 +3,9 @@ use std::sync::Arc;
 
 use crate::http::destination::HttpDestination;
 use crate::mqtt::MqttDestination;
+#[cfg(test)]
+use crate::processing::destination::Destinations::Dummy;
+use crate::processing::destination::Destinations::{Http, Lite, Mqtt, Tpc};
 use crate::processing::option::Configurable;
 use crate::processing::plan::DestinationModel;
 use crate::processing::station::Command;
@@ -13,19 +16,13 @@ use crate::tpc::TpcDestination;
 use crate::util::Tx;
 use crossbeam::channel::Sender;
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
-use track_rails::message_generated::protocol::{Destination as FlatDestination, DestinationArgs};
 use serde_json::{Map, Value};
 #[cfg(test)]
 use std::sync::Mutex;
+use track_rails::message_generated::protocol::{Destination as FlatDestination, DestinationArgs};
 use value::train::Train;
-use crate::processing::destination::Destinations::{Http, Lite, Mqtt, Tpc};
-#[cfg(test)]
-use crate::processing::destination::Destinations::Dummy;
 
-pub fn parse_destination(
-    type_: &str,
-    options: Map<String, Value>,
-) -> Result<Destinations, String> {
+pub fn parse_destination(type_: &str, options: Map<String, Value>) -> Result<Destinations, String> {
     let destination = match type_.to_ascii_lowercase().as_str() {
         "mqtt" => Mqtt(MqttDestination::parse(options)?),
         "sqlite" => Lite(LiteDestination::parse(options)?),
@@ -39,7 +36,7 @@ pub fn parse_destination(
 }
 
 #[derive(Clone)]
-pub enum Destinations{
+pub enum Destinations {
     Mqtt(MqttDestination),
     Lite(LiteDestination),
     Http(HttpDestination),
@@ -48,7 +45,7 @@ pub enum Destinations{
     Dummy(DummyDestination),
 }
 
-impl Deref for Destinations{
+impl Deref for Destinations {
     type Target = dyn Destination;
 
     fn deref(&self) -> &Self::Target {
@@ -58,12 +55,12 @@ impl Deref for Destinations{
             Http(h) => h,
             Tpc(t) => t,
             #[cfg(test)]
-            Dummy(d) => d
+            Dummy(d) => d,
         }
     }
 }
 
-impl DerefMut for Destinations{
+impl DerefMut for Destinations {
     fn deref_mut(&mut self) -> &mut Self::Target {
         match self {
             Mqtt(m) => m,
@@ -71,7 +68,7 @@ impl DerefMut for Destinations{
             Http(h) => h,
             Tpc(t) => t,
             #[cfg(test)]
-            Dummy(d) => d
+            Dummy(d) => d,
         }
     }
 }

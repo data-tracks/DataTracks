@@ -1,15 +1,15 @@
+use crate::processing::Train;
 use crate::processing::option::Configurable;
 use crate::processing::plan::SourceModel;
+use crate::processing::source::Sources::Tpc;
 use crate::processing::source::{Source, Sources};
 use crate::processing::station::Command;
-use crate::processing::Train;
-use crate::tpc::server::{handle_register, StreamUser, TcpStream};
 use crate::tpc::Server;
+use crate::tpc::server::{StreamUser, TcpStream, handle_register};
 use crate::ui::{ConfigModel, StringModel};
 use crate::util::Tx;
 use crate::util::{deserialize_message, new_id};
-use crossbeam::channel::{unbounded, Receiver, Sender};
-use track_rails::message_generated::protocol::{Payload};
+use crossbeam::channel::{Receiver, Sender, unbounded};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -17,7 +17,7 @@ use std::thread;
 use std::time::Duration;
 use tokio::time::sleep;
 use tracing::{debug, error, info, warn};
-use crate::processing::source::Sources::Tpc;
+use track_rails::message_generated::protocol::Payload;
 
 #[derive(Clone)]
 pub struct TpcSource {
@@ -170,7 +170,7 @@ impl StreamUser for TpcSource {
                             }
                             Payload::Train => {
                                 let msg = msg.data_as_train().unwrap();
-                                
+
                                 debug!("tpc train: {:?}", msg);
                                 match msg.try_into() {
                                     Ok(train) => self.send(train),

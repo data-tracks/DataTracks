@@ -1,3 +1,4 @@
+use crate::algebra::Scan;
 use crate::algebra::aggregate::{Aggregate, ValueLoader};
 use crate::algebra::dual::Dual;
 use crate::algebra::filter::Filter;
@@ -8,7 +9,6 @@ use crate::algebra::scan::IndexScan;
 use crate::algebra::sort::Sort;
 use crate::algebra::union::Union;
 use crate::algebra::variable::VariableScan;
-use crate::algebra::Scan;
 use crate::optimize::Cost;
 use crate::processing::transform::Transform;
 use crate::processing::{Layout, Train};
@@ -37,7 +37,6 @@ pub enum Algebraic {
     Sort(Sort),
 }
 
-
 impl Mul for &Cost {
     type Output = Cost;
 
@@ -50,8 +49,6 @@ impl Mul for &Cost {
 }
 
 impl Algebraic {
-
-
     pub(crate) fn calc_cost(&self, root: &AlgebraRoot) -> Cost {
         match self {
             Algebraic::Dual(_) => Cost::new(1),
@@ -92,7 +89,6 @@ impl Algebraic {
             }
         }
     }
-    
 }
 
 impl AlgInputDerivable for Algebraic {
@@ -187,7 +183,6 @@ pub trait Algebra: Clone + AlgInputDerivable + AlgOutputDerivable {
     fn id(&self) -> usize;
     fn replace_id(self, id: usize) -> Self;
     fn derive_iterator(&self, root: &AlgebraRoot) -> Result<Self::Iterator, String>;
-    
 }
 
 pub trait ValueHandler: Send {

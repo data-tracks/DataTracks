@@ -124,7 +124,8 @@ pub(crate) enum Token {
     Divide,
     #[token("COUNT")]
     Count,
-    #[regex(r#"["]?[a-zA-Z_$][a-zA-Z_$0-9.]*["]?"#, | lex | lex.slice().trim_matches('"').to_owned())]
+    #[regex(r#"["]?[a-zA-Z_$][a-zA-Z_$0-9.]*["]?"#, | lex | lex.slice().trim_matches('"').to_owned()
+    )]
     Identifier(String),
 }
 
@@ -500,7 +501,7 @@ fn trim_quotes(value: &str) -> String {
 
 #[cfg(test)]
 mod test {
-    use crate::language::sql::lex::{create_lexer, parse, Token};
+    use crate::language::sql::lex::{Token, create_lexer, parse};
 
     #[test]
     fn test_literal_number() {

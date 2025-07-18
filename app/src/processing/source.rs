@@ -3,24 +3,24 @@ use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
 use crate::mqtt::MqttSource;
+use crate::processing::HttpSource;
 use crate::processing::option::Configurable;
 use crate::processing::plan::SourceModel;
+#[cfg(test)]
+use crate::processing::source::Sources::Dummy;
+use crate::processing::source::Sources::{Http, Lite, Mqtt, Tpc};
 use crate::processing::station::Command;
 #[cfg(test)]
 use crate::processing::tests::DummySource;
-use crate::processing::HttpSource;
 use crate::sql::LiteSource;
 use crate::tpc::TpcSource;
 use crate::ui::ConfigModel;
 use crate::util::Tx;
 use crossbeam::channel::Sender;
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
-use track_rails::message_generated::protocol::{Source as FlatSource, SourceArgs};
 use serde_json::{Map, Value};
+use track_rails::message_generated::protocol::{Source as FlatSource, SourceArgs};
 use value::train::Train;
-use crate::processing::source::Sources::{Http, Lite, Mqtt, Tpc};
-#[cfg(test)]
-use crate::processing::source::Sources::Dummy;
 
 pub fn parse_source(type_: &str, options: Map<String, Value>) -> Result<Sources, String> {
     let source = match type_.to_ascii_lowercase().as_str() {
@@ -36,7 +36,7 @@ pub fn parse_source(type_: &str, options: Map<String, Value>) -> Result<Sources,
 }
 
 #[derive(Clone)]
-pub enum Sources{
+pub enum Sources {
     Mqtt(MqttSource),
     Lite(LiteSource),
     Http(HttpSource),
@@ -45,7 +45,7 @@ pub enum Sources{
     Dummy(DummySource),
 }
 
-impl Deref for Sources{
+impl Deref for Sources {
     type Target = dyn Source;
 
     fn deref(&self) -> &Self::Target {
@@ -55,12 +55,12 @@ impl Deref for Sources{
             Sources::Http(h) => h,
             Sources::Tpc(t) => t,
             #[cfg(test)]
-            Sources::Dummy(d) => d
+            Sources::Dummy(d) => d,
         }
     }
 }
 
-impl DerefMut for Sources{
+impl DerefMut for Sources {
     fn deref_mut(&mut self) -> &mut Self::Target {
         match self {
             Sources::Mqtt(m) => m,
@@ -68,11 +68,10 @@ impl DerefMut for Sources{
             Sources::Http(h) => h,
             Sources::Tpc(t) => t,
             #[cfg(test)]
-            Sources::Dummy(d) => d
+            Sources::Dummy(d) => d,
         }
     }
 }
-
 
 pub trait Source: Send + Sync + Configurable {
     fn parse(options: Map<String, Value>) -> Result<Self, String>

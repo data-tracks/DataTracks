@@ -1,8 +1,8 @@
-use track_rails::message_generated::protocol::StationArgs;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 use std::thread;
+use track_rails::message_generated::protocol::StationArgs;
 
 use crate::processing::layout::Layout;
 use crate::processing::plan::PlanStage;
@@ -12,15 +12,15 @@ use crate::processing::transform::Transform;
 use crate::processing::watermark::WatermarkStrategy;
 use crate::processing::window::Window;
 use crate::util::TriggerType;
-use crate::util::{new_channel, new_id};
 use crate::util::{Rx, Tx};
+use crate::util::{new_channel, new_id};
 use crossbeam::channel;
-use crossbeam::channel::{unbounded, Receiver};
+use crossbeam::channel::{Receiver, unbounded};
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
-use track_rails::message_generated::protocol::Station as FlatStation;
 use tracing::{debug, error};
-use value::train::Train;
+use track_rails::message_generated::protocol::Station as FlatStation;
 use value::Time;
+use value::train::Train;
 
 #[derive(Clone)]
 pub struct Station {
@@ -351,9 +351,9 @@ pub mod tests {
     pub use crate::processing::tests::dict_values;
     use crate::processing::transform::{FuncTransform, Transform};
     use crate::util::Rx;
-    use crate::util::{new_channel, Tx};
     use crate::util::{TimeUnit, TriggerType};
-    use crossbeam::channel::{unbounded, Receiver, Sender};
+    use crate::util::{Tx, new_channel};
+    use crossbeam::channel::{Receiver, Sender, unbounded};
     use tracing::debug;
     use tracing_test::traced_test;
     use value::train::Train;

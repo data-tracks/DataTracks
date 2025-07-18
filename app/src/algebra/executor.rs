@@ -1,8 +1,8 @@
 use crate::algebra::BoxedIterator;
 use crate::processing::Sender;
-use crate::util::storage::ValueStore;
 use crate::util::Tx;
-use std::collections::{HashMap};
+use crate::util::storage::ValueStore;
+use std::collections::HashMap;
 use tracing::warn;
 use value::train::Train;
 
@@ -77,4 +77,3 @@ impl Executor {
         self.sender.send(train.flag(self.stop));
     }
 }
-

@@ -1,10 +1,10 @@
+use crate::algebra::BoxedIterator;
 use crate::algebra::algebra::{Algebra, ValueIterator};
 use crate::algebra::root::{AlgInputDerivable, AlgOutputDerivable, AlgebraRoot};
-use crate::algebra::BoxedIterator;
-use crate::processing::transform::Transform;
 use crate::processing::Layout;
-use crate::util::storage::ValueStore;
+use crate::processing::transform::Transform;
 use crate::util::EmptyIterator;
+use crate::util::storage::ValueStore;
 use std::collections::{HashMap, VecDeque};
 use value::Value;
 
@@ -87,10 +87,7 @@ impl Algebra for IndexScan {
     }
 
     fn replace_id(self, id: usize) -> Self {
-        Self {
-            id,
-            ..self
-        }
+        Self { id, ..self }
     }
 
     fn derive_iterator(&self, _root: &AlgebraRoot) -> Result<Self::Iterator, String> {
@@ -148,10 +145,7 @@ impl Algebra for Scan {
     }
 
     fn replace_id(self, id: usize) -> Self {
-        Self {
-            id,
-            ..self
-        }
+        Self { id, ..self }
     }
 
     fn derive_iterator(&self, _root: &AlgebraRoot) -> Result<Self::Iterator, String> {
@@ -161,7 +155,7 @@ impl Algebra for Scan {
 
 #[cfg(test)]
 mod test {
-    use crate::algebra::{AlgebraRoot};
+    use crate::algebra::AlgebraRoot;
     use crate::processing::Train;
     use value::Value;
 

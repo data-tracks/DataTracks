@@ -1,8 +1,8 @@
 use crate::algebra::algebra::Algebra;
 use crate::algebra::root::{AlgInputDerivable, AlgOutputDerivable, AlgebraRoot};
 use crate::algebra::{BoxedIterator, ValueIterator};
-use crate::processing::transform::Transform;
 use crate::processing::OutputType::Array;
+use crate::processing::transform::Transform;
 use crate::processing::{ArrayType, Layout};
 use crate::util::storage::ValueStore;
 use std::collections::HashMap;
@@ -204,10 +204,7 @@ impl Algebra for Join {
     }
 
     fn replace_id(self, id: usize) -> Self {
-        Self{
-            id,
-            ..self
-        }
+        Self { id, ..self }
     }
 
     fn derive_iterator(&self, root: &AlgebraRoot) -> Result<Self::Iterator, String> {
@@ -230,7 +227,7 @@ impl Algebra for Join {
 
 #[cfg(test)]
 mod test {
-    use crate::algebra::{AlgebraRoot};
+    use crate::algebra::AlgebraRoot;
     use value::{Dict, Value};
 
     #[test]
@@ -272,7 +269,6 @@ mod test {
         let mut root = AlgebraRoot::new_scan_index(0);
         root.scan_index(1);
         root.join_natural();
-
 
         let mut handle = root.derive_iterator().unwrap();
 

@@ -1,9 +1,9 @@
 use crate::management::{Api, Storage};
 use crate::processing::station::Command;
-use crate::tpc::server::{StreamUser, TcpStream};
 use crate::tpc::Server;
+use crate::tpc::server::{StreamUser, TcpStream};
 use crate::util::deserialize_message;
-use crossbeam::channel::{unbounded, Receiver, Sender};
+use crossbeam::channel::{Receiver, Sender, unbounded};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -73,7 +73,7 @@ impl StreamUser for TpcManagement {
                                 info!("Disconnected from server");
                                 return;
                             }
-                            
+
                             match Api::handle_message(self.storage.clone(), self.api.clone(), msg) {
                                 Ok(res) => match stream.write_all(&res).await {
                                     Ok(_) => {}

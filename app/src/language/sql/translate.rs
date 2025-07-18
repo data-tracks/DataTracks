@@ -22,10 +22,12 @@ fn handle_select(query: SqlSelect) -> Result<AlgebraRoot, String> {
         .collect::<Result<Vec<_>, String>>();
 
     let mut root = match froms {
-        Ok(f) => f.into_iter().collect::<Option<AlgebraRoot>>().unwrap_or(AlgebraRoot::dual()),
-        Err(_) => AlgebraRoot::dual()
+        Ok(f) => f
+            .into_iter()
+            .collect::<Option<AlgebraRoot>>()
+            .unwrap_or(AlgebraRoot::dual()),
+        Err(_) => AlgebraRoot::dual(),
     };
-
 
     let aliases = root.aliases();
 
@@ -100,9 +102,9 @@ fn handle_collection_operator(operator: SqlOperator) -> Result<AlgebraRoot, Stri
         .map(handle_from)
         .collect::<Result<Vec<_>, _>>();
 
-    let root:Option<AlgebraRoot> = match froms {
+    let root: Option<AlgebraRoot> = match froms {
         Ok(v) => v.into_iter().collect(),
-        Err(_) => None
+        Err(_) => None,
     };
 
     let mut root = root.ok_or("Could not handle operator".to_string())?;
