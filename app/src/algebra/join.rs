@@ -4,7 +4,7 @@ use crate::algebra::{BoxedIterator, ValueIterator};
 use crate::processing::OutputType::Array;
 use crate::processing::transform::Transform;
 use crate::processing::{ArrayType, Layout};
-use crate::util::storage::ValueStore;
+use crate::util::reservoir::ValueReservoir;
 use std::collections::HashMap;
 use value::Value;
 
@@ -133,7 +133,7 @@ impl JoinIterator {
 }
 
 impl ValueIterator for JoinIterator {
-    fn get_storages(&self) -> Vec<ValueStore> {
+    fn get_storages(&self) -> Vec<ValueReservoir> {
         let mut left = self.left.get_storages();
         let right = self.right.get_storages();
         left.append(&mut right.to_vec());

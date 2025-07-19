@@ -11,7 +11,7 @@ use crate::processing::tests::DummyDatabase;
 use crate::processing::transform::Transform::DummyDB;
 use crate::processing::transform::Transform::{Func, Lang, Postgres, SQLite};
 use crate::sql::{PostgresTransformer, SqliteTransformer};
-use crate::util::storage::ValueStore;
+use crate::util::reservoir::ValueReservoir;
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use serde_json::Map;
 use std::collections::HashMap;
@@ -411,7 +411,7 @@ impl Iterator for FuncIter {
 }
 
 impl ValueIterator for FuncIter {
-    fn get_storages(&self) -> Vec<ValueStore> {
+    fn get_storages(&self) -> Vec<ValueReservoir> {
         self.input.get_storages()
     }
 

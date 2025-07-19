@@ -7,6 +7,7 @@ use crate::algebra::Executor;
 use crate::optimize::OptimizeStrategy;
 use crate::processing::Train;
 use crate::processing::layout::Layout;
+use crate::processing::portal::Portal;
 use crate::processing::select::{TriggerSelector, WindowSelector};
 use crate::processing::sender::Sender;
 use crate::processing::station::Command::{Attach, Detach, Okay, Ready, Threshold};
@@ -95,11 +96,11 @@ impl Platform {
 
         let watermark_strategy = self.watermark_strategy.clone();
 
-        let storage = Arc::new(Mutex::new(vec![]));
+        let mut portal = Portal::new();
 
         let window_selector = Arc::new(RwLock::new(WindowSelector::new(self.window.clone())));
 
-        let trigger_selector = TriggerSelector::new(storage.clone(), self.trigger.clone());
+        let trigger_selector = TriggerSelector::new(portal.clone(), self.trigger.clone());
 
         let when_tx = when(
             self.stop,
@@ -155,7 +156,7 @@ impl Platform {
                     debug!("{:?}", train);
                     if self.layout.fits_train(&train) {
                         // save and update if something changed
-                        storage.lock().unwrap().push(train.clone());
+                        portal.push(train.clone());
                         watermark_strategy.mark(&train);
                         window_selector.write().mark(&train);
                     }

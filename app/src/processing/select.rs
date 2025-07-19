@@ -1,12 +1,14 @@
 use crate::processing;
+use crate::processing::portal::Portal;
 use crate::processing::window::WindowStrategy;
 use crate::util::TriggerType;
+use axum::http::uri::Port;
 use std::cmp::PartialEq;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
 use tracing::debug;
-use value::train::Train;
 use value::Time;
+use value::train::Train;
 
 pub type Storage = Arc<Mutex<Vec<Train>>>;
 
@@ -59,7 +61,7 @@ impl WindowSelector {
 
 pub struct TriggerSelector {
     triggered_windows: HashMap<WindowDescriptor, TriggerStatus>,
-    pub(crate) storage: Storage,
+    pub(crate) portal: Portal,
     trigger: TriggerType,
     fire_early: bool,
     fire_late: bool,
@@ -67,10 +69,10 @@ pub struct TriggerSelector {
 }
 
 impl TriggerSelector {
-    pub(crate) fn new(storage: Storage, trigger: TriggerType) -> Self {
+    pub(crate) fn new(portal: Portal, trigger: TriggerType) -> Self {
         TriggerSelector {
             triggered_windows: Default::default(),
-            storage,
+            portal,
             trigger,
             fire_early: false,
             fire_late: false,
@@ -140,9 +142,9 @@ impl TriggerSelector {
     }
 
     fn get_trains(&self, window: WindowDescriptor) -> Option<Train> {
-        let storage = self.storage.lock().unwrap();
         let is_same = window.to == window.from;
-        storage
+        self.portal
+            .drain()
             .iter()
             .filter(|train| {
                 (is_same && window.to == train.event_time)
@@ -163,14 +165,14 @@ pub enum TriggerStatus {
 
 #[cfg(test)]
 mod tests {
-    use crate::processing::select::{Storage, TriggerSelector, WindowSelector};
+    use crate::processing::portal::Portal;
+    use crate::processing::select::{TriggerSelector, WindowSelector};
     use crate::processing::window::Window::Non;
     use crate::processing::window::{BackWindow, NonWindow, Window};
     use crate::util::TimeUnit;
     use crate::util::TriggerType;
-    use std::sync::{Arc, Mutex};
-    use value::train::Train;
     use value::Time;
+    use value::train::Train;
 
     #[test]
     fn test_window_no_window_current() {
@@ -184,9 +186,9 @@ mod tests {
         let windows = selector.select(train.event_time);
         assert_eq!(windows.len(), 1);
 
-        let storage: Storage = Arc::new(Mutex::new(vec![]));
-        let mut trigger = TriggerSelector::new(storage.clone(), TriggerType::Element);
-        storage.lock().unwrap().push(train);
+        let portal = Portal::new();
+        let mut trigger = TriggerSelector::new(portal.clone(), TriggerType::Element);
+        portal.push(train);
 
         trigger.select(windows, &Time::new(3, 3));
     }
@@ -203,9 +205,9 @@ mod tests {
         let windows = selector.select(train.event_time);
         assert_eq!(windows.len(), 1);
 
-        let storage: Storage = Arc::new(Mutex::new(vec![]));
-        let mut trigger = TriggerSelector::new(storage.clone(), TriggerType::Element);
-        storage.lock().unwrap().push(train);
+        let portal = Portal::new();
+        let mut trigger = TriggerSelector::new(portal.clone(), TriggerType::Element);
+        portal.push(train);
 
         trigger.select(windows, &Time::new(5, 5));
     }
@@ -263,13 +265,13 @@ mod tests {
         let window = BackWindow::new(4, TimeUnit::Millis);
         let mut selector = WindowSelector::new(Window::Back(window));
 
-        let storage: Storage = Arc::new(Mutex::new(vec![]));
-        let mut trigger = TriggerSelector::new(storage.clone(), TriggerType::Element);
+        let portal = Portal::new();
+        let mut trigger = TriggerSelector::new(portal.clone(), TriggerType::Element);
 
         let mut train = Train::new(vec![3.into()]);
         train.event_time = Time::new(3, 0);
         selector.mark(&train);
-        storage.lock().unwrap().push(train);
+        portal.push(train);
 
         let mut train = Train::new(vec![3.into()]);
         train.event_time = Time::new(4, 0);
@@ -277,7 +279,7 @@ mod tests {
         let time = train.event_time;
 
         selector.mark(&train);
-        storage.lock().unwrap().push(train);
+        portal.push(train);
 
         let windows = selector.select(time);
         assert_eq!(windows.len(), 2);

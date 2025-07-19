@@ -16,7 +16,7 @@ pub mod dummy {
     use crate::processing::station::Command::{Ready, Stop};
     use crate::processing::transform::{Transform, Transformer};
     use crate::ui::ConfigModel;
-    use crate::util::storage::ValueStore;
+    use crate::util::reservoir::ValueReservoir;
     use crate::util::{Rx, Tx, new_channel, new_id};
     use crossbeam::channel::{Sender, unbounded};
     use serde_json::Map;
@@ -362,7 +362,7 @@ pub mod dummy {
     pub struct MappingIterator {
         mapping: HashMap<Value, Value>,
         values: Vec<Value>,
-        storage: ValueStore,
+        storage: ValueReservoir,
     }
 
     impl MappingIterator {
@@ -370,7 +370,7 @@ pub mod dummy {
             MappingIterator {
                 mapping,
                 values: Vec::new(),
-                storage: ValueStore::new_with_id(0),
+                storage: ValueReservoir::new_with_id(0),
             }
         }
 
@@ -397,7 +397,7 @@ pub mod dummy {
     }
 
     impl ValueIterator for MappingIterator {
-        fn get_storages(&self) -> Vec<ValueStore> {
+        fn get_storages(&self) -> Vec<ValueReservoir> {
             vec![self.storage.clone()]
         }
 

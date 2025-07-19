@@ -12,7 +12,7 @@ use crate::algebra::variable::VariableScan;
 use crate::optimize::Cost;
 use crate::processing::transform::Transform;
 use crate::processing::{Layout, Train};
-use crate::util::storage::ValueStore;
+use crate::util::reservoir::ValueReservoir;
 use std::collections::HashMap;
 use std::ops::Mul;
 use value::Value;
@@ -208,7 +208,7 @@ impl ValueHandler for IdentityHandler {
 }
 
 pub trait ValueIterator: Iterator<Item = Value> + Send + 'static {
-    fn get_storages(&self) -> Vec<ValueStore>;
+    fn get_storages(&self) -> Vec<ValueReservoir>;
 
     fn drain(&mut self) -> Vec<Value> {
         self.into_iter().collect()

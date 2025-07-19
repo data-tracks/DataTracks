@@ -1,15 +1,15 @@
+use crate::algebra::Op::{Agg, Binary, Collection, Tuple};
+use crate::algebra::TupleOp::{And, Combine, Index, Input, Or};
 use crate::algebra::aggregate::{AvgOperator, CountOperator, SumOperator};
 use crate::algebra::algebra::{BoxedValueLoader, ValueHandler};
 use crate::algebra::function::{ArgImplementable, Implementable, Operator};
 use crate::algebra::operator::AggOp::{Avg, Count, Sum};
 use crate::algebra::operator::CollectionOp::Unwind;
 use crate::algebra::operator::TupleOp::{Division, Equal, Minus, Multiplication, Not, Plus};
-use crate::algebra::Op::{Agg, Binary, Collection, Tuple};
-use crate::algebra::TupleOp::{And, Combine, Index, Input, Or};
 use crate::algebra::{BoxedIterator, BoxedValueHandler, ValueIterator};
 use crate::processing::transform::Transform;
 use crate::processing::{ArrayType, DictType, Layout, OutputType, TupleType};
-use crate::util::storage::ValueStore;
+use crate::util::reservoir::ValueReservoir;
 use regex::Regex;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::Debug;
@@ -151,7 +151,7 @@ fn unwind<'a>(value: Value) -> Vec<Value> {
 }
 
 impl ValueIterator for SetProjectIterator {
-    fn get_storages(&self) -> Vec<ValueStore> {
+    fn get_storages(&self) -> Vec<ValueReservoir> {
         self.input.get_storages()
     }
 
@@ -905,12 +905,12 @@ impl Op {
 
 #[cfg(test)]
 mod tests {
-    use crate::algebra::operator::{IndexOp, LiteralOp, NameOp};
     use crate::algebra::Op::Tuple;
     use crate::algebra::Operator;
     use crate::algebra::TupleOp::{
         And, Division, Equal, Index, Literal, Minus, Multiplication, Name, Not, Or, Plus,
     };
+    use crate::algebra::operator::{IndexOp, LiteralOp, NameOp};
     use crate::analyse::{InputDerivable, OutputDerivable};
     use crate::processing::OutputType::{Array, Dict};
     use crate::processing::{ArrayType, DictType, Layout, OutputType};
@@ -1040,6 +1040,6 @@ mod tests {
         assert_eq!(op.derive_input_layout().unwrap(), layout);
 
         let array = Layout::tuple(vec![Some("key1".to_string()), Some("key2".to_string())]);
-        assert_eq!(op.derive_output_layout(HashMap::new(), ).unwrap(), array);
+        assert_eq!(op.derive_output_layout(HashMap::new(),).unwrap(), array);
     }
 }

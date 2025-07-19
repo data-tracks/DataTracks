@@ -4,7 +4,7 @@ use crate::algebra::root::{AlgInputDerivable, AlgOutputDerivable, AlgebraRoot};
 use crate::processing::Layout;
 use crate::processing::transform::Transform;
 use crate::util::EmptyIterator;
-use crate::util::storage::ValueStore;
+use crate::util::reservoir::ValueReservoir;
 use std::collections::{HashMap, VecDeque};
 use value::Value;
 
@@ -24,7 +24,7 @@ impl IndexScan {
 pub struct ScanIterator {
     index: usize,
     values: VecDeque<Value>,
-    storage: ValueStore,
+    storage: ValueReservoir,
 }
 
 impl ScanIterator {
@@ -46,7 +46,7 @@ impl Iterator for ScanIterator {
 }
 
 impl ValueIterator for ScanIterator {
-    fn get_storages(&self) -> Vec<ValueStore> {
+    fn get_storages(&self) -> Vec<ValueReservoir> {
         vec![self.storage.clone()]
     }
 
@@ -54,7 +54,7 @@ impl ValueIterator for ScanIterator {
         Box::new(ScanIterator {
             index: self.index,
             values: VecDeque::new(),
-            storage: ValueStore::new(),
+            storage: ValueReservoir::new(),
         })
     }
 
@@ -91,7 +91,7 @@ impl Algebra for IndexScan {
     }
 
     fn derive_iterator(&self, _root: &AlgebraRoot) -> Result<Self::Iterator, String> {
-        let storage = ValueStore::new_with_id(self.scan_index);
+        let storage = ValueReservoir::new_with_id(self.scan_index);
         Ok(ScanIterator {
             index: self.scan_index,
             values: VecDeque::new(),

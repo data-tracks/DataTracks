@@ -1,146 +1,10 @@
-use parking_lot::Mutex;
+use crate::util::reservoir::StorageError;
 use redb::{Database, TableDefinition};
 use speedy::{Readable, Writable};
-use std::collections::BTreeMap;
 use std::fs;
-use std::sync::Arc;
 use tempfile::NamedTempFile;
-use thiserror::Error;
-use tracing::error;
+use uuid::Uuid;
 use value::Value;
-
-/// Error type for storage operations
-#[derive(Error, Debug)]
-pub enum StorageError {
-    #[error("Database error: {0}")]
-    DatabaseError(String),
-    #[error("File operation error: {0}")]
-    FileError(String),
-    #[error("Key not found")]
-    KeyNotFound,
-}
-
-/// Sharable and thread-save value store
-#[derive(Clone)]
-pub struct ValueStore {
-    inner: Arc<Mutex<SharedState>>,
-    pub index: usize,
-}
-
-impl Default for ValueStore {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl ValueStore {
-    pub fn new() -> Self {
-        Self::new_with_values(vec![], 0)
-    }
-
-    pub fn new_with_id(id: usize) -> Self {
-        Self::new_with_values(vec![], id)
-    }
-
-    pub fn new_with_values(values: Vec<Value>, index: usize) -> Self {
-        let store = ValueStore {
-            inner: Arc::new(Mutex::new(SharedState::new(
-                Storage::new_temp("temp").unwrap(),
-            ))),
-            index,
-        };
-        store.append(values);
-        store
-    }
-
-    pub fn add(&self, value: Value) -> Result<(), StorageError> {
-        let mut inner = self.inner.lock();
-        inner.counter += 1;
-        let counter = inner.counter.into();
-        inner
-            .storage
-            .write_value(counter, value.wagonize(self.index));
-        Ok(())
-    }
-
-    pub fn set_source(&mut self, source: usize) {
-        self.index = source;
-    }
-
-    pub(crate) fn append(&self, values: Vec<Value>) {
-        let mut inner = self.inner.lock();
-
-        values.into_iter().for_each(|v| {
-            inner.counter += 1;
-            let counter: Value = inner.counter.into();
-            inner.storage.write_value(counter, v)
-        });
-    }
-
-    pub fn drain(&self) -> Vec<Value> {
-        let mut inner = self.inner.lock();
-        inner.drain()
-    }
-}
-
-pub struct SharedState {
-    storage: CachedStorage,
-    counter: usize,
-}
-
-impl SharedState {
-    pub fn new(storage: Storage) -> Self {
-        SharedState {
-            storage: CachedStorage::new(storage, 10_000),
-            counter: 0,
-        }
-    }
-
-    pub(crate) fn clear(&mut self) {
-        for i in 0..self.counter {
-            self.storage.delete(i.into()).unwrap()
-        }
-        self.counter = 0;
-    }
-
-    pub(crate) fn drain(&mut self) -> Vec<Value> {
-        std::mem::take(&mut self.storage.cache)
-            .into_values()
-            .collect()
-    }
-}
-
-struct CachedStorage {
-    //storage: Storage,
-    cache: BTreeMap<Value, Value>,
-    //counter: usize,
-    //max: usize,
-}
-
-impl CachedStorage {
-    pub(crate) fn read_value(&self, key: Value) -> Result<Value, StorageError> {
-        self.cache
-            .get(&key)
-            .cloned()
-            .ok_or(StorageError::KeyNotFound)
-    }
-    pub(crate) fn delete(&mut self, key: Value) -> Result<(), StorageError> {
-        self.cache.remove(&key);
-
-        Ok(())
-    }
-    pub(crate) fn write_value(&mut self, key: Value, value: Value) {
-        self.cache.insert(key, value);
-    }
-}
-
-impl CachedStorage {
-    pub fn new(_storage: Storage, _cache: usize) -> Self {
-        CachedStorage {
-            cache: Default::default(),
-        }
-    }
-}
 
 pub struct Storage {
     path: Option<String>,
@@ -150,24 +14,26 @@ pub struct Storage {
 
 impl Storage {
     /// Create a new storage instance with a temporary file.
-    pub fn new_temp<S: AsRef<str>>(table_name: S) -> Result<Storage, StorageError> {
+    pub fn new_temp() -> Result<Storage, StorageError> {
+        let uuid = Uuid::new_v4();
         let file = NamedTempFile::new().map_err(|e| StorageError::FileError(e.to_string()))?;
         let db = Database::create(file).map_err(|e| StorageError::DatabaseError(e.to_string()))?;
         Ok(Storage {
             path: None,
-            table_name: table_name.as_ref().to_string(),
+            table_name: uuid.to_string(),
             database: db,
         })
     }
 
     /// Create a new storage instance from a specified file path.
-    pub fn new_from_path<S: AsRef<str>>(file: S, table_name: S) -> Result<Storage, StorageError> {
+    pub fn new_from_path<S: AsRef<str>>(file: S) -> Result<Storage, StorageError> {
         let db = Database::create(file.as_ref())
             .map_err(|e| StorageError::DatabaseError(e.to_string()))?;
+        let uuid = Uuid::new_v4();
 
         let storage = Storage {
             path: Some(file.as_ref().to_string()),
-            table_name: table_name.as_ref().to_string(),
+            table_name: uuid.to_string(),
             database: db,
         };
         Ok(storage)
@@ -260,7 +126,7 @@ mod tests {
 
     #[test]
     fn test_write_read() {
-        let storage = Storage::new_temp("table".to_string()).unwrap();
+        let storage = Storage::new_temp().unwrap();
         storage
             .write("test".into(), Value::text("David").write_to_vec().unwrap())
             .unwrap();
@@ -275,7 +141,7 @@ mod tests {
     fn test_write_permanently() {
         let path = "db_test";
         {
-            let storage = Storage::new_from_path(path.to_string(), "table".to_string()).unwrap();
+            let storage = Storage::new_from_path(path).unwrap();
             storage
                 .write("test".into(), Value::text("David").write_to_vec().unwrap())
                 .unwrap();

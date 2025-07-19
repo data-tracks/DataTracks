@@ -9,7 +9,7 @@ use crate::analyse::{InputDerivable, OutputDerivable};
 use crate::processing::OutputType::Array;
 use crate::processing::transform::Transform;
 use crate::processing::{ArrayType, Layout};
-use crate::util::storage::ValueStore;
+use crate::util::reservoir::ValueReservoir;
 use std::collections::HashMap;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -248,7 +248,7 @@ impl Iterator for AggIterator {
 }
 
 impl ValueIterator for AggIterator {
-    fn get_storages(&self) -> Vec<ValueStore> {
+    fn get_storages(&self) -> Vec<ValueReservoir> {
         self.input.get_storages()
     }
 

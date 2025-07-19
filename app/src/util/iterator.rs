@@ -1,6 +1,6 @@
 use crate::algebra::{BoxedIterator, ValueIterator};
 use crate::processing::transform::Transform;
-use crate::util::storage::ValueStore;
+use crate::util::reservoir::ValueReservoir;
 use std::collections::HashMap;
 use value::Value;
 
@@ -15,7 +15,7 @@ impl Iterator for EmptyIterator {
 }
 
 impl ValueIterator for EmptyIterator {
-    fn get_storages(&self) -> Vec<ValueStore> {
+    fn get_storages(&self) -> Vec<ValueReservoir> {
         vec![]
     }
 

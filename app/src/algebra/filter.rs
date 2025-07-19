@@ -3,9 +3,9 @@ use crate::algebra::implement::implement;
 use crate::algebra::root::{AlgInputDerivable, AlgOutputDerivable, AlgebraRoot};
 use crate::algebra::{BoxedValueHandler, Operator};
 use crate::analyse::InputDerivable;
-use crate::processing::transform::Transform;
 use crate::processing::Layout;
-use crate::util::storage::ValueStore;
+use crate::processing::transform::Transform;
+use crate::util::reservoir::ValueReservoir;
 use std::collections::HashMap;
 use value::Value;
 
@@ -43,7 +43,7 @@ impl Iterator for FilterIterator {
 }
 
 impl ValueIterator for FilterIterator {
-    fn get_storages(&self) -> Vec<ValueStore> {
+    fn get_storages(&self) -> Vec<ValueReservoir> {
         self.input.get_storages()
     }
 
@@ -92,10 +92,7 @@ impl Algebra for Filter {
     }
 
     fn replace_id(self, id: usize) -> Self {
-        Self {
-            id,
-            ..self
-        }
+        Self { id, ..self }
     }
 
     fn derive_iterator(&self, root: &AlgebraRoot) -> Result<Self::Iterator, String> {
