@@ -9,6 +9,7 @@ pub use iterator::EmptyIterator;
 pub use logo::logo;
 pub use message::*;
 pub use reader::BufferedReader;
+pub use storage::Storage;
 pub use timeunit::TimeUnit;
 pub use trigger::TriggerType;
 pub use visitor::ChangingVisitor;

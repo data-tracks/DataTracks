@@ -1,15 +1,18 @@
 use crate::util::reservoir::StorageError;
+use moka::sync::Cache;
 use redb::{Database, TableDefinition};
 use speedy::{Readable, Writable};
 use std::fs;
 use tempfile::NamedTempFile;
 use uuid::Uuid;
 use value::Value;
+use value::train::{Train, TrainId};
 
 pub struct Storage {
     path: Option<String>,
     table_name: String,
     database: Database,
+    cache: Cache<TrainId, Train>,
 }
 
 impl Storage {
@@ -18,10 +21,13 @@ impl Storage {
         let uuid = Uuid::new_v4();
         let file = NamedTempFile::new().map_err(|e| StorageError::FileError(e.to_string()))?;
         let db = Database::create(file).map_err(|e| StorageError::DatabaseError(e.to_string()))?;
+
+        let cache = Cache::new(100_000);
         Ok(Storage {
             path: None,
             table_name: uuid.to_string(),
             database: db,
+            cache,
         })
     }
 
@@ -31,16 +37,33 @@ impl Storage {
             .map_err(|e| StorageError::DatabaseError(e.to_string()))?;
         let uuid = Uuid::new_v4();
 
+        let cache = Cache::new(100_000);
+
         let storage = Storage {
             path: Some(file.as_ref().to_string()),
             table_name: uuid.to_string(),
             database: db,
+            cache,
         };
         Ok(storage)
     }
 
+    fn table(&self) -> TableDefinition<String, Vec<u8>> {
+        TableDefinition::new(&self.table_name)
+    }
+
+    pub(crate) fn write_train(&mut self, key: TrainId, train: Train) -> Result<(), StorageError> {
+        self.cache.insert(key, train.clone());
+        self.write(key, train.write_to_vec().unwrap())
+    }
+    pub(crate) fn read_train(&self, key: TrainId) -> Option<Train> {
+        match self.cache.get(&key) {
+            None => Train::read_from_buffer(&self.read_u8(key).ok()?).ok(),
+            Some(v) => Some(v),
+        }
+    }
     /// Write a key-value pair to the storage.
-    pub fn write(&self, key: Value, value: Vec<u8>) -> Result<(), StorageError> {
+    fn write(&self, key: TrainId, value: Vec<u8>) -> Result<(), StorageError> {
         let write_txn = self
             .database
             .begin_write()
@@ -50,7 +73,7 @@ impl Storage {
                 .open_table(self.table())
                 .map_err(|e| StorageError::DatabaseError(e.to_string()))?;
             table
-                .insert(key, value)
+                .insert(key.to_string(), value)
                 .map_err(|e| StorageError::DatabaseError(e.to_string()))?;
         }
         write_txn
@@ -59,17 +82,8 @@ impl Storage {
         Ok(())
     }
 
-    pub fn write_value(&mut self, key: Value, value: Value) -> Result<(), StorageError> {
-        self.write(key, value.write_to_vec().unwrap())
-    }
-
-    pub fn read_value(&self, key: Value) -> Result<Value, StorageError> {
-        Value::read_from_buffer(&self.read_u8(key)?)
-            .map_err(|e| StorageError::DatabaseError(e.to_string()))
-    }
-
     /// Read a value by its key from the storage.
-    pub fn read_u8(&self, key: Value) -> Result<Vec<u8>, StorageError> {
+    fn read_u8(&self, key: TrainId) -> Result<Vec<u8>, StorageError> {
         let read_txn = self
             .database
             .begin_read()
@@ -78,15 +92,14 @@ impl Storage {
             .open_table(self.table())
             .map_err(|e| StorageError::DatabaseError(e.to_string()))?;
 
-        let value = table.get(key);
+        let value = table.get(key.to_string());
         let value = value
             .map_err(|e| StorageError::DatabaseError(e.to_string()))?
             .map(|entry| entry.value().clone());
         value.ok_or(StorageError::KeyNotFound)
     }
-
     /// Delete a key-value pair from the storage.
-    pub fn delete(&self, key: Value) -> Result<(), StorageError> {
+    fn delete(&self, key: Value) -> Result<(), StorageError> {
         let delete_txn = self
             .database
             .begin_write()
@@ -96,16 +109,12 @@ impl Storage {
                 .open_table(self.table())
                 .map_err(|e| StorageError::DatabaseError(e.to_string()))?;
             table
-                .remove(key)
+                .remove(key.to_string())
                 .map_err(|e| StorageError::DatabaseError(e.to_string()))?;
         }
         delete_txn
             .commit()
             .map_err(|e| StorageError::DatabaseError(e.to_string()))
-    }
-
-    fn table(&self) -> TableDefinition<Value, Vec<u8>> {
-        TableDefinition::new(&self.table_name)
     }
 }
 
@@ -128,13 +137,16 @@ mod tests {
     fn test_write_read() {
         let storage = Storage::new_temp().unwrap();
         storage
-            .write("test".into(), Value::text("David").write_to_vec().unwrap())
+            .write(
+                TrainId::new(0, 0),
+                Value::text("David").write_to_vec().unwrap(),
+            )
             .unwrap();
         assert_eq!(
-            Value::read_from_buffer(&storage.read_u8("test".into()).unwrap()).unwrap(),
+            Value::read_from_buffer(&storage.read_u8(TrainId::new(0, 0)).unwrap()).unwrap(),
             Value::text("David")
         );
-        assert!(storage.read_u8("nonexistent".into()).is_err());
+        assert!(storage.read_u8(TrainId::new(0, 1)).is_err());
     }
 
     #[test]
@@ -143,7 +155,10 @@ mod tests {
         {
             let storage = Storage::new_from_path(path).unwrap();
             storage
-                .write("test".into(), Value::text("David").write_to_vec().unwrap())
+                .write(
+                    TrainId::new(0, 0),
+                    Value::text("David").write_to_vec().unwrap(),
+                )
                 .unwrap();
         }
         assert!(!fs::exists(path).unwrap());

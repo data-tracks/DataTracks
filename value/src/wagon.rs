@@ -33,7 +33,10 @@ impl PartialEq for Wagon {
 
 impl From<Vec<Wagon>> for Train {
     fn from(value: Vec<Wagon>) -> Self {
-        Train::new(value.into_iter().map(Value::Wagon).collect::<Vec<Value>>())
+        Train::new(
+            value.into_iter().map(Value::Wagon).collect::<Vec<Value>>(),
+            0,
+        )
     }
 }
 
@@ -44,6 +47,7 @@ impl From<Vec<Value>> for Train {
                 .into_iter()
                 .map(|v| Value::wagon(v, Value::null()))
                 .collect::<Vec<Value>>(),
+            0,
         )
     }
 }

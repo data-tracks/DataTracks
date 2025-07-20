@@ -76,5 +76,8 @@ mod test {
         for _ in 0..10_000_000 {
             connection.send("This is a test.").unwrap();
         }
+
+        let client = Client::new("127.0.0.1", 6565);
+        let _connection = client.connect().unwrap();
     }
 }

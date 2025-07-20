@@ -141,9 +141,11 @@ pub mod dummy {
                 }
                 sleep(initial_delay);
 
+                let mut i = 0;
                 for values in &values {
                     for sender in &senders {
-                        sender.send(Train::new(values.clone()));
+                        sender.send(Train::new(values.clone(), i));
+                        i += 1;
                     }
                     sleep(delay);
                 }
@@ -454,7 +456,7 @@ pub mod tests {
 
         plan.operate().unwrap();
 
-        input.send(Train::new(values.clone()));
+        input.send(Train::new(values.clone(), 0));
 
         let res = output_rx.recv().unwrap();
         assert_eq!(res.values.clone(), values);
@@ -492,7 +494,7 @@ pub mod tests {
 
         plan.operate().unwrap();
 
-        input.send(Train::new(values.clone()));
+        input.send(Train::new(values.clone(), 0));
 
         let res = output1_rx.recv().unwrap();
         assert_eq!(res.values.clone(), values);

@@ -2,15 +2,11 @@ use crate::processing;
 use crate::processing::portal::Portal;
 use crate::processing::window::WindowStrategy;
 use crate::util::TriggerType;
-use axum::http::uri::Port;
 use std::cmp::PartialEq;
 use std::collections::{BTreeMap, HashMap};
-use std::sync::{Arc, Mutex};
 use tracing::debug;
 use value::Time;
 use value::train::Train;
-
-pub type Storage = Arc<Mutex<Vec<Train>>>;
 
 #[derive(Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Copy, Debug)]
 pub struct WindowDescriptor {
@@ -143,14 +139,13 @@ impl TriggerSelector {
 
     fn get_trains(&self, window: WindowDescriptor) -> Option<Train> {
         let is_same = window.to == window.from;
+
         self.portal
-            .drain()
-            .iter()
-            .filter(|train| {
-                (is_same && window.to == train.event_time)
-                    || (window.from < train.event_time && window.to >= train.event_time)
-            })
-            .cloned()
+            .peek(Box::new(move |event_time| {
+                (is_same && window.to == event_time)
+                    || (window.from < event_time && window.to >= event_time)
+            }))
+            .into_iter()
             .reduce(|a, b| a.merge(b))
     }
 }
@@ -179,14 +174,14 @@ mod tests {
         let window = NonWindow {};
         let mut selector = WindowSelector::new(Non(window));
 
-        let mut train = Train::new(vec![3.into()]);
+        let mut train = Train::new(vec![3.into()], 0);
         train.event_time = Time::new(3, 3);
 
         selector.mark(&train);
         let windows = selector.select(train.event_time);
         assert_eq!(windows.len(), 1);
 
-        let portal = Portal::new();
+        let portal = Portal::new().unwrap();
         let mut trigger = TriggerSelector::new(portal.clone(), TriggerType::Element);
         portal.push(train);
 
@@ -198,14 +193,14 @@ mod tests {
         let window = NonWindow {};
         let mut selector = WindowSelector::new(Non(window));
 
-        let mut train = Train::new(vec![3.into()]);
+        let mut train = Train::new(vec![3.into()], 0);
         train.event_time = Time::new(3, 3);
 
         selector.mark(&train);
         let windows = selector.select(train.event_time);
         assert_eq!(windows.len(), 1);
 
-        let portal = Portal::new();
+        let portal = Portal::new().unwrap();
         let mut trigger = TriggerSelector::new(portal.clone(), TriggerType::Element);
         portal.push(train);
 
@@ -217,7 +212,7 @@ mod tests {
         let window = BackWindow::new(3, TimeUnit::Millis);
         let mut selector = WindowSelector::new(Window::Back(window));
 
-        let mut train = Train::new(vec![3.into()]);
+        let mut train = Train::new(vec![3.into()], 0);
         train.event_time = Time::new(3, 0);
 
         selector.mark(&train);
@@ -230,11 +225,11 @@ mod tests {
         let window = BackWindow::new(3, TimeUnit::Millis);
         let mut selector = WindowSelector::new(Window::Back(window));
 
-        let mut train = Train::new(vec![3.into()]);
+        let mut train = Train::new(vec![3.into()], 0);
         train.event_time = Time::new(3, 0);
         selector.mark(&train);
 
-        let mut train = Train::new(vec![3.into()]);
+        let mut train = Train::new(vec![3.into()], 1);
         train.event_time = Time::new(3, 0);
         let time = train.event_time;
         selector.mark(&train);
@@ -248,11 +243,11 @@ mod tests {
         let window = BackWindow::new(3, TimeUnit::Millis);
         let mut selector = WindowSelector::new(Window::Back(window));
 
-        let mut train = Train::new(vec![3.into()]);
+        let mut train = Train::new(vec![3.into()], 0);
         train.event_time = Time::new(3, 0);
         selector.mark(&train);
 
-        let mut train = Train::new(vec![3.into()]);
+        let mut train = Train::new(vec![3.into()], 1);
         train.event_time = Time::new(4, 0);
         selector.mark(&train);
 
@@ -265,15 +260,15 @@ mod tests {
         let window = BackWindow::new(4, TimeUnit::Millis);
         let mut selector = WindowSelector::new(Window::Back(window));
 
-        let portal = Portal::new();
+        let portal = Portal::new().unwrap();
         let mut trigger = TriggerSelector::new(portal.clone(), TriggerType::Element);
 
-        let mut train = Train::new(vec![3.into()]);
+        let mut train = Train::new(vec![3.into()], 0);
         train.event_time = Time::new(3, 0);
         selector.mark(&train);
         portal.push(train);
 
-        let mut train = Train::new(vec![3.into()]);
+        let mut train = Train::new(vec![3.into()], 1);
         train.event_time = Time::new(4, 0);
 
         let time = train.event_time;

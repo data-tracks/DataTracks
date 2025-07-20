@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use data_tracks::algebra::{Executor};
+use data_tracks::algebra::Executor;
 use data_tracks::new_channel;
 use data_tracks::processing::{Sender, Train};
 use value::{Dict, Value};

@@ -161,7 +161,7 @@ mod test {
 
     #[test]
     fn simple_scan() {
-        let train = Train::new(transform(vec![3.into(), "test".into()]));
+        let train = Train::new(transform(vec![3.into(), "test".into()]), 0);
 
         let mut root = AlgebraRoot::new_scan_index(0);
 

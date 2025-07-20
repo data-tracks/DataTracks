@@ -1,6 +1,6 @@
+use crate::processing::Train;
 use crate::processing::select::WindowDescriptor;
 use crate::processing::window::Window::{Back, Interval, Non};
-use crate::processing::Train;
 use crate::util::TimeUnit;
 use chrono::{Duration, NaiveTime, Timelike};
 use std::collections::BTreeMap;
@@ -309,10 +309,10 @@ mod test {
     use crate::processing::station::Station;
     use crate::processing::tests::dict_values;
     use crate::processing::window::{BackWindow, Window};
-    use crate::util::{new_channel, TimeUnit};
+    use crate::util::{TimeUnit, new_channel};
     use crossbeam::channel::unbounded;
-    use value::train::Train;
     use value::Value;
+    use value::train::Train;
 
     #[test]
     fn default_behavior() {
@@ -326,7 +326,7 @@ mod test {
 
         station.add_out(0, tx).unwrap();
         station.operate(Arc::new(control.0), HashMap::new());
-        station.fake_receive(Train::new(values.clone()));
+        station.fake_receive(Train::new(values.clone(), 0));
 
         let res = rx.recv();
         match res {
@@ -360,7 +360,7 @@ mod test {
         assert_eq!(Ready(0), control.1.recv().unwrap());
 
         for value in &values {
-            station.fake_receive(Train::new(vec![value.clone()]));
+            station.fake_receive(Train::new(vec![value.clone()], 0));
         }
         sleep(Duration::from_millis(50));
 
@@ -370,7 +370,7 @@ mod test {
             results.push(rx.recv().unwrap())
         }
 
-        station.fake_receive(Train::new(after.clone()));
+        station.fake_receive(Train::new(after.clone(), 1));
 
         //receive last
         results.push(rx.recv().unwrap());

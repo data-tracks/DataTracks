@@ -215,7 +215,7 @@ pub trait ValueIterator: Iterator<Item = Value> + Send + 'static {
     }
 
     fn drain_to_train(&mut self, stop: usize) -> Train {
-        Train::new(self.drain()).mark(stop)
+        Train::new(self.drain(), 0).mark(stop)
     }
 
     fn clone(&self) -> BoxedIterator;

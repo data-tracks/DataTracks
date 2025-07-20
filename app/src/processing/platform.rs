@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::thread::{Builder, sleep};
 use std::time::Duration;
 
@@ -96,7 +96,7 @@ impl Platform {
 
         let watermark_strategy = self.watermark_strategy.clone();
 
-        let mut portal = Portal::new();
+        let portal = Portal::new().unwrap();
 
         let window_selector = Arc::new(RwLock::new(WindowSelector::new(self.window.clone())));
 
