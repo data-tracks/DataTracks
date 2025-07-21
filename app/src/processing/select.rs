@@ -140,11 +140,14 @@ impl TriggerSelector {
     fn get_trains(&self, window: WindowDescriptor) -> Option<Train> {
         let is_same = window.to == window.from;
 
+        let mut ids = vec![];
+        for (id, time) in self.portal.peek() {
+            if (is_same && window.to == time) || (window.from < time && window.to >= time) {
+                ids.push(id);
+            }
+        }
         self.portal
-            .peek(Box::new(move |event_time| {
-                (is_same && window.to == event_time)
-                    || (window.from < event_time && window.to >= event_time)
-            }))
+            .get_trains(ids)
             .into_iter()
             .reduce(|a, b| a.merge(b))
     }

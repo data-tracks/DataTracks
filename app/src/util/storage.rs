@@ -1,6 +1,6 @@
 use crate::util::reservoir::StorageError;
 use moka::sync::Cache;
-use redb::{Database, TableDefinition};
+use redb::{Database, Durability, TableDefinition};
 use speedy::{Readable, Writable};
 use std::fs;
 use tempfile::NamedTempFile;
@@ -64,7 +64,7 @@ impl Storage {
     }
     /// Write a key-value pair to the storage.
     fn write(&self, key: TrainId, value: Vec<u8>) -> Result<(), StorageError> {
-        let write_txn = self
+        let mut write_txn = self
             .database
             .begin_write()
             .map_err(|e| StorageError::DatabaseError(e.to_string()))?;
@@ -76,6 +76,7 @@ impl Storage {
                 .insert(key.to_string(), value)
                 .map_err(|e| StorageError::DatabaseError(e.to_string()))?;
         }
+        write_txn.set_durability(Durability::Eventual);
         write_txn
             .commit()
             .map_err(|e| StorageError::DatabaseError(e.to_string()))?;

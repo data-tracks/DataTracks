@@ -212,3 +212,11 @@ impl redb::Value for Train {
         TypeName::new("train")
     }
 }
+
+impl PartialEq<Self> for Train {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl Eq for Train {}

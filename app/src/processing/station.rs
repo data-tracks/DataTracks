@@ -530,7 +530,7 @@ pub mod tests {
         let sender = station.operate(Arc::clone(&a_tx), HashMap::new());
 
         let mut trains = vec![];
-        let amount = 10;
+        let amount = 1000;
 
         for i in 0..amount {
             trains.push(Train::new(values.clone(), i));

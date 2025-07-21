@@ -22,18 +22,22 @@ impl Portal {
         state.push(train);
     }
 
-    pub fn peek(&self, cond: Box<dyn Fn(Time) -> bool>) -> Vec<Train> {
+    pub fn peek(&self) -> BTreeMap<TrainId, Time> {
         let state = self.shared_state.lock().unwrap();
-        let mut values = vec![];
-        for (i, time) in state.timestamps.iter() {
-            if cond(*time) {
-                match state.storage.read_train(*i) {
-                    Some(t) => values.push(t),
-                    None => warn!("Error reading train {}", time),
-                }
+        state.timestamps.clone()
+    }
+
+    pub fn get_trains(&self, ids: Vec<TrainId>) -> Vec<Train> {
+        let mut trains = vec![];
+
+        let state = self.shared_state.lock().unwrap();
+        for id in ids {
+            match state.storage.read_train(id) {
+                None => {}
+                Some(t) => trains.push(t),
             }
         }
-        values
+        trains
     }
 }
 
