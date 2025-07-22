@@ -73,10 +73,12 @@ impl Default for MonotonicWatermark {
                 observers: Arc::new(Mutex::new(HashMap::new())),
             };
         }
-
-        MonotonicWatermark {
-            last: Arc::new(Mutex::new(Time::default())),
-            observers: Arc::new(Mutex::new(HashMap::new())),
+        #[cfg(not(test))]
+        {
+            MonotonicWatermark {
+                last: Arc::new(Mutex::new(Time::default())),
+                observers: Arc::new(Mutex::new(HashMap::new())),
+            }
         }
     }
 }

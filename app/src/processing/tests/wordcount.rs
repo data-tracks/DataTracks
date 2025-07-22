@@ -52,9 +52,6 @@ mod test {
 
     #[test]
     fn wordcount_group_large_test() {
-        let source = 1;
-        let destination = 5;
-
         let mut plan = Plan::parse(&format!(
             "\
             0--{query}--2\n\

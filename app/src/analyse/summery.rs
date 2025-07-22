@@ -51,10 +51,6 @@ impl Summery {
         warnings
     }
 
-    pub fn set_status(&mut self, status: Status) {
-        self.status = status;
-    }
-
     pub fn add_stop_status(&mut self, id: usize, status: Status) {
         self.stops.insert(id, status);
     }

@@ -56,6 +56,19 @@ impl Storage {
         self.cache.insert(key, train.clone());
         self.write(key, train.write_to_vec().unwrap())
     }
+
+    pub(crate) fn write_trains(&mut self, trains: Vec<Train>) -> Result<(), StorageError> {
+        for train in &trains {
+            self.cache.insert(train.id, train.clone());
+        }
+        self.writes(
+            trains
+                .into_iter()
+                .map(|t| (t.id, t.write_to_vec().unwrap()))
+                .collect::<Vec<_>>(),
+        )
+    }
+
     pub(crate) fn read_train(&self, key: TrainId) -> Option<Train> {
         match self.cache.get(&key) {
             None => Train::read_from_buffer(&self.read_u8(key).ok()?).ok(),
@@ -76,7 +89,30 @@ impl Storage {
                 .insert(key.to_string(), value)
                 .map_err(|e| StorageError::DatabaseError(e.to_string()))?;
         }
-        write_txn.set_durability(Durability::Eventual);
+        write_txn.set_durability(Durability::Immediate);
+        write_txn
+            .commit()
+            .map_err(|e| StorageError::DatabaseError(e.to_string()))?;
+        Ok(())
+    }
+
+    /// Write a key-value pair to the storage.
+    fn writes(&self, values: Vec<(TrainId, Vec<u8>)>) -> Result<(), StorageError> {
+        let mut write_txn = self
+            .database
+            .begin_write()
+            .map_err(|e| StorageError::DatabaseError(e.to_string()))?;
+        {
+            let mut table = write_txn
+                .open_table(self.table())
+                .map_err(|e| StorageError::DatabaseError(e.to_string()))?;
+            for (id, value) in values {
+                table
+                    .insert(id.to_string(), value)
+                    .map_err(|e| StorageError::DatabaseError(e.to_string()))?;
+            }
+        }
+        write_txn.set_durability(Durability::Immediate);
         write_txn
             .commit()
             .map_err(|e| StorageError::DatabaseError(e.to_string()))?;

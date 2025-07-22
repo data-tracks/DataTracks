@@ -142,6 +142,6 @@ mod test {
         builder.finish(msg, None);
         let msg = builder.finished_data().to_vec();
 
-        let msg = deserialize_message(msg.as_slice()).unwrap();
+        let _msg = deserialize_message(msg.as_slice()).unwrap();
     }
 }

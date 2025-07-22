@@ -25,6 +25,7 @@ use parking_lot::RwLock;
 use tracing::{debug, error};
 
 const IDLE_TIMEOUT: Duration = Duration::from_nanos(10);
+const BATCH_SIZE: usize = 100;
 
 // What: Transformations, Where: Windowing, When: Triggers, How: Accumulation
 /// Platform represents an independent action steps which handles data based on the 4 streaming operations from different inputs  
@@ -151,20 +152,32 @@ impl Platform {
                 }
             }
 
-            match self.receiver.try_recv() {
-                Ok(train) => {
-                    debug!("{:?}", train);
-                    if self.layout.fits_train(&train) {
-                        // save and update if something changed
-                        portal.push(train.clone());
-                        watermark_strategy.mark(&train);
-                        window_selector.write().mark(&train);
+            let mut i = 0;
+            let mut trains = Vec::new();
+            let mut finish = false;
+            while i < BATCH_SIZE && !finish {
+                match self.receiver.try_recv() {
+                    Ok(t) => {
+                        trains.push(t);
+                    }
+                    Err(_) => {
+                        finish = true;
                     }
                 }
-                _ => {
-                    sleep(timeout); // wait again
+
+                i += 1;
+            }
+
+            if !trains.is_empty() {
+                // save and update if something changed
+                portal.push_trains(trains.clone());
+                for t in trains {
+                    watermark_strategy.mark(&t);
+                    window_selector.write().mark(&t);
                 }
-            };
+            } else {
+                sleep(timeout);
+            }
         }
     }
 }

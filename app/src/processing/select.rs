@@ -186,7 +186,7 @@ mod tests {
 
         let portal = Portal::new().unwrap();
         let mut trigger = TriggerSelector::new(portal.clone(), TriggerType::Element);
-        portal.push(train);
+        portal.push_train(train);
 
         trigger.select(windows, &Time::new(3, 3));
     }
@@ -205,7 +205,7 @@ mod tests {
 
         let portal = Portal::new().unwrap();
         let mut trigger = TriggerSelector::new(portal.clone(), TriggerType::Element);
-        portal.push(train);
+        portal.push_train(train);
 
         trigger.select(windows, &Time::new(5, 5));
     }
@@ -269,7 +269,7 @@ mod tests {
         let mut train = Train::new(vec![3.into()], 0);
         train.event_time = Time::new(3, 0);
         selector.mark(&train);
-        portal.push(train);
+        portal.push_train(train);
 
         let mut train = Train::new(vec![3.into()], 1);
         train.event_time = Time::new(4, 0);
@@ -277,7 +277,7 @@ mod tests {
         let time = train.event_time;
 
         selector.mark(&train);
-        portal.push(train);
+        portal.push_train(train);
 
         let windows = selector.select(time);
         assert_eq!(windows.len(), 2);

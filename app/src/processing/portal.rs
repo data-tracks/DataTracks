@@ -1,7 +1,7 @@
 use crate::util::Storage;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
-use tracing::{error, warn};
+use tracing::error;
 use value::Time;
 use value::train::{Train, TrainId};
 
@@ -17,9 +17,14 @@ impl Portal {
         })
     }
 
-    pub fn push(&self, train: Train) {
+    pub fn push_trains(&self, trains: Vec<Train>) {
         let mut state = self.shared_state.lock().unwrap();
-        state.push(train);
+        state.push_trains(trains);
+    }
+
+    pub fn push_train(&self, train: Train) {
+        let mut state = self.shared_state.lock().unwrap();
+        state.push_train(train);
     }
 
     pub fn peek(&self) -> BTreeMap<TrainId, Time> {
@@ -63,9 +68,24 @@ impl SharedState {
         })
     }
 
-    fn push(&mut self, train: Train) {
-        let time = train.event_time;
+    fn push_trains(&mut self, trains: Vec<Train>) {
+        let ids = trains
+            .iter()
+            .map(|t| (t.id, t.event_time))
+            .collect::<Vec<_>>();
+        match self.storage.write_trains(trains) {
+            Ok(_) => {
+                for (id, time) in ids {
+                    self.timestamps.insert(id, time);
+                }
+            }
+            Err(err) => error!("{:?}", err),
+        }
+    }
+
+    fn push_train(&mut self, train: Train) {
         let id = train.id;
+        let time = train.event_time;
         match self.storage.write_train(id, train) {
             Ok(_) => {
                 self.timestamps.insert(id, time);
