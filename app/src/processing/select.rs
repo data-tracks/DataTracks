@@ -1,29 +1,27 @@
 use crate::processing;
 use crate::processing::portal::Portal;
+use crate::processing::select::WindowDescriptor::{Normal, Unbounded};
 use crate::processing::window::WindowStrategy;
 use crate::util::TriggerType;
 use std::cmp::PartialEq;
 use std::collections::{BTreeMap, HashMap};
 use tracing::debug;
 use value::Time;
-use value::train::Train;
+use value::train::{Train, TrainId};
 
 #[derive(Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Copy, Debug)]
-pub struct WindowDescriptor {
-    from: Time,
-    to: Time,
+pub enum WindowDescriptor {
+    Normal(Time, Time),
+    Unbounded(TrainId),
 }
 
 impl WindowDescriptor {
     pub fn new(from: Time, to: Time) -> WindowDescriptor {
-        WindowDescriptor { from, to }
+        Normal(from, to)
     }
 
-    pub fn unbounded(time: Time) -> WindowDescriptor {
-        WindowDescriptor {
-            from: time,
-            to: time,
-        }
+    pub fn unbounded(train_id: TrainId) -> WindowDescriptor {
+        Unbounded(train_id)
     }
 }
 
@@ -84,65 +82,68 @@ impl TriggerSelector {
         let mut trains = vec![];
         windows.into_iter().for_each(|(window, _is_complete)| {
             let mut trigger = false;
-            if window.to == window.from {
-                // we re-trigger same windows always
-                trigger = true;
-            } else if let Some(status) = self.triggered_windows.get(&window) {
-                // have already seen this window, are in window
-                if self.re_fire
-                    && current < &window.to
-                    && (matches!(self.trigger, TriggerType::Element))
-                {
-                    // still early
-                    debug!("trigger early");
-                    trigger = true;
-                    self.triggered_windows.insert(window, TriggerStatus::Early);
+            match window {
+                Normal(from, to) => {
+                    if let Some(status) = self.triggered_windows.get(&window) {
+                        // have already seen this window, are in window
+                        if self.re_fire
+                            && current < &to
+                            && (matches!(self.trigger, TriggerType::Element))
+                        {
+                            // still early
+                            debug!("trigger early");
+                            trigger = true;
+                            self.triggered_windows.insert(window, TriggerStatus::Early);
 
-                    // are past the window, did not trigger yet or early
-                } else if current >= &window.to
-                    && (status == &TriggerStatus::Untriggered
-                        || (status == &TriggerStatus::Early
-                            && matches!(self.trigger, TriggerType::Element))
-                        || (self.re_fire))
-                {
-                    debug!("trigger onTime or refire");
-                    trigger = true;
-                    self.triggered_windows.insert(window, TriggerStatus::OnTime);
+                            // are past the window, did not trigger yet or early
+                        } else if current >= &to
+                            && (status == &TriggerStatus::Untriggered
+                                || (status == &TriggerStatus::Early
+                                    && matches!(self.trigger, TriggerType::Element))
+                                || (self.re_fire))
+                        {
+                            debug!("trigger onTime or refire");
+                            trigger = true;
+                            self.triggered_windows.insert(window, TriggerStatus::OnTime);
+                        }
+                    } else {
+                        // have not seen this window, are past it
+                        if &to <= current
+                            && (matches!(self.trigger, TriggerType::Element)
+                                || matches!(self.trigger, TriggerType::WindowEnd))
+                        {
+                            // on time, did not fire yet
+                            debug!("@ {} trigger onTime {:?}", current, window);
+                            trigger = true;
+                            self.triggered_windows.insert(window, TriggerStatus::OnTime);
+                        } else if self.fire_early || matches!(self.trigger, TriggerType::Element) {
+                            // early fire
+                            debug!("fire early");
+                            trigger = true;
+                            self.triggered_windows.insert(window, TriggerStatus::Early);
+                        }
+                    }
+                    if trigger {
+                        match self.get_trains(&from, &to) {
+                            None => {}
+                            Some(t) => trains.push((window, t)),
+                        }
+                    }
                 }
-            } else {
-                // have not seen this window, are past it
-                if &window.to <= current
-                    && (matches!(self.trigger, TriggerType::Element)
-                        || matches!(self.trigger, TriggerType::WindowEnd))
-                {
-                    // on time, did not fire yet
-                    debug!("@ {} trigger onTime {:?}", current, window);
-                    trigger = true;
-                    self.triggered_windows.insert(window, TriggerStatus::OnTime);
-                } else if self.fire_early || matches!(self.trigger, TriggerType::Element) {
-                    // early fire
-                    debug!("fire early");
-                    trigger = true;
-                    self.triggered_windows.insert(window, TriggerStatus::Early);
-                }
-            }
-            if trigger {
-                match self.get_trains(window) {
+                Unbounded(train_id) => match self.get_train(train_id) {
                     None => {}
                     Some(t) => trains.push((window, t)),
-                }
+                },
             }
         });
 
         trains
     }
 
-    fn get_trains(&self, window: WindowDescriptor) -> Option<Train> {
-        let is_same = window.to == window.from;
-
+    fn get_trains(&self, from: &Time, to: &Time) -> Option<Train> {
         let mut ids = vec![];
         for (id, time) in self.portal.peek() {
-            if (is_same && window.to == time) || (window.from < time && window.to >= time) {
+            if from < &time && to >= &time {
                 ids.push(id);
             }
         }
@@ -150,6 +151,10 @@ impl TriggerSelector {
             .get_trains(ids)
             .into_iter()
             .reduce(|a, b| a.merge(b))
+    }
+
+    fn get_train(&self, train_id: TrainId) -> Option<Train> {
+        self.portal.get_train(train_id)
     }
 }
 

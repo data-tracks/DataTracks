@@ -171,7 +171,7 @@ impl StreamUser for TpcSource {
                             Payload::Train => {
                                 let msg = msg.data_as_train().unwrap();
 
-                                debug!("tpc train: {:?}", msg);
+                                //debug!("tpc train: {:?}", msg);
                                 match msg.try_into() {
                                     Ok(train) => self.send(train),
                                     Err(err) => warn!("error transformation {}", err),

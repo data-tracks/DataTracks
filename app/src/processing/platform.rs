@@ -22,7 +22,7 @@ use crossbeam::channel;
 use crossbeam::channel::Receiver;
 pub use logos::Source;
 use parking_lot::RwLock;
-use tracing::{debug, error};
+use tracing::error;
 
 const IDLE_TIMEOUT: Duration = Duration::from_nanos(10);
 const BATCH_SIZE: usize = 100;
@@ -226,7 +226,7 @@ fn when(
                 // decide if we fire a window, discard or wait
                 match when.select(windows, &current) {
                     trains if !trains.is_empty() => {
-                        debug!("trains {:?}", trains);
+                        //debug!("trains {:?}", trains);
                         trains.into_iter().for_each(|(_, t)| what.execute(t));
                     }
                     _ => {}

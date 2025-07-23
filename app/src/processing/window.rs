@@ -218,7 +218,7 @@ impl NoneStrategy {
         NoneStrategy {}
     }
     pub(crate) fn mark(&mut self, train: &Train) -> Vec<(WindowDescriptor, bool)> {
-        vec![(WindowDescriptor::unbounded(train.event_time), true)]
+        vec![(WindowDescriptor::unbounded(train.id), true)]
     }
 }
 
@@ -359,8 +359,8 @@ mod test {
         // wait for read
         assert_eq!(Ready(0), control.1.recv().unwrap());
 
-        for value in &values {
-            station.fake_receive(Train::new(vec![value.clone()], 0));
+        for (i, value) in values.iter().enumerate() {
+            station.fake_receive(Train::new(vec![value.clone()], i));
         }
         sleep(Duration::from_millis(50));
 
@@ -370,7 +370,7 @@ mod test {
             results.push(rx.recv().unwrap())
         }
 
-        station.fake_receive(Train::new(after.clone(), 1));
+        station.fake_receive(Train::new(after.clone(), 2));
 
         //receive last
         results.push(rx.recv().unwrap());

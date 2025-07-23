@@ -355,6 +355,7 @@ pub mod tests {
     use crate::util::{Tx, new_channel};
     use crossbeam::channel::{Receiver, Sender, unbounded};
     use tracing::debug;
+
     use tracing_test::traced_test;
     use value::train::Train;
     use value::{Dict, Time, Value};
@@ -498,12 +499,15 @@ pub mod tests {
         let (mut station, train_sender, rx, c_rx, a_tx) = create_test_station(10);
         let _sender = station.operate(Arc::clone(&a_tx), HashMap::new());
 
-        for i in 0..500 {
-            train_sender.send(Train::new(dict_values(vec![Value::int(i)]), 0));
+        for i in 0..500usize {
+            train_sender.send(Train::new(dict_values(vec![Value::int(i as i64)]), i));
         }
         station.operate(Arc::clone(&a_tx), HashMap::new());
-        for i in 0..500 {
-            train_sender.send(Train::new(dict_values(vec![Value::int(500 + i)]), 1));
+        for i in 0..500usize {
+            train_sender.send(Train::new(
+                dict_values(vec![Value::int((500 + i) as i64)]),
+                500 + i,
+            ));
         }
 
         // the station should open a platform, the station starts another platform,  the threshold should be reached and after some time be balanced
@@ -515,7 +519,14 @@ pub mod tests {
         while trains.iter().map(|v: &Train| v.values.len()).sum::<usize>() < 1_000 {
             trains.push(rx.recv().unwrap())
         }
-        debug!("{:?}", trains);
+        //debug!("{:?}", trains);
+        let mut ids = vec![];
+        for train in &trains {
+            if ids.contains(&train.id) {
+                debug!("found id {}", train.id);
+            }
+            ids.push(train.id);
+        }
 
         assert_eq!(
             trains.iter().map(|t| t.values.len()).sum::<usize>(),

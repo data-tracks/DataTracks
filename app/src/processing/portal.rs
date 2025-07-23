@@ -32,6 +32,11 @@ impl Portal {
         state.timestamps.clone()
     }
 
+    pub fn get_train(&self, train_id: TrainId) -> Option<Train> {
+        let state = self.shared_state.lock().unwrap();
+        state.storage.read_train(train_id)
+    }
+
     pub fn get_trains(&self, ids: Vec<TrainId>) -> Vec<Train> {
         let mut trains = vec![];
 
