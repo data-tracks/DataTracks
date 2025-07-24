@@ -21,7 +21,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
-use tracing::error;
+use tracing::{debug, error};
 use track_rails::message_generated::protocol::KeyValueU64StationArgs;
 use track_rails::message_generated::protocol::{
     KeyValueStringTransform, KeyValueStringTransformArgs, KeyValueU64Destination,
@@ -71,6 +71,19 @@ impl Clone for Plan {
     }
 }
 
+impl Drop for Plan {
+    fn drop(&mut self) {
+        self.controls.iter().for_each(|(id, senders)| {
+            senders
+                .iter()
+                .for_each(|sender| match sender.send(Command::Stop(*id)) {
+                    Ok(_) => {}
+                    Err(err) => debug!("already closed{:?}", err),
+                })
+        })
+    }
+}
+
 impl Default for Plan {
     fn default() -> Self {
         let (tx, rx) = unbounded();
@@ -109,10 +122,19 @@ impl Status {
 
 impl Plan {
     pub fn new(id: usize) -> Self {
+        let (tx, rx) = unbounded();
         Plan {
             id,
             name: id.to_string(),
-            ..Default::default()
+            lines: Default::default(),
+            stations: Default::default(),
+            stations_to_in_outs: Default::default(),
+            sources: Default::default(),
+            destinations: Default::default(),
+            controls: Default::default(),
+            control_receiver: (Arc::new(tx), rx),
+            status: Status::Running,
+            transforms: Default::default(),
         }
     }
 
@@ -275,6 +297,11 @@ impl Plan {
                 .entry(destination.id())
                 .or_default()
                 .push(destination.operate(Arc::clone(&self.control_receiver.0)));
+
+            match self.control_receiver.1.recv() {
+                Ok(_) => {}
+                Err(err) => return Err(format!("Not known destination {:?}", err)),
+            }
         }
 
         for source in self.sources.values_mut() {
@@ -282,6 +309,11 @@ impl Plan {
                 .entry(source.id())
                 .or_default()
                 .push(source.operate(Arc::clone(&self.control_receiver.0)));
+
+            match self.control_receiver.1.recv() {
+                Ok(_) => {}
+                Err(err) => return Err(format!("Not known source {:?}", err)),
+            }
         }
 
         self.status = Status::Running;

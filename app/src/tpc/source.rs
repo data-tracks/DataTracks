@@ -25,20 +25,31 @@ pub struct TpcSource {
     url: String,
     port: u16,
     outs: Vec<Tx<Train>>,
+    tx: Sender<Command>,
+    rx: Receiver<Command>,
+    control: Option<Arc<Sender<Command>>>,
 }
 
 impl TpcSource {
     pub fn new(url: String, port: u16) -> Self {
+        let (t, r) = unbounded();
         Self {
             id: new_id(),
             url,
             port,
             outs: Vec::new(),
+            tx: t,
+            rx: r,
+            control: None,
         }
     }
 
     fn send(&self, train: Train) {
         self.outs.iter().for_each(|out| out.send(train.clone()))
+    }
+
+    pub(crate) fn port(&self) -> u16 {
+        self.port
     }
 }
 
@@ -74,10 +85,13 @@ impl Source for TpcSource {
     fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command> {
         debug!("starting tpc source...");
 
-        let (tx, rx) = unbounded();
         let port = self.port;
         let url = self.url.clone();
-        let rx = Arc::new(rx);
+        let rx = self.rx.clone();
+        let tx = self.tx.clone();
+
+        self.control = Some(control);
+        let control = self.control.clone().unwrap();
 
         let clone = self.clone();
 
@@ -85,7 +99,7 @@ impl Source for TpcSource {
             .name("TPC Source".to_string())
             .spawn(move || {
                 let server = Server::new(url.clone(), port);
-                if server.start(clone, control, rx).is_ok() {}
+                if server.start(clone, control, Arc::new(rx)).is_ok() {}
             });
 
         match res {

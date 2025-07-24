@@ -1,15 +1,15 @@
+use crate::processing::Train;
 use crate::processing::destination::Destination;
 use crate::processing::option::Configurable;
 use crate::processing::plan::DestinationModel;
 use crate::processing::station::Command;
-use crate::processing::Train;
-use crate::tpc::server::{ack, StreamUser, TcpStream};
 use crate::tpc::Server;
+use crate::tpc::server::{StreamUser, TcpStream, ack};
 use crate::ui::{ConfigModel, NumberModel, StringModel};
+use crate::util::Tx;
 use crate::util::new_broadcast;
 use crate::util::new_id;
-use crate::util::Tx;
-use crossbeam::channel::{unbounded, Receiver, Sender};
+use crossbeam::channel::{Receiver, Sender, unbounded};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -45,6 +45,10 @@ impl TpcDestination {
             rx: r,
             control: None,
         }
+    }
+
+    pub fn port(&self) -> u16 {
+        self.port
     }
 }
 
@@ -151,6 +155,18 @@ impl Destination for TpcDestination {
         match res {
             Ok(_) => {}
             Err(err) => error!("{}", err),
+        }
+
+        match self.rx.recv() {
+            Ok(Command::Ready(_)) => {
+                self.control
+                    .clone()
+                    .map(|c| c.send(Command::Ready(self.id)));
+            }
+            _ => match self.control {
+                None => {}
+                Some(_) => {}
+            },
         }
 
         self.tx.clone()

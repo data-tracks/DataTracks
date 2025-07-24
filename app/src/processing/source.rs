@@ -50,12 +50,12 @@ impl Deref for Sources {
 
     fn deref(&self) -> &Self::Target {
         match self {
-            Sources::Mqtt(m) => m,
-            Sources::Lite(s) => s,
-            Sources::Http(h) => h,
-            Sources::Tpc(t) => t,
+            Mqtt(m) => m,
+            Lite(s) => s,
+            Http(h) => h,
+            Tpc(t) => t,
             #[cfg(test)]
-            Sources::Dummy(d) => d,
+            Dummy(d) => d,
         }
     }
 }
@@ -63,12 +63,12 @@ impl Deref for Sources {
 impl DerefMut for Sources {
     fn deref_mut(&mut self) -> &mut Self::Target {
         match self {
-            Sources::Mqtt(m) => m,
-            Sources::Lite(s) => s,
-            Sources::Http(h) => h,
-            Sources::Tpc(t) => t,
+            Mqtt(m) => m,
+            Lite(s) => s,
+            Http(h) => h,
+            Tpc(t) => t,
             #[cfg(test)]
-            Sources::Dummy(d) => d,
+            Dummy(d) => d,
         }
     }
 }

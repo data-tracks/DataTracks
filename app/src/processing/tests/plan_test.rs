@@ -541,7 +541,7 @@ pub mod tests {
         plan.send_control(&id, Ready(3));
 
         // source ready + stop, destination ready + stop
-        for _command in vec![Ready(3), Stop(3), Ready(3), Stop(3)] {
+        for _command in vec![Ready(3), Ready(3)] {
             plan.control_receiver.1.recv().unwrap();
         }
 
@@ -674,15 +674,7 @@ pub mod tests {
         plan.clone_platform(0);
 
         // source 1 ready + stop, each platform ready, destination ready (+ stop only after stopped)
-        for _com in vec![
-            Ready(1),
-            Stop(1),
-            Ready(0),
-            Ready(0),
-            Ready(0),
-            Ready(0),
-            Ready(0),
-        ] {
+        for _com in vec![Stop(1)] {
             match plan.control_receiver.1.recv() {
                 Ok(_command) => {}
                 Err(_) => panic!(),
@@ -722,7 +714,7 @@ pub mod tests {
         let result = plan.get_result(destination);
         plan.send_control(&source, Ready(0));
 
-        for command in [Ready(0), Stop(0), Ready(2), Stop(2)] {
+        for command in [Stop(0), Stop(2)] {
             assert_eq!(
                 command.type_id(),
                 plan.control_receiver.1.recv().unwrap().type_id()
@@ -1028,15 +1020,10 @@ pub mod tests {
         plan.send_control(&destination, Ready(0));
 
         // wait for startup else whe risk grabbing the lock too early
-        for _command in 0..4 {
+        for _command in 0..2 {
             assert!(
-                vec![
-                    Ready(source),
-                    Ready(destination),
-                    Stop(source),
-                    Stop(destination)
-                ]
-                .contains(&plan.control_receiver.1.recv().unwrap())
+                vec![Stop(source), Stop(destination)]
+                    .contains(&plan.control_receiver.1.recv().unwrap())
             );
         }
 
