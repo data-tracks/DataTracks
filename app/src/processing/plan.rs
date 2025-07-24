@@ -266,10 +266,11 @@ impl Plan {
 
         for station in self.stations.values_mut() {
             let entry = self.controls.entry(station.id).or_default();
-            entry.push(station.operate(
+            let (sender, _join) = station.operate(
                 Arc::clone(&self.control_receiver.0),
                 self.transforms.clone(),
-            ));
+            );
+            entry.push(sender)
         }
 
         // wait for all stations to be ready
@@ -287,7 +288,7 @@ impl Plan {
                     if start_time.elapsed().as_secs() > 3 {
                         return Err("Stations did not start properly".to_string());
                     }
-                    sleep(Duration::from_millis(100));
+                    sleep(Duration::from_secs(1));
                 }
             }
         }
@@ -322,10 +323,11 @@ impl Plan {
 
     pub(crate) fn clone_platform(&mut self, num: usize) {
         let station = self.stations.get_mut(&num).unwrap();
-        self.controls.entry(num).or_default().push(station.operate(
+        let (sender, _join) = station.operate(
             Arc::clone(&self.control_receiver.0),
             self.transforms.clone(),
-        ))
+        );
+        self.controls.entry(num).or_default().push(sender)
     }
 
     fn connect_stops(&mut self) -> Result<(), String> {

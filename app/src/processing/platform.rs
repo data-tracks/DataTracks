@@ -82,7 +82,7 @@ impl Platform {
         )
     }
 
-    pub(crate) fn operate(&mut self, control: Arc<channel::Sender<Command>>) {
+    pub(crate) fn operate(&mut self, control: Arc<channel::Sender<Command>>) -> Result<(), String> {
         let process = optimize(
             self.stop,
             self.transform.clone(),
@@ -111,7 +111,7 @@ impl Platform {
             process,
         );
 
-        control.send(Ready(stop)).unwrap();
+        control.send(Ready(stop)).map_err(|err| err.to_string())?;
 
         loop {
             // are we struggling to handle incoming?
@@ -135,7 +135,7 @@ impl Platform {
                 match command {
                     Command::Stop(_) => {
                         when_tx.send(Command::Stop(stop));
-                        return;
+                        return Ok(());
                     }
                     Attach(num, (send, watermark)) => {
                         watermark_strategy.attach(num, watermark.clone());

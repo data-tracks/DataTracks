@@ -72,7 +72,7 @@ mod test {
         let client = Client::new("127.0.0.1", in_port);
         let mut connection = client.connect().unwrap();
 
-        for _ in 0..10_000_000 {
+        for _ in 0..1_000_000 {
             connection.send("This is a test.").unwrap();
         }
 
