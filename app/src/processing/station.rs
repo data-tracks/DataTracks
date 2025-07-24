@@ -276,22 +276,20 @@ impl Station {
         &mut self,
         control: Arc<channel::Sender<Command>>,
         transforms: HashMap<String, Transform>,
-    ) -> (
-        crossbeam::channel::Sender<Command>,
-        std::io::Result<JoinHandle<Result<(), String>>>,
-    ) {
+    ) -> Result<(channel::Sender<Command>, JoinHandle<Result<(), String>>), String> {
         let (mut platform, sender) = Platform::new(self, transforms);
         let stop = self.stop;
 
-        (
+        Ok((
             sender,
             thread::Builder::new()
                 .name(format!("Station {}", self.id))
                 .spawn(move || {
                     debug!("Starting station {stop}");
                     platform.operate(control)
-                }),
-        )
+                })
+                .map_err(|err| format!("Could not spawn thread: {}", err))?,
+        ))
     }
 
     fn add_explicit_layout(&mut self, layout: Layout) {
@@ -466,7 +464,7 @@ pub mod tests {
     fn too_high() {
         let (mut station, train_sender, _rx, c_rx, a_tx) = create_test_station(10);
 
-        let (sender, _) = station.operate(Arc::clone(&a_tx), HashMap::new());
+        let (sender, _) = station.operate(Arc::clone(&a_tx), HashMap::new()).unwrap();
         sender.send(Threshold(3)).unwrap();
 
         for _ in 0..1_000 {
@@ -482,7 +480,7 @@ pub mod tests {
     fn too_high_two() {
         let (mut station, train_sender, _rx, c_rx, a_tx) = create_test_station(100);
 
-        let (sender, _) = station.operate(Arc::clone(&a_tx), HashMap::new());
+        let (sender, _) = station.operate(Arc::clone(&a_tx), HashMap::new()).unwrap();
         sender.send(Threshold(3)).unwrap();
         // second platform
         station.operate(Arc::clone(&a_tx), HashMap::new());
@@ -538,7 +536,7 @@ pub mod tests {
 
     fn run_minimal_overhead(name: &str, values: Vec<Value>) {
         let (mut station, train_sender, rx, c_rx, a_tx) = create_test_station(0);
-        let (sender, _) = station.operate(Arc::clone(&a_tx), HashMap::new());
+        let (sender, _) = station.operate(Arc::clone(&a_tx), HashMap::new()).unwrap();
 
         let mut trains = vec![];
         let amount = 1000;
@@ -718,7 +716,9 @@ pub mod tests {
             })
             .collect::<Vec<(_, _)>>();
 
-        let (sender, _) = station.operate(Arc::new(control_tx), Default::default());
+        let (sender, _) = station
+            .operate(Arc::new(control_tx), Default::default())
+            .unwrap();
         control_rx.recv().unwrap(); // wait for go from station
         sender.send(Ready(0)).unwrap(); // start station
 

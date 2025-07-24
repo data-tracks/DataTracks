@@ -269,7 +269,7 @@ impl Plan {
             let (sender, _join) = station.operate(
                 Arc::clone(&self.control_receiver.0),
                 self.transforms.clone(),
-            );
+            )?;
             entry.push(sender)
         }
 
@@ -321,13 +321,13 @@ impl Plan {
         Ok(())
     }
 
-    pub(crate) fn clone_platform(&mut self, num: usize) {
+    pub(crate) fn clone_platform(&mut self, num: usize) -> Result<(), String> {
         let station = self.stations.get_mut(&num).unwrap();
         let (sender, _join) = station.operate(
             Arc::clone(&self.control_receiver.0),
             self.transforms.clone(),
-        );
-        self.controls.entry(num).or_default().push(sender)
+        )?;
+        Ok(self.controls.entry(num).or_default().push(sender))
     }
 
     fn connect_stops(&mut self) -> Result<(), String> {
