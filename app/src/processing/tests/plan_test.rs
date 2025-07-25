@@ -2,7 +2,7 @@
 pub mod dummy {
     use std::collections::HashMap;
     use std::sync::{Arc, Mutex};
-    use std::thread::{sleep, spawn};
+    use std::thread::{JoinHandle, sleep, spawn};
     use std::time::Duration;
 
     use crate::algebra::{BoxedIterator, ValueIterator};
@@ -241,38 +241,47 @@ pub mod dummy {
             Ok(destination)
         }
 
-        fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command> {
+        fn operate(
+            &mut self,
+            control: Arc<Sender<Command>>,
+        ) -> (Sender<Command>, JoinHandle<Result<(), String>>) {
             let id = self.id;
             let local = self.results();
             let receiver = self.receiver.take().unwrap();
             let result_amount = self.result_size;
             let (tx, rx) = unbounded();
 
-            spawn(move || {
-                control.send(Ready(id)).unwrap();
-                let mut shared = local.lock().unwrap();
-                loop {
-                    match rx.try_recv() {
-                        Ok(command) => match command {
-                            Stop(_) => break,
+            (
+                tx,
+                spawn(move || {
+                    control.send(Ready(id)).unwrap();
+                    let mut shared = local.lock().unwrap();
+                    loop {
+                        match rx.try_recv() {
+                            Ok(command) => match command {
+                                Stop(_) => break,
+                                _ => {}
+                            },
                             _ => {}
-                        },
-                        _ => {}
-                    }
-                    match receiver.try_recv() {
-                        Ok(train) => {
-                            shared.push(train);
-                            if shared.len() == result_amount {
-                                break;
-                            }
                         }
-                        _ => sleep(Duration::from_nanos(100)),
+                        match receiver.try_recv() {
+                            Ok(train) => {
+                                shared.push(train);
+                                if shared.len() == result_amount {
+                                    break;
+                                }
+                            }
+                            _ => sleep(Duration::from_nanos(100)),
+                        }
                     }
-                }
-                drop(shared);
-                control.send(Stop(id))
-            });
-            tx
+                    drop(shared);
+                    control
+                        .send(Stop(id))
+                        .map_err(|err| err.to_string())
+                        .unwrap();
+                    Ok(())
+                }),
+            )
         }
 
         fn get_in(&self) -> Tx<Train> {
@@ -669,9 +678,9 @@ pub mod tests {
         plan.operate().unwrap();
         let now = SystemTime::now();
         plan.send_control(&id, Ready(0));
-        plan.clone_platform(0);
-        plan.clone_platform(0);
-        plan.clone_platform(0);
+        let _ = plan.clone_platform(0);
+        let _ = plan.clone_platform(0);
+        let _ = plan.clone_platform(0);
 
         // source 1 ready + stop, each platform ready, destination ready (+ stop only after stopped)
         for _com in vec![Stop(1)] {

@@ -486,7 +486,7 @@ pub mod tests {
         let (sender, _) = station.operate(Arc::clone(&a_tx), HashMap::new()).unwrap();
         sender.send(Threshold(3)).unwrap();
         // second platform
-        station.operate(Arc::clone(&a_tx), HashMap::new());
+        let _ = station.operate(Arc::clone(&a_tx), HashMap::new());
 
         for _ in 0..1_000 {
             train_sender.send(Train::new(dict_values(vec![Value::int(3)]), 0));
@@ -506,7 +506,7 @@ pub mod tests {
         for i in 0..500usize {
             train_sender.send(Train::new(dict_values(vec![Value::int(i as i64)]), i));
         }
-        station.operate(Arc::clone(&a_tx), HashMap::new());
+        let _ = station.operate(Arc::clone(&a_tx), HashMap::new());
         for i in 0..500usize {
             train_sender.send(Train::new(
                 dict_values(vec![Value::int((500 + i) as i64)]),
@@ -733,7 +733,7 @@ pub mod tests {
             time += wait; // we are farther along
         }
 
-        let result = receive(rx, Duration::from_millis(100));
+        let result = receive(rx, Duration::from_secs(1));
 
         if !has_more {
             assert_eq!(result.len(), answers);

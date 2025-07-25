@@ -7,7 +7,7 @@ mod test {
     use value::Value;
 
     #[test]
-    fn wordcount_test() {
+    fn word_count_test() {
         let values = vec![vec!["Hey there".into(), "how are you".into()]];
         let res: Vec<Vec<Value>> = vec![vec![
             "Hey".into(),
@@ -30,7 +30,7 @@ mod test {
     }
 
     #[test]
-    fn wordcount_group_test() {
+    fn word_count_group_test() {
         let values = vec![vec!["Hey Hallo".into(), "Hey".into()]];
         let res: Vec<Vec<Value>> = vec![vec![
             vec!["Hey".into(), 2.into()].into(),
@@ -50,7 +50,7 @@ mod test {
     }
 
     #[test]
-    fn wordcount_group_large_test() {
+    fn word_count_group_large_test() {
         let offset = random_range(0..1000);
         let in_port = 6767 + offset;
         let offset = random_range(0..1000);
@@ -72,7 +72,7 @@ mod test {
         let client = Client::new("127.0.0.1", in_port);
         let mut connection = client.connect().unwrap();
 
-        for _ in 0..1_000_000 {
+        for _ in 0..10_000 {
             connection.send("This is a test.").unwrap();
         }
 

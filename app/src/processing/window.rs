@@ -325,7 +325,7 @@ mod test {
         let (tx, rx) = new_channel("test", false);
 
         station.add_out(0, tx).unwrap();
-        station.operate(Arc::new(control.0), HashMap::new());
+        let _ = station.operate(Arc::new(control.0), HashMap::new());
         station.fake_receive(Train::new(values.clone(), 0));
 
         let res = rx.recv();
@@ -355,7 +355,7 @@ mod test {
         let (tx, rx) = new_channel("test", false);
 
         station.add_out(0, tx).unwrap();
-        station.operate(Arc::new(control.0), HashMap::new());
+        let _ = station.operate(Arc::new(control.0), HashMap::new());
         // wait for read
         assert_eq!(Ready(0), control.1.recv().unwrap());
 

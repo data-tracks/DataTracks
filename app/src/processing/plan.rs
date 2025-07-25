@@ -16,12 +16,13 @@ use serde::{Deserialize, Serialize, Serializer};
 use serde_json::{Map, Value};
 use std::cmp::PartialEq;
 use std::collections::HashMap;
+use std::mem;
 use std::sync::Arc;
 #[cfg(test)]
 use std::sync::Mutex;
-use std::thread::sleep;
+use std::thread::{sleep, JoinHandle};
 use std::time::{Duration, Instant};
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
 use track_rails::message_generated::protocol::KeyValueU64StationArgs;
 use track_rails::message_generated::protocol::{
     KeyValueStringTransform, KeyValueStringTransformArgs, KeyValueU64Destination,
@@ -43,6 +44,7 @@ pub struct Plan {
     pub control_receiver: (Arc<Sender<Command>>, Receiver<Command>),
     pub status: Status,
     pub transforms: HashMap<String, transform::Transform>,
+    pub handles: HashMap<usize, JoinHandle<Result<(), String>>>
 }
 
 #[cfg(test)]
@@ -67,6 +69,7 @@ impl Clone for Plan {
             control_receiver: (Arc::new(tx), rx),
             status: Status::Running,
             transforms: self.transforms.clone(),
+            handles: Default::default(),
         }
     }
 }
@@ -80,6 +83,12 @@ impl Drop for Plan {
                     Ok(_) => {}
                     Err(err) => debug!("already closed{:?}", err),
                 })
+        });
+        mem::take(&mut self.handles).into_iter().for_each(|(id, handle)| {
+            match handle.join().unwrap() {
+                Ok(t) => {},
+                Err(err) => warn!("Error on closing {}", err)
+            }
         })
     }
 }
@@ -99,6 +108,7 @@ impl Default for Plan {
             control_receiver: (Arc::new(tx), rx),
             status: Stopped,
             transforms: Default::default(),
+            handles: Default::default(),
         }
     }
 }
@@ -135,6 +145,7 @@ impl Plan {
             control_receiver: (Arc::new(tx), rx),
             status: Status::Running,
             transforms: Default::default(),
+            handles: Default::default(),
         }
     }
 
@@ -265,12 +276,15 @@ impl Plan {
         self.connect_sources()?;
 
         for station in self.stations.values_mut() {
-            let entry = self.controls.entry(station.id).or_default();
-            let (sender, _join) = station.operate(
+            let (sender, join) = station.operate(
                 Arc::clone(&self.control_receiver.0),
                 self.transforms.clone(),
             )?;
-            entry.push(sender)
+            // add controls
+            let entry = self.controls.entry(station.id).or_default();
+            entry.push(sender);
+            // add handles
+            self.handles.insert(station.id, join);
         }
 
         // wait for all stations to be ready
@@ -285,7 +299,7 @@ impl Plan {
                     command => return Err(format!("Not known command {:?}", command)),
                 },
                 Err(_) => {
-                    if start_time.elapsed().as_secs() > 3 {
+                    if start_time.elapsed().as_secs() > 5 {
                         return Err("Stations did not start properly".to_string());
                     }
                     sleep(Duration::from_secs(1));
@@ -294,10 +308,11 @@ impl Plan {
         }
 
         for destination in self.destinations.values_mut() {
+            let sender = destination.operate(Arc::clone(&self.control_receiver.0));
             self.controls
                 .entry(destination.id())
                 .or_default()
-                .push(destination.operate(Arc::clone(&self.control_receiver.0)));
+                .push(sender);
 
             match self.control_receiver.1.recv() {
                 Ok(_) => {}
@@ -306,10 +321,11 @@ impl Plan {
         }
 
         for source in self.sources.values_mut() {
+            let sender = source.operate(Arc::clone(&self.control_receiver.0));
             self.controls
                 .entry(source.id())
                 .or_default()
-                .push(source.operate(Arc::clone(&self.control_receiver.0)));
+                .push(sender); // todo get thread
 
             match self.control_receiver.1.recv() {
                 Ok(_) => {}
@@ -989,7 +1005,9 @@ impl From<transform::Transform> for ConfigContainer {
 
 #[cfg(test)]
 mod test {
-    use crate::processing::plan::Plan;
+    use rusty_tracks::Client;
+    use tracing_test::traced_test;
+    use crate::processing::plan::{Plan, Stencil};
 
     #[test]
     fn parse_line_stop_stencil() {
@@ -1152,6 +1170,29 @@ mod test {
             let plan = Plan::parse(stencil).unwrap();
             assert_eq!(plan.dump(false).trim(), stencil.trim())
         }
+    }
+
+    #[test]
+    #[traced_test]
+    fn stop_sets() {
+        let stencil = "\
+            1\n\
+            In\n\
+            Tpc{\"port\":5656,\"url\":\"127.0.0.1\"}:1\n\
+            ";
+
+        let mut plan = Plan::parse(stencil).unwrap();
+        plan.operate().unwrap();
+
+        let client = Client::new("127.0.0.1", 5656);
+        let mut connection = client.connect().unwrap();
+
+        for _ in 0..100 {
+            connection.send("test").unwrap();
+        }
+
+        drop(plan);
+
     }
 }
 
