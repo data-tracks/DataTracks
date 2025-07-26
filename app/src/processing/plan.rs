@@ -84,9 +84,9 @@ impl Drop for Plan {
                     Err(err) => debug!("already closed{:?}", err),
                 })
         });
-        mem::take(&mut self.handles).into_iter().for_each(|(id, handle)| {
+        mem::take(&mut self.handles).into_iter().for_each(|(_, handle)| {
             match handle.join().unwrap() {
-                Ok(t) => {},
+                Ok(_) => {},
                 Err(err) => warn!("Error on closing {}", err)
             }
         })
@@ -308,7 +308,7 @@ impl Plan {
         }
 
         for destination in self.destinations.values_mut() {
-            let sender = destination.operate(Arc::clone(&self.control_receiver.0));
+            let (sender, join) = destination.operate(Arc::clone(&self.control_receiver.0));
             self.controls
                 .entry(destination.id())
                 .or_default()
@@ -317,20 +317,24 @@ impl Plan {
             match self.control_receiver.1.recv() {
                 Ok(_) => {}
                 Err(err) => return Err(format!("Not known destination {:?}", err)),
-            }
+            };
+            // add handles
+            self.handles.insert(destination.id(), join);
         }
 
         for source in self.sources.values_mut() {
-            let sender = source.operate(Arc::clone(&self.control_receiver.0));
+            let (sender, join) = source.operate(Arc::clone(&self.control_receiver.0));
             self.controls
                 .entry(source.id())
                 .or_default()
-                .push(sender); // todo get thread
+                .push(sender);
 
             match self.control_receiver.1.recv() {
                 Ok(_) => {}
                 Err(err) => return Err(format!("Not known source {:?}", err)),
-            }
+            };
+            // add handles
+            self.handles.insert(source.id(), join);
         }
 
         self.status = Status::Running;
@@ -1007,7 +1011,7 @@ impl From<transform::Transform> for ConfigContainer {
 mod test {
     use rusty_tracks::Client;
     use tracing_test::traced_test;
-    use crate::processing::plan::{Plan, Stencil};
+    use crate::processing::plan::{Plan};
 
     #[test]
     fn parse_line_stop_stencil() {
@@ -1175,7 +1179,8 @@ mod test {
     #[test]
     #[traced_test]
     fn stop_sets() {
-        let stencil = "\
+        let stencil =
+            "\
             1\n\
             In\n\
             Tpc{\"port\":5656,\"url\":\"127.0.0.1\"}:1\n\

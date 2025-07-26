@@ -14,9 +14,10 @@ use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::thread;
+use std::thread::JoinHandle;
 use std::time::Duration;
 use tokio::time::sleep;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 use track_rails::message_generated::protocol::Payload;
 
 #[derive(Clone)]
@@ -82,7 +83,7 @@ impl Source for TpcSource {
         Ok(TpcSource::new(url, port as u16))
     }
 
-    fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command> {
+    fn operate(&mut self, control: Arc<Sender<Command>>) -> (Sender<Command>, JoinHandle<Result<(), String>>) {
         debug!("starting tpc source...");
 
         let port = self.port;
@@ -100,14 +101,13 @@ impl Source for TpcSource {
             .spawn(move || {
                 let server = Server::new(url.clone(), port);
                 if server.start(clone, control, Arc::new(rx)).is_ok() {}
+                Ok(())
             });
 
         match res {
-            Ok(_) => {}
-            Err(err) => error!("{:?}", err),
+            Ok(t) => (tx,t),
+            Err(err) => panic!("Tpc Source errors {:?}", err),
         }
-
-        tx
     }
 
     fn outs(&mut self) -> &mut Vec<Tx<Train>> {
@@ -170,6 +170,12 @@ impl StreamUser for TpcSource {
         let mut len_buf = [0u8; 4];
 
         loop {
+            match self.rx.try_recv() {
+                Ok(Command::Stop(_)) => break,
+                Err(_) => {},
+                _ => {}
+            }
+
             match stream.read_exact(&mut len_buf).await {
                 Ok(_) => {
                     let size = u32::from_be_bytes(len_buf) as usize;

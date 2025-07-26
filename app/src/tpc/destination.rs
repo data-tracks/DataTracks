@@ -14,6 +14,7 @@ use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::thread;
+use std::thread::JoinHandle;
 use std::time::Duration;
 use tokio::time::sleep;
 use tracing::{debug, error};
@@ -132,7 +133,7 @@ impl Destination for TpcDestination {
         Ok(Self::new(url, port))
     }
 
-    fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command> {
+    fn operate(&mut self, control: Arc<Sender<Command>>) -> (Sender<Command>, JoinHandle<Result<(), String>>) {
         debug!("starting tpc destination...");
 
         let url = self.url.clone();
@@ -150,12 +151,10 @@ impl Destination for TpcDestination {
             .name("TPC Destination".to_string())
             .spawn(move || {
                 server.start(clone, Arc::new(tx), Arc::new(rx)).unwrap();
+                Ok(())
             });
 
-        match res {
-            Ok(_) => {}
-            Err(err) => error!("{}", err),
-        }
+
 
         match self.rx.recv() {
             Ok(Command::Ready(_)) => {
@@ -169,7 +168,10 @@ impl Destination for TpcDestination {
             },
         }
 
-        self.tx.clone()
+        match res {
+            Ok(t) => (self.tx.clone(), t),
+            Err(err) => panic!("{}", err),
+        }
     }
 
     fn get_in(&self) -> Tx<Train> {

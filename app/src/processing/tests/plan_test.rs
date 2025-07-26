@@ -119,7 +119,7 @@ pub mod dummy {
             Ok(source)
         }
 
-        fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command> {
+        fn operate(&mut self, control: Arc<Sender<Command>>) -> (Sender<Command>, JoinHandle<Result<(), String>>) {
             let id = self.id;
 
             let delay = self.delay;
@@ -128,7 +128,7 @@ pub mod dummy {
             let senders = self.senders.clone();
             let (tx, rx) = unbounded();
 
-            let _handle = spawn(move || {
+            let handle = spawn(move || {
                 control.send(Ready(id)).unwrap();
 
                 // wait for ready from callee
@@ -150,8 +150,9 @@ pub mod dummy {
                     sleep(delay);
                 }
                 control.send(Stop(id)).unwrap();
+                Ok(())
             });
-            tx
+            (tx, handle)
         }
 
         fn outs(&mut self) -> &mut Vec<Tx<Train>> {

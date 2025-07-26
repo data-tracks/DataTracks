@@ -15,6 +15,7 @@ use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::thread::JoinHandle;
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
 use tower_http::cors::CorsLayer;
@@ -109,7 +110,7 @@ impl Source for HttpSource {
         ))
     }
 
-    fn operate(&mut self, _control: Arc<Sender<Command>>) -> Sender<Command> {
+    fn operate(&mut self, _control: Arc<Sender<Command>>) -> (Sender<Command>, JoinHandle<Result<(), String>>) {
         let rt = Runtime::new().unwrap();
 
         let (tx, rx) = unbounded();
@@ -122,14 +123,13 @@ impl Source for HttpSource {
                 rt.block_on(async {
                     start_source(clone, rx).await;
                 });
+                Ok(())
             });
 
         match res {
-            Ok(_) => {}
-            Err(err) => error!("{}", err),
+            Ok(h) => (tx, h),
+            Err(err) => panic!("{}", err),
         }
-
-        tx
     }
 
     fn outs(&mut self) -> &mut Vec<Tx<Train>> {

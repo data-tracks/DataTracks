@@ -16,8 +16,9 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use std::time::Duration;
 use std::{str, thread};
+use std::thread::JoinHandle;
 use tokio::runtime::Runtime;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 use value::{Dict, Value};
 
 // mosquitto_sub -h 127.0.0.1 -p 8888 -t "test/topic2" -i "id"
@@ -73,7 +74,7 @@ impl Source for MqttSource {
         Ok(MqttSource::new(url, port as u16))
     }
 
-    fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command> {
+    fn operate(&mut self, control: Arc<Sender<Command>>) -> (Sender<Command>, JoinHandle<Result<(), String>>) {
         let runtime = Runtime::new().unwrap();
         debug!("starting mqtt source...");
 
@@ -127,14 +128,13 @@ impl Source for MqttSource {
                     }
                     warn!("MQTT broker has been stopped.");
                 });
+                Ok(())
             });
 
         match res {
-            Ok(_) => {}
-            Err(err) => error!("{}", err),
+            Ok(join) => (tx, join),
+            Err(err) => panic!("{}", err),
         }
-
-        tx
     }
 
     fn outs(&mut self) -> &mut Vec<Tx<Train>> {

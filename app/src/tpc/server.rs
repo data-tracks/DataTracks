@@ -1,15 +1,17 @@
 use crate::processing::station::Command;
 use crossbeam::channel::{Receiver, Sender};
 
-use crate::util::deserialize_message;
+use crate::util::{deserialize_message};
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use std::io;
 use std::io::Error;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
+use tokio::time::timeout;
 use tracing::{error, info};
 use track_rails::message_generated::protocol::{
     Message, MessageArgs, OkStatus, OkStatusArgs, Payload, RegisterResponse, RegisterResponseArgs,
@@ -132,27 +134,36 @@ impl Server {
         rx: Arc<Receiver<Command>>,
     ) -> Result<(), String> {
         let rt = Runtime::new().map_err(|err| err.to_string())?;
+
+        let accept_timeout = Duration::from_millis(100);
+
+
         rt.block_on(async {
             let listener = TcpListener::bind(self.addr)
                 .await
                 .map_err(|err| err.to_string())?;
             info!("TPC server listening {}...", self.addr);
-            let rx = Arc::new(rx);
+            //let rx = Arc::new(rx);
 
             control.send(Command::Ready(0)).unwrap();
 
             loop {
-                let (stream, _) = listener.accept().await.map_err(|err| err.to_string())?;
+                let result = timeout(accept_timeout, listener.accept()).await.map_err(|err| err.to_string())?;
 
                 if let Ok(cmd) = rx.try_recv() {
                     if let Command::Stop(s) = cmd {
                         return Err(format!("Stopped {}", s));
                     }
                 }
-
-                user.clone().handle(stream.into()).await;
+                match result {
+                    Ok((stream, _)) => {
+                        user.clone().handle(stream.into()).await
+                    }
+                    Err(_) => {}
+                };
             }
-        })
+        })?;
+        Ok(())
     }
 
     fn would_block(err: &Error) -> bool {
