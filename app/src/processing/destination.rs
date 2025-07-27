@@ -19,6 +19,7 @@ use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use serde_json::{Map, Value};
 #[cfg(test)]
 use std::sync::Mutex;
+use std::thread::JoinHandle;
 use track_rails::message_generated::protocol::{Destination as FlatDestination, DestinationArgs};
 use value::train::Train;
 
@@ -78,7 +79,10 @@ pub trait Destination: Send + Configurable + Sync {
     where
         Self: Sized;
 
-    fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command>;
+    fn operate(
+        &mut self,
+        control: Arc<Sender<Command>>,
+    ) -> (Sender<Command>, JoinHandle<Result<(), String>>);
     fn get_in(&self) -> Tx<Train>;
 
     fn id(&self) -> usize;

@@ -2,7 +2,7 @@ use crate::algebra::root::{AlgInputDerivable, AlgOutputDerivable, AlgebraRoot};
 use crate::algebra::{Algebra, BoxedIterator, BoxedValueHandler, ValueIterator};
 use crate::processing::transform::Transform;
 use crate::processing::{Direction, Layout, Order};
-use crate::util::storage::ValueStore;
+use crate::util::reservoir::ValueReservoir;
 use std::collections::{BTreeMap, HashMap};
 use value::Value;
 
@@ -100,7 +100,7 @@ impl Iterator for SortIterator {
 }
 
 impl ValueIterator for SortIterator {
-    fn get_storages(&self) -> Vec<ValueStore> {
+    fn get_storages(&self) -> Vec<ValueReservoir> {
         self.input.get_storages()
     }
 

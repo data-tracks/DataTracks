@@ -5,7 +5,7 @@ use crate::processing::option::Configurable;
 use crate::processing::transform::{Transform, Transformer};
 use crate::processing::Layout;
 use crate::sql::postgres::connection::PostgresConnection;
-use crate::util::storage::ValueStore;
+use crate::util::reservoir::ValueReservoir;
 use crate::util::{DynamicQuery, ValueExtractor};
 use postgres::types::ToSql;
 use postgres::{Client, Statement};
@@ -107,7 +107,7 @@ pub struct PostgresIterator {
     statement: Statement,
     value_functions: ValueExtractor,
     values: Vec<value::Value>,
-    storage: ValueStore,
+    storage: ValueReservoir,
 }
 
 impl PostgresIterator {
@@ -169,7 +169,7 @@ impl Iterator for PostgresIterator {
 }
 
 impl ValueIterator for PostgresIterator {
-    fn get_storages(&self) -> Vec<ValueStore> {
+    fn get_storages(&self) -> Vec<ValueReservoir> {
         vec![self.storage.clone()]
     }
 

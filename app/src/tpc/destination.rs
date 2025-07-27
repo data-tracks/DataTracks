@@ -8,12 +8,14 @@ use crate::tpc::Server;
 use crate::ui::{ConfigModel, NumberModel, StringModel};
 use crate::util::new_broadcast;
 use crate::util::new_id;
+use crate::util::Rx;
 use crate::util::Tx;
 use crossbeam::channel::{unbounded, Receiver, Sender};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::thread;
+use std::thread::JoinHandle;
 use std::time::Duration;
 use tokio::time::sleep;
 use tracing::{debug, error};
@@ -46,6 +48,10 @@ impl TpcDestination {
             control: None,
         }
     }
+
+    pub fn port(&self) -> u16 {
+        self.port
+    }
 }
 
 impl Configurable for TpcDestination {
@@ -62,7 +68,7 @@ impl Configurable for TpcDestination {
 }
 
 impl StreamUser for TpcDestination {
-    async fn handle(&mut self, mut stream: TcpStream) {
+    async fn handle(&mut self, mut stream: TcpStream, rx: Rx<Command>) {
         let control = self.control.clone().unwrap();
 
         let receiver = self.sender.subscribe();
@@ -78,8 +84,10 @@ impl StreamUser for TpcDestination {
         control.send(Command::Ready(self.id)).unwrap();
         let mut retry = 3;
         loop {
-            if let Ok(msg) = self.rx.try_recv() {
-                panic!("msg: {:?}", msg);
+            match rx.try_recv() {
+                Ok(Command::Stop(_)) => break,
+                Err(_) => {}
+                _ => {}
             }
 
             match receiver.try_recv() {
@@ -128,7 +136,10 @@ impl Destination for TpcDestination {
         Ok(Self::new(url, port))
     }
 
-    fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command> {
+    fn operate(
+        &mut self,
+        control: Arc<Sender<Command>>,
+    ) -> (Sender<Command>, JoinHandle<Result<(), String>>) {
         debug!("starting tpc destination...");
 
         let url = self.url.clone();
@@ -145,15 +156,29 @@ impl Destination for TpcDestination {
         let res = thread::Builder::new()
             .name("TPC Destination".to_string())
             .spawn(move || {
-                server.start(clone, Arc::new(tx), Arc::new(rx)).unwrap();
+                match server.start(clone, Arc::new(tx), Arc::new(rx)) {
+                    Ok(_) => {}
+                    Err(err) => error!("Error on TPC Destination thread{:?}", err),
+                }
+                Ok(())
             });
 
-        match res {
-            Ok(_) => {}
-            Err(err) => error!("{}", err),
+        match self.rx.recv() {
+            Ok(Command::Ready(_)) => {
+                self.control
+                    .clone()
+                    .map(|c| c.send(Command::Ready(self.id)));
+            }
+            _ => match self.control {
+                None => {}
+                Some(_) => {}
+            },
         }
 
-        self.tx.clone()
+        match res {
+            Ok(t) => (self.tx.clone(), t),
+            Err(err) => panic!("{}", err),
+        }
     }
 
     fn get_in(&self) -> Tx<Train> {

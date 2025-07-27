@@ -13,9 +13,9 @@ use serde_json::Map;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::thread;
+use std::thread::JoinHandle;
 use std::time::Duration;
 use tokio::runtime::Runtime;
-use tracing::error;
 
 #[derive(Clone)]
 pub struct LiteDestination {
@@ -68,7 +68,10 @@ impl Destination for LiteDestination {
         Ok(destination)
     }
 
-    fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command> {
+    fn operate(
+        &mut self,
+        control: Arc<Sender<Command>>,
+    ) -> (Sender<Command>, JoinHandle<Result<(), String>>) {
         let receiver = self.sender.subscribe();
         let (tx, rx) = unbounded();
         let id = self.id;
@@ -104,15 +107,14 @@ impl Destination for LiteDestination {
                             _ => tokio::time::sleep(Duration::from_nanos(100)).await,
                         }
                     }
-                })
+                });
+                Ok(())
             });
 
         match res {
-            Ok(_) => {}
-            Err(err) => error!("{}", err),
+            Ok(t) => (tx, t),
+            Err(err) => panic!("{}", err),
         }
-
-        tx
     }
 
     fn get_in(&self) -> Tx<Train> {

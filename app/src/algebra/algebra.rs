@@ -1,4 +1,3 @@
-use crate::algebra::Scan;
 use crate::algebra::aggregate::{Aggregate, ValueLoader};
 use crate::algebra::dual::Dual;
 use crate::algebra::filter::Filter;
@@ -9,10 +8,11 @@ use crate::algebra::scan::IndexScan;
 use crate::algebra::sort::Sort;
 use crate::algebra::union::Union;
 use crate::algebra::variable::VariableScan;
+use crate::algebra::Scan;
 use crate::optimize::Cost;
 use crate::processing::transform::Transform;
 use crate::processing::{Layout, Train};
-use crate::util::storage::ValueStore;
+use crate::util::reservoir::ValueReservoir;
 use std::collections::HashMap;
 use std::ops::Mul;
 use value::Value;
@@ -208,14 +208,14 @@ impl ValueHandler for IdentityHandler {
 }
 
 pub trait ValueIterator: Iterator<Item = Value> + Send + 'static {
-    fn get_storages(&self) -> Vec<ValueStore>;
+    fn get_storages(&self) -> Vec<ValueReservoir>;
 
     fn drain(&mut self) -> Vec<Value> {
         self.into_iter().collect()
     }
 
     fn drain_to_train(&mut self, stop: usize) -> Train {
-        Train::new(self.drain()).mark(stop)
+        Train::new(self.drain(), 0).mark(stop)
     }
 
     fn clone(&self) -> BoxedIterator;

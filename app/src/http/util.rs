@@ -37,7 +37,7 @@ pub fn transform_to_train(payload: Value) -> Train {
         Err(_) => {
             let mut map = BTreeMap::new();
             map.insert(String::from("$"), v.into());
-            Train::new(vec![value::Value::Dict(Dict::new(map))])
+            Train::new(vec![value::Value::Dict(Dict::new(map))], 0)
         }
     }
     .mark(0)
@@ -106,7 +106,7 @@ impl RxWrapper {
         match self {
             RxWrapper::Train(t) => t.recv().map(|t| serde_json::to_string(&t).unwrap().into()),
             RxWrapper::Time(t) => t.recv().map(|t| {
-                serde_json::to_string(&Train::new(vec![t.into()]))
+                serde_json::to_string(&Train::new(vec![t.into()], 0))
                     .unwrap()
                     .into()
             }),

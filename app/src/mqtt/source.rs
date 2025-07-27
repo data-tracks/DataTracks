@@ -5,19 +5,20 @@ use crate::processing::source::Sources::Mqtt;
 use crate::processing::source::{Source, Sources};
 use crate::processing::station::Command;
 use crate::processing::station::Command::Ready;
-use crate::processing::{Train, plan};
+use crate::processing::{plan, Train};
 use crate::ui::{ConfigModel, StringModel};
-use crate::util::Tx;
 use crate::util::new_id;
-use crossbeam::channel::{Sender, unbounded};
+use crate::util::Tx;
+use crossbeam::channel::{unbounded, Sender};
 use rumqttd::Notification;
 use serde_json::Map;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
+use std::thread::JoinHandle;
 use std::time::Duration;
 use std::{str, thread};
 use tokio::runtime::Runtime;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 use value::{Dict, Value};
 
 // mosquitto_sub -h 127.0.0.1 -p 8888 -t "test/topic2" -i "id"
@@ -73,7 +74,10 @@ impl Source for MqttSource {
         Ok(MqttSource::new(url, port as u16))
     }
 
-    fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command> {
+    fn operate(
+        &mut self,
+        control: Arc<Sender<Command>>,
+    ) -> (Sender<Command>, JoinHandle<Result<(), String>>) {
         let runtime = Runtime::new().unwrap();
         debug!("starting mqtt source...");
 
@@ -127,14 +131,13 @@ impl Source for MqttSource {
                     }
                     warn!("MQTT broker has been stopped.");
                 });
+                Ok(())
             });
 
         match res {
-            Ok(_) => {}
-            Err(err) => error!("{}", err),
+            Ok(join) => (tx, join),
+            Err(err) => panic!("{}", err),
         }
-
-        tx
     }
 
     fn outs(&mut self) -> &mut Vec<Tx<Train>> {
@@ -187,6 +190,6 @@ impl Source for MqttSource {
 }
 
 pub fn send_message(dict: Dict, outs: &[Tx<Train>]) {
-    let train = Train::new(vec![Value::Dict(dict)]);
+    let train = Train::new(vec![Value::Dict(dict)], 0);
     outs.iter().for_each(|out| out.send(train.clone()));
 }

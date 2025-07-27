@@ -1,8 +1,8 @@
 use crate::algebra::root::{AlgInputDerivable, AlgOutputDerivable, AlgebraRoot};
 use crate::algebra::{Algebra, BoxedIterator, ValueIterator};
-use crate::processing::transform::Transform;
 use crate::processing::Layout;
-use crate::util::storage::ValueStore;
+use crate::processing::transform::Transform;
+use crate::util::reservoir::ValueReservoir;
 use std::collections::HashMap;
 use value::Value;
 
@@ -77,7 +77,7 @@ impl Iterator for BareVariableIterator {
 }
 
 impl ValueIterator for BareVariableIterator {
-    fn get_storages(&self) -> Vec<ValueStore> {
+    fn get_storages(&self) -> Vec<ValueReservoir> {
         unreachable!("Not correctly enriched")
     }
 
@@ -102,7 +102,7 @@ impl ValueIterator for BareVariableIterator {
 pub struct VariableIterator {
     transform: BoxedIterator,
     inputs: Vec<BoxedIterator>,
-    store: ValueStore,
+    store: ValueReservoir,
     name: Value,
 }
 
@@ -150,7 +150,7 @@ impl Iterator for VariableIterator {
 }
 
 impl ValueIterator for VariableIterator {
-    fn get_storages(&self) -> Vec<ValueStore> {
+    fn get_storages(&self) -> Vec<ValueReservoir> {
         self.inputs
             .iter()
             .map(|v| v.get_storages())

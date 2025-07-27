@@ -1,6 +1,6 @@
+use crate::processing::Train;
 use crate::processing::select::WindowDescriptor;
 use crate::processing::window::Window::{Back, Interval, Non};
-use crate::processing::Train;
 use crate::util::TimeUnit;
 use chrono::{Duration, NaiveTime, Timelike};
 use std::collections::BTreeMap;
@@ -218,7 +218,7 @@ impl NoneStrategy {
         NoneStrategy {}
     }
     pub(crate) fn mark(&mut self, train: &Train) -> Vec<(WindowDescriptor, bool)> {
-        vec![(WindowDescriptor::unbounded(train.event_time), true)]
+        vec![(WindowDescriptor::unbounded(train.id), true)]
     }
 }
 
@@ -309,10 +309,10 @@ mod test {
     use crate::processing::station::Station;
     use crate::processing::tests::dict_values;
     use crate::processing::window::{BackWindow, Window};
-    use crate::util::{new_channel, TimeUnit};
+    use crate::util::{TimeUnit, new_channel};
     use crossbeam::channel::unbounded;
-    use value::train::Train;
     use value::Value;
+    use value::train::Train;
 
     #[test]
     fn default_behavior() {
@@ -325,8 +325,8 @@ mod test {
         let (tx, rx) = new_channel("test", false);
 
         station.add_out(0, tx).unwrap();
-        station.operate(Arc::new(control.0), HashMap::new());
-        station.fake_receive(Train::new(values.clone()));
+        let _ = station.operate(Arc::new(control.0), HashMap::new());
+        station.fake_receive(Train::new(values.clone(), 0));
 
         let res = rx.recv();
         match res {
@@ -355,12 +355,12 @@ mod test {
         let (tx, rx) = new_channel("test", false);
 
         station.add_out(0, tx).unwrap();
-        station.operate(Arc::new(control.0), HashMap::new());
+        let _ = station.operate(Arc::new(control.0), HashMap::new());
         // wait for read
         assert_eq!(Ready(0), control.1.recv().unwrap());
 
-        for value in &values {
-            station.fake_receive(Train::new(vec![value.clone()]));
+        for (i, value) in values.iter().enumerate() {
+            station.fake_receive(Train::new(vec![value.clone()], i));
         }
         sleep(Duration::from_millis(50));
 
@@ -370,7 +370,7 @@ mod test {
             results.push(rx.recv().unwrap())
         }
 
-        station.fake_receive(Train::new(after.clone()));
+        station.fake_receive(Train::new(after.clone(), 2));
 
         //receive last
         results.push(rx.recv().unwrap());

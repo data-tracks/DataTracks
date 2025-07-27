@@ -62,7 +62,7 @@ pub mod advertise_tests {
         plan.send_control(&source_id, Ready(3));
 
         // source ready + stop, destination ready + stop
-        for _command in vec![Ready(3), Stop(3), Ready(3), Stop(3)] {
+        for _command in vec![Stop(3), Stop(3)] {
             plan.control_receiver.1.recv().unwrap();
         }
 

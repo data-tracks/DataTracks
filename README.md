@@ -4,7 +4,7 @@
 
 # 🚂 DataTracks
 
-[![🫸 Integration Tests](https://github.com/data-tracks/DataTracks/actions/workflows/push.yml/badge.svg)](https://github.com/data-tracks/DataTracks/actions/workflows/push.yml)
+[![🫸 Integration Tests](https://github.com/data-tracks/DataTracks/actions/workflows/push.yml/badge.svg?branch=main)](https://github.com/data-tracks/DataTracks/actions/workflows/push.yml)
 ![📚 Version Badge](https://img.shields.io/badge/Version-rust%201.88-orange?style=flat)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 

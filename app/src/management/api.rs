@@ -1,11 +1,10 @@
-use crate::management::Storage;
 use crate::management::api::Status::Error;
 use crate::management::permission::ApiPermission;
+use crate::management::Storage;
 use flatbuffers::FlatBufferBuilder;
 use std::sync::{Arc, Mutex};
 use tracing::field::debug;
 use tracing::{debug, info, warn};
-use track_rails::message_generated::protocol;
 use track_rails::message_generated::protocol::{
     BindRequest, BindRequestArgs, Catalog, CatalogArgs, CreatePlanRequest, CreatePlanResponse,
     CreatePlanResponseArgs, DeletePlanRequest, DeletePlanResponse, DeletePlanResponseArgs,
@@ -86,7 +85,7 @@ impl Api {
                 }
             },
             Payload::UnbindRequest => match msg.data_as_unbind_request() {
-                None => build_status_response(Status::Error(String::from("Incorrect Request"))),
+                None => build_status_response(Error(String::from("Incorrect Request"))),
                 Some(u) => {
                     let mut storage = storage.lock().unwrap();
                     storage.detach(0, u.plan_id() as usize, u.stop_id() as usize);
@@ -94,12 +93,12 @@ impl Api {
                     Self::empty_msg()
                 }
             },
-            _ => build_status_response(Status::Error(String::from("Invalid Request"))),
+            _ => build_status_response(Error(String::from("Invalid Request"))),
         }
     }
 
     fn empty_msg<'a>() -> Result<Vec<u8>, Vec<u8>> {
-        build_status_response(Status::Error("Empty message".to_string()))
+        build_status_response(Error("Empty message".to_string()))
     }
 
     fn build_bind_response(data_port: usize, watermark_port: usize) -> Result<Vec<u8>, Vec<u8>> {
@@ -252,7 +251,7 @@ fn handle_create_plan(
 
             let status = OkStatus::create(&mut builder, &OkStatusArgs {}).as_union_value();
 
-            let message = protocol::Message::create(
+            let message = Message::create(
                 &mut builder,
                 &MessageArgs {
                     data: Some(create),
@@ -285,7 +284,7 @@ fn build_status_response(status: Status) -> Result<Vec<u8>, Vec<u8>> {
                 },
             )
         }
-        Status::Error(err) => {
+        Error(err) => {
             let msg = builder.create_string(&err);
             let status = ErrorStatus::create(
                 &mut builder,

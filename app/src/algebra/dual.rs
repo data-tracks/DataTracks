@@ -2,7 +2,7 @@ use crate::algebra::root::{AlgInputDerivable, AlgOutputDerivable, AlgebraRoot};
 use crate::algebra::{Algebra, BoxedIterator, ValueIterator};
 use crate::processing::transform::Transform;
 use crate::processing::{Layout, OutputType};
-use crate::util::storage::ValueStore;
+use crate::util::reservoir::ValueReservoir;
 use std::collections::HashMap;
 use value::Value;
 
@@ -80,7 +80,7 @@ impl Iterator for DualIterator {
 }
 
 impl ValueIterator for DualIterator {
-    fn get_storages(&self) -> Vec<ValueStore> {
+    fn get_storages(&self) -> Vec<ValueReservoir> {
         vec![]
     }
 

@@ -12,6 +12,7 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::sync::Arc;
 use std::thread;
+use std::thread::JoinHandle;
 use tracing::{debug, error};
 
 pub struct DebugDestination {
@@ -49,36 +50,41 @@ impl Destination for DebugDestination {
         Ok(DebugDestination::new())
     }
 
-    fn operate(&mut self, _control: Arc<Sender<Command>>) -> Sender<Command> {
+    fn operate(
+        &mut self,
+        _control: Arc<Sender<Command>>,
+    ) -> (Sender<Command>, JoinHandle<Result<(), String>>) {
         let receiver = self.receiver.take().unwrap();
         let (tx, _rx) = unbounded();
 
-        thread::spawn(move || {
-            let mut writer = None;
-            if let Ok(file) = File::create("../../../debug.txt") {
-                writer = Some(BufWriter::new(file));
-            }
-            loop {
-                let res = receiver.recv();
-                match res {
-                    Ok(train) => {
-                        if let Some(ref mut w) = writer {
-                            writeln!(w, "{:?}", train).expect("Could not write to debug file.");
+        (
+            tx,
+            thread::spawn(move || {
+                let mut writer = None;
+                if let Ok(file) = File::create("../../../debug.txt") {
+                    writer = Some(BufWriter::new(file));
+                }
+                loop {
+                    let res = receiver.recv();
+                    match res {
+                        Ok(train) => {
+                            if let Some(ref mut w) = writer {
+                                writeln!(w, "{:?}", train).expect("Could not write to debug file.");
+                            }
+
+                            debug!("last: {}, {:?}", train.last(), train.values);
                         }
-
-                        debug!("last: {}, {:?}", train.last(), train.values);
+                        Err(e) => {
+                            error!("{}", e)
+                        }
                     }
-                    Err(e) => {
-                        error!("{}", e)
+
+                    if let Some(ref mut w) = writer {
+                        w.flush().unwrap();
                     }
                 }
-
-                if let Some(ref mut w) = writer {
-                    w.flush().unwrap();
-                }
-            }
-        });
-        tx
+            }),
+        )
     }
 
     fn get_in(&self) -> Tx<Train> {

@@ -9,7 +9,7 @@ use crate::algebra::TupleOp::{And, Combine, Index, Input, Or};
 use crate::algebra::{BoxedIterator, BoxedValueHandler, ValueIterator};
 use crate::processing::transform::Transform;
 use crate::processing::{ArrayType, DictType, Layout, OutputType, TupleType};
-use crate::util::storage::ValueStore;
+use crate::util::reservoir::ValueReservoir;
 use regex::Regex;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::Debug;
@@ -151,7 +151,7 @@ fn unwind<'a>(value: Value) -> Vec<Value> {
 }
 
 impl ValueIterator for SetProjectIterator {
-    fn get_storages(&self) -> Vec<ValueStore> {
+    fn get_storages(&self) -> Vec<ValueReservoir> {
         self.input.get_storages()
     }
 

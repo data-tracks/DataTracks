@@ -1,20 +1,21 @@
 use crate::http::util::{parse_addr, receive, receive_ws};
-use crate::processing::Train;
 use crate::processing::option::Configurable;
 use crate::processing::plan::SourceModel;
 use crate::processing::source::Sources::Http;
 use crate::processing::source::{Source, Sources};
 use crate::processing::station::Command;
+use crate::processing::Train;
 use crate::ui::ConfigModel;
-use crate::util::Tx;
 use crate::util::new_id;
-use axum::Router;
+use crate::util::Tx;
 use axum::routing::{get, post};
-use crossbeam::channel::{Receiver, Sender, unbounded};
+use axum::Router;
+use crossbeam::channel::{unbounded, Receiver, Sender};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::thread::JoinHandle;
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
 use tower_http::cors::CorsLayer;
@@ -109,7 +110,10 @@ impl Source for HttpSource {
         ))
     }
 
-    fn operate(&mut self, _control: Arc<Sender<Command>>) -> Sender<Command> {
+    fn operate(
+        &mut self,
+        _control: Arc<Sender<Command>>,
+    ) -> (Sender<Command>, JoinHandle<Result<(), String>>) {
         let rt = Runtime::new().unwrap();
 
         let (tx, rx) = unbounded();
@@ -122,14 +126,13 @@ impl Source for HttpSource {
                 rt.block_on(async {
                     start_source(clone, rx).await;
                 });
+                Ok(())
             });
 
         match res {
-            Ok(_) => {}
-            Err(err) => error!("{}", err),
+            Ok(h) => (tx, h),
+            Err(err) => panic!("{}", err),
         }
-
-        tx
     }
 
     fn outs(&mut self) -> &mut Vec<Tx<Train>> {

@@ -1,31 +1,27 @@
 use crate::processing;
+use crate::processing::portal::Portal;
+use crate::processing::select::WindowDescriptor::{Normal, Unbounded};
 use crate::processing::window::WindowStrategy;
 use crate::util::TriggerType;
 use std::cmp::PartialEq;
 use std::collections::{BTreeMap, HashMap};
-use std::sync::{Arc, Mutex};
 use tracing::debug;
-use value::train::Train;
+use value::train::{Train, TrainId};
 use value::Time;
 
-pub type Storage = Arc<Mutex<Vec<Train>>>;
-
 #[derive(Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Copy, Debug)]
-pub struct WindowDescriptor {
-    from: Time,
-    to: Time,
+pub enum WindowDescriptor {
+    Normal(Time, Time),
+    Unbounded(TrainId),
 }
 
 impl WindowDescriptor {
     pub fn new(from: Time, to: Time) -> WindowDescriptor {
-        WindowDescriptor { from, to }
+        Normal(from, to)
     }
 
-    pub fn unbounded(time: Time) -> WindowDescriptor {
-        WindowDescriptor {
-            from: time,
-            to: time,
-        }
+    pub fn unbounded(train_id: TrainId) -> WindowDescriptor {
+        Unbounded(train_id)
     }
 }
 
@@ -59,7 +55,7 @@ impl WindowSelector {
 
 pub struct TriggerSelector {
     triggered_windows: HashMap<WindowDescriptor, TriggerStatus>,
-    pub(crate) storage: Storage,
+    pub(crate) portal: Portal,
     trigger: TriggerType,
     fire_early: bool,
     fire_late: bool,
@@ -67,10 +63,10 @@ pub struct TriggerSelector {
 }
 
 impl TriggerSelector {
-    pub(crate) fn new(storage: Storage, trigger: TriggerType) -> Self {
+    pub(crate) fn new(portal: Portal, trigger: TriggerType) -> Self {
         TriggerSelector {
             triggered_windows: Default::default(),
-            storage,
+            portal,
             trigger,
             fire_early: false,
             fire_late: false,
@@ -86,70 +82,79 @@ impl TriggerSelector {
         let mut trains = vec![];
         windows.into_iter().for_each(|(window, _is_complete)| {
             let mut trigger = false;
-            if window.to == window.from {
-                // we re-trigger same windows always
-                trigger = true;
-            } else if let Some(status) = self.triggered_windows.get(&window) {
-                // have already seen this window, are in window
-                if self.re_fire
-                    && current < &window.to
-                    && (matches!(self.trigger, TriggerType::Element))
-                {
-                    // still early
-                    debug!("trigger early");
-                    trigger = true;
-                    self.triggered_windows.insert(window, TriggerStatus::Early);
+            match window {
+                Normal(from, to) => {
+                    if let Some(status) = self.triggered_windows.get(&window) {
+                        // have already seen this window, are in window
+                        if self.re_fire
+                            && current < &to
+                            && (matches!(self.trigger, TriggerType::Element))
+                        {
+                            // still early
+                            debug!("trigger early");
+                            trigger = true;
+                            self.triggered_windows.insert(window, TriggerStatus::Early);
 
-                    // are past the window, did not trigger yet or early
-                } else if current >= &window.to
-                    && (status == &TriggerStatus::Untriggered
-                        || (status == &TriggerStatus::Early
+                            // are past the window, did not trigger yet or early
+                        } else if current >= &to
+                            && (status == &TriggerStatus::Untriggered
+                            || (status == &TriggerStatus::Early
                             && matches!(self.trigger, TriggerType::Element))
-                        || (self.re_fire))
-                {
-                    debug!("trigger onTime or refire");
-                    trigger = true;
-                    self.triggered_windows.insert(window, TriggerStatus::OnTime);
+                            || (self.re_fire))
+                        {
+                            debug!("trigger onTime or refire");
+                            trigger = true;
+                            self.triggered_windows.insert(window, TriggerStatus::OnTime);
+                        }
+                    } else {
+                        // have not seen this window, are past it
+                        if &to <= current
+                            && (matches!(self.trigger, TriggerType::Element)
+                            || matches!(self.trigger, TriggerType::WindowEnd))
+                        {
+                            // on time, did not fire yet
+                            debug!("@ {} trigger onTime {:?}", current, window);
+                            trigger = true;
+                            self.triggered_windows.insert(window, TriggerStatus::OnTime);
+                        } else if self.fire_early || matches!(self.trigger, TriggerType::Element) {
+                            // early fire
+                            debug!("fire early");
+                            trigger = true;
+                            self.triggered_windows.insert(window, TriggerStatus::Early);
+                        }
+                    }
+                    if trigger {
+                        match self.get_trains(&from, &to) {
+                            None => {}
+                            Some(t) => trains.push((window, t)),
+                        }
+                    }
                 }
-            } else {
-                // have not seen this window, are past it
-                if &window.to <= current
-                    && (matches!(self.trigger, TriggerType::Element)
-                        || matches!(self.trigger, TriggerType::WindowEnd))
-                {
-                    // on time, did not fire yet
-                    debug!("@ {} trigger onTime {:?}", current, window);
-                    trigger = true;
-                    self.triggered_windows.insert(window, TriggerStatus::OnTime);
-                } else if self.fire_early || matches!(self.trigger, TriggerType::Element) {
-                    // early fire
-                    debug!("fire early");
-                    trigger = true;
-                    self.triggered_windows.insert(window, TriggerStatus::Early);
-                }
-            }
-            if trigger {
-                match self.get_trains(window) {
+                Unbounded(train_id) => match self.get_train(train_id) {
                     None => {}
                     Some(t) => trains.push((window, t)),
-                }
+                },
             }
         });
 
         trains
     }
 
-    fn get_trains(&self, window: WindowDescriptor) -> Option<Train> {
-        let storage = self.storage.lock().unwrap();
-        let is_same = window.to == window.from;
-        storage
-            .iter()
-            .filter(|train| {
-                (is_same && window.to == train.event_time)
-                    || (window.from < train.event_time && window.to >= train.event_time)
-            })
-            .cloned()
+    fn get_trains(&self, from: &Time, to: &Time) -> Option<Train> {
+        let mut ids = vec![];
+        for (id, time) in self.portal.peek() {
+            if from < &time && to >= &time {
+                ids.push(id);
+            }
+        }
+        self.portal
+            .get_trains(ids)
+            .into_iter()
             .reduce(|a, b| a.merge(b))
+    }
+
+    fn get_train(&self, train_id: TrainId) -> Option<Train> {
+        self.portal.get_train(train_id)
     }
 }
 
@@ -163,12 +168,12 @@ pub enum TriggerStatus {
 
 #[cfg(test)]
 mod tests {
-    use crate::processing::select::{Storage, TriggerSelector, WindowSelector};
+    use crate::processing::portal::Portal;
+    use crate::processing::select::{TriggerSelector, WindowSelector};
     use crate::processing::window::Window::Non;
     use crate::processing::window::{BackWindow, NonWindow, Window};
     use crate::util::TimeUnit;
     use crate::util::TriggerType;
-    use std::sync::{Arc, Mutex};
     use value::train::Train;
     use value::Time;
 
@@ -177,16 +182,16 @@ mod tests {
         let window = NonWindow {};
         let mut selector = WindowSelector::new(Non(window));
 
-        let mut train = Train::new(vec![3.into()]);
+        let mut train = Train::new(vec![3.into()], 0);
         train.event_time = Time::new(3, 3);
 
         selector.mark(&train);
         let windows = selector.select(train.event_time);
         assert_eq!(windows.len(), 1);
 
-        let storage: Storage = Arc::new(Mutex::new(vec![]));
-        let mut trigger = TriggerSelector::new(storage.clone(), TriggerType::Element);
-        storage.lock().unwrap().push(train);
+        let portal = Portal::new().unwrap();
+        let mut trigger = TriggerSelector::new(portal.clone(), TriggerType::Element);
+        portal.push_train(train);
 
         trigger.select(windows, &Time::new(3, 3));
     }
@@ -196,16 +201,16 @@ mod tests {
         let window = NonWindow {};
         let mut selector = WindowSelector::new(Non(window));
 
-        let mut train = Train::new(vec![3.into()]);
+        let mut train = Train::new(vec![3.into()], 0);
         train.event_time = Time::new(3, 3);
 
         selector.mark(&train);
         let windows = selector.select(train.event_time);
         assert_eq!(windows.len(), 1);
 
-        let storage: Storage = Arc::new(Mutex::new(vec![]));
-        let mut trigger = TriggerSelector::new(storage.clone(), TriggerType::Element);
-        storage.lock().unwrap().push(train);
+        let portal = Portal::new().unwrap();
+        let mut trigger = TriggerSelector::new(portal.clone(), TriggerType::Element);
+        portal.push_train(train);
 
         trigger.select(windows, &Time::new(5, 5));
     }
@@ -215,7 +220,7 @@ mod tests {
         let window = BackWindow::new(3, TimeUnit::Millis);
         let mut selector = WindowSelector::new(Window::Back(window));
 
-        let mut train = Train::new(vec![3.into()]);
+        let mut train = Train::new(vec![3.into()], 0);
         train.event_time = Time::new(3, 0);
 
         selector.mark(&train);
@@ -228,11 +233,11 @@ mod tests {
         let window = BackWindow::new(3, TimeUnit::Millis);
         let mut selector = WindowSelector::new(Window::Back(window));
 
-        let mut train = Train::new(vec![3.into()]);
+        let mut train = Train::new(vec![3.into()], 0);
         train.event_time = Time::new(3, 0);
         selector.mark(&train);
 
-        let mut train = Train::new(vec![3.into()]);
+        let mut train = Train::new(vec![3.into()], 1);
         train.event_time = Time::new(3, 0);
         let time = train.event_time;
         selector.mark(&train);
@@ -246,11 +251,11 @@ mod tests {
         let window = BackWindow::new(3, TimeUnit::Millis);
         let mut selector = WindowSelector::new(Window::Back(window));
 
-        let mut train = Train::new(vec![3.into()]);
+        let mut train = Train::new(vec![3.into()], 0);
         train.event_time = Time::new(3, 0);
         selector.mark(&train);
 
-        let mut train = Train::new(vec![3.into()]);
+        let mut train = Train::new(vec![3.into()], 1);
         train.event_time = Time::new(4, 0);
         selector.mark(&train);
 
@@ -263,21 +268,21 @@ mod tests {
         let window = BackWindow::new(4, TimeUnit::Millis);
         let mut selector = WindowSelector::new(Window::Back(window));
 
-        let storage: Storage = Arc::new(Mutex::new(vec![]));
-        let mut trigger = TriggerSelector::new(storage.clone(), TriggerType::Element);
+        let portal = Portal::new().unwrap();
+        let mut trigger = TriggerSelector::new(portal.clone(), TriggerType::Element);
 
-        let mut train = Train::new(vec![3.into()]);
+        let mut train = Train::new(vec![3.into()], 0);
         train.event_time = Time::new(3, 0);
         selector.mark(&train);
-        storage.lock().unwrap().push(train);
+        portal.push_train(train);
 
-        let mut train = Train::new(vec![3.into()]);
+        let mut train = Train::new(vec![3.into()], 1);
         train.event_time = Time::new(4, 0);
 
         let time = train.event_time;
 
         selector.mark(&train);
-        storage.lock().unwrap().push(train);
+        portal.push_train(train);
 
         let windows = selector.select(time);
         assert_eq!(windows.len(), 2);

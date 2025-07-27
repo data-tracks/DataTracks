@@ -1,19 +1,21 @@
-use crate::processing::Train;
 use crate::processing::option::Configurable;
 use crate::processing::plan::SourceModel;
 use crate::processing::source::Sources::Tpc;
 use crate::processing::source::{Source, Sources};
 use crate::processing::station::Command;
+use crate::processing::Train;
+use crate::tpc::server::{handle_register, StreamUser, TcpStream};
 use crate::tpc::Server;
-use crate::tpc::server::{StreamUser, TcpStream, handle_register};
 use crate::ui::{ConfigModel, StringModel};
+use crate::util::Rx;
 use crate::util::Tx;
 use crate::util::{deserialize_message, new_id};
-use crossbeam::channel::{Receiver, Sender, unbounded};
+use crossbeam::channel::{unbounded, Receiver, Sender};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::thread;
+use std::thread::JoinHandle;
 use std::time::Duration;
 use tokio::time::sleep;
 use tracing::{debug, error, info, warn};
@@ -25,15 +27,22 @@ pub struct TpcSource {
     url: String,
     port: u16,
     outs: Vec<Tx<Train>>,
+    tx: Sender<Command>,
+    rx: Receiver<Command>,
+    control: Option<Arc<Sender<Command>>>,
 }
 
 impl TpcSource {
     pub fn new(url: String, port: u16) -> Self {
+        let (t, r) = unbounded();
         Self {
             id: new_id(),
             url,
             port,
             outs: Vec::new(),
+            tx: t,
+            rx: r,
+            control: None,
         }
     }
 
@@ -71,13 +80,19 @@ impl Source for TpcSource {
         Ok(TpcSource::new(url, port as u16))
     }
 
-    fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command> {
-        debug!("starting tpc source...");
+    fn operate(
+        &mut self,
+        control: Arc<Sender<Command>>,
+    ) -> (Sender<Command>, JoinHandle<Result<(), String>>) {
+        debug!("Starting TPC source...");
 
-        let (tx, rx) = unbounded();
         let port = self.port;
         let url = self.url.clone();
-        let rx = Arc::new(rx);
+        let rx = self.rx.clone();
+        let tx = self.tx.clone();
+
+        self.control = Some(control);
+        let control = self.control.clone().unwrap();
 
         let clone = self.clone();
 
@@ -85,15 +100,17 @@ impl Source for TpcSource {
             .name("TPC Source".to_string())
             .spawn(move || {
                 let server = Server::new(url.clone(), port);
-                if server.start(clone, control, rx).is_ok() {}
+                match server.start(clone, control, Arc::new(rx)) {
+                    Ok(_) => {}
+                    Err(err) => error!("Error on TPC source: {}", err),
+                }
+                Ok(())
             });
 
         match res {
-            Ok(_) => {}
-            Err(err) => error!("{:?}", err),
+            Ok(t) => (tx, t),
+            Err(err) => panic!("Tpc Source errors {:?}", err),
         }
-
-        tx
     }
 
     fn outs(&mut self) -> &mut Vec<Tx<Train>> {
@@ -152,10 +169,16 @@ impl Source for TpcSource {
 }
 
 impl StreamUser for TpcSource {
-    async fn handle(&mut self, mut stream: TcpStream) {
+    async fn handle(&mut self, mut stream: TcpStream, rx: Rx<Command>) {
         let mut len_buf = [0u8; 4];
 
         loop {
+            match rx.try_recv() {
+                Ok(Command::Stop(_)) => break,
+                Err(_) => {}
+                _ => {}
+            }
+
             match stream.read_exact(&mut len_buf).await {
                 Ok(_) => {
                     let size = u32::from_be_bytes(len_buf) as usize;
@@ -171,7 +194,7 @@ impl StreamUser for TpcSource {
                             Payload::Train => {
                                 let msg = msg.data_as_train().unwrap();
 
-                                debug!("tpc train: {:?}", msg);
+                                //debug!("tpc train: {:?}", msg);
                                 match msg.try_into() {
                                     Ok(train) => self.send(train),
                                     Err(err) => warn!("error transformation {}", err),
@@ -200,5 +223,50 @@ impl StreamUser for TpcSource {
 
     fn control(&mut self) -> Sender<Command> {
         todo!()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::processing::source::Source;
+    use crate::processing::station::Command::{Ready, Stop};
+    use crate::tpc::TpcSource;
+    use crossbeam::channel::unbounded;
+    use rusty_tracks::Client;
+    use std::sync::Arc;
+
+    #[test]
+    fn test_stop() {
+        let mut source = TpcSource::new("127.0.0.1".to_owned(), 9999);
+
+        let (tx, _rx) = unbounded();
+        let (out, res) = source.operate(Arc::new(tx));
+
+        out.send(Stop(0)).unwrap();
+        res.join().unwrap().unwrap();
+    }
+
+    #[test]
+    fn test_stop_connected() {
+        let mut source = TpcSource::new("127.0.0.1".to_owned(), 9991);
+
+        let (tx, rx) = unbounded();
+        let (out, res) = source.operate(Arc::new(tx));
+
+        match rx.recv() {
+            Ok(Ready(_)) => {}
+            Err(err) => panic!("{:?}", err),
+            _ => {}
+        }
+
+        let client = Client::new("127.0.0.1", 9991);
+        let mut connection = client.connect().unwrap();
+
+        for _ in 0..100 {
+            connection.send("test").unwrap();
+        }
+
+        out.send(Stop(0)).unwrap();
+        res.join().unwrap().unwrap();
     }
 }

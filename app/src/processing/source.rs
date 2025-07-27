@@ -1,9 +1,4 @@
-use std::collections::HashMap;
-use std::ops::{Deref, DerefMut};
-use std::sync::Arc;
-
 use crate::mqtt::MqttSource;
-use crate::processing::HttpSource;
 use crate::processing::option::Configurable;
 use crate::processing::plan::SourceModel;
 #[cfg(test)]
@@ -12,6 +7,7 @@ use crate::processing::source::Sources::{Http, Lite, Mqtt, Tpc};
 use crate::processing::station::Command;
 #[cfg(test)]
 use crate::processing::tests::DummySource;
+use crate::processing::HttpSource;
 use crate::sql::LiteSource;
 use crate::tpc::TpcSource;
 use crate::ui::ConfigModel;
@@ -19,6 +15,10 @@ use crate::util::Tx;
 use crossbeam::channel::Sender;
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use serde_json::{Map, Value};
+use std::collections::HashMap;
+use std::ops::{Deref, DerefMut};
+use std::sync::Arc;
+use std::thread::JoinHandle;
 use track_rails::message_generated::protocol::{Source as FlatSource, SourceArgs};
 use value::train::Train;
 
@@ -50,12 +50,12 @@ impl Deref for Sources {
 
     fn deref(&self) -> &Self::Target {
         match self {
-            Sources::Mqtt(m) => m,
-            Sources::Lite(s) => s,
-            Sources::Http(h) => h,
-            Sources::Tpc(t) => t,
+            Mqtt(m) => m,
+            Lite(s) => s,
+            Http(h) => h,
+            Tpc(t) => t,
             #[cfg(test)]
-            Sources::Dummy(d) => d,
+            Dummy(d) => d,
         }
     }
 }
@@ -63,12 +63,12 @@ impl Deref for Sources {
 impl DerefMut for Sources {
     fn deref_mut(&mut self) -> &mut Self::Target {
         match self {
-            Sources::Mqtt(m) => m,
-            Sources::Lite(s) => s,
-            Sources::Http(h) => h,
-            Sources::Tpc(t) => t,
+            Mqtt(m) => m,
+            Lite(s) => s,
+            Http(h) => h,
+            Tpc(t) => t,
             #[cfg(test)]
-            Sources::Dummy(d) => d,
+            Dummy(d) => d,
         }
     }
 }
@@ -78,7 +78,10 @@ pub trait Source: Send + Sync + Configurable {
     where
         Self: Sized;
 
-    fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command>;
+    fn operate(
+        &mut self,
+        control: Arc<Sender<Command>>,
+    ) -> (Sender<Command>, JoinHandle<Result<(), String>>);
 
     fn add_out(&mut self, out: Tx<Train>) {
         self.outs().push(out);

@@ -5,7 +5,7 @@ use crate::processing::option::Configurable;
 use crate::processing::transform::{Transform, Transformer};
 use crate::processing::Layout;
 use crate::sql::sqlite::connection::SqliteConnector;
-use crate::util::storage::ValueStore;
+use crate::util::reservoir::ValueReservoir;
 use crate::util::{new_id, DynamicQuery};
 use rusqlite::{params_from_iter, ToSql};
 use serde_json::Map;
@@ -93,7 +93,7 @@ pub struct SqliteIterator {
     query: DynamicQuery,
     connector: SqliteConnector,
     values: Vec<Value>,
-    storage: ValueStore,
+    storage: ValueReservoir,
 }
 
 impl SqliteIterator {
@@ -102,7 +102,7 @@ impl SqliteIterator {
             query,
             connector,
             values: Vec::new(),
-            storage: ValueStore::new(),
+            storage: ValueReservoir::new(),
         }
     }
 
@@ -148,7 +148,7 @@ impl Iterator for SqliteIterator {
 }
 
 impl ValueIterator for SqliteIterator {
-    fn get_storages(&self) -> Vec<ValueStore> {
+    fn get_storages(&self) -> Vec<ValueReservoir> {
         vec![self.storage.clone()]
     }
 

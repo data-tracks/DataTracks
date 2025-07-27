@@ -18,6 +18,7 @@ mod layout;
 pub(crate) mod option;
 pub(crate) mod plan;
 mod platform;
+mod portal;
 mod select;
 mod sender;
 pub(crate) mod source;

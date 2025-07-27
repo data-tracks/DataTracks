@@ -1,12 +1,12 @@
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
-use std::thread::{Builder, sleep};
+use std::sync::Arc;
+use std::thread::{sleep, Builder};
 use std::time::Duration;
 
 use crate::algebra::Executor;
 use crate::optimize::OptimizeStrategy;
-use crate::processing::Train;
 use crate::processing::layout::Layout;
+use crate::processing::portal::Portal;
 use crate::processing::select::{TriggerSelector, WindowSelector};
 use crate::processing::sender::Sender;
 use crate::processing::station::Command::{Attach, Detach, Okay, Ready, Threshold};
@@ -14,16 +14,18 @@ use crate::processing::station::{Command, Station};
 use crate::processing::transform::Transform;
 use crate::processing::watermark::WatermarkStrategy;
 use crate::processing::window::Window;
-use crate::util::TriggerType;
+use crate::processing::Train;
 use crate::util::new_id;
-use crate::util::{Rx, Tx, new_channel};
+use crate::util::TriggerType;
+use crate::util::{new_channel, Rx, Tx};
 use crossbeam::channel;
 use crossbeam::channel::Receiver;
 pub use logos::Source;
 use parking_lot::RwLock;
-use tracing::{debug, error};
+use tracing::error;
 
 const IDLE_TIMEOUT: Duration = Duration::from_nanos(10);
+const BATCH_SIZE: usize = 100;
 
 // What: Transformations, Where: Windowing, When: Triggers, How: Accumulation
 /// Platform represents an independent action steps which handles data based on the 4 streaming operations from different inputs  
@@ -80,7 +82,7 @@ impl Platform {
         )
     }
 
-    pub(crate) fn operate(&mut self, control: Arc<channel::Sender<Command>>) {
+    pub(crate) fn operate(&mut self, control: Arc<channel::Sender<Command>>) -> Result<(), String> {
         let process = optimize(
             self.stop,
             self.transform.clone(),
@@ -95,11 +97,11 @@ impl Platform {
 
         let watermark_strategy = self.watermark_strategy.clone();
 
-        let storage = Arc::new(Mutex::new(vec![]));
+        let portal = Portal::new().unwrap();
 
         let window_selector = Arc::new(RwLock::new(WindowSelector::new(self.window.clone())));
 
-        let trigger_selector = TriggerSelector::new(storage.clone(), self.trigger.clone());
+        let trigger_selector = TriggerSelector::new(portal.clone(), self.trigger.clone());
 
         let when_tx = when(
             self.stop,
@@ -109,7 +111,7 @@ impl Platform {
             process,
         );
 
-        control.send(Ready(stop)).unwrap();
+        control.send(Ready(stop)).map_err(|err| err.to_string())?;
 
         loop {
             // are we struggling to handle incoming?
@@ -133,7 +135,7 @@ impl Platform {
                 match command {
                     Command::Stop(_) => {
                         when_tx.send(Command::Stop(stop));
-                        return;
+                        return Ok(());
                     }
                     Attach(num, (send, watermark)) => {
                         watermark_strategy.attach(num, watermark.clone());
@@ -150,20 +152,32 @@ impl Platform {
                 }
             }
 
-            match self.receiver.try_recv() {
-                Ok(train) => {
-                    debug!("{:?}", train);
-                    if self.layout.fits_train(&train) {
-                        // save and update if something changed
-                        storage.lock().unwrap().push(train.clone());
-                        watermark_strategy.mark(&train);
-                        window_selector.write().mark(&train);
+            let mut i = 0;
+            let mut trains = Vec::new();
+            let mut finish = false;
+            while i < BATCH_SIZE && !finish {
+                match self.receiver.try_recv() {
+                    Ok(t) => {
+                        trains.push(t);
+                    }
+                    Err(_) => {
+                        finish = true;
                     }
                 }
-                _ => {
-                    sleep(timeout); // wait again
+
+                i += 1;
+            }
+
+            if !trains.is_empty() {
+                // save and update if something changed
+                portal.push_trains(trains.clone());
+                for t in trains {
+                    watermark_strategy.mark(&t);
+                    window_selector.write().mark(&t);
                 }
-            };
+            } else {
+                sleep(timeout);
+            }
         }
     }
 }
@@ -212,7 +226,7 @@ fn when(
                 // decide if we fire a window, discard or wait
                 match when.select(windows, &current) {
                     trains if !trains.is_empty() => {
-                        debug!("trains {:?}", trains);
+                        //debug!("trains {:?}", trains);
                         trains.into_iter().for_each(|(_, t)| what.execute(t));
                     }
                     _ => {}

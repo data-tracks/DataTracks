@@ -56,7 +56,10 @@ impl Manager {
             if handle.is_finished() {
                 info!("Thread finished.");
             } else {
-                info!("Waiting for thread to finish...");
+                info!(
+                    "Waiting for thread to finish {:?}...",
+                    handle.thread().name().unwrap_or("unknown")
+                );
             }
 
             match handle.join() {
@@ -107,7 +110,7 @@ fn add_producer() {
 
         let message = "Hello from Rust!";
 
-        let mut train = Train::new(vec![message.into()]);
+        let mut train = Train::new(vec![message.into()], 0);
         train.event_time = Time::now();
 
         let train = serde_json::to_string(&train).unwrap_or(message.to_string());

@@ -2,12 +2,11 @@
 pub mod dummy {
     use std::collections::HashMap;
     use std::sync::{Arc, Mutex};
-    use std::thread::{sleep, spawn};
+    use std::thread::{sleep, spawn, JoinHandle};
     use std::time::Duration;
 
     use crate::algebra::{BoxedIterator, ValueIterator};
     use crate::analyse::{InputDerivable, OutputDerivationStrategy};
-    use crate::processing::Layout;
     use crate::processing::destination::Destination;
     use crate::processing::option::Configurable;
     use crate::processing::plan::{DestinationModel, SourceModel};
@@ -15,13 +14,14 @@ pub mod dummy {
     use crate::processing::station::Command;
     use crate::processing::station::Command::{Ready, Stop};
     use crate::processing::transform::{Transform, Transformer};
+    use crate::processing::Layout;
     use crate::ui::ConfigModel;
-    use crate::util::storage::ValueStore;
-    use crate::util::{Rx, Tx, new_channel, new_id};
-    use crossbeam::channel::{Sender, unbounded};
+    use crate::util::reservoir::ValueReservoir;
+    use crate::util::{new_channel, new_id, Rx, Tx};
+    use crossbeam::channel::{unbounded, Sender};
     use serde_json::Map;
-    use value::Value;
     use value::train::Train;
+    use value::Value;
 
     #[derive(Clone)]
     pub struct DummySource {
@@ -119,7 +119,10 @@ pub mod dummy {
             Ok(source)
         }
 
-        fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command> {
+        fn operate(
+            &mut self,
+            control: Arc<Sender<Command>>,
+        ) -> (Sender<Command>, JoinHandle<Result<(), String>>) {
             let id = self.id;
 
             let delay = self.delay;
@@ -128,7 +131,7 @@ pub mod dummy {
             let senders = self.senders.clone();
             let (tx, rx) = unbounded();
 
-            let _handle = spawn(move || {
+            let handle = spawn(move || {
                 control.send(Ready(id)).unwrap();
 
                 // wait for ready from callee
@@ -141,15 +144,18 @@ pub mod dummy {
                 }
                 sleep(initial_delay);
 
+                let mut i = 0;
                 for values in &values {
                     for sender in &senders {
-                        sender.send(Train::new(values.clone()));
+                        sender.send(Train::new(values.clone(), i));
+                        i += 1;
                     }
                     sleep(delay);
                 }
                 control.send(Stop(id)).unwrap();
+                Ok(())
             });
-            tx
+            (tx, handle)
         }
 
         fn outs(&mut self) -> &mut Vec<Tx<Train>> {
@@ -239,38 +245,47 @@ pub mod dummy {
             Ok(destination)
         }
 
-        fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command> {
+        fn operate(
+            &mut self,
+            control: Arc<Sender<Command>>,
+        ) -> (Sender<Command>, JoinHandle<Result<(), String>>) {
             let id = self.id;
             let local = self.results();
             let receiver = self.receiver.take().unwrap();
             let result_amount = self.result_size;
             let (tx, rx) = unbounded();
 
-            spawn(move || {
-                control.send(Ready(id)).unwrap();
-                let mut shared = local.lock().unwrap();
-                loop {
-                    match rx.try_recv() {
-                        Ok(command) => match command {
-                            Stop(_) => break,
+            (
+                tx,
+                spawn(move || {
+                    control.send(Ready(id)).unwrap();
+                    let mut shared = local.lock().unwrap();
+                    loop {
+                        match rx.try_recv() {
+                            Ok(command) => match command {
+                                Stop(_) => break,
+                                _ => {}
+                            },
                             _ => {}
-                        },
-                        _ => {}
-                    }
-                    match receiver.try_recv() {
-                        Ok(train) => {
-                            shared.push(train);
-                            if shared.len() == result_amount {
-                                break;
-                            }
                         }
-                        _ => sleep(Duration::from_nanos(100)),
+                        match receiver.try_recv() {
+                            Ok(train) => {
+                                shared.push(train);
+                                if shared.len() == result_amount {
+                                    break;
+                                }
+                            }
+                            _ => sleep(Duration::from_nanos(100)),
+                        }
                     }
-                }
-                drop(shared);
-                control.send(Stop(id))
-            });
-            tx
+                    drop(shared);
+                    control
+                        .send(Stop(id))
+                        .map_err(|err| err.to_string())
+                        .unwrap();
+                    Ok(())
+                }),
+            )
         }
 
         fn get_in(&self) -> Tx<Train> {
@@ -362,7 +377,7 @@ pub mod dummy {
     pub struct MappingIterator {
         mapping: HashMap<Value, Value>,
         values: Vec<Value>,
-        storage: ValueStore,
+        storage: ValueReservoir,
     }
 
     impl MappingIterator {
@@ -370,7 +385,7 @@ pub mod dummy {
             MappingIterator {
                 mapping,
                 values: Vec::new(),
-                storage: ValueStore::new_with_id(0),
+                storage: ValueReservoir::new_with_id(0),
             }
         }
 
@@ -397,7 +412,7 @@ pub mod dummy {
     }
 
     impl ValueIterator for MappingIterator {
-        fn get_storages(&self) -> Vec<ValueStore> {
+        fn get_storages(&self) -> Vec<ValueReservoir> {
             vec![self.storage.clone()]
         }
 
@@ -413,7 +428,6 @@ pub mod dummy {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::processing::Train;
     use crate::processing::destination::{Destination, Destinations};
     use crate::processing::plan::Plan;
     use crate::processing::source::Sources;
@@ -421,6 +435,7 @@ pub mod tests {
     use crate::processing::station::Station;
     use crate::processing::tests::plan_test::dummy::{DummyDestination, DummySource};
     use crate::processing::transform::{FuncTransform, Transform};
+    use crate::processing::Train;
     use crate::util::new_channel;
     use std::any::Any;
     use std::thread::sleep;
@@ -454,7 +469,7 @@ pub mod tests {
 
         plan.operate().unwrap();
 
-        input.send(Train::new(values.clone()));
+        input.send(Train::new(values.clone(), 0));
 
         let res = output_rx.recv().unwrap();
         assert_eq!(res.values.clone(), values);
@@ -492,7 +507,7 @@ pub mod tests {
 
         plan.operate().unwrap();
 
-        input.send(Train::new(values.clone()));
+        input.send(Train::new(values.clone(), 0));
 
         let res = output1_rx.recv().unwrap();
         assert_eq!(res.values.clone(), values);
@@ -539,7 +554,7 @@ pub mod tests {
         plan.send_control(&id, Ready(3));
 
         // source ready + stop, destination ready + stop
-        for _command in vec![Ready(3), Stop(3), Ready(3), Stop(3)] {
+        for _command in vec![Ready(3), Ready(3)] {
             plan.control_receiver.1.recv().unwrap();
         }
 
@@ -667,20 +682,12 @@ pub mod tests {
         plan.operate().unwrap();
         let now = SystemTime::now();
         plan.send_control(&id, Ready(0));
-        plan.clone_platform(0);
-        plan.clone_platform(0);
-        plan.clone_platform(0);
+        let _ = plan.clone_platform(0);
+        let _ = plan.clone_platform(0);
+        let _ = plan.clone_platform(0);
 
         // source 1 ready + stop, each platform ready, destination ready (+ stop only after stopped)
-        for _com in vec![
-            Ready(1),
-            Stop(1),
-            Ready(0),
-            Ready(0),
-            Ready(0),
-            Ready(0),
-            Ready(0),
-        ] {
+        for _com in vec![Stop(1)] {
             match plan.control_receiver.1.recv() {
                 Ok(_command) => {}
                 Err(_) => panic!(),
@@ -720,7 +727,7 @@ pub mod tests {
         let result = plan.get_result(destination);
         plan.send_control(&source, Ready(0));
 
-        for command in [Ready(0), Stop(0), Ready(2), Stop(2)] {
+        for command in [Stop(0), Stop(2)] {
             assert_eq!(
                 command.type_id(),
                 plan.control_receiver.1.recv().unwrap().type_id()
@@ -1026,15 +1033,10 @@ pub mod tests {
         plan.send_control(&destination, Ready(0));
 
         // wait for startup else whe risk grabbing the lock too early
-        for _command in 0..4 {
+        for _command in 0..2 {
             assert!(
-                vec![
-                    Ready(source),
-                    Ready(destination),
-                    Stop(source),
-                    Stop(destination)
-                ]
-                .contains(&plan.control_receiver.1.recv().unwrap())
+                vec![Stop(source), Stop(destination)]
+                    .contains(&plan.control_receiver.1.recv().unwrap())
             );
         }
 

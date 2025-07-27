@@ -2,14 +2,17 @@ use crate::processing::station::Command;
 use crossbeam::channel::{Receiver, Sender};
 
 use crate::util::deserialize_message;
+use crate::util::{new_broadcast, Rx};
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use std::io;
 use std::io::Error;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
+use tokio::time::timeout;
 use tracing::{error, info};
 use track_rails::message_generated::protocol::{
     Message, MessageArgs, OkStatus, OkStatusArgs, Payload, RegisterResponse, RegisterResponseArgs,
@@ -58,7 +61,11 @@ impl From<tokio::net::TcpStream> for TcpStream {
     }
 }
 pub trait StreamUser: Clone {
-    fn handle(&mut self, stream: TcpStream) -> impl std::future::Future<Output = ()> + Send;
+    fn handle(
+        &mut self,
+        stream: TcpStream,
+        receiver: Rx<Command>,
+    ) -> impl Future<Output=()> + Send;
 
     fn interrupt(&mut self) -> Receiver<Command>;
 
@@ -127,32 +134,56 @@ impl Server {
 
     pub fn start(
         &self,
-        user: impl StreamUser,
+        user: impl StreamUser + Send + 'static,
         control: Arc<Sender<Command>>,
         rx: Arc<Receiver<Command>>,
     ) -> Result<(), String> {
         let rt = Runtime::new().map_err(|err| err.to_string())?;
+
+        let accept_timeout = Duration::from_millis(100);
+
         rt.block_on(async {
             let listener = TcpListener::bind(self.addr)
                 .await
                 .map_err(|err| err.to_string())?;
             info!("TPC server listening {}...", self.addr);
-            let rx = Arc::new(rx);
 
             control.send(Command::Ready(0)).unwrap();
 
+            let broadcast = new_broadcast("tpc server handle");
+
             loop {
-                let (stream, _) = listener.accept().await.map_err(|err| err.to_string())?;
+                let result = match timeout(accept_timeout, listener.accept())
+                    .await
+                    .map_err(|err| err.to_string())
+                {
+                    Ok(res) => res.map_err(|err| err.to_string()),
+                    Err(err) => Err(err.to_string()),
+                };
 
                 if let Ok(cmd) = rx.try_recv() {
-                    if let Command::Stop(s) = cmd {
-                        return Err(format!("Stopped {}", s));
+                    match cmd {
+                        Command::Stop(s) => {
+                            broadcast.send(Command::Stop(s));
+                            return Err(format!("Stopped {}", s));
+                        }
+                        _ => {}
                     }
                 }
-
-                user.clone().handle(stream.into()).await;
+                match result {
+                    Ok((stream, _)) => {
+                        // handler for children
+                        let mut clone = user.clone();
+                        let rx = broadcast.subscribe();
+                        tokio::spawn(async move {
+                            clone.handle(stream.into(), rx).await;
+                        });
+                    }
+                    Err(_) => {}
+                };
             }
-        })
+        })?;
+        Ok(())
     }
 
     fn would_block(err: &Error) -> bool {

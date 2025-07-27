@@ -1,181 +1,83 @@
-use parking_lot::Mutex;
-use redb::{Database, TableDefinition};
+use crate::util::reservoir::StorageError;
+use moka::sync::Cache;
+use redb::{Database, Durability, TableDefinition};
 use speedy::{Readable, Writable};
-use std::collections::BTreeMap;
 use std::fs;
-use std::sync::Arc;
 use tempfile::NamedTempFile;
-use thiserror::Error;
-use tracing::error;
+use uuid::Uuid;
+use value::train::{Train, TrainId};
 use value::Value;
-
-/// Error type for storage operations
-#[derive(Error, Debug)]
-pub enum StorageError {
-    #[error("Database error: {0}")]
-    DatabaseError(String),
-    #[error("File operation error: {0}")]
-    FileError(String),
-    #[error("Key not found")]
-    KeyNotFound,
-}
-
-/// Sharable and thread-save value store
-#[derive(Clone)]
-pub struct ValueStore {
-    inner: Arc<Mutex<SharedState>>,
-    pub index: usize,
-}
-
-impl Default for ValueStore {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl ValueStore {
-    pub fn new() -> Self {
-        Self::new_with_values(vec![], 0)
-    }
-
-    pub fn new_with_id(id: usize) -> Self {
-        Self::new_with_values(vec![], id)
-    }
-
-    pub fn new_with_values(values: Vec<Value>, index: usize) -> Self {
-        let store = ValueStore {
-            inner: Arc::new(Mutex::new(SharedState::new(
-                Storage::new_temp("temp").unwrap(),
-            ))),
-            index,
-        };
-        store.append(values);
-        store
-    }
-
-    pub fn add(&self, value: Value) -> Result<(), StorageError> {
-        let mut inner = self.inner.lock();
-        inner.counter += 1;
-        let counter = inner.counter.into();
-        inner
-            .storage
-            .write_value(counter, value.wagonize(self.index));
-        Ok(())
-    }
-
-    pub fn set_source(&mut self, source: usize) {
-        self.index = source;
-    }
-
-    pub(crate) fn append(&self, values: Vec<Value>) {
-        let mut inner = self.inner.lock();
-
-        values.into_iter().for_each(|v| {
-            inner.counter += 1;
-            let counter: Value = inner.counter.into();
-            inner.storage.write_value(counter, v)
-        });
-    }
-
-    pub fn drain(&self) -> Vec<Value> {
-        let mut inner = self.inner.lock();
-        inner.drain()
-    }
-}
-
-pub struct SharedState {
-    storage: CachedStorage,
-    counter: usize,
-}
-
-impl SharedState {
-    pub fn new(storage: Storage) -> Self {
-        SharedState {
-            storage: CachedStorage::new(storage, 10_000),
-            counter: 0,
-        }
-    }
-
-    pub(crate) fn clear(&mut self) {
-        for i in 0..self.counter {
-            self.storage.delete(i.into()).unwrap()
-        }
-        self.counter = 0;
-    }
-
-    pub(crate) fn drain(&mut self) -> Vec<Value> {
-        std::mem::take(&mut self.storage.cache)
-            .into_values()
-            .collect()
-    }
-}
-
-struct CachedStorage {
-    //storage: Storage,
-    cache: BTreeMap<Value, Value>,
-    //counter: usize,
-    //max: usize,
-}
-
-impl CachedStorage {
-    pub(crate) fn read_value(&self, key: Value) -> Result<Value, StorageError> {
-        self.cache
-            .get(&key)
-            .cloned()
-            .ok_or(StorageError::KeyNotFound)
-    }
-    pub(crate) fn delete(&mut self, key: Value) -> Result<(), StorageError> {
-        self.cache.remove(&key);
-
-        Ok(())
-    }
-    pub(crate) fn write_value(&mut self, key: Value, value: Value) {
-        self.cache.insert(key, value);
-    }
-}
-
-impl CachedStorage {
-    pub fn new(_storage: Storage, _cache: usize) -> Self {
-        CachedStorage {
-            cache: Default::default(),
-        }
-    }
-}
 
 pub struct Storage {
     path: Option<String>,
     table_name: String,
     database: Database,
+    cache: Cache<TrainId, Train>,
 }
 
 impl Storage {
     /// Create a new storage instance with a temporary file.
-    pub fn new_temp<S: AsRef<str>>(table_name: S) -> Result<Storage, StorageError> {
+    pub fn new_temp() -> Result<Storage, StorageError> {
+        let uuid = Uuid::new_v4();
         let file = NamedTempFile::new().map_err(|e| StorageError::FileError(e.to_string()))?;
         let db = Database::create(file).map_err(|e| StorageError::DatabaseError(e.to_string()))?;
+
+        let cache = Cache::new(100_000);
         Ok(Storage {
             path: None,
-            table_name: table_name.as_ref().to_string(),
+            table_name: uuid.to_string(),
             database: db,
+            cache,
         })
     }
 
     /// Create a new storage instance from a specified file path.
-    pub fn new_from_path<S: AsRef<str>>(file: S, table_name: S) -> Result<Storage, StorageError> {
+    pub fn new_from_path<S: AsRef<str>>(file: S) -> Result<Storage, StorageError> {
         let db = Database::create(file.as_ref())
             .map_err(|e| StorageError::DatabaseError(e.to_string()))?;
+        let uuid = Uuid::new_v4();
+
+        let cache = Cache::new(100_000);
 
         let storage = Storage {
             path: Some(file.as_ref().to_string()),
-            table_name: table_name.as_ref().to_string(),
+            table_name: uuid.to_string(),
             database: db,
+            cache,
         };
         Ok(storage)
     }
 
+    fn table(&self) -> TableDefinition<String, Vec<u8>> {
+        TableDefinition::new(&self.table_name)
+    }
+
+    pub(crate) fn write_train(&mut self, key: TrainId, train: Train) -> Result<(), StorageError> {
+        self.cache.insert(key, train.clone());
+        self.write(key, train.write_to_vec().unwrap())
+    }
+
+    pub(crate) fn write_trains(&mut self, trains: Vec<Train>) -> Result<(), StorageError> {
+        for train in &trains {
+            self.cache.insert(train.id, train.clone());
+        }
+        self.writes(
+            trains
+                .into_iter()
+                .map(|t| (t.id, t.write_to_vec().unwrap()))
+                .collect::<Vec<_>>(),
+        )
+    }
+
+    pub(crate) fn read_train(&self, key: TrainId) -> Option<Train> {
+        match self.cache.get(&key) {
+            None => Train::read_from_buffer(&self.read_u8(key).ok()?).ok(),
+            Some(v) => Some(v),
+        }
+    }
     /// Write a key-value pair to the storage.
-    pub fn write(&self, key: Value, value: Vec<u8>) -> Result<(), StorageError> {
-        let write_txn = self
+    fn write(&self, key: TrainId, value: Vec<u8>) -> Result<(), StorageError> {
+        let mut write_txn = self
             .database
             .begin_write()
             .map_err(|e| StorageError::DatabaseError(e.to_string()))?;
@@ -184,26 +86,41 @@ impl Storage {
                 .open_table(self.table())
                 .map_err(|e| StorageError::DatabaseError(e.to_string()))?;
             table
-                .insert(key, value)
+                .insert(key.to_string(), value)
                 .map_err(|e| StorageError::DatabaseError(e.to_string()))?;
         }
+        write_txn.set_durability(Durability::Immediate);
         write_txn
             .commit()
             .map_err(|e| StorageError::DatabaseError(e.to_string()))?;
         Ok(())
     }
 
-    pub fn write_value(&mut self, key: Value, value: Value) -> Result<(), StorageError> {
-        self.write(key, value.write_to_vec().unwrap())
-    }
-
-    pub fn read_value(&self, key: Value) -> Result<Value, StorageError> {
-        Value::read_from_buffer(&self.read_u8(key)?)
-            .map_err(|e| StorageError::DatabaseError(e.to_string()))
+    /// Write a key-value pair to the storage.
+    fn writes(&self, values: Vec<(TrainId, Vec<u8>)>) -> Result<(), StorageError> {
+        let mut write_txn = self
+            .database
+            .begin_write()
+            .map_err(|e| StorageError::DatabaseError(e.to_string()))?;
+        {
+            let mut table = write_txn
+                .open_table(self.table())
+                .map_err(|e| StorageError::DatabaseError(e.to_string()))?;
+            for (id, value) in values {
+                table
+                    .insert(id.to_string(), value)
+                    .map_err(|e| StorageError::DatabaseError(e.to_string()))?;
+            }
+        }
+        write_txn.set_durability(Durability::Immediate);
+        write_txn
+            .commit()
+            .map_err(|e| StorageError::DatabaseError(e.to_string()))?;
+        Ok(())
     }
 
     /// Read a value by its key from the storage.
-    pub fn read_u8(&self, key: Value) -> Result<Vec<u8>, StorageError> {
+    fn read_u8(&self, key: TrainId) -> Result<Vec<u8>, StorageError> {
         let read_txn = self
             .database
             .begin_read()
@@ -212,15 +129,14 @@ impl Storage {
             .open_table(self.table())
             .map_err(|e| StorageError::DatabaseError(e.to_string()))?;
 
-        let value = table.get(key);
+        let value = table.get(key.to_string());
         let value = value
             .map_err(|e| StorageError::DatabaseError(e.to_string()))?
             .map(|entry| entry.value().clone());
         value.ok_or(StorageError::KeyNotFound)
     }
-
     /// Delete a key-value pair from the storage.
-    pub fn delete(&self, key: Value) -> Result<(), StorageError> {
+    fn delete(&self, key: Value) -> Result<(), StorageError> {
         let delete_txn = self
             .database
             .begin_write()
@@ -230,16 +146,12 @@ impl Storage {
                 .open_table(self.table())
                 .map_err(|e| StorageError::DatabaseError(e.to_string()))?;
             table
-                .remove(key)
+                .remove(key.to_string())
                 .map_err(|e| StorageError::DatabaseError(e.to_string()))?;
         }
         delete_txn
             .commit()
             .map_err(|e| StorageError::DatabaseError(e.to_string()))
-    }
-
-    fn table(&self) -> TableDefinition<Value, Vec<u8>> {
-        TableDefinition::new(&self.table_name)
     }
 }
 
@@ -260,24 +172,30 @@ mod tests {
 
     #[test]
     fn test_write_read() {
-        let storage = Storage::new_temp("table".to_string()).unwrap();
+        let storage = Storage::new_temp().unwrap();
         storage
-            .write("test".into(), Value::text("David").write_to_vec().unwrap())
+            .write(
+                TrainId::new(0, 0),
+                Value::text("David").write_to_vec().unwrap(),
+            )
             .unwrap();
         assert_eq!(
-            Value::read_from_buffer(&storage.read_u8("test".into()).unwrap()).unwrap(),
+            Value::read_from_buffer(&storage.read_u8(TrainId::new(0, 0)).unwrap()).unwrap(),
             Value::text("David")
         );
-        assert!(storage.read_u8("nonexistent".into()).is_err());
+        assert!(storage.read_u8(TrainId::new(0, 1)).is_err());
     }
 
     #[test]
     fn test_write_permanently() {
         let path = "db_test";
         {
-            let storage = Storage::new_from_path(path.to_string(), "table".to_string()).unwrap();
+            let storage = Storage::new_from_path(path).unwrap();
             storage
-                .write("test".into(), Value::text("David").write_to_vec().unwrap())
+                .write(
+                    TrainId::new(0, 0),
+                    Value::text("David").write_to_vec().unwrap(),
+                )
                 .unwrap();
         }
         assert!(!fs::exists(path).unwrap());

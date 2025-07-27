@@ -1,9 +1,10 @@
 use crate::management::{Api, Storage};
 use crate::processing::station::Command;
-use crate::tpc::Server;
 use crate::tpc::server::{StreamUser, TcpStream};
+use crate::tpc::Server;
 use crate::util::deserialize_message;
-use crossbeam::channel::{Receiver, Sender, unbounded};
+use crate::util::Rx;
+use crossbeam::channel::{unbounded, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -53,10 +54,16 @@ pub struct TpcManagement {
 }
 
 impl StreamUser for TpcManagement {
-    async fn handle(&mut self, mut stream: TcpStream) {
+    async fn handle(&mut self, mut stream: TcpStream, rx: Rx<Command>) {
         let mut len_buf = [0u8; 4];
 
         loop {
+            match rx.try_recv() {
+                Ok(Command::Stop(_)) => break,
+                Err(_) => {}
+                _ => {}
+            }
+
             match stream.read_exact(&mut len_buf).await {
                 Ok(()) => {
                     let size = u32::from_be_bytes(len_buf) as usize;
@@ -142,6 +149,6 @@ mod test {
         builder.finish(msg, None);
         let msg = builder.finished_data().to_vec();
 
-        let msg = deserialize_message(msg.as_slice()).unwrap();
+        let _msg = deserialize_message(msg.as_slice()).unwrap();
     }
 }

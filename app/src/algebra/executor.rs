@@ -1,13 +1,13 @@
 use crate::algebra::BoxedIterator;
 use crate::processing::Sender;
+use crate::util::reservoir::ValueReservoir;
 use crate::util::Tx;
-use crate::util::storage::ValueStore;
 use std::collections::HashMap;
 use tracing::warn;
 use value::train::Train;
 
 enum WhatStrategy {
-    Task(BoxedIterator, HashMap<usize, ValueStore>),
+    Task(BoxedIterator, HashMap<usize, ValueReservoir>),
     Direct,
 }
 

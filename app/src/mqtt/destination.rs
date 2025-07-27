@@ -14,6 +14,7 @@ use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::thread;
+use std::thread::JoinHandle;
 use std::time::Duration;
 use tokio::runtime::Runtime;
 use tracing::{debug, error, info};
@@ -69,7 +70,10 @@ impl Destination for MqttDestination {
         Ok(Self::new(url, port))
     }
 
-    fn operate(&mut self, control: Arc<Sender<Command>>) -> Sender<Command> {
+    fn operate(
+        &mut self,
+        control: Arc<Sender<Command>>,
+    ) -> (Sender<Command>, JoinHandle<Result<(), String>>) {
         let runtime = Runtime::new().unwrap();
         debug!("starting mqtt destination...");
 
@@ -123,14 +127,13 @@ impl Destination for MqttDestination {
                     }
                     error!("MQTT broker stopped");
                 });
+                Ok(())
             });
 
         match res {
-            Ok(_) => {}
-            Err(err) => error!("{}", err),
+            Ok(join) => (tx, join),
+            Err(err) => panic!("{}", err),
         }
-
-        tx
     }
 
     fn get_in(&self) -> Tx<Train> {

@@ -1,27 +1,28 @@
-#[cfg(test)]
-use crate::processing::Train;
-use crate::processing::destination::{Destinations, parse_destination};
+use crate::processing::destination::{parse_destination, Destinations};
 use crate::processing::option::Configurable;
 use crate::processing::plan::Status::Stopped;
-use crate::processing::source::{Sources, parse_source};
+use crate::processing::source::{parse_source, Sources};
 use crate::processing::station::{Command, Station};
 use crate::processing::transform;
+#[cfg(test)]
+use crate::processing::Train;
 use crate::ui::{ConfigContainer, ConfigModel};
 use crate::util::new_id;
 use core::default::Default;
-use crossbeam::channel::{Receiver, Sender, unbounded};
+use crossbeam::channel::{unbounded, Receiver, Sender};
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize, Serializer};
 use serde_json::{Map, Value};
 use std::cmp::PartialEq;
 use std::collections::HashMap;
+use std::mem;
 use std::sync::Arc;
 #[cfg(test)]
 use std::sync::Mutex;
-use std::thread::sleep;
+use std::thread::{sleep, JoinHandle};
 use std::time::{Duration, Instant};
-use tracing::error;
+use tracing::{debug, error, warn};
 use track_rails::message_generated::protocol::KeyValueU64StationArgs;
 use track_rails::message_generated::protocol::{
     KeyValueStringTransform, KeyValueStringTransformArgs, KeyValueU64Destination,
@@ -43,6 +44,7 @@ pub struct Plan {
     pub control_receiver: (Arc<Sender<Command>>, Receiver<Command>),
     pub status: Status,
     pub transforms: HashMap<String, transform::Transform>,
+    pub handles: HashMap<usize, JoinHandle<Result<(), String>>>,
 }
 
 #[cfg(test)]
@@ -67,7 +69,27 @@ impl Clone for Plan {
             control_receiver: (Arc::new(tx), rx),
             status: Status::Running,
             transforms: self.transforms.clone(),
+            handles: Default::default(),
         }
+    }
+}
+
+impl Drop for Plan {
+    fn drop(&mut self) {
+        self.controls.iter().for_each(|(id, senders)| {
+            senders
+                .iter()
+                .for_each(|sender| match sender.send(Command::Stop(*id)) {
+                    Ok(_) => {}
+                    Err(err) => debug!("already closed{:?}", err),
+                })
+        });
+        mem::take(&mut self.handles)
+            .into_iter()
+            .for_each(|(_, handle)| match handle.join().unwrap() {
+                Ok(_) => {}
+                Err(err) => warn!("Error on closing {}", err),
+            })
     }
 }
 
@@ -86,6 +108,7 @@ impl Default for Plan {
             control_receiver: (Arc::new(tx), rx),
             status: Stopped,
             transforms: Default::default(),
+            handles: Default::default(),
         }
     }
 }
@@ -109,10 +132,20 @@ impl Status {
 
 impl Plan {
     pub fn new(id: usize) -> Self {
+        let (tx, rx) = unbounded();
         Plan {
             id,
             name: id.to_string(),
-            ..Default::default()
+            lines: Default::default(),
+            stations: Default::default(),
+            stations_to_in_outs: Default::default(),
+            sources: Default::default(),
+            destinations: Default::default(),
+            controls: Default::default(),
+            control_receiver: (Arc::new(tx), rx),
+            status: Status::Running,
+            transforms: Default::default(),
+            handles: Default::default(),
         }
     }
 
@@ -243,11 +276,15 @@ impl Plan {
         self.connect_sources()?;
 
         for station in self.stations.values_mut() {
-            let entry = self.controls.entry(station.id).or_default();
-            entry.push(station.operate(
+            let (sender, join) = station.operate(
                 Arc::clone(&self.control_receiver.0),
                 self.transforms.clone(),
-            ));
+            )?;
+            // add controls
+            let entry = self.controls.entry(station.id).or_default();
+            entry.push(sender);
+            // add handles
+            self.handles.insert(station.id, join);
         }
 
         // wait for all stations to be ready
@@ -262,38 +299,52 @@ impl Plan {
                     command => return Err(format!("Not known command {:?}", command)),
                 },
                 Err(_) => {
-                    if start_time.elapsed().as_secs() > 3 {
+                    if start_time.elapsed().as_secs() > 5 {
                         return Err("Stations did not start properly".to_string());
                     }
-                    sleep(Duration::from_millis(100));
+                    sleep(Duration::from_secs(1));
                 }
             }
         }
 
         for destination in self.destinations.values_mut() {
+            let (sender, join) = destination.operate(Arc::clone(&self.control_receiver.0));
             self.controls
                 .entry(destination.id())
                 .or_default()
-                .push(destination.operate(Arc::clone(&self.control_receiver.0)));
+                .push(sender);
+
+            match self.control_receiver.1.recv() {
+                Ok(_) => {}
+                Err(err) => return Err(format!("Not known destination {:?}", err)),
+            };
+            // add handles
+            self.handles.insert(destination.id(), join);
         }
 
         for source in self.sources.values_mut() {
-            self.controls
-                .entry(source.id())
-                .or_default()
-                .push(source.operate(Arc::clone(&self.control_receiver.0)));
+            let (sender, join) = source.operate(Arc::clone(&self.control_receiver.0));
+            self.controls.entry(source.id()).or_default().push(sender);
+
+            match self.control_receiver.1.recv() {
+                Ok(_) => {}
+                Err(err) => return Err(format!("Not known source {:?}", err)),
+            };
+            // add handles
+            self.handles.insert(source.id(), join);
         }
 
         self.status = Status::Running;
         Ok(())
     }
 
-    pub(crate) fn clone_platform(&mut self, num: usize) {
+    pub(crate) fn clone_platform(&mut self, num: usize) -> Result<(), String> {
         let station = self.stations.get_mut(&num).unwrap();
-        self.controls.entry(num).or_default().push(station.operate(
+        let (sender, _join) = station.operate(
             Arc::clone(&self.control_receiver.0),
             self.transforms.clone(),
-        ))
+        )?;
+        Ok(self.controls.entry(num).or_default().push(sender))
     }
 
     fn connect_stops(&mut self) -> Result<(), String> {
@@ -956,6 +1007,8 @@ impl From<transform::Transform> for ConfigContainer {
 #[cfg(test)]
 mod test {
     use crate::processing::plan::Plan;
+    use rusty_tracks::Client;
+    use tracing_test::traced_test;
 
     #[test]
     fn parse_line_stop_stencil() {
@@ -1118,6 +1171,28 @@ mod test {
             let plan = Plan::parse(stencil).unwrap();
             assert_eq!(plan.dump(false).trim(), stencil.trim())
         }
+    }
+
+    #[test]
+    #[traced_test]
+    fn stop_sets() {
+        let stencil = "\
+            1\n\
+            In\n\
+            Tpc{\"port\":5656,\"url\":\"127.0.0.1\"}:1";
+
+        let mut plan = Plan::parse(stencil).unwrap();
+        plan.operate().unwrap();
+
+        let client = Client::new("127.0.0.1", 5656);
+        let mut connection = client.connect().unwrap();
+
+        for _ in 0..10_000 {
+            connection.send("test").unwrap();
+        }
+
+        drop(plan);
+        drop(connection);
     }
 }
 

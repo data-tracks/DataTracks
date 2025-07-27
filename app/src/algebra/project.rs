@@ -7,7 +7,7 @@ use crate::algebra::{BoxedIterator, Op, ValueIterator};
 use crate::analyse::{InputDerivable, OutputDerivable};
 use crate::processing::transform::Transform;
 use crate::processing::Layout;
-use crate::util::storage::ValueStore;
+use crate::util::reservoir::ValueReservoir;
 use std::collections::HashMap;
 use value::Value;
 
@@ -40,7 +40,7 @@ impl Iterator for ProjectIter {
 }
 
 impl ValueIterator for ProjectIter {
-    fn get_storages(&self) -> Vec<ValueStore> {
+    fn get_storages(&self) -> Vec<ValueReservoir> {
         match self {
             ProjectIter::ValueProjectIterator(p) => p.get_storages(),
             ProjectIter::ValueSetProjectIterator(s) => s.get_storages(),
@@ -79,7 +79,7 @@ impl Iterator for ProjectIterator {
 }
 
 impl<'a> ValueIterator for ProjectIterator {
-    fn get_storages(&self) -> Vec<ValueStore> {
+    fn get_storages(&self) -> Vec<ValueReservoir> {
         self.input.get_storages()
     }
 
@@ -124,10 +124,7 @@ impl Algebra for Project {
     }
 
     fn replace_id(self, id: usize) -> Self {
-        Self {
-            id,
-            ..self
-        }
+        Self { id, ..self }
     }
 
     fn derive_iterator(&self, root: &AlgebraRoot) -> Result<Self::Iterator, String> {

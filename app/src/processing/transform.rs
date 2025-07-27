@@ -3,15 +3,15 @@ use crate::analyse::{InputDerivable, OutputDerivable, OutputDerivationStrategy};
 use crate::language;
 use crate::language::Language;
 use crate::optimize::OptimizeStrategy;
-use crate::processing::Layout;
 use crate::processing::option::Configurable;
 #[cfg(test)]
 use crate::processing::tests::DummyDatabase;
 #[cfg(test)]
 use crate::processing::transform::Transform::DummyDB;
 use crate::processing::transform::Transform::{Func, Lang, Postgres, SQLite};
+use crate::processing::Layout;
 use crate::sql::{PostgresTransformer, SqliteTransformer};
-use crate::util::storage::ValueStore;
+use crate::util::reservoir::ValueReservoir;
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use serde_json::Map;
 use std::collections::HashMap;
@@ -411,7 +411,7 @@ impl Iterator for FuncIter {
 }
 
 impl ValueIterator for FuncIter {
-    fn get_storages(&self) -> Vec<ValueStore> {
+    fn get_storages(&self) -> Vec<ValueReservoir> {
         self.input.get_storages()
     }
 
@@ -438,7 +438,7 @@ mod tests {
     use crate::processing::station::Station;
     use crate::processing::tests::dict_values;
     use crate::processing::transform::Transform::Func;
-    use crate::processing::transform::{FuncTransform, build_algebra};
+    use crate::processing::transform::{build_algebra, FuncTransform};
     use crate::util::new_channel;
     use crossbeam::channel::unbounded;
     use std::collections::HashMap;
@@ -467,8 +467,8 @@ mod tests {
         let (tx, rx) = new_channel("test", false);
 
         station.add_out(0, tx).unwrap();
-        station.operate(Arc::new(control.0), HashMap::new());
-        station.fake_receive(Train::new(values.clone()));
+        let _ = station.operate(Arc::new(control.0), HashMap::new());
+        station.fake_receive(Train::new(values.clone(), 0));
 
         let res = rx.recv();
         match res {
@@ -506,8 +506,8 @@ mod tests {
         let (tx, rx) = new_channel("test", false);
 
         station.add_out(0, tx).unwrap();
-        station.operate(Arc::new(control.0), HashMap::new());
-        station.fake_receive(Train::new(values.clone()));
+        let _ = station.operate(Arc::new(control.0), HashMap::new());
+        station.fake_receive(Train::new(values.clone(), 0));
 
         let res = rx.recv();
         match res {

@@ -380,7 +380,7 @@ impl TryFrom<ValueWrapper<'_>> for Value {
             FlatValue::Document => {
                 todo!()
             }
-            _ => panic!(),
+            t => Err(format!("Unsupported type {:?}", t)),
         }
     }
 }

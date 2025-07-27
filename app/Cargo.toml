@@ -1,6 +1,6 @@
 [package]
 name = "data-tracks"
-version = "0.3.2"
+version = "0.4.0"
 edition = "2024"
 authors = ["David Lengweiler"]
 license = "GPL-3.0"
@@ -43,7 +43,8 @@ regex = "1.11.1"
 criterion = "0.6.0"
 uuid = { version = "1.16.0", features = ["v4"] }
 tracing-test = "0.2.5"
-rusty-tracks = "0.0.9"
+rusty-tracks = "0.0.12"
+moka = { version = "0.12.10", features = ["sync"] }
 
 [dependencies.track-rails]
 git = "https://github.com/data-tracks/TrackRails.git"

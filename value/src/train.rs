@@ -1,4 +1,5 @@
 use crate::{Time, Value};
+use core::fmt::{Display, Formatter};
 use flatbuffers::FlatBufferBuilder;
 use redb::TypeName;
 use serde::{Deserialize, Serialize};
@@ -9,6 +10,34 @@ use track_rails::message_generated::protocol::{
     Message, MessageArgs, OkStatus, OkStatusArgs, Payload, Status, Train as FlatTrain, TrainArgs,
 };
 
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Deserialize,
+    Serialize,
+    Writable,
+    Readable,
+    Ord,
+    PartialOrd,
+    Eq,
+    PartialEq,
+    Hash,
+)]
+pub struct TrainId(usize, usize);
+
+impl TrainId {
+    pub fn new(part_id: usize, id: usize) -> Self {
+        TrainId(part_id, id)
+    }
+}
+
+impl Display for TrainId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        f.write_fmt(format_args!("{}{}", self.0, self.1))
+    }
+}
+
 pub type MutWagonsFunc = Box<dyn FnMut(&mut Vec<Train>) -> Train>;
 
 #[derive(Clone, Debug, Deserialize, Serialize, Writable, Readable)]
@@ -16,14 +45,16 @@ pub struct Train {
     pub marks: BTreeMap<usize, Time>,
     pub values: Vec<Value>,
     pub event_time: Time,
+    pub id: TrainId,
 }
 
 impl Train {
-    pub fn new(values: Vec<Value>) -> Self {
+    pub fn new(values: Vec<Value>, part_id: usize) -> Self {
         Train {
             marks: BTreeMap::new(),
             values,
             event_time: Time::now(),
+            id: TrainId(0, part_id),
         }
     }
 
@@ -118,13 +149,15 @@ impl TryFrom<track_rails::message_generated::protocol::Train<'_>> for Train {
                 .iter()
                 .map(|v| v.try_into())
                 .collect::<Result<_, _>>()?,
+            0,
         ))
     }
 }
 
 impl From<&mut Train> for Train {
-    fn from(train: &mut Train) -> Self {
-        let mut train = Train::new(train.values.clone());
+    fn from(other: &mut Train) -> Self {
+        let mut train = Train::new(other.values.clone(), 0);
+        train.id = other.id;
         train.marks = train.marks.iter().map(|(k, v)| (*k, *v)).collect();
         train
     }
@@ -137,11 +170,13 @@ impl From<Vec<Train>> for Train {
         }
 
         let mut values = vec![];
+        let mut part_id = 0usize;
         for train in wagons {
+            part_id = train.id.1;
             values.append(train.values.clone().as_mut());
         }
 
-        Train::new(values)
+        Train::new(values, part_id)
     }
 }
 
@@ -177,3 +212,11 @@ impl redb::Value for Train {
         TypeName::new("train")
     }
 }
+
+impl PartialEq<Self> for Train {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl Eq for Train {}
