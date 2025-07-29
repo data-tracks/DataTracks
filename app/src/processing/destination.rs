@@ -1,6 +1,6 @@
 use std::ops::{Deref, DerefMut};
-use std::sync::Arc;
-
+#[cfg(test)]
+use std::sync::{Arc, Mutex};
 use crate::http::destination::HttpDestination;
 use crate::mqtt::MqttDestination;
 #[cfg(test)]
@@ -8,18 +8,13 @@ use crate::processing::destination::Destinations::Dummy;
 use crate::processing::destination::Destinations::{Http, Lite, Mqtt, Tpc};
 use crate::processing::option::Configurable;
 use crate::processing::plan::DestinationModel;
-use crate::processing::station::Command;
 #[cfg(test)]
 use crate::processing::tests::DummyDestination;
 use crate::sql::LiteDestination;
 use crate::tpc::TpcDestination;
-use crate::util::Tx;
-use crossbeam::channel::Sender;
+use crate::util::{HybridThreadPool, Tx};
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use serde_json::{Map, Value};
-#[cfg(test)]
-use std::sync::Mutex;
-use std::thread::JoinHandle;
 use track_rails::message_generated::protocol::{Destination as FlatDestination, DestinationArgs};
 use value::train::Train;
 
@@ -81,8 +76,8 @@ pub trait Destination: Send + Configurable + Sync {
 
     fn operate(
         &mut self,
-        control: Arc<Sender<Command>>,
-    ) -> (Sender<Command>, JoinHandle<Result<(), String>>);
+        pool: HybridThreadPool,
+    ) -> usize;
     fn get_in(&self) -> Tx<Train>;
 
     fn id(&self) -> usize;

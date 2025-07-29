@@ -160,7 +160,7 @@ impl Display for Dict {
             "{{{}}}",
             self.values
                 .iter()
-                .map(|(k, v)| format!("{}: {}", k, v))
+                .map(|(k, v)| format!("{k}: {v}"))
                 .collect::<Vec<String>>()
                 .join(", ")
         )

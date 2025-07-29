@@ -1,21 +1,15 @@
 use crate::processing::destination::Destination;
 use crate::processing::option::Configurable;
 use crate::processing::plan::DestinationModel;
-use crate::processing::station::Command;
 use crate::processing::station::Command::Ready;
 use crate::processing::{plan, Train};
 use crate::sql::sqlite::connection::SqliteConnector;
-use crate::util::Tx;
 use crate::util::{new_channel, new_id, DynamicQuery};
-use crossbeam::channel::{unbounded, Sender};
+use crate::util::{HybridThreadPool, Tx};
 use rusqlite::params_from_iter;
 use serde_json::Map;
 use std::collections::HashMap;
-use std::sync::Arc;
-use std::thread;
-use std::thread::JoinHandle;
 use std::time::Duration;
-use tokio::runtime::Runtime;
 
 #[derive(Clone)]
 pub struct LiteDestination {
@@ -23,6 +17,7 @@ pub struct LiteDestination {
     sender: Tx<Train>,
     connector: SqliteConnector,
     query: DynamicQuery,
+    path: String,
 }
 
 impl LiteDestination {
@@ -35,6 +30,7 @@ impl LiteDestination {
             sender: tx,
             connector: connection,
             query,
+            path
         }
     }
 }
@@ -70,26 +66,23 @@ impl Destination for LiteDestination {
 
     fn operate(
         &mut self,
-        control: Arc<Sender<Command>>,
-    ) -> (Sender<Command>, JoinHandle<Result<(), String>>) {
+        pool: HybridThreadPool,
+    ) -> usize {
         let receiver = self.sender.subscribe();
-        let (tx, rx) = unbounded();
         let id = self.id;
         let query = self.query.clone();
-        let runtime = Runtime::new().unwrap();
-        let connection = self.connector.clone();
+        let path = self.path.clone();
 
-        let res = thread::Builder::new()
-            .name("SQLite Destination".to_string())
-            .spawn(move || {
-                runtime.block_on(async {
-                    let conn = connection.connect().await.unwrap();
+        //let connection = self.connector.clone();
+
+        pool.execute_async( "SQLite Destination".to_string(),move |meta| {
+            Box::pin( async move {
+                    let conn = SqliteConnector::new(&path).connect().await.unwrap();
                     let (query, value_functions) = query.prepare_query("$", None);
-                    let mut prepared = conn.prepare_cached(&query).unwrap();
 
-                    control.send(Ready(id)).unwrap();
+                    meta.output_channel.send(Ready(id));
                     loop {
-                        if plan::check_commands(&rx) {
+                        if plan::check_commands(&meta.ins.1) {
                             break;
                         }
                         match receiver.try_recv() {
@@ -99,7 +92,7 @@ impl Destination for LiteDestination {
                                     continue;
                                 }
                                 for value in values {
-                                    let _ = prepared
+                                    let _ = conn.prepare_cached(&query).unwrap()
                                         .query(params_from_iter(value_functions(value)))
                                         .unwrap();
                                 }
@@ -107,14 +100,7 @@ impl Destination for LiteDestination {
                             _ => tokio::time::sleep(Duration::from_nanos(100)).await,
                         }
                     }
-                });
-                Ok(())
-            });
-
-        match res {
-            Ok(t) => (tx, t),
-            Err(err) => panic!("{}", err),
-        }
+                })}, vec![])
     }
 
     fn get_in(&self) -> Tx<Train> {

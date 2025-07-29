@@ -14,6 +14,8 @@ use tracing::{debug, warn};
 use value;
 use value::{Dict, Time};
 
+pub(crate) const DEFAULT_URL: &'static str = "127.0.0.1";
+
 pub async fn receive(
     State(state): State<SourceState>,
     Json(payload): Json<Value>,

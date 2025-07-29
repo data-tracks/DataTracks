@@ -1,18 +1,13 @@
+use crate::processing::Train;
 use crate::processing::destination::Destination;
 use crate::processing::option::Configurable;
 use crate::processing::plan::DestinationModel;
-use crate::processing::station::Command;
-use crate::processing::Train;
-use crate::util::{new_channel, new_id};
+use crate::util::{HybridThreadPool, new_channel, new_id};
 use crate::util::{Rx, Tx};
-use crossbeam::channel::{unbounded, Sender};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufWriter, Write};
-use std::sync::Arc;
-use std::thread;
-use std::thread::JoinHandle;
 use tracing::{debug, error};
 
 pub struct DebugDestination {
@@ -50,23 +45,18 @@ impl Destination for DebugDestination {
         Ok(DebugDestination::new())
     }
 
-    fn operate(
-        &mut self,
-        _control: Arc<Sender<Command>>,
-    ) -> (Sender<Command>, JoinHandle<Result<(), String>>) {
+    fn operate(&mut self, pool: HybridThreadPool) -> usize {
         let receiver = self.receiver.take().unwrap();
-        let (tx, _rx) = unbounded();
 
-        (
-            tx,
-            thread::spawn(move || {
+        pool.execute_sync(
+            "Debug Destination",
+            move |_args| {
                 let mut writer = None;
                 if let Ok(file) = File::create("../../../debug.txt") {
                     writer = Some(BufWriter::new(file));
                 }
                 loop {
-                    let res = receiver.recv();
-                    match res {
+                    match receiver.recv() {
                         Ok(train) => {
                             if let Some(ref mut w) = writer {
                                 writeln!(w, "{:?}", train).expect("Could not write to debug file.");
@@ -83,7 +73,8 @@ impl Destination for DebugDestination {
                         w.flush().unwrap();
                     }
                 }
-            }),
+            },
+            vec![],
         )
     }
 

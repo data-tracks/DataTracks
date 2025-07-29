@@ -380,7 +380,7 @@ impl TryFrom<ValueWrapper<'_>> for Value {
             FlatValue::Document => {
                 todo!()
             }
-            t => Err(format!("Unsupported type {:?}", t)),
+            t => Err(format!("Unsupported type {t:?}")),
         }
     }
 }
@@ -643,7 +643,7 @@ impl TryFrom<Notification> for Dict {
     fn try_from(value: Notification) -> Result<Self, Self::Error> {
         match value {
             Notification::Forward(f) => f.publish.try_into(),
-            _ => Err(format!("Unexpected notification {:?}", value))?,
+            _ => Err(format!("Unexpected notification {value:?}"))?,
         }
     }
 }
@@ -721,7 +721,7 @@ impl TryFrom<Event> for Dict {
                     map.insert("$topic".to_string(), Value::text(&p.topic));
                     Ok(Value::dict(map).as_dict().unwrap())
                 }
-                _ => Err(format!("Unexpected Incoming publish {:?}", i))?,
+                _ => Err(format!("Unexpected Incoming publish {i:?}"))?,
             },
             Event::Outgoing(_) => Err(String::from("Unexpected Outgoing publish")),
         }
@@ -764,7 +764,7 @@ impl Add for &Value {
             (lhs, Wagon(w)) => lhs + &*w.value.clone(),
 
             // Panic on unsupported types
-            (lhs, rhs) => panic!("Cannot add {:?} with {:?}.", lhs, rhs),
+            (lhs, rhs) => panic!("Cannot add {lhs:?} with {rhs:?}."),
         }
     }
 }

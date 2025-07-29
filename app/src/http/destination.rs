@@ -1,22 +1,17 @@
-use crate::http::util::{parse_addr, publish_ws, DestinationState};
+use crate::http::util::{parse_addr, publish_ws, DestinationState, DEFAULT_URL};
 use crate::processing::destination::Destination;
 use crate::processing::option::Configurable;
 use crate::processing::plan::DestinationModel;
 use crate::processing::station::Command;
 use crate::processing::Train;
 use crate::ui::ConfigModel;
-use crate::util::new_broadcast;
+use crate::util::{new_broadcast, new_id, HybridThreadPool, Rx};
 use crate::util::Tx;
 use axum::routing::get;
 use axum::Router;
-use crossbeam::channel::{unbounded, Receiver, Sender};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
-use std::sync::Arc;
-use std::thread;
-use std::thread::JoinHandle;
 use tokio::net::TcpListener;
-use tokio::runtime::Runtime;
 use tower_http::cors::CorsLayer;
 use tracing::{debug, error};
 
@@ -28,12 +23,13 @@ pub struct HttpDestination {
     sender: Tx<Train>,
 }
 
+
 impl HttpDestination {
-    pub fn new(url: String, port: u16) -> Self {
+    pub fn new<S: AsRef<str>>(url: Option<S>, port: u16) -> Self {
         let sender = new_broadcast("Incoming HTTP Destination");
         HttpDestination {
-            id: 0,
-            url,
+            id: new_id(),
+            url: url.map(|r| r.as_ref().to_string()).unwrap_or(DEFAULT_URL.to_string()),
             port,
             sender,
         }
@@ -53,7 +49,7 @@ impl Configurable for HttpDestination {
     }
 }
 
-async fn start_destination(http: HttpDestination, _rx: Receiver<Command>, sender: Tx<Train>) {
+async fn start_destination(http: HttpDestination, _rx: Rx<Command>, sender: Tx<Train>) {
     debug!(
         "starting http destination on {url}:{port}...",
         url = http.url,
@@ -86,47 +82,31 @@ impl Destination for HttpDestination {
     where
         Self: Sized,
     {
-        let url = match options.get("url") {
-            None => panic!("missing url"),
-            Some(url) => url,
-        }
-        .as_str()
-        .unwrap();
+        let url = options.get("url").map(|url| url.as_str()).flatten();
         let port = options
             .get("port")
-            .unwrap()
-            .to_string()
-            .parse::<u16>()
+            .map(|port| port.as_u64().unwrap() as u16)
             .unwrap();
 
-        let destination = HttpDestination::new(url.to_string(), port.to_owned());
+        let destination = HttpDestination::new(url, port.to_owned());
 
         Ok(destination)
     }
 
     fn operate(
         &mut self,
-        _control: Arc<Sender<Command>>,
-    ) -> (Sender<Command>, JoinHandle<Result<(), String>>) {
-        let rt = Runtime::new().unwrap();
-
-        let (tx, rx) = unbounded();
+        pool: HybridThreadPool,
+    ) -> usize {
         let sender = self.sender.clone();
 
         let clone = self.clone();
 
-        let res = thread::Builder::new()
-            .name("HTTP Destination".to_string())
-            .spawn(move || {
-                rt.block_on(async {
-                    start_destination(clone, rx, sender).await;
-                });
-                Ok(())
+        pool.execute_async("HTTP Destination", move |meta| {
+            Box::pin(async move {
+                start_destination(clone, meta.ins.1, sender).await;
             })
-            .map_err(|err| err.to_string())
-            .unwrap();
+        }, vec![])
 
-        (tx, res)
     }
 
     fn get_in(&self) -> Tx<Train> {

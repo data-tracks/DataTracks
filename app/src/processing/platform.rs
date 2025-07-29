@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::thread::{sleep, Builder};
+use std::thread::{Builder, sleep};
 use std::time::Duration;
 
 use crate::algebra::Executor;
 use crate::optimize::OptimizeStrategy;
+use crate::processing::Train;
 use crate::processing::layout::Layout;
 use crate::processing::portal::Portal;
 use crate::processing::select::{TriggerSelector, WindowSelector};
@@ -14,12 +15,9 @@ use crate::processing::station::{Command, Station};
 use crate::processing::transform::Transform;
 use crate::processing::watermark::WatermarkStrategy;
 use crate::processing::window::Window;
-use crate::processing::Train;
-use crate::util::new_id;
 use crate::util::TriggerType;
-use crate::util::{new_channel, Rx, Tx};
-use crossbeam::channel;
-use crossbeam::channel::Receiver;
+use crate::util::{Rx, Tx, new_channel};
+use crate::util::{WorkerMeta, new_id};
 pub use logos::Source;
 use parking_lot::RwLock;
 use tracing::error;
@@ -31,7 +29,6 @@ const BATCH_SIZE: usize = 100;
 /// Platform represents an independent action steps which handles data based on the 4 streaming operations from different inputs  
 pub(crate) struct Platform {
     id: usize,
-    control: Receiver<Command>,
     receiver: Rx<Train>,
     sender: Sender,
     transform: Option<Transform>,
@@ -46,10 +43,7 @@ pub(crate) struct Platform {
 }
 
 impl Platform {
-    pub(crate) fn new(
-        station: &mut Station,
-        transforms: HashMap<String, Transform>,
-    ) -> (Self, channel::Sender<Command>) {
+    pub(crate) fn new(station: &mut Station, transforms: HashMap<String, Transform>) -> Self {
         let receiver = station.incoming.1.clone();
         let sender = station.outgoing.clone();
         let transform = station.transform.clone();
@@ -57,32 +51,27 @@ impl Platform {
         let stop = station.stop;
         let blocks = station.block.clone();
         let inputs = station.inputs.clone();
-        let control = station.control.clone();
         let layout = station.layout.clone();
         let trigger = station.trigger.clone();
         let watermark_strategy = station.watermark_strategy.clone();
 
-        (
-            Platform {
-                id: new_id(),
-                control: control.1,
-                receiver,
-                sender,
-                transform,
-                window,
-                layout,
-                stop,
-                trigger,
-                blocks,
-                inputs,
-                transforms,
-                watermark_strategy,
-            },
-            control.0,
-        )
+        Platform {
+            id: new_id(),
+            receiver,
+            sender,
+            transform,
+            window,
+            layout,
+            stop,
+            trigger,
+            blocks,
+            inputs,
+            transforms,
+            watermark_strategy,
+        }
     }
 
-    pub(crate) fn operate(&mut self, control: Arc<channel::Sender<Command>>) -> Result<(), String> {
+    pub(crate) fn operate(&mut self, meta: WorkerMeta) -> Result<(), String> {
         let process = optimize(
             self.stop,
             self.transform.clone(),
@@ -97,7 +86,7 @@ impl Platform {
 
         let watermark_strategy = self.watermark_strategy.clone();
 
-        let portal = Portal::new().unwrap();
+        let portal = Portal::new()?;
 
         let window_selector = Arc::new(RwLock::new(WindowSelector::new(self.window.clone())));
 
@@ -111,27 +100,21 @@ impl Platform {
             process,
         );
 
-        control.send(Ready(stop)).map_err(|err| err.to_string())?;
+        meta.output_channel.send(Ready(stop));
 
         loop {
             // are we struggling to handle incoming?
             let current = self.receiver.len();
             if current > threshold && !too_high {
-                match control.send(Threshold(stop)) {
-                    Err(err) => error!("Failed to send stop signal {}", err),
-                    _ => {}
-                }
+                meta.output_channel.send(Threshold(stop));
                 too_high = true;
             } else if current < threshold && too_high {
-                match control.send(Okay(stop)) {
-                    Err(err) => error!("Failed to send stop signal {}", err),
-                    _ => {}
-                }
+                meta.output_channel.send(Okay(stop));
                 too_high = false;
             }
 
             // did we get a command?
-            if let Ok(command) = self.control.try_recv() {
+            if let Ok(command) = meta.ins.1.try_recv() {
                 match command {
                     Command::Stop(_) => {
                         when_tx.send(Command::Stop(stop));

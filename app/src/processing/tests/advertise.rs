@@ -45,6 +45,8 @@ pub mod advertise_tests {
 
         let mut plan = Plan::parse(&stencil).unwrap();
 
+        let control = plan.control_receiver();
+
         let transformation: &mut _ = plan.get_transformation("comp").unwrap();
 
         match transformation {
@@ -63,7 +65,7 @@ pub mod advertise_tests {
 
         // source ready + stop, destination ready + stop
         for _command in vec![Stop(3), Stop(3)] {
-            plan.control_receiver.1.recv().unwrap();
+            control.recv().unwrap();
         }
 
         let results = clone.lock().unwrap();

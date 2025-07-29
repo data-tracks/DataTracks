@@ -1,7 +1,7 @@
 use crate::processing::station::Command;
 use crossbeam::channel::{Receiver, Sender};
 
-use crate::util::deserialize_message;
+use crate::util::{deserialize_message, Tx};
 use crate::util::{new_broadcast, Rx};
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use std::io;
@@ -134,21 +134,25 @@ impl Server {
 
     pub fn start(
         &self,
+        id: usize,
         user: impl StreamUser + Send + 'static,
-        control: Arc<Sender<Command>>,
-        rx: Arc<Receiver<Command>>,
+        control: Arc<Tx<Command>>,
+        rx: Arc<Rx<Command>>,
     ) -> Result<(), String> {
         let rt = Runtime::new().map_err(|err| err.to_string())?;
 
         let accept_timeout = Duration::from_millis(100);
 
         rt.block_on(async {
-            let listener = TcpListener::bind(self.addr)
+            let listener = match TcpListener::bind(self.addr)
                 .await
-                .map_err(|err| err.to_string())?;
+                .map_err(|err| err.to_string()) {
+                Ok(l) => l,
+                Err(_) => return Err(format!("Cannot bind to {}", self.addr)),
+            };
             info!("TPC server listening {}...", self.addr);
 
-            control.send(Command::Ready(0)).unwrap();
+            control.send(Command::Ready(id));
 
             let broadcast = new_broadcast("tpc server handle");
 
@@ -165,7 +169,7 @@ impl Server {
                     match cmd {
                         Command::Stop(s) => {
                             broadcast.send(Command::Stop(s));
-                            return Err(format!("Stopped {}", s));
+                            return Ok(());
                         }
                         _ => {}
                     }

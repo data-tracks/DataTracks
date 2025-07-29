@@ -2,21 +2,15 @@ use crate::processing::option::Configurable;
 use crate::processing::plan::SourceModel;
 use crate::processing::source::Sources::Lite;
 use crate::processing::source::{Source, Sources};
-use crate::processing::station::Command;
 use crate::processing::station::Command::{Ready, Stop};
 use crate::processing::{plan, Train};
 use crate::sql::sqlite::connection::SqliteConnector;
 use crate::ui::ConfigModel;
-use crate::util::new_id;
 use crate::util::Tx;
-use crossbeam::channel::{unbounded, Sender};
+use crate::util::{new_id, HybridThreadPool};
 use rusqlite::params;
 use serde_json::{Map, Value};
 use std::collections::HashMap;
-use std::sync::Arc;
-use std::thread;
-use std::thread::JoinHandle;
-use tokio::runtime::Runtime;
 
 #[derive(Clone)]
 pub struct LiteSource {
@@ -64,47 +58,41 @@ impl Source for LiteSource {
 
     fn operate(
         &mut self,
-        control: Arc<Sender<Command>>,
-    ) -> (Sender<Command>, JoinHandle<Result<(), String>>) {
-        let (tx, rx) = unbounded();
+        pool: HybridThreadPool,
+    ) -> usize {
         let id = self.id;
         let query = self.query.to_owned();
-        let runtime = Runtime::new().unwrap();
         let connection = self.connector.clone();
         let sender = self.outs.clone();
 
-        let res = thread::Builder::new()
-            .name("SQLite Source".to_string())
-            .spawn(move || {
-                runtime.block_on(async {
-                    let conn = connection.connect().await.unwrap();
-                    let mut prepared = conn.prepare_cached(query.as_str()).unwrap();
-                    control.send(Ready(id)).unwrap();
-                    let count = prepared.column_count();
-                    loop {
-                        if plan::check_commands(&rx) {
-                            break;
-                        }
+        let control = pool.control_sender();
 
-                        let mut iter = prepared.query(params![]).unwrap();
-                        let mut values = vec![];
-                        while let Ok(Some(row)) = iter.next() {
-                            values.push((row, count).try_into().unwrap());
-                        }
-                        let train = Train::new(values, 0);
-
-                        for sender in &sender {
-                            sender.send(train.clone());
-                        }
+        pool.execute_async("SQLite Source", move |meta| {
+            Box::pin(async move {
+                let conn = connection.connect().await.unwrap();
+                let mut prepared = conn.prepare_cached(query.as_str()).unwrap();
+                control.send(Ready(id));
+                let count = prepared.column_count();
+                loop {
+                    if plan::check_commands(&meta.ins.1) {
+                        break;
                     }
-                    control.send(Stop(id)).unwrap();
-                });
-                Ok(())
-            });
-        match res {
-            Ok(r) => (tx, r),
-            Err(e) => panic!("SQLite Source thread terminated unexpectedly: {}", e),
-        }
+
+                    let mut iter = prepared.query(params![]).unwrap();
+                    let mut values = vec![];
+                    while let Ok(Some(row)) = iter.next() {
+                        values.push((row, count).try_into().unwrap());
+                    }
+                    let train = Train::new(values, 0);
+
+                    for sender in &sender {
+                        sender.send(train.clone());
+                    }
+                }
+                control.send(Stop(id));
+            })
+        }, vec![])
+
     }
 
     fn outs(&mut self) -> &mut Vec<Tx<Train>> {
@@ -180,8 +168,10 @@ mod tests {
         let dummy = plan.get_result(35).clone();
         plan.operate().unwrap();
 
+        let control = plan.control_receiver();
+
         for _ in 0..4 {
-            plan.control_receiver.1.recv().unwrap();
+            control.recv().unwrap();
         }
         let values = dummy.lock().unwrap();
         println!("{:?}", values);

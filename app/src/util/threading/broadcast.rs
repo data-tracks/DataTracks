@@ -1,5 +1,5 @@
-use crate::util::one_shot;
-use crate::util::one_shot::{SingleRx, SingleTx};
+use crate::util::threading::one_shot;
+use crate::util::threading::one_shot::{SingleRx, SingleTx};
 use parking_lot::Mutex;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
@@ -97,7 +97,7 @@ impl<T: Clone + Send + 'static> Drop for BroadcastRx<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::util::broadcast::BroadcastTx;
+    use crate::util::threading::broadcast::BroadcastTx;
 
     #[test]
     fn test_broadcast() {

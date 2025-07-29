@@ -1,7 +1,7 @@
-use crate::util::broadcast::{BroadcastRx, BroadcastTx};
-use crate::util::one_shot;
+use crate::util::threading::broadcast::{BroadcastRx, BroadcastTx};
+use crate::util::threading::one_shot;
 
-use crate::util::one_shot::{SingleRx, SingleTx};
+use crate::util::threading::one_shot::{SingleRx, SingleTx};
 
 #[derive(Clone)]
 pub enum Tx<T: Clone + Send + 'static> {

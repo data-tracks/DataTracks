@@ -31,7 +31,7 @@ impl Manager {
         add_default(self.get_storage());
 
         let web_storage = self.get_storage();
-        let tpc_storage = self.get_storage().clone();
+        let tpc_storage = self.get_storage();
 
         let handle = match thread::Builder::new()
             .name("HTTP Interface".to_string())
@@ -78,13 +78,13 @@ fn add_default(storage: Arc<Mutex<Storage>>) {
                 "\
                 1--2{sql|SELECT $1 FROM $1}[2s]--3\n\
                 In\n\
-                HTTP{\"url\":\"127.0.0.1\", \"port\": \"5555\"}:1\n\
-                MQTT{\"url\":\"127.0.0.1\", \"port\": 6666}:1\n\
-                TPC{\"url\":\"127.0.0.1\", \"port\": 9999}:1\n\
+                HTTP{\"port\": \"5555\"}:1\n\
+                MQTT{\"port\": 6666}:1\n\
+                TPC{\"port\": 9999}:1\n\
                 Out\n\
-                MQTT{\"url\":\"127.0.0.1\", \"port\": 8888}:3\n\
-                TPC{\"url\":\"127.0.0.1\", \"port\": 8686}:3\n\
-                HTTP{\"url\":\"127.0.0.1\", \"port\": 9696}:3",
+                MQTT{\"port\": 8888}:3\n\
+                TPC{\"port\": 8686}:3\n\
+                HTTP{\"port\": 9696}:3",
             )
             .unwrap();
 

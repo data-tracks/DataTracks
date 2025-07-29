@@ -70,7 +70,7 @@ mod test {
     use std::sync::Arc;
     use std::thread::spawn;
 
-    use crate::util::one_shot::new_channel;
+    use crate::util::threading::one_shot::new_channel;
     use rand::random;
 
     #[test]

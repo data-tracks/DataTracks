@@ -2,9 +2,9 @@ use crate::management::{Api, Storage};
 use crate::processing::station::Command;
 use crate::tpc::server::{StreamUser, TcpStream};
 use crate::tpc::Server;
-use crate::util::deserialize_message;
+use crate::util::{deserialize_message, new_channel, Tx};
 use crate::util::Rx;
-use crossbeam::channel::{unbounded, Receiver, Sender};
+use crossbeam::channel::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -24,7 +24,7 @@ pub fn start_tpc(url: String, port: u16, storage: Arc<Mutex<Storage>>) {
 }
 
 fn startup(url: String, port: u16, storage: Arc<Mutex<Storage>>) {
-    let (tx, rx) = unbounded();
+    let (tx, rx) = new_channel("Management TPC", false);
     let tx = Arc::new(tx);
     let rx = Arc::new(rx);
 
@@ -39,7 +39,7 @@ fn startup(url: String, port: u16, storage: Arc<Mutex<Storage>>) {
         "DataTracks (TrackRails) protocol listening on: http://localhost:{}",
         port
     );
-    match server.start(management, tx, rx) {
+    match server.start(0, management, tx, rx) {
         Ok(_) => {}
         Err(err) => error!("{}", err),
     }
@@ -47,8 +47,8 @@ fn startup(url: String, port: u16, storage: Arc<Mutex<Storage>>) {
 
 #[derive(Clone)]
 pub struct TpcManagement {
-    interrupt: Arc<Sender<Command>>,
-    control: Arc<Receiver<Command>>,
+    interrupt: Arc<Tx<Command>>,
+    control: Arc<Rx<Command>>,
     storage: Arc<Mutex<Storage>>,
     api: Arc<Mutex<Api>>,
 }

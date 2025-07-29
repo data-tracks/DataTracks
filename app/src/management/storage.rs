@@ -1,10 +1,10 @@
 use crate::http::util;
 use crate::http::util::{DestinationState, parse_addr};
-use crate::processing::destination::{Destination, Destinations};
+use crate::processing::destination::{Destinations};
 use crate::processing::plan::Status;
-use crate::processing::source::{Source, Sources};
+use crate::processing::source::{Sources};
 use crate::processing::station::Command;
-use crate::processing::{Plan, Train, transform};
+use crate::processing::{Plan, Train};
 use crate::util::Tx;
 use crate::util::new_channel;
 use axum::Router;
@@ -19,13 +19,14 @@ use tower_http::cors::CorsLayer;
 use tracing::error;
 use track_rails::message_generated::protocol::CreatePlanRequest;
 use value::Time;
+use crate::processing::transform::Transform;
 
 #[derive(Default)]
 pub struct Storage {
     pub plans: Mutex<HashMap<usize, Plan>>,
-    pub ins: Mutex<HashMap<String, fn(Map<String, Value>) -> Box<dyn Source>>>,
-    pub outs: Mutex<HashMap<String, fn(Map<String, Value>) -> Box<dyn Destination>>>,
-    pub transforms: Mutex<HashMap<String, fn(String, Value) -> Box<transform::Transform>>>,
+    pub ins: Mutex<HashMap<String, fn(Map<String, Value>) -> Sources>>,
+    pub outs: Mutex<HashMap<String, fn(Map<String, Value>) -> Destinations>>,
+    pub transforms: Mutex<HashMap<String, fn(String, Value) -> Transform>>,
     pub attachments: Mutex<HashMap<usize, Attachment>>,
 }
 
@@ -293,16 +294,7 @@ impl Storage {
         let tx = self.start_http_attacher(source_id, data_port, watermark_port);
         let mut lock = self.plans.lock().unwrap();
         let plan = lock.get_mut(&plan_id).unwrap();
-        match plan.stations.get_mut(&stop_id) {
-            None => error!("Could not find plan"),
-            Some(station) => {
-                station
-                    .control
-                    .0
-                    .send(Command::Attach(source_id, tx))
-                    .unwrap();
-            }
-        }
+        plan.send_control(&stop_id, Command::Attach(source_id, tx));
         Ok((data_port, watermark_port))
     }
 
@@ -315,12 +307,7 @@ impl Storage {
 
         let mut lock = self.plans.lock().unwrap();
         let plan = lock.get_mut(&plan_id).unwrap();
-        match plan.stations.get_mut(&stop_id) {
-            None => error!("Could not find plan"),
-            Some(station) => {
-                station.control.0.send(Command::Detach(source_id)).unwrap();
-            }
-        }
+        plan.send_control(&stop_id, Command::Detach(source_id));
         let mut lock = self.attachments.lock().unwrap();
         if lock.remove(&source_id).is_none() {
             error!("Could not remove")

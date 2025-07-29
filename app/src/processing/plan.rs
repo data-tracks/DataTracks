@@ -7,22 +7,18 @@ use crate::processing::transform;
 #[cfg(test)]
 use crate::processing::Train;
 use crate::ui::{ConfigContainer, ConfigModel};
-use crate::util::new_id;
-use core::default::Default;
-use crossbeam::channel::{unbounded, Receiver, Sender};
+use crate::util::{new_id, HybridThreadPool, Rx};
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize, Serializer};
 use serde_json::{Map, Value};
 use std::cmp::PartialEq;
 use std::collections::HashMap;
-use std::mem;
-use std::sync::Arc;
+use std::sync::{Arc};
 #[cfg(test)]
-use std::sync::Mutex;
-use std::thread::{sleep, JoinHandle};
+use std::sync::{Mutex};
+use std::thread::sleep;
 use std::time::{Duration, Instant};
-use tracing::{debug, error, warn};
 use track_rails::message_generated::protocol::KeyValueU64StationArgs;
 use track_rails::message_generated::protocol::{
     KeyValueStringTransform, KeyValueStringTransformArgs, KeyValueU64Destination,
@@ -40,12 +36,12 @@ pub struct Plan {
     pub stations_to_in_outs: HashMap<usize, Vec<usize>>,
     pub sources: HashMap<usize, Sources>,
     pub destinations: HashMap<usize, Destinations>,
-    pub controls: HashMap<usize, Vec<Sender<Command>>>,
-    pub control_receiver: (Arc<Sender<Command>>, Receiver<Command>),
+    pub thread_mapping: HashMap<usize, usize>,
     pub status: Status,
     pub transforms: HashMap<String, transform::Transform>,
-    pub handles: HashMap<usize, JoinHandle<Result<(), String>>>,
+    pub pool: HybridThreadPool
 }
+
 
 #[cfg(test)]
 impl Plan {
@@ -56,7 +52,6 @@ impl Plan {
 
 impl Clone for Plan {
     fn clone(&self) -> Self {
-        let (tx, rx) = unbounded();
         Plan {
             id: self.id,
             name: self.name.clone(),
@@ -65,37 +60,17 @@ impl Clone for Plan {
             stations_to_in_outs: self.stations_to_in_outs.clone(),
             sources: self.sources.clone(),
             destinations: self.destinations.clone(),
-            controls: self.controls.clone(),
-            control_receiver: (Arc::new(tx), rx),
+            thread_mapping: self.thread_mapping.clone(),
             status: Status::Running,
             transforms: self.transforms.clone(),
-            handles: Default::default(),
+            pool: Default::default(),
         }
     }
 }
 
-impl Drop for Plan {
-    fn drop(&mut self) {
-        self.controls.iter().for_each(|(id, senders)| {
-            senders
-                .iter()
-                .for_each(|sender| match sender.send(Command::Stop(*id)) {
-                    Ok(_) => {}
-                    Err(err) => debug!("already closed{:?}", err),
-                })
-        });
-        mem::take(&mut self.handles)
-            .into_iter()
-            .for_each(|(_, handle)| match handle.join().unwrap() {
-                Ok(_) => {}
-                Err(err) => warn!("Error on closing {}", err),
-            })
-    }
-}
 
 impl Default for Plan {
     fn default() -> Self {
-        let (tx, rx) = unbounded();
         Plan {
             id: new_id(),
             name: "".to_string(),
@@ -104,11 +79,10 @@ impl Default for Plan {
             stations_to_in_outs: Default::default(),
             sources: Default::default(),
             destinations: Default::default(),
-            controls: Default::default(),
-            control_receiver: (Arc::new(tx), rx),
+            thread_mapping: Default::default(),
             status: Stopped,
             transforms: Default::default(),
-            handles: Default::default(),
+            pool: Default::default(),
         }
     }
 }
@@ -132,7 +106,6 @@ impl Status {
 
 impl Plan {
     pub fn new(id: usize) -> Self {
-        let (tx, rx) = unbounded();
         Plan {
             id,
             name: id.to_string(),
@@ -141,12 +114,15 @@ impl Plan {
             stations_to_in_outs: Default::default(),
             sources: Default::default(),
             destinations: Default::default(),
-            controls: Default::default(),
-            control_receiver: (Arc::new(tx), rx),
+            thread_mapping: Default::default(),
             status: Status::Running,
             transforms: Default::default(),
-            handles: Default::default(),
+            pool: Default::default(),
         }
+    }
+
+    pub fn control_receiver(&self) -> Arc<Rx<Command>> {
+        self.pool.control_receiver()
     }
 
     pub(crate) fn set_name(&mut self, name: String) {
@@ -155,7 +131,9 @@ impl Plan {
 
     pub(crate) fn halt(&mut self) {
         for station in self.stations.values_mut() {
-            station.close();
+            if let Some(id) =  self.thread_mapping.get(&station.id) {
+                self.pool.stop(id)
+            }
         }
     }
 
@@ -259,15 +237,10 @@ impl Plan {
         dump
     }
 
-    pub(crate) fn send_control(&mut self, num: &usize, command: Command) {
-        self.controls
-            .get_mut(num)
-            .unwrap_or(&mut Vec::new())
-            .iter()
-            .for_each(|c| {
-                c.send(command.clone())
-                    .unwrap_or_else(|err| error!("error: {}", err))
-            })
+    pub(crate) fn send_control(&self, num: &usize, command: Command) {
+        if let Some(id) = self.thread_mapping.get(&num) {
+            self.pool.send_control(id, command);
+        }
     }
 
     pub fn operate(&mut self) -> Result<(), String> {
@@ -275,23 +248,22 @@ impl Plan {
         self.connect_destinations()?;
         self.connect_sources()?;
 
+        let control = self.pool.control_receiver();
+
         for station in self.stations.values_mut() {
-            let (sender, join) = station.operate(
-                Arc::clone(&self.control_receiver.0),
+            let id = station.operate(
                 self.transforms.clone(),
+                self.pool.clone(),
             )?;
-            // add controls
-            let entry = self.controls.entry(station.id).or_default();
-            entry.push(sender);
-            // add handles
-            self.handles.insert(station.id, join);
+
+            self.thread_mapping.insert(station.id, id);
         }
 
         // wait for all stations to be ready
         let mut readys = vec![];
         let start_time = Instant::now();
-        while readys.len() != self.controls.len() {
-            match self.control_receiver.1.try_recv() {
+        while readys.len() != self.stations.len() {
+            match control.try_recv() {
                 Ok(command) => match command {
                     Command::Ready(id) => {
                         readys.push(id);
@@ -308,43 +280,40 @@ impl Plan {
         }
 
         for destination in self.destinations.values_mut() {
-            let (sender, join) = destination.operate(Arc::clone(&self.control_receiver.0));
-            self.controls
-                .entry(destination.id())
-                .or_default()
-                .push(sender);
+            let id = destination.operate(self.pool.clone());
 
-            match self.control_receiver.1.recv() {
+
+            match control.recv() {
                 Ok(_) => {}
                 Err(err) => return Err(format!("Not known destination {:?}", err)),
             };
-            // add handles
-            self.handles.insert(destination.id(), join);
+            self.thread_mapping.insert(destination.id(), id);
+
         }
 
         for source in self.sources.values_mut() {
-            let (sender, join) = source.operate(Arc::clone(&self.control_receiver.0));
-            self.controls.entry(source.id()).or_default().push(sender);
+            let id = source.operate(self.pool.clone());
 
-            match self.control_receiver.1.recv() {
+            match control.recv() {
                 Ok(_) => {}
                 Err(err) => return Err(format!("Not known source {:?}", err)),
             };
-            // add handles
-            self.handles.insert(source.id(), join);
+
+            self.thread_mapping.insert(source.id(), id);
         }
 
         self.status = Status::Running;
         Ok(())
     }
 
-    pub(crate) fn clone_platform(&mut self, num: usize) -> Result<(), String> {
+    #[cfg(test)]
+    pub(crate) fn clone_station(&mut self, num: usize) -> Result<(), String> {
         let station = self.stations.get_mut(&num).unwrap();
-        let (sender, _join) = station.operate(
-            Arc::clone(&self.control_receiver.0),
+        let _ = station.operate(
             self.transforms.clone(),
+            self.pool.clone(),
         )?;
-        Ok(self.controls.entry(num).or_default().push(sender))
+        Ok(())
     }
 
     fn connect_stops(&mut self) -> Result<(), String> {
@@ -833,7 +802,7 @@ impl Plan {
     }
 }
 
-pub fn check_commands(rx: &Receiver<Command>) -> bool {
+pub fn check_commands(rx: &Rx<Command>) -> bool {
     if let Ok(command) = rx.try_recv() {
         if let Command::Stop(_) = command {
             return true;

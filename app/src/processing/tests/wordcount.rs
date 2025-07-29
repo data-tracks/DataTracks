@@ -79,4 +79,5 @@ mod test {
         let client = Client::new("127.0.0.1", out_port);
         let _connection = client.connect().unwrap();
     }
+
 }

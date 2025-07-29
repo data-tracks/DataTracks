@@ -1,23 +1,18 @@
-use crate::mqtt::broker;
+use crate::mqtt::{broker, DEFAULT_URL};
 use crate::processing::option::Configurable;
 use crate::processing::plan::SourceModel;
 use crate::processing::source::Sources::Mqtt;
 use crate::processing::source::{Source, Sources};
-use crate::processing::station::Command;
 use crate::processing::station::Command::Ready;
 use crate::processing::{plan, Train};
 use crate::ui::{ConfigModel, StringModel};
-use crate::util::new_id;
+use crate::util::{new_id, HybridThreadPool};
 use crate::util::Tx;
-use crossbeam::channel::{unbounded, Sender};
 use rumqttd::Notification;
 use serde_json::Map;
 use std::collections::{BTreeMap, HashMap};
-use std::sync::Arc;
-use std::thread::JoinHandle;
 use std::time::Duration;
-use std::{str, thread};
-use tokio::runtime::Runtime;
+use std::str;
 use tracing::{debug, info, warn};
 use value::{Dict, Value};
 
@@ -51,10 +46,10 @@ impl Configurable for MqttSource {
 }
 
 impl MqttSource {
-    pub fn new(url: String, port: u16) -> Self {
+    pub fn new<S: AsRef<str>>(url: Option<S>, port: u16) -> Self {
         MqttSource {
             port,
-            url,
+            url: url.map(|r| r.as_ref().to_string()).unwrap_or(DEFAULT_URL.to_string()),
             id: new_id(),
             outs: Vec::new(),
         }
@@ -66,78 +61,65 @@ impl Source for MqttSource {
         let port = options.get("port").unwrap().as_u64().unwrap_or(9999);
         let url = options
             .get("url")
-            .unwrap()
-            .as_str()
-            .unwrap()
-            .parse()
-            .unwrap();
+            .map(|url| url.as_str()).flatten();
         Ok(MqttSource::new(url, port as u16))
     }
 
     fn operate(
         &mut self,
-        control: Arc<Sender<Command>>,
-    ) -> (Sender<Command>, JoinHandle<Result<(), String>>) {
-        let runtime = Runtime::new().unwrap();
+        pool: HybridThreadPool,
+    ) -> usize {
         debug!("starting mqtt source...");
 
-        let (tx, rx) = unbounded();
         let outs = self.outs.clone();
         let port = self.port;
         let url = self.url.clone();
         let id = self.id;
 
-        let res = thread::Builder::new()
-            .name("MQTT Source".to_string())
-            .spawn(move || {
-                let (mut broker, mut link_tx, mut link_rx) = broker::create_broker(port, url, id);
+        let control = pool.control_sender();
 
-                runtime.block_on(async move {
-                    // Start the broker asynchronously
-                    tokio::spawn(async move {
-                        broker.start().expect("Broker failed to start");
-                    });
-
-                    info!("Embedded MQTT broker for receiving is running...");
-                    control.send(Ready(id)).unwrap();
-
-                    link_tx.subscribe("#").unwrap(); // all topics
-
-                    loop {
-                        if plan::check_commands(&rx) {
-                            break;
-                        }
-                        if let Some(notification) = link_rx.recv().unwrap() {
-                            match notification {
-                                Notification::Forward(f) => {
-                                    let mut dict = BTreeMap::new();
-                                    dict.insert(
-                                        "$".to_string(),
-                                        Value::text(str::from_utf8(&f.publish.payload).unwrap()),
-                                    );
-                                    dict.insert(
-                                        "$topic".to_string(),
-                                        Value::text(str::from_utf8(&f.publish.topic).unwrap()),
-                                    );
-                                    send_message(Value::dict(dict).as_dict().unwrap(), &outs)
-                                }
-                                msg => {
-                                    warn!("Received unexpected message: {:?}", msg);
-                                }
-                            }
-                        } else {
-                            tokio::time::sleep(Duration::from_nanos(100)).await;
-                        }
-                    }
-                    warn!("MQTT broker has been stopped.");
+        pool.execute_async("MQTT Source", move |meta| {
+            let (mut broker, mut link_tx, mut link_rx) = broker::create_broker(port, url, id);
+            Box::pin(async move {
+                // Start the broker asynchronously
+                tokio::spawn(async move {
+                    broker.start().expect("Broker failed to start");
                 });
-                Ok(())
-            });
 
-        match res {
-            Ok(join) => (tx, join),
-            Err(err) => panic!("{}", err),
-        }
+                info!("Embedded MQTT broker for receiving is running...");
+                control.send(Ready(id));
+
+                link_tx.subscribe("#").unwrap(); // all topics
+
+                loop {
+                    if plan::check_commands(&meta.ins.1) {
+                        break;
+                    }
+                    if let Some(notification) = link_rx.recv().unwrap() {
+                        match notification {
+                            Notification::Forward(f) => {
+                                let mut dict = BTreeMap::new();
+                                dict.insert(
+                                    "$".to_string(),
+                                    Value::text(str::from_utf8(&f.publish.payload).unwrap()),
+                                );
+                                dict.insert(
+                                    "$topic".to_string(),
+                                    Value::text(str::from_utf8(&f.publish.topic).unwrap()),
+                                );
+                                send_message(Value::dict(dict).as_dict().unwrap(), &outs)
+                            }
+                            msg => {
+                                warn!("Received unexpected message: {:?}", msg);
+                            }
+                        }
+                    } else {
+                        tokio::time::sleep(Duration::from_nanos(100)).await;
+                    }
+                }
+                warn!("MQTT broker has been stopped.");
+            })
+        }, vec![])
     }
 
     fn outs(&mut self) -> &mut Vec<Tx<Train>> {
@@ -166,13 +148,9 @@ impl Source for MqttSource {
         } else {
             return Err(String::from("Could not create MqttSource."));
         };
-        let url = if let Some(url) = configs.get("url") {
-            url.as_str()
-        } else {
-            return Err(String::from("Could not create MqttSource."));
-        };
+        let url = configs.get("url").map(|u| u.as_str());
 
-        Ok(Mqtt(MqttSource::new(url.to_owned(), port as u16)))
+        Ok(Mqtt(MqttSource::new(url, port as u16)))
     }
 
     fn serialize_default() -> Result<SourceModel, ()> {

@@ -1,6 +1,6 @@
-use crate::processing::Train;
 use crate::processing::select::WindowDescriptor;
 use crate::processing::window::Window::{Back, Interval, Non};
+use crate::processing::Train;
 use crate::util::TimeUnit;
 use chrono::{Duration, NaiveTime, Timelike};
 use std::collections::BTreeMap;
@@ -301,7 +301,6 @@ impl IntervalStrategy {
 #[cfg(test)]
 mod test {
     use std::collections::HashMap;
-    use std::sync::Arc;
     use std::thread::sleep;
     use std::time::Duration;
 
@@ -309,27 +308,23 @@ mod test {
     use crate::processing::station::Station;
     use crate::processing::tests::dict_values;
     use crate::processing::window::{BackWindow, Window};
-    use crate::util::{TimeUnit, new_channel};
-    use crossbeam::channel::unbounded;
-    use value::Value;
+    use crate::util::{new_channel, TimeUnit};
     use value::train::Train;
+    use value::Value;
 
     #[test]
     fn default_behavior() {
         let mut station = Station::new(0);
-
-        let control = unbounded();
 
         let values = dict_values(vec![Value::float(3.3), Value::int(3)]);
 
         let (tx, rx) = new_channel("test", false);
 
         station.add_out(0, tx).unwrap();
-        let _ = station.operate(Arc::new(control.0), HashMap::new());
+        let (id, pool) = station.operate_test(HashMap::new());
         station.fake_receive(Train::new(values.clone(), 0));
 
-        let res = rx.recv();
-        match res {
+        match rx.recv() {
             Ok(t) => {
                 assert_eq!(values.len(), t.values.len());
                 for (i, value) in t.values.into_iter().enumerate() {
@@ -347,7 +342,6 @@ mod test {
 
         station.window = Window::Back(BackWindow::new(5, TimeUnit::Millis));
 
-        let control = unbounded();
 
         let values = dict_values(vec![Value::float(3.3), Value::int(3)]);
         let after = dict_values(vec!["test".into()]);
@@ -355,9 +349,9 @@ mod test {
         let (tx, rx) = new_channel("test", false);
 
         station.add_out(0, tx).unwrap();
-        let _ = station.operate(Arc::new(control.0), HashMap::new());
+        let (id, pool) = station.operate_test(HashMap::new());
         // wait for read
-        assert_eq!(Ready(0), control.1.recv().unwrap());
+        assert_eq!(Ready(0), pool.control_receiver().recv().unwrap());
 
         for (i, value) in values.iter().enumerate() {
             station.fake_receive(Train::new(vec![value.clone()], i));

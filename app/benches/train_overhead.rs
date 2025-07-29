@@ -10,14 +10,14 @@ pub fn benchmark_overhead(c: &mut Criterion) {
 
         let sender = Sender::new(0, tx);
 
-        let executer = Executor::new(0, None, sender);
+        let _executer = Executor::new(0, None, sender);
 
-        let train = Train::new(vec![Value::Dict(Dict::from(Value::int(3)))], 0);
+        let _train = Train::new(vec![Value::Dict(Dict::from(Value::int(3)))], 0);
 
         b.iter(|| {
             //block.next(train.clone());
 
-            rx.recv();
+            let _ = rx.recv();
         });
     });
 }

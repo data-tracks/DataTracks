@@ -4,18 +4,16 @@ use crate::processing::plan::DestinationModel;
 use crate::processing::station::Command;
 use crate::processing::Train;
 use crate::tpc::server::{ack, StreamUser, TcpStream};
-use crate::tpc::Server;
+use crate::tpc::{Server, DEFAULT_URL};
 use crate::ui::{ConfigModel, NumberModel, StringModel};
-use crate::util::new_broadcast;
+use crate::util::{new_broadcast, HybridThreadPool};
 use crate::util::new_id;
 use crate::util::Rx;
 use crate::util::Tx;
-use crossbeam::channel::{unbounded, Receiver, Sender};
+use crossbeam::channel::{Receiver, Sender};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::thread;
-use std::thread::JoinHandle;
 use std::time::Duration;
 use tokio::time::sleep;
 use tracing::{debug, error};
@@ -26,25 +24,19 @@ pub struct TpcDestination {
     port: u16,
     url: String,
     sender: Tx<Train>,
-    tx: Sender<Command>,
-    rx: Receiver<Command>,
-    control: Option<Arc<Sender<Command>>>,
+    control: Option<Arc<Tx<Command>>>,
+
 }
 
 impl TpcDestination {
-    pub fn new(url: String, port: u16) -> Self {
+    pub fn new<S: AsRef<str>>(url: Option<S>, port: u16) -> Self {
         let tx = new_broadcast("TPC Destination");
-        let id = new_id();
-
-        let (t, r) = unbounded();
 
         TpcDestination {
-            id,
+            id: new_id(),
             port,
-            url,
+            url: url.map(|r| r.as_ref().to_string()).unwrap_or(DEFAULT_URL.to_string()),
             sender: tx,
-            tx: t,
-            rx: r,
             control: None,
         }
     }
@@ -81,7 +73,7 @@ impl StreamUser for TpcDestination {
             }
         }
 
-        control.send(Command::Ready(self.id)).unwrap();
+        control.send(Command::Ready(self.id));
         let mut retry = 3;
         loop {
             match rx.try_recv() {
@@ -120,65 +112,45 @@ impl StreamUser for TpcDestination {
 }
 
 impl Destination for TpcDestination {
-    fn parse(_options: Map<String, Value>) -> Result<Self, String> {
-        let port = if let Some(port) = _options.get("port") {
+    fn parse(options: Map<String, Value>) -> Result<Self, String> {
+        let port = if let Some(port) = options.get("port") {
             port.as_i64().unwrap() as u16
         } else {
             return Err(String::from("Port not specified"));
         };
 
-        let url = if let Some(url) = _options.get("url") {
-            url.as_str().unwrap().to_string()
-        } else {
-            return Err(String::from("MqttDestination URL is required"));
-        };
+        let url =  options.get("url").map(|url| url.as_str()).flatten();
 
         Ok(Self::new(url, port))
     }
 
     fn operate(
         &mut self,
-        control: Arc<Sender<Command>>,
-    ) -> (Sender<Command>, JoinHandle<Result<(), String>>) {
+        pool: HybridThreadPool,
+    ) -> usize {
         debug!("starting tpc destination...");
 
         let url = self.url.clone();
         let port = self.port;
 
         let server = Server::new(url.clone(), port);
-        self.control = Some(control);
 
-        let tx = self.tx.clone();
-        let rx = self.rx.clone();
+        self.control = Some(pool.control_sender());
 
         let clone = self.clone();
 
-        let res = thread::Builder::new()
-            .name("TPC Destination".to_string())
-            .spawn(move || {
-                match server.start(clone, Arc::new(tx), Arc::new(rx)) {
-                    Ok(_) => {}
-                    Err(err) => error!("Error on TPC Destination thread{:?}", err),
-                }
-                Ok(())
-            });
+        let id = self.id;
 
-        match self.rx.recv() {
-            Ok(Command::Ready(_)) => {
-                self.control
-                    .clone()
-                    .map(|c| c.send(Command::Ready(self.id)));
+        let id = pool.execute_sync("TPC Destination".to_string(), move |meta| {
+            match server.start(id, clone, meta.output_channel, Arc::new(meta.ins.1)) {
+                Ok(_) => {}
+                Err(err) => error!("Error on TPC Destination thread{:?}", err),
             }
-            _ => match self.control {
-                None => {}
-                Some(_) => {}
-            },
-        }
+        }, vec![]);
 
-        match res {
-            Ok(t) => (self.tx.clone(), t),
-            Err(err) => panic!("{}", err),
-        }
+
+        id
+
     }
 
     fn get_in(&self) -> Tx<Train> {

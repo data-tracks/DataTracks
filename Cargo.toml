@@ -1,6 +1,22 @@
 [workspace]
-resolver = "1"
+resolver = "2"
 members = ["app", "value"]
+
+
+[workspace.dependencies]
+speedy = "0.8.7"
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.141"
+tracing = "0.1.41"
+chrono = "0.4.41"
+flatbuffers = "25.2.10"
+postgres = "0.19.10"
+rusqlite = { version = "0.37.0", features = ["bundled"] }
+criterion = "0.7.0"
+redb = "2.6.1"
+rumqttc = "0.24.0"
+rumqttd = "0.19.0"
+
 
 # The profile that 'cargo dist' will build with
 [profile.dist]

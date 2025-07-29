@@ -1,4 +1,4 @@
-use crate::http::util::{parse_addr, receive, receive_ws};
+use crate::http::util::{parse_addr, receive, receive_ws, DEFAULT_URL};
 use crate::processing::option::Configurable;
 use crate::processing::plan::SourceModel;
 use crate::processing::source::Sources::Http;
@@ -6,21 +6,19 @@ use crate::processing::source::{Source, Sources};
 use crate::processing::station::Command;
 use crate::processing::Train;
 use crate::ui::ConfigModel;
-use crate::util::new_id;
+use crate::util::{new_id, HybridThreadPool};
 use crate::util::Tx;
 use axum::routing::{get, post};
 use axum::Router;
-use crossbeam::channel::{unbounded, Receiver, Sender};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use std::thread;
-use std::thread::JoinHandle;
+use std::time::Duration;
 use tokio::net::TcpListener;
-use tokio::runtime::Runtime;
 use tower_http::cors::CorsLayer;
 use tracing::error;
 use tracing::log::debug;
+use crate::util::Rx;
 
 // ws: npx wscat -c ws://127.0.0.1:3666/ws/data
 // messages like: curl --json '{"website": "linuxize.com"}' localhost:5555/data/isabel
@@ -33,22 +31,36 @@ pub struct HttpSource {
 }
 
 impl HttpSource {
-    pub(crate) fn new(url: String, port: u16) -> Self {
+    pub(crate) fn new<S: AsRef<str>>(url: Option<S>, port: u16) -> Self {
         HttpSource {
             id: new_id(),
-            url,
+            url: url.map(|r| r.as_ref().to_string()).unwrap_or(DEFAULT_URL.to_string()),
             port,
             outs: Default::default(),
         }
     }
 }
 
-async fn start_source(http: HttpSource, _rx: Receiver<Command>) {
+async fn start_source(http: HttpSource, rx: Rx<Command>) {
     debug!(
         "starting http source on {url}:{port}...",
         url = http.url,
         port = http.port
     );
+
+    // Combine all shutdown signals using tokio::select!
+    let server_shutdown_future = async move {
+        loop {
+            match rx.try_recv() {
+                Ok(Command::Stop(_)) => break,
+                _ => {
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                }
+            }
+        }
+    };
+
+
     let addr = match parse_addr(http.url, http.port) {
         Ok(addr) => addr,
         Err(err) => panic!("{}", err),
@@ -68,7 +80,7 @@ async fn start_source(http: HttpSource, _rx: Receiver<Command>) {
         Ok(msg) => msg,
         Err(err) => panic!("failed to bind to {}: {}", addr, err),
     };
-    match axum::serve(listener, app).await {
+    match axum::serve(listener, app).with_graceful_shutdown(server_shutdown_future).await {
         Ok(_) => {}
         Err(err) => error!("failed to start HTTP server: {}", err),
     }
@@ -93,12 +105,7 @@ impl Source for HttpSource {
         Self: Sized,
     {
         Ok(HttpSource::new(
-            String::from(
-                options
-                    .get("url")
-                    .map(|url| url.as_str().ok_or("Could not parse url."))
-                    .ok_or(format!("Did not provide necessary url {:?}.", options))??,
-            ),
+            options.get("url").map(|url| url.as_str()).flatten(),
             options
                 .get("port")
                 .map(|port| {
@@ -112,27 +119,15 @@ impl Source for HttpSource {
 
     fn operate(
         &mut self,
-        _control: Arc<Sender<Command>>,
-    ) -> (Sender<Command>, JoinHandle<Result<(), String>>) {
-        let rt = Runtime::new().unwrap();
-
-        let (tx, rx) = unbounded();
-
+        pool: HybridThreadPool,
+    ) -> usize {
         let clone = self.clone();
 
-        let res = thread::Builder::new()
-            .name("HTTP Source".to_string())
-            .spawn(move || {
-                rt.block_on(async {
-                    start_source(clone, rx).await;
-                });
-                Ok(())
-            });
-
-        match res {
-            Ok(h) => (tx, h),
-            Err(err) => panic!("{}", err),
-        }
+        pool.execute_async("HTTP Source", move |meta| {
+            Box::pin(async move {
+                start_source(clone, meta.ins.1.clone()).await;
+            })
+        }, vec![])
     }
 
     fn outs(&mut self) -> &mut Vec<Tx<Train>> {
@@ -165,8 +160,8 @@ impl Source for HttpSource {
             _ => return Err(String::from("Could not create HttpSource.")),
         };
         let url = match configs.get("url") {
-            Some(ConfigModel::String(url)) => url.string.clone(),
-            _ => return Err(String::from("Could not create HttpSource.")),
+            Some(ConfigModel::String(url)) => Some(url.string.clone()),
+            _ => None,
         };
         Ok(Http(HttpSource::new(url, port)))
     }

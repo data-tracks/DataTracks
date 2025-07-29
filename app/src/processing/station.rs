@@ -1,8 +1,5 @@
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
-use std::sync::Arc;
-use std::thread;
-use std::thread::JoinHandle;
 use track_rails::message_generated::protocol::StationArgs;
 
 use crate::processing::layout::Layout;
@@ -12,16 +9,14 @@ use crate::processing::sender::Sender;
 use crate::processing::transform::Transform;
 use crate::processing::watermark::WatermarkStrategy;
 use crate::processing::window::Window;
-use crate::util::TriggerType;
-use crate::util::{new_channel, new_id};
+use crate::util::{HybridThreadPool, TriggerType};
 use crate::util::{Rx, Tx};
-use crossbeam::channel;
-use crossbeam::channel::{unbounded, Receiver};
+use crate::util::{new_channel, new_id};
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
-use tracing::{debug, error};
+use tracing::debug;
 use track_rails::message_generated::protocol::Station as FlatStation;
-use value::train::Train;
 use value::Time;
+use value::train::Train;
 
 #[derive(Clone)]
 pub struct Station {
@@ -35,7 +30,6 @@ pub struct Station {
     pub block: Vec<usize>,
     pub inputs: Vec<usize>,
     pub layout: Layout,
-    pub control: (channel::Sender<Command>, Receiver<Command>),
     pub watermark_strategy: WatermarkStrategy,
 }
 
@@ -48,7 +42,6 @@ impl Default for Station {
 impl Station {
     pub(crate) fn new(stop: usize) -> Self {
         let incoming = new_channel(format!("Incoming {stop}"), false);
-        let control = unbounded();
         Station {
             id: new_id(),
             stop,
@@ -60,7 +53,6 @@ impl Station {
             block: vec![],
             inputs: vec![],
             layout: Layout::default(),
-            control: (control.0.clone(), control.1.clone()),
             watermark_strategy: Default::default(),
         }
     }
@@ -221,13 +213,6 @@ impl Station {
             .unwrap_or_default()
     }
 
-    pub(crate) fn close(&mut self) {
-        match self.control.0.send(Command::Stop(0)) {
-            Ok(_) => {}
-            Err(err) => error!("{}", err),
-        };
-    }
-
     pub(crate) fn set_stop(&mut self, stop: usize) {
         self.stop = stop
     }
@@ -272,23 +257,31 @@ impl Station {
         self.incoming.0.clone()
     }
 
+
+    #[cfg(test)]
+    pub(crate) fn operate_test (
+        &mut self,
+        transforms: HashMap<String, Transform>) -> (usize, HybridThreadPool)  {
+        let pool = HybridThreadPool::default();
+        let id = self.operate(transforms, pool.clone() ).unwrap();
+        (id, pool)
+    }
+
     pub(crate) fn operate(
         &mut self,
-        control: Arc<channel::Sender<Command>>,
         transforms: HashMap<String, Transform>,
-    ) -> Result<(channel::Sender<Command>, JoinHandle<Result<(), String>>), String> {
-        let (mut platform, sender) = Platform::new(self, transforms);
+        pool: HybridThreadPool,
+    ) -> Result<usize, String> {
+        let mut platform = Platform::new(self, transforms);
         let stop = self.stop;
 
-        Ok((
-            sender,
-            thread::Builder::new()
-                .name(format!("Station {}", self.id))
-                .spawn(move || {
-                    debug!("Starting station {stop}");
-                    platform.operate(control)
-                })
-                .map_err(|err| format!("Could not spawn thread: {}", err))?,
+        Ok(pool.execute_sync(
+            format!("Station {}", self.id),
+            move |args| {
+                debug!("Starting station {stop}");
+                platform.operate(args).unwrap();
+            },
+            vec![],
         ))
     }
 
@@ -348,13 +341,13 @@ pub mod tests {
 
     use crate::processing::plan::Plan;
     use crate::processing::station::Command::{Okay, Ready, Stop, Threshold};
-    use crate::processing::station::{Command, Station};
+    use crate::processing::station::Station;
     pub use crate::processing::tests::dict_values;
     use crate::processing::transform::{FuncTransform, Transform};
     use crate::util::Rx;
-    use crate::util::{new_channel, Tx};
     use crate::util::{TimeUnit, TriggerType};
-    use crossbeam::channel::{unbounded, Receiver, Sender};
+    use crate::util::{Tx, new_channel};
+    
 
     use tracing_test::traced_test;
     use value::train::Train;
@@ -364,8 +357,6 @@ pub mod tests {
     #[traced_test]
     fn start_stop_test() {
         let mut station = Station::new(0);
-
-        let control = unbounded();
 
         let mut values = dict_values(vec![
             Value::text("test"),
@@ -381,9 +372,7 @@ pub mod tests {
         let (tx, rx) = new_channel("test", false);
 
         station.add_out(0, tx).unwrap();
-        station
-            .operate(Arc::new(control.0), HashMap::new())
-            .unwrap();
+        let (_, pool) = station.operate_test(HashMap::new());
         station.fake_receive(Train::new(values.clone(), 0));
 
         let res = rx.recv();
@@ -396,13 +385,12 @@ pub mod tests {
             }
             Err(..) => unreachable!(),
         }
+        drop(pool)
     }
 
     #[test]
     fn station_two_train() {
         let values = vec![Value::Dict(Dict::from(Value::int(3)))];
-        let (tx, _rx) = unbounded();
-        let control = Arc::new(tx);
 
         let mut first = Station::new(0);
         let input = first.get_in();
@@ -415,10 +403,8 @@ pub mod tests {
         let tx = second.get_in();
         first.add_out(1, tx).unwrap();
 
-        first.operate(Arc::clone(&control), HashMap::new()).unwrap();
-        second
-            .operate(Arc::clone(&control), HashMap::new())
-            .unwrap();
+        let (id, pool) = first.operate_test(HashMap::new());
+        let id_2 = second.operate(HashMap::new(), pool.clone()).unwrap();
 
         input.send(Train::new(values.clone(), 0));
 
@@ -429,8 +415,9 @@ pub mod tests {
         assert!(output_rx.try_recv().is_err());
 
         drop(input); // close the channel
-        first.close();
-        second.close();
+
+        pool.stop(&id);
+        pool.stop(&id_2);
     }
 
     #[test]
@@ -465,48 +452,55 @@ pub mod tests {
 
     #[test]
     fn too_high() {
-        let (mut station, train_sender, _rx, c_rx, a_tx) = create_test_station(10);
+        let (mut station, train_sender, _rx) = create_test_station(10);
 
-        let (sender, _) = station.operate(Arc::clone(&a_tx), HashMap::new()).unwrap();
-        sender.send(Threshold(3)).unwrap();
+        let (id, pool) = station.operate_test( HashMap::new());
+        pool.send_control(&id, Threshold(3));
 
         for _ in 0..1_000 {
             train_sender.send(Train::new(dict_values(vec![Value::int(3)]), 0));
         }
 
+        let receiver = pool.control_receiver();
+
         // the station should start, the threshold should be reached and after some time be balanced
         for state in vec![Ready(0), Threshold(0), Okay(0)] {
-            assert_eq!(state, c_rx.recv().unwrap())
+            assert_eq!(state, receiver.recv().unwrap())
         }
     }
 
     fn too_high_two() {
-        let (mut station, train_sender, _rx, c_rx, a_tx) = create_test_station(100);
+        let (mut station, train_sender, _rx) = create_test_station(100);
 
-        let (sender, _) = station.operate(Arc::clone(&a_tx), HashMap::new()).unwrap();
-        sender.send(Threshold(3)).unwrap();
+        let (id, pool) = station.operate_test(HashMap::new());
+        pool.send_control(&id, Threshold(3));
+
+        let (id, pool) = station.operate_test( HashMap::new());
+        pool.send_control(&id, Threshold(3));
+
         // second platform
-        let _ = station.operate(Arc::clone(&a_tx), HashMap::new());
+        let _ = station.operate(HashMap::new(), pool.clone()).unwrap();
 
         for _ in 0..1_000 {
             train_sender.send(Train::new(dict_values(vec![Value::int(3)]), 0));
         }
 
+        let receiver = pool.control_receiver();
         // the station should open a platform, the station starts another platform,  the threshold should be reached and after some time be balanced
         for state in vec![Ready(0), Ready(0), Threshold(0), Okay(0)] {
-            assert_eq!(state, c_rx.recv().unwrap())
+            assert_eq!(state, receiver.recv().unwrap())
         }
     }
 
     #[test]
     fn remove_during_op() {
-        let (mut station, train_sender, rx, c_rx, a_tx) = create_test_station(10);
-        let _sender = station.operate(Arc::clone(&a_tx), HashMap::new());
+        let (mut station, train_sender, rx) = create_test_station(10);
+        let (_, pool) = station.operate_test(HashMap::new());
 
         for i in 0..500usize {
             train_sender.send(Train::new(dict_values(vec![Value::int(i as i64)]), i));
         }
-        let _ = station.operate(Arc::clone(&a_tx), HashMap::new());
+        let _ = station.operate(HashMap::new(), pool.clone());
         for i in 0..500usize {
             train_sender.send(Train::new(
                 dict_values(vec![Value::int((500 + i) as i64)]),
@@ -514,9 +508,10 @@ pub mod tests {
             ));
         }
 
+        let receiver = pool.control_receiver();
         // the station should open a platform, the station starts another platform,  the threshold should be reached and after some time be balanced
         for state in vec![Ready(0), Ready(0)] {
-            assert_eq!(state, c_rx.recv().unwrap())
+            assert_eq!(state, receiver.recv().unwrap())
         }
         let mut trains = vec![];
 
@@ -538,19 +533,20 @@ pub mod tests {
     }
 
     fn run_minimal_overhead(name: &str, values: Vec<Value>) {
-        let (mut station, train_sender, rx, c_rx, a_tx) = create_test_station(0);
-        let (sender, _) = station.operate(Arc::clone(&a_tx), HashMap::new()).unwrap();
+        let (mut station, train_sender, rx) = create_test_station(0);
+        let (_, pool) = station.operate_test(HashMap::new());
 
         let mut trains = vec![];
-        let amount = 1000;
+        let amount = 10_000;
 
         for i in 0..amount {
             trains.push(Train::new(values.clone(), i));
         }
 
+        let receiver = pool.control_receiver();
         // the station should open a platform
         for state in vec![Ready(0)] {
-            assert_eq!(state, c_rx.recv().unwrap())
+            assert_eq!(state, receiver.recv().unwrap())
         }
 
         let mut values = vec![];
@@ -572,7 +568,7 @@ pub mod tests {
             elapsed.div_f64(amount as f64)
         );
 
-        sender.send(Stop(0)).unwrap();
+        pool.control_sender().send(Stop(0));
     }
 
     mod overhead {
@@ -621,8 +617,6 @@ pub mod tests {
         Station,
         Tx<Train>,
         Rx<Train>,
-        Receiver<Command>,
-        Arc<Sender<Command>>,
     ) {
         let mut station = Station::new(0);
         let train_sender = station.get_in();
@@ -638,10 +632,8 @@ pub mod tests {
             }))),
         });
 
-        let (c_tx, c_rx) = unbounded();
 
-        let a_tx = Arc::new(c_tx);
-        (station, train_sender, rx, c_rx, a_tx)
+        (station, train_sender, rx)
     }
 
     #[test]
@@ -707,8 +699,6 @@ pub mod tests {
         let (tx, rx) = new_channel("Test", false);
         station.add_out(0, tx).unwrap();
 
-        let (control_tx, control_rx) = unbounded();
-
         let trains = values
             .into_iter()
             .enumerate()
@@ -719,11 +709,9 @@ pub mod tests {
             })
             .collect::<Vec<(_, _)>>();
 
-        let (sender, _) = station
-            .operate(Arc::new(control_tx), Default::default())
-            .unwrap();
-        control_rx.recv().unwrap(); // wait for go from station
-        sender.send(Ready(0)).unwrap(); // start station
+        let (_, pool) = station.operate_test(Default::default());
+        pool.control_receiver().recv().unwrap(); // wait for go from station
+        pool.control_sender().send(Ready(0)); // start station
 
         let mut time = 0;
         for (train, out) in trains {
@@ -741,7 +729,7 @@ pub mod tests {
             assert!(result.len() >= answers);
         }
 
-        sender.send(Stop(0)).unwrap(); // stop station
+        pool.control_sender().send(Stop(0)); // stop station
     }
 
     fn receive(rx: Rx<Train>, duration: Duration) -> Vec<Train> {

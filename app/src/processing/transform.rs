@@ -440,9 +440,8 @@ mod tests {
     use crate::processing::transform::Transform::Func;
     use crate::processing::transform::{build_algebra, FuncTransform};
     use crate::util::new_channel;
-    use crossbeam::channel::unbounded;
+    
     use std::collections::HashMap;
-    use std::sync::Arc;
     use std::vec;
     use value::train::Train;
     use value::{Dict, Value};
@@ -450,8 +449,6 @@ mod tests {
     #[test]
     fn transform() {
         let mut station = Station::new(0);
-
-        let control = unbounded();
 
         station.set_transform(Func(FuncTransform::new_val(0, |x| {
             let mut dict = x.as_dict().unwrap();
@@ -467,7 +464,7 @@ mod tests {
         let (tx, rx) = new_channel("test", false);
 
         station.add_out(0, tx).unwrap();
-        let _ = station.operate(Arc::new(control.0), HashMap::new());
+        let (_, pool) = station.operate_test(HashMap::new());
         station.fake_receive(Train::new(values.clone(), 0));
 
         let res = rx.recv();
@@ -484,13 +481,12 @@ mod tests {
             }
             Err(..) => assert!(false),
         }
+        drop(pool);
     }
 
     #[test]
     fn sql_transform() {
         let mut station = Station::new(0);
-
-        let control = unbounded();
 
         station.set_transform(Func(FuncTransform::new_val(0, |x| {
             let mut dict = x.as_dict().unwrap();
@@ -506,7 +502,7 @@ mod tests {
         let (tx, rx) = new_channel("test", false);
 
         station.add_out(0, tx).unwrap();
-        let _ = station.operate(Arc::new(control.0), HashMap::new());
+        let (_, pool) = station.operate_test(HashMap::new());
         station.fake_receive(Train::new(values.clone(), 0));
 
         let res = rx.recv();
@@ -533,6 +529,7 @@ mod tests {
             }
             Err(e) => panic!("Failed to receive: {:?}", e),
         }
+        drop(pool);
     }
 
     #[test]

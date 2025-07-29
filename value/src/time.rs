@@ -116,7 +116,7 @@ impl std::fmt::Display for Time {
             time.format("%H:%M:%S").to_string()
         };
 
-        write!(f, "{}", string)
+        write!(f, "{string}")
     }
 }
 
