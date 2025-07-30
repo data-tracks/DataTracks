@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["app", "value"]
+members = ["app", "value", "cdc"]
 
 
 [workspace.dependencies]
@@ -16,6 +16,7 @@ criterion = "0.7.0"
 redb = "2.6.1"
 rumqttc = "0.24.0"
 rumqttd = "0.19.0"
+tokio = { version = "1.38.0", features = ["full"] }
 
 
 # The profile that 'cargo dist' will build with
