@@ -1,4 +1,4 @@
-pub(crate) const DEFAULT_URL: &'static str = "127.0.0.1";
+pub(crate) const DEFAULT_URL: &str = "127.0.0.1";
 
 mod destination;
 mod management;

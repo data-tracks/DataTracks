@@ -264,7 +264,7 @@ fn parse_type(reader: &mut BufferedReader, c: char) -> (Layout, Option<i32>) {
         'b' => parse_field(Boolean, reader),
         ARRAY_OPEN => parse_array(reader),
         DICT_OPEN => parse_dict(reader),
-        prefix => panic!("Unknown output prefix: {}", prefix),
+        prefix => panic!("Unknown output prefix: {prefix}"),
     }
 }
 
@@ -520,8 +520,7 @@ impl OutputType {
                         if length < t.fields.len() as i32 {
                             // incoming array is shorter than current tuple
                             return Err(format!(
-                                "Type mismatch {:?} cannot accept {:?} as incoming is shorter than this station",
-                                t, o
+                                "Type mismatch {t:?} cannot accept {o:?} as incoming is shorter than this station"
                             ));
                         }
                     } else {
@@ -550,10 +549,7 @@ impl OutputType {
     }
 
     fn type_mismatch_error(&self, other: &OutputType) -> Result<(), String> {
-        Err(format!(
-            "Type mismatch {:?} cannot accept {:?}",
-            self, other
-        ))
+        Err(format!("Type mismatch {self:?} cannot accept {other:?}"))
     }
 
     fn value_type(&self) -> ValType {

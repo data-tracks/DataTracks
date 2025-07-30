@@ -1,3 +1,4 @@
+use crate::algebra::Scan;
 use crate::algebra::aggregate::{Aggregate, ValueLoader};
 use crate::algebra::dual::Dual;
 use crate::algebra::filter::Filter;
@@ -8,7 +9,6 @@ use crate::algebra::scan::IndexScan;
 use crate::algebra::sort::Sort;
 use crate::algebra::union::Union;
 use crate::algebra::variable::VariableScan;
-use crate::algebra::Scan;
 use crate::optimize::Cost;
 use crate::processing::transform::Transform;
 use crate::processing::{Layout, Train};
@@ -67,7 +67,7 @@ impl Algebraic {
             Algebraic::Join(j) => {
                 let children = root.get_children(j.id());
                 Cost::new(2)
-                    + children.get(0).unwrap().calc_cost(root)
+                    + children.first().unwrap().calc_cost(root)
                     + children.get(1).unwrap().calc_cost(root)
             }
             Algebraic::Union(u) => {

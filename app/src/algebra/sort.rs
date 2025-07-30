@@ -24,10 +24,7 @@ impl AlgOutputDerivable for Sort {
         inputs: HashMap<String, Layout>,
         root: &AlgebraRoot,
     ) -> Option<Layout> {
-        Some(
-            root.get_child(self.id)?
-                .derive_output_layout(inputs, root)?,
-        )
+        root.get_child(self.id)?.derive_output_layout(inputs, root)
     }
 }
 

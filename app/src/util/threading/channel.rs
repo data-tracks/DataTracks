@@ -37,6 +37,10 @@ impl<T: Clone + Send + 'static> Tx<T> {
             Tx::Broadcast(b) => b.len(),
         }
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 #[derive(Clone)]
@@ -58,6 +62,10 @@ impl<T: Clone + Send + 'static> Rx<T> {
             Rx::Single(s) => s.recv(),
             Rx::Broadcast(b) => b.recv(),
         }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 }
 

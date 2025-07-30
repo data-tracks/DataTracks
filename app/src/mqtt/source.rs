@@ -1,18 +1,18 @@
-use crate::mqtt::{broker, DEFAULT_URL};
+use crate::mqtt::{DEFAULT_URL, broker};
 use crate::processing::option::Configurable;
 use crate::processing::plan::SourceModel;
 use crate::processing::source::Sources::Mqtt;
 use crate::processing::source::{Source, Sources};
 use crate::processing::station::Command::Ready;
-use crate::processing::{plan, Train};
+use crate::processing::{Train, plan};
 use crate::ui::{ConfigModel, StringModel};
-use crate::util::{new_id, HybridThreadPool};
 use crate::util::Tx;
+use crate::util::{HybridThreadPool, new_id};
 use rumqttd::Notification;
 use serde_json::Map;
 use std::collections::{BTreeMap, HashMap};
-use std::time::Duration;
 use std::str;
+use std::time::Duration;
 use tracing::{debug, info, warn};
 use value::{Dict, Value};
 
@@ -49,7 +49,9 @@ impl MqttSource {
     pub fn new<S: AsRef<str>>(url: Option<S>, port: u16) -> Self {
         MqttSource {
             port,
-            url: url.map(|r| r.as_ref().to_string()).unwrap_or(DEFAULT_URL.to_string()),
+            url: url
+                .map(|r| r.as_ref().to_string())
+                .unwrap_or(DEFAULT_URL.to_string()),
             id: new_id(),
             outs: Vec::new(),
         }
@@ -59,16 +61,11 @@ impl MqttSource {
 impl Source for MqttSource {
     fn parse(options: Map<String, serde_json::Value>) -> Result<Self, String> {
         let port = options.get("port").unwrap().as_u64().unwrap_or(9999);
-        let url = options
-            .get("url")
-            .map(|url| url.as_str()).flatten();
+        let url = options.get("url").and_then(|url| url.as_str());
         Ok(MqttSource::new(url, port as u16))
     }
 
-    fn operate(
-        &mut self,
-        pool: HybridThreadPool,
-    ) -> usize {
+    fn operate(&mut self, pool: HybridThreadPool) -> usize {
         debug!("starting mqtt source...");
 
         let outs = self.outs.clone();
@@ -78,48 +75,52 @@ impl Source for MqttSource {
 
         let control = pool.control_sender();
 
-        pool.execute_async("MQTT Source", move |meta| {
-            let (mut broker, mut link_tx, mut link_rx) = broker::create_broker(port, url, id);
-            Box::pin(async move {
-                // Start the broker asynchronously
-                tokio::spawn(async move {
-                    broker.start().expect("Broker failed to start");
-                });
+        pool.execute_async(
+            "MQTT Source",
+            move |meta| {
+                let (mut broker, mut link_tx, mut link_rx) = broker::create_broker(port, url, id);
+                Box::pin(async move {
+                    // Start the broker asynchronously
+                    tokio::spawn(async move {
+                        broker.start().expect("Broker failed to start");
+                    });
 
-                info!("Embedded MQTT broker for receiving is running...");
-                control.send(Ready(id));
+                    info!("Embedded MQTT broker for receiving is running...");
+                    control.send(Ready(id));
 
-                link_tx.subscribe("#").unwrap(); // all topics
+                    link_tx.subscribe("#").unwrap(); // all topics
 
-                loop {
-                    if plan::check_commands(&meta.ins.1) {
-                        break;
-                    }
-                    if let Some(notification) = link_rx.recv().unwrap() {
-                        match notification {
-                            Notification::Forward(f) => {
-                                let mut dict = BTreeMap::new();
-                                dict.insert(
-                                    "$".to_string(),
-                                    Value::text(str::from_utf8(&f.publish.payload).unwrap()),
-                                );
-                                dict.insert(
-                                    "$topic".to_string(),
-                                    Value::text(str::from_utf8(&f.publish.topic).unwrap()),
-                                );
-                                send_message(Value::dict(dict).as_dict().unwrap(), &outs)
-                            }
-                            msg => {
-                                warn!("Received unexpected message: {:?}", msg);
-                            }
+                    loop {
+                        if plan::check_commands(&meta.ins.1) {
+                            break;
                         }
-                    } else {
-                        tokio::time::sleep(Duration::from_nanos(100)).await;
+                        if let Some(notification) = link_rx.recv().unwrap() {
+                            match notification {
+                                Notification::Forward(f) => {
+                                    let mut dict = BTreeMap::new();
+                                    dict.insert(
+                                        "$".to_string(),
+                                        Value::text(str::from_utf8(&f.publish.payload).unwrap()),
+                                    );
+                                    dict.insert(
+                                        "$topic".to_string(),
+                                        Value::text(str::from_utf8(&f.publish.topic).unwrap()),
+                                    );
+                                    send_message(Value::dict(dict).as_dict().unwrap(), &outs)
+                                }
+                                msg => {
+                                    warn!("Received unexpected message: {:?}", msg);
+                                }
+                            }
+                        } else {
+                            tokio::time::sleep(Duration::from_nanos(100)).await;
+                        }
                     }
-                }
-                warn!("MQTT broker has been stopped.");
-            })
-        }, vec![])
+                    warn!("MQTT broker has been stopped.");
+                })
+            },
+            vec![],
+        )
     }
 
     fn outs(&mut self) -> &mut Vec<Tx<Train>> {

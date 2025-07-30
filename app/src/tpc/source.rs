@@ -1,15 +1,15 @@
+use crate::processing::Train;
 use crate::processing::option::Configurable;
 use crate::processing::plan::SourceModel;
 use crate::processing::source::Sources::Tpc;
 use crate::processing::source::{Source, Sources};
 use crate::processing::station::Command;
-use crate::processing::Train;
-use crate::tpc::server::{handle_register, StreamUser, TcpStream};
-use crate::tpc::{Server, DEFAULT_URL};
+use crate::tpc::server::{StreamUser, TcpStream, handle_register};
+use crate::tpc::{DEFAULT_URL, Server};
 use crate::ui::{ConfigModel, StringModel};
 use crate::util::Tx;
-use crate::util::{deserialize_message, new_id};
 use crate::util::{HybridThreadPool, Rx};
+use crate::util::{deserialize_message, new_id};
 use crossbeam::channel::{Receiver, Sender};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
@@ -32,7 +32,9 @@ impl TpcSource {
     pub fn new<S: AsRef<str>>(url: Option<S>, port: u16) -> Self {
         Self {
             id: new_id(),
-            url: url.map(|r| r.as_ref().to_string()).unwrap_or(DEFAULT_URL.to_string()),
+            url: url
+                .map(|r| r.as_ref().to_string())
+                .unwrap_or(DEFAULT_URL.to_string()),
             port,
             outs: Vec::new(),
             control: None,
@@ -63,16 +65,12 @@ impl Source for TpcSource {
         Self: Sized,
     {
         let port = options.get("port").unwrap().as_u64().unwrap_or(9999);
-        let url = options.get("url").map(|s| s.as_str()).flatten();
+        let url = options.get("url").and_then(|s| s.as_str());
 
         Ok(TpcSource::new(url, port as u16))
     }
 
-
-    fn operate(
-        &mut self,
-        pool: HybridThreadPool,
-    ) -> usize {
+    fn operate(&mut self, pool: HybridThreadPool) -> usize {
         debug!("Starting TPC source...");
 
         let port = self.port;
@@ -83,14 +81,17 @@ impl Source for TpcSource {
 
         let clone = self.clone();
 
-        pool.execute_sync("TPC Source", move |meta| {
-            let server = Server::new(url.clone(), port);
-            match server.start(clone.id, clone, control, Arc::new(meta.ins.1)) {
-                Ok(_) => {}
-                Err(err) => error!("Error on TPC source: {}", err),
-            }
-        }, vec![])
-
+        pool.execute_sync(
+            "TPC Source",
+            move |meta| {
+                let server = Server::new(url.clone(), port);
+                match server.start(clone.id, clone, control, Arc::new(meta.ins.1)) {
+                    Ok(_) => {}
+                    Err(err) => error!("Error on TPC source: {}", err),
+                }
+            },
+            vec![],
+        )
     }
 
     fn outs(&mut self) -> &mut Vec<Tx<Train>> {

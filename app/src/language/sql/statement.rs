@@ -161,7 +161,7 @@ impl Statement for SqlIdentifier {
     fn dump(&self, quote: &str) -> String {
         self.names
             .iter()
-            .map(|n| format!("{}{}{}", quote, n, quote))
+            .map(|n| format!("{quote}{n}{quote}"))
             .collect::<Vec<_>>()
             .join(".")
             .to_string()
@@ -227,7 +227,7 @@ impl Statement for SqlOperator {
                 .map(|o| o.dump(quote))
                 .collect::<Vec<String>>()
                 .join(", ");
-            return format!("{{{}}}", operators);
+            return format!("{{{operators}}}");
         } else if matches!(self.operator, Op::Tuple(TupleOp::KeyValue(_))) {
             return format!(
                 "{}:{}",
@@ -269,13 +269,13 @@ impl SqlValue {
     fn dump_value(value: &Value, quote: &str) -> String {
         match value {
             Value::Text(t) => {
-                format!("{}{}{}", quote, t, quote)
+                format!("{quote}{t}{quote}")
             }
             Value::Wagon(w) => {
                 let value = w.clone().unwrap();
                 Self::dump_value(&value, quote)
             }
-            v => format!("{}", v),
+            v => format!("{v}"),
         }
     }
 }

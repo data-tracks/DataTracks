@@ -1,15 +1,15 @@
+use crate::processing::Train;
 use crate::processing::destination::Destination;
 use crate::processing::option::Configurable;
 use crate::processing::plan::DestinationModel;
 use crate::processing::station::Command;
-use crate::processing::Train;
-use crate::tpc::server::{ack, StreamUser, TcpStream};
-use crate::tpc::{Server, DEFAULT_URL};
+use crate::tpc::server::{StreamUser, TcpStream, ack};
+use crate::tpc::{DEFAULT_URL, Server};
 use crate::ui::{ConfigModel, NumberModel, StringModel};
-use crate::util::{new_broadcast, HybridThreadPool};
-use crate::util::new_id;
 use crate::util::Rx;
 use crate::util::Tx;
+use crate::util::new_id;
+use crate::util::{HybridThreadPool, new_broadcast};
 use crossbeam::channel::{Receiver, Sender};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
@@ -25,7 +25,6 @@ pub struct TpcDestination {
     url: String,
     sender: Tx<Train>,
     control: Option<Arc<Tx<Command>>>,
-
 }
 
 impl TpcDestination {
@@ -35,7 +34,9 @@ impl TpcDestination {
         TpcDestination {
             id: new_id(),
             port,
-            url: url.map(|r| r.as_ref().to_string()).unwrap_or(DEFAULT_URL.to_string()),
+            url: url
+                .map(|r| r.as_ref().to_string())
+                .unwrap_or(DEFAULT_URL.to_string()),
             sender: tx,
             control: None,
         }
@@ -119,15 +120,12 @@ impl Destination for TpcDestination {
             return Err(String::from("Port not specified"));
         };
 
-        let url =  options.get("url").map(|url| url.as_str()).flatten();
+        let url = options.get("url").and_then(|url| url.as_str());
 
         Ok(Self::new(url, port))
     }
 
-    fn operate(
-        &mut self,
-        pool: HybridThreadPool,
-    ) -> usize {
+    fn operate(&mut self, pool: HybridThreadPool) -> usize {
         debug!("starting tpc destination...");
 
         let url = self.url.clone();
@@ -141,16 +139,14 @@ impl Destination for TpcDestination {
 
         let id = self.id;
 
-        let id = pool.execute_sync("TPC Destination".to_string(), move |meta| {
-            match server.start(id, clone, meta.output_channel, Arc::new(meta.ins.1)) {
+        pool.execute_sync(
+            "TPC Destination".to_string(),
+            move |meta| match server.start(id, clone, meta.output_channel, Arc::new(meta.ins.1)) {
                 Ok(_) => {}
                 Err(err) => error!("Error on TPC Destination thread{:?}", err),
-            }
-        }, vec![]);
-
-
-        id
-
+            },
+            vec![],
+        )
     }
 
     fn get_in(&self) -> Tx<Train> {

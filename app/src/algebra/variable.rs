@@ -51,7 +51,6 @@ impl Algebra for VariableScan {
             root.get_children(self.id())
                 .iter()
                 .map(|i| i.derive_iterator(root))
-                .into_iter()
                 .collect::<Result<Vec<_>, String>>()?,
         ))
     }

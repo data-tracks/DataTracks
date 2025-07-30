@@ -2,9 +2,9 @@ use crate::processing::destination::Destination;
 use crate::processing::option::Configurable;
 use crate::processing::plan::DestinationModel;
 use crate::processing::station::Command::Ready;
-use crate::processing::{plan, Train};
+use crate::processing::{Train, plan};
 use crate::sql::sqlite::connection::SqliteConnector;
-use crate::util::{new_channel, new_id, DynamicQuery};
+use crate::util::{DynamicQuery, new_channel, new_id};
 use crate::util::{HybridThreadPool, Tx};
 use rusqlite::params_from_iter;
 use serde_json::Map;
@@ -30,7 +30,7 @@ impl LiteDestination {
             sender: tx,
             connector: connection,
             query,
-            path
+            path,
         }
     }
 }
@@ -64,10 +64,7 @@ impl Destination for LiteDestination {
         Ok(destination)
     }
 
-    fn operate(
-        &mut self,
-        pool: HybridThreadPool,
-    ) -> usize {
+    fn operate(&mut self, pool: HybridThreadPool) -> usize {
         let receiver = self.sender.subscribe();
         let id = self.id;
         let query = self.query.clone();
@@ -75,8 +72,10 @@ impl Destination for LiteDestination {
 
         //let connection = self.connector.clone();
 
-        pool.execute_async( "SQLite Destination".to_string(),move |meta| {
-            Box::pin( async move {
+        pool.execute_async(
+            "SQLite Destination",
+            move |meta| {
+                Box::pin(async move {
                     let conn = SqliteConnector::new(&path).connect().await.unwrap();
                     let (query, value_functions) = query.prepare_query("$", None);
 
@@ -92,7 +91,9 @@ impl Destination for LiteDestination {
                                     continue;
                                 }
                                 for value in values {
-                                    let _ = conn.prepare_cached(&query).unwrap()
+                                    let _ = conn
+                                        .prepare_cached(&query)
+                                        .unwrap()
                                         .query(params_from_iter(value_functions(value)))
                                         .unwrap();
                                 }
@@ -100,7 +101,10 @@ impl Destination for LiteDestination {
                             _ => tokio::time::sleep(Duration::from_nanos(100)).await,
                         }
                     }
-                })}, vec![])
+                })
+            },
+            vec![],
+        )
     }
 
     fn get_in(&self) -> Tx<Train> {

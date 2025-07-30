@@ -1,9 +1,9 @@
 use crate::algebra::{BoxedIterator, ValueIterator};
 use crate::analyse::{InputDerivable, OutputDerivationStrategy};
 use crate::language::Language;
+use crate::processing::Layout;
 use crate::processing::option::Configurable;
 use crate::processing::transform::{Transform, Transformer};
-use crate::processing::Layout;
 use crate::sql::postgres::connection::PostgresConnection;
 use crate::util::reservoir::ValueReservoir;
 use crate::util::{DynamicQuery, ValueExtractor};
@@ -11,7 +11,6 @@ use postgres::types::ToSql;
 use postgres::{Client, Statement};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
-use value;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct PostgresTransformer {
@@ -55,7 +54,7 @@ impl InputDerivable for PostgresTransformer {
 }
 
 fn error(param: &str) -> String {
-    format!("Missing {} parameter", param)
+    format!("Missing {param} parameter")
 }
 
 impl Transformer for PostgresTransformer {

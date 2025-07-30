@@ -1,9 +1,10 @@
 use crate::http::util;
 use crate::http::util::{DestinationState, parse_addr};
-use crate::processing::destination::{Destinations};
+use crate::processing::destination::Destinations;
 use crate::processing::plan::Status;
-use crate::processing::source::{Sources};
+use crate::processing::source::Sources;
 use crate::processing::station::Command;
+use crate::processing::transform::Transform;
 use crate::processing::{Plan, Train};
 use crate::util::Tx;
 use crate::util::new_channel;
@@ -19,21 +20,23 @@ use tower_http::cors::CorsLayer;
 use tracing::error;
 use track_rails::message_generated::protocol::CreatePlanRequest;
 use value::Time;
-use crate::processing::transform::Transform;
+
+type SourceStorage = Mutex<HashMap<String, fn(Map<String, Value>) -> Sources>>;
+type DestinationStorage = Mutex<HashMap<String, fn(Map<String, Value>) -> Destinations>>;
+type TransformStorage = Mutex<HashMap<String, fn(Map<String, Value>) -> Transform>>;
 
 #[derive(Default)]
 pub struct Storage {
     pub plans: Mutex<HashMap<usize, Plan>>,
-    pub ins: Mutex<HashMap<String, fn(Map<String, Value>) -> Sources>>,
-    pub outs: Mutex<HashMap<String, fn(Map<String, Value>) -> Destinations>>,
-    pub transforms: Mutex<HashMap<String, fn(String, Value) -> Transform>>,
+    pub ins: SourceStorage,
+    pub outs: DestinationStorage,
+    pub transforms: TransformStorage,
     pub attachments: Mutex<HashMap<usize, Attachment>>,
 }
 
 pub struct Attachment {
     data_port: u16,
     watermark_port: u16,
-    sender: Tx<Train>,
     wm_sender: Tx<Time>,
     shutdown_channel: Sender<bool>,
     wm_shutdown_channel: Sender<bool>,
@@ -43,7 +46,6 @@ impl Attachment {
     pub fn new(
         data_port: u16,
         watermark_port: u16,
-        sender: Tx<Train>,
         wm_sender: Tx<Time>,
         shutdown_channel: Sender<bool>,
         wm_shutdown_channel: Sender<bool>,
@@ -52,7 +54,6 @@ impl Attachment {
             watermark_port,
             wm_sender,
             data_port,
-            sender,
             wm_shutdown_channel,
             shutdown_channel,
         }
@@ -137,7 +138,6 @@ impl Storage {
         let attachment = Attachment::new(
             data_port,
             watermark_port,
-            tx.clone(),
             water_tx.clone(),
             sh_tx,
             water_sh_tx,
@@ -170,7 +170,7 @@ impl Storage {
         let mut plans = self.plans.lock().unwrap();
         plans
             .remove(&id)
-            .ok_or(format!("No plan with id {}", id))
+            .ok_or(format!("No plan with id {id}"))
             .map(|_| ())
     }
 
@@ -181,8 +181,8 @@ impl Storage {
                 .lock()
                 .unwrap()
                 .clone()
-                .iter()
-                .map(|(_, plan)| plan.clone())
+                .values()
+                .map(|plan| plan.clone())
                 .collect();
         }
 

@@ -93,7 +93,7 @@ pub async fn startup(storage: Arc<Mutex<Storage>>) {
 
     let listener = match TcpListener::bind(&addr).await {
         Ok(listener) => listener,
-        Err(error) => panic!("Unable to bind to {}: {}", addr, error),
+        Err(error) => panic!("Unable to bind to {addr}: {error}"),
     };
     debug!("router initialized, now listening on port {}", port);
     info!("DataTracks (TrackView) started: http://localhost:{}", port);

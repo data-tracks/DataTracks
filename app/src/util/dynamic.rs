@@ -68,7 +68,7 @@ impl DynamicQuery {
                         None => i.to_string(),
                         Some(placeholder) => placeholder.to_owned(),
                     };
-                    let key = format!("{}{}", prefix, index);
+                    let key = format!("{prefix}{index}");
                     builder.append_string(&key);
                     i += 1;
                 }

@@ -5,8 +5,8 @@ use speedy::{Readable, Writable};
 use std::fs;
 use tempfile::NamedTempFile;
 use uuid::Uuid;
-use value::train::{Train, TrainId};
 use value::Value;
+use value::train::{Train, TrainId};
 
 pub struct Storage {
     path: Option<String>,
@@ -159,7 +159,7 @@ impl Drop for Storage {
     fn drop(&mut self) {
         if let Some(path) = self.path.take() {
             if let Err(e) = fs::remove_file(path) {
-                eprintln!("Failed to remove file: {}", e);
+                eprintln!("Failed to remove file: {e}");
             }
         }
     }

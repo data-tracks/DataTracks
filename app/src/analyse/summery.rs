@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt::Display;
 
 #[derive(Default)]
 pub struct Summery {
@@ -68,12 +69,29 @@ impl Summery {
     }
 }
 
+impl Display for Summery {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(format!("{}", self.status).as_str())
+    }
+}
+
 #[derive(Default, Clone, Debug, PartialEq)]
 pub enum Status {
     #[default]
     Ok,
     Warning(StatusTypes, String),
     Error(StatusTypes, String),
+}
+
+impl Display for Status {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name = match self {
+            Status::Ok => "Ok",
+            Status::Warning(t, print) => &format!("{t}\n{print}"),
+            Status::Error(t, print) => &format!("{t}\n{print}"),
+        };
+        f.write_str(format!("\n{name}\n").as_str())
+    }
 }
 
 impl Status {
@@ -88,4 +106,13 @@ impl Status {
 #[derive(Clone, Debug, PartialEq)]
 pub enum StatusTypes {
     Islands,
+}
+
+impl Display for StatusTypes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name = match self {
+            StatusTypes::Islands => "Islands",
+        };
+        f.write_str(name)
+    }
 }

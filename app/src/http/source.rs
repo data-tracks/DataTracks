@@ -1,15 +1,16 @@
-use crate::http::util::{parse_addr, receive, receive_ws, DEFAULT_URL};
+use crate::http::util::{DEFAULT_URL, parse_addr, receive, receive_ws};
+use crate::processing::Train;
 use crate::processing::option::Configurable;
 use crate::processing::plan::SourceModel;
 use crate::processing::source::Sources::Http;
 use crate::processing::source::{Source, Sources};
 use crate::processing::station::Command;
-use crate::processing::Train;
 use crate::ui::ConfigModel;
-use crate::util::{new_id, HybridThreadPool};
+use crate::util::Rx;
 use crate::util::Tx;
-use axum::routing::{get, post};
+use crate::util::{HybridThreadPool, new_id};
 use axum::Router;
+use axum::routing::{get, post};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -18,7 +19,6 @@ use tokio::net::TcpListener;
 use tower_http::cors::CorsLayer;
 use tracing::error;
 use tracing::log::debug;
-use crate::util::Rx;
 
 // ws: npx wscat -c ws://127.0.0.1:3666/ws/data
 // messages like: curl --json '{"website": "linuxize.com"}' localhost:5555/data/isabel
@@ -34,7 +34,9 @@ impl HttpSource {
     pub(crate) fn new<S: AsRef<str>>(url: Option<S>, port: u16) -> Self {
         HttpSource {
             id: new_id(),
-            url: url.map(|r| r.as_ref().to_string()).unwrap_or(DEFAULT_URL.to_string()),
+            url: url
+                .map(|r| r.as_ref().to_string())
+                .unwrap_or(DEFAULT_URL.to_string()),
             port,
             outs: Default::default(),
         }
@@ -60,7 +62,6 @@ async fn start_source(http: HttpSource, rx: Rx<Command>) {
         }
     };
 
-
     let addr = match parse_addr(http.url, http.port) {
         Ok(addr) => addr,
         Err(err) => panic!("{}", err),
@@ -78,9 +79,12 @@ async fn start_source(http: HttpSource, rx: Rx<Command>) {
 
     let listener = match TcpListener::bind(&addr).await {
         Ok(msg) => msg,
-        Err(err) => panic!("failed to bind to {}: {}", addr, err),
+        Err(err) => panic!("failed to bind to {addr}: {err}"),
     };
-    match axum::serve(listener, app).with_graceful_shutdown(server_shutdown_future).await {
+    match axum::serve(listener, app)
+        .with_graceful_shutdown(server_shutdown_future)
+        .await
+    {
         Ok(_) => {}
         Err(err) => error!("failed to start HTTP server: {}", err),
     }
@@ -105,7 +109,7 @@ impl Source for HttpSource {
         Self: Sized,
     {
         Ok(HttpSource::new(
-            options.get("url").map(|url| url.as_str()).flatten(),
+            options.get("url").and_then(|url| url.as_str()),
             options
                 .get("port")
                 .map(|port| {
@@ -113,21 +117,22 @@ impl Source for HttpSource {
                         .ok_or("Could not parse port.")
                         .map(|v| v.parse::<u16>().map_err(|_err| "Could not parse error"))?
                 })
-                .ok_or(format!("Did not provide necessary port {:?}.", options))??,
+                .ok_or(format!("Did not provide necessary port {options:?}."))??,
         ))
     }
 
-    fn operate(
-        &mut self,
-        pool: HybridThreadPool,
-    ) -> usize {
+    fn operate(&mut self, pool: HybridThreadPool) -> usize {
         let clone = self.clone();
 
-        pool.execute_async("HTTP Source", move |meta| {
-            Box::pin(async move {
-                start_source(clone, meta.ins.1.clone()).await;
-            })
-        }, vec![])
+        pool.execute_async(
+            "HTTP Source",
+            move |meta| {
+                Box::pin(async move {
+                    start_source(clone, meta.ins.1.clone()).await;
+                })
+            },
+            vec![],
+        )
     }
 
     fn outs(&mut self) -> &mut Vec<Tx<Train>> {

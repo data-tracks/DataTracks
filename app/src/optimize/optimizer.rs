@@ -153,7 +153,7 @@ impl ChangingVisitor<&mut Algebraic> for RuleBasedOptimizer {
                         .collect::<Vec<_>>();
                     <RuleBasedOptimizer as ChangingVisitor<&mut Algebraic>>::visit(
                         self,
-                        children.get(0).unwrap().id(),
+                        children.first().unwrap().id(),
                         root,
                     );
                     <RuleBasedOptimizer as ChangingVisitor<&mut Algebraic>>::visit(

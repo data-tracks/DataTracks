@@ -1,13 +1,13 @@
-use crate::mqtt::{broker, DEFAULT_URL};
+use crate::mqtt::{DEFAULT_URL, broker};
 use crate::processing::destination::Destination;
 use crate::processing::option::Configurable;
 use crate::processing::plan::DestinationModel;
 use crate::processing::station::Command::Ready;
-use crate::processing::{plan, Train};
+use crate::processing::{Train, plan};
 use crate::ui::{ConfigModel, NumberModel, StringModel};
-use crate::util::{new_broadcast, HybridThreadPool};
-use crate::util::new_id;
 use crate::util::Tx;
+use crate::util::new_id;
+use crate::util::{HybridThreadPool, new_broadcast};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::time::Duration;
@@ -22,12 +22,14 @@ pub struct MqttDestination {
 }
 
 impl MqttDestination {
-    pub fn new<S:AsRef<str>>(url: Option<S>, port: u16) -> Self {
+    pub fn new<S: AsRef<str>>(url: Option<S>, port: u16) -> Self {
         let sender = new_broadcast("MQTT Destination");
         MqttDestination {
             id: new_id(),
             port,
-            url: url.map(|r| r.as_ref().to_string()).unwrap_or(DEFAULT_URL.to_string()),
+            url: url
+                .map(|r| r.as_ref().to_string())
+                .unwrap_or(DEFAULT_URL.to_string()),
             sender,
         }
     }
@@ -54,15 +56,12 @@ impl Destination for MqttDestination {
             return Err(String::from("Port not specified"));
         };
 
-        let url = options.get("url").map(|url| url.as_str()).flatten();
+        let url = options.get("url").and_then(|url| url.as_str());
 
         Ok(Self::new(url, port))
     }
 
-    fn operate(
-        &mut self,
-        pool: HybridThreadPool,
-    ) -> usize {
+    fn operate(&mut self, pool: HybridThreadPool) -> usize {
         debug!("starting mqtt destination...");
 
         let id = self.id;
@@ -73,9 +72,9 @@ impl Destination for MqttDestination {
         let (mut broker, mut link_tx, _link_rx) = broker::create_broker(port, url.clone(), id);
 
         pool.execute_async(
-            "MQTT Destination".to_string(),
+            "MQTT Destination",
             move |meta| {
-                Box::pin( async move {
+                Box::pin(async move {
                     // Start the broker asynchronously
                     tokio::spawn(async move {
                         broker.start().expect("Broker failed to start");
@@ -114,8 +113,9 @@ impl Destination for MqttDestination {
                     }
                     error!("MQTT broker stopped");
                 })
-            }
-            ,vec![])
+            },
+            vec![],
+        )
     }
 
     fn get_in(&self) -> Tx<Train> {

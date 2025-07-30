@@ -179,7 +179,7 @@ impl Station {
                     }
                     station.set_stop(
                         num.parse()
-                            .map_err(|err| format!("Could not parse stop number: {}", err))?,
+                            .map_err(|err| format!("Could not parse stop number: {err}"))?,
                     )
                 }
             }
@@ -257,13 +257,13 @@ impl Station {
         self.incoming.0.clone()
     }
 
-
     #[cfg(test)]
-    pub(crate) fn operate_test (
+    pub(crate) fn operate_test(
         &mut self,
-        transforms: HashMap<String, Transform>) -> (usize, HybridThreadPool)  {
+        transforms: HashMap<String, Transform>,
+    ) -> (usize, HybridThreadPool) {
         let pool = HybridThreadPool::default();
-        let id = self.operate(transforms, pool.clone() ).unwrap();
+        let id = self.operate(transforms, pool.clone()).unwrap();
         (id, pool)
     }
 
@@ -347,7 +347,6 @@ pub mod tests {
     use crate::util::Rx;
     use crate::util::{TimeUnit, TriggerType};
     use crate::util::{Tx, new_channel};
-    
 
     use tracing_test::traced_test;
     use value::train::Train;
@@ -454,7 +453,7 @@ pub mod tests {
     fn too_high() {
         let (mut station, train_sender, _rx) = create_test_station(10);
 
-        let (id, pool) = station.operate_test( HashMap::new());
+        let (id, pool) = station.operate_test(HashMap::new());
         pool.send_control(&id, Threshold(3));
 
         for _ in 0..1_000 {
@@ -475,7 +474,7 @@ pub mod tests {
         let (id, pool) = station.operate_test(HashMap::new());
         pool.send_control(&id, Threshold(3));
 
-        let (id, pool) = station.operate_test( HashMap::new());
+        let (id, pool) = station.operate_test(HashMap::new());
         pool.send_control(&id, Threshold(3));
 
         // second platform
@@ -611,13 +610,7 @@ pub mod tests {
         }
     }
 
-    fn create_test_station(
-        duration: u64,
-    ) -> (
-        Station,
-        Tx<Train>,
-        Rx<Train>,
-    ) {
+    fn create_test_station(duration: u64) -> (Station, Tx<Train>, Rx<Train>) {
         let mut station = Station::new(0);
         let train_sender = station.get_in();
         let (tx, rx) = new_channel("test", false);
@@ -631,7 +624,6 @@ pub mod tests {
                 value
             }))),
         });
-
 
         (station, train_sender, rx)
     }

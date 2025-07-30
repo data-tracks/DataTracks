@@ -1,11 +1,11 @@
 use crate::http::source::SourceState;
 use crate::processing::Train;
 use crate::util::{Rx, Tx};
+use axum::Json;
 use axum::extract::ws::{Message, Utf8Bytes, WebSocket};
 use axum::extract::{State, WebSocketUpgrade};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::Json;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::net::{IpAddr, SocketAddr};
@@ -59,13 +59,11 @@ pub fn parse_addr<S: AsRef<str>>(url: S, port: u16) -> Result<SocketAddr, String
 
             rt.block_on(async {
                 match &url {
-                    url if url.parse::<IpAddr>().is_ok() => {
-                        format!("{url}:{port}", url = url, port = port)
-                            .parse::<SocketAddr>()
-                            .map_err(|e| format!("Failed to parse address: {}", e))
-                            .unwrap()
-                    }
-                    _ => tokio::net::lookup_host(format!("{url}:{port}", url = url, port = port))
+                    url if url.parse::<IpAddr>().is_ok() => format!("{url}:{port}")
+                        .parse::<SocketAddr>()
+                        .map_err(|e| format!("Failed to parse address: {e}"))
+                        .unwrap(),
+                    _ => tokio::net::lookup_host(format!("{url}:{port}"))
                         .await
                         .unwrap()
                         .next()
@@ -79,7 +77,7 @@ pub fn parse_addr<S: AsRef<str>>(url: S, port: u16) -> Result<SocketAddr, String
 
     match result {
         Ok(socket_addr) => Ok(socket_addr),
-        Err(err) => Err(format!("Failed to parse socket Address: {:?}", err)),
+        Err(err) => Err(format!("Failed to parse socket Address: {err:?}")),
     }
 }
 

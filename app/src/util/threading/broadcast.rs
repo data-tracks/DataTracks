@@ -35,12 +35,10 @@ impl<T: Clone + Send + 'static> BroadcastTx<T> {
     pub fn new_empty_channel<S: AsRef<str>>(name: S) -> Self {
         let inner = Arc::new(Mutex::new(vec![]));
 
-        let sender = BroadcastTx {
+        BroadcastTx {
             inner,
             name: String::from(name.as_ref()),
-        };
-
-        sender
+        }
     }
 
     pub fn new_channel<S: AsRef<str>>(name: S) -> (Self, BroadcastRx<T>) {

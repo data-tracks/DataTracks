@@ -1,6 +1,6 @@
+use crate::management::Storage;
 use crate::management::api::Status::Error;
 use crate::management::permission::ApiPermission;
-use crate::management::Storage;
 use flatbuffers::FlatBufferBuilder;
 use std::sync::{Arc, Mutex};
 use tracing::field::debug;
@@ -97,7 +97,7 @@ impl Api {
         }
     }
 
-    fn empty_msg<'a>() -> Result<Vec<u8>, Vec<u8>> {
+    fn empty_msg() -> Result<Vec<u8>, Vec<u8>> {
         build_status_response(Error("Empty message".to_string()))
     }
 

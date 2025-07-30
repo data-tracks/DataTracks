@@ -13,6 +13,10 @@ use tracing::{debug, info};
 
 const ASYNC_WORKERS: usize = 20;
 
+type BoxedFutureFactory = Box<
+    dyn FnOnce(WorkerMeta) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>> + Send + 'static,
+>;
+
 #[derive(Clone)]
 pub struct WorkerArgs {
     id: usize,
@@ -91,11 +95,7 @@ struct AsyncWorker {
 impl AsyncWorker {
     fn new(
         runtime_handle: Handle,
-        future_task: Box<
-            dyn FnOnce(WorkerMeta) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>
-                + Send
-                + 'static,
-        >,
+        future_task: BoxedFutureFactory,
         output_channel: Arc<Tx<Command>>,
         args: WorkerArgs,
         finished_ids_handle: Arc<Mutex<Vec<usize>>>,
@@ -134,13 +134,12 @@ pub struct PoolMeta {
 /// and an embedded Tokio runtime for executing async tasks.
 #[derive(Clone, Default)]
 pub struct HybridThreadPool {
-    state: Arc<PoolState>
+    state: Arc<PoolState>,
 }
 
 impl HybridThreadPool {
-
     pub(crate) fn new() -> Self {
-        HybridThreadPool{
+        HybridThreadPool {
             state: Arc::new(PoolState::new()),
         }
     }
@@ -169,16 +168,11 @@ impl HybridThreadPool {
         self.state.join(id)
     }
 
-    pub fn execute_async<F, S: AsRef<str>>(
-        &self,
-        name: S,
-        f: F,
-        depends_on: Vec<usize>,
-    ) -> usize
+    pub fn execute_async<F, S: AsRef<str>>(&self, name: S, f: F, depends_on: Vec<usize>) -> usize
     where
         F: FnOnce(WorkerMeta) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>
-        + Send
-        + 'static,
+            + Send
+            + 'static,
     {
         self.state.execute_async(name, f, depends_on)
     }
@@ -190,8 +184,6 @@ impl HybridThreadPool {
         self.state.execute_sync(name, f, depends_on)
     }
 }
-
-
 
 /// The main thread-safe `Poolstate` housing all the logic.
 /// This pool manages a set of standard threads for dispatching/sync tasks
@@ -239,11 +231,8 @@ impl PoolState {
 
         let cleanup = thread::spawn(move || {
             loop {
-                match rx.try_recv() {
-                    Ok(Command::Stop(_)) => {
-                        return;
-                    }
-                    _ => {}
+                if let Ok(Stop(_)) = rx.try_recv() {
+                    return;
                 }
                 Self::preform_cleanup(&finished_clone, &async_workers_clone, &sync_workers_clone);
                 thread::sleep(Duration::from_millis(100));
@@ -274,19 +263,19 @@ impl PoolState {
     }
 
     fn stop(&self, id: &usize) {
-        if let Some(sync_worker) = self.sync_workers.lock().unwrap().get(&id) {
+        if let Some(sync_worker) = self.sync_workers.lock().unwrap().get(id) {
             sync_worker.meta.ins.0.send(Stop(sync_worker.meta.id))
-        } else if let Some(async_worker) = self.async_workers.lock().unwrap().get(&id) {
+        } else if let Some(async_worker) = self.async_workers.lock().unwrap().get(id) {
             async_worker.meta.ins.0.send(Stop(async_worker.meta.id))
         }
     }
 
     fn join(&self, id: &usize) {
-        if let Some(w) = self.sync_workers.lock().unwrap().get_mut(&id) {
+        if let Some(w) = self.sync_workers.lock().unwrap().get_mut(id) {
             if let Some(handle) = w.handle.take() {
                 handle.join().unwrap();
             }
-        } else if let Some(w) = self.async_workers.lock().unwrap().get_mut(&id) {
+        } else if let Some(w) = self.async_workers.lock().unwrap().get_mut(id) {
             if let Some(handle) = w.handle.take() {
                 handle.abort();
             }
@@ -344,12 +333,7 @@ impl PoolState {
     /// Submits an asynchronous task to the pool.
     /// This task will be dispatched by a `sync` worker and then spawned onto the
     /// internal Tokio runtime.
-    fn execute_async<F, S: AsRef<str>>(
-        &self,
-        name: S,
-        f: F,
-        depends_on: Vec<usize>,
-    ) -> usize
+    fn execute_async<F, S: AsRef<str>>(&self, name: S, f: F, depends_on: Vec<usize>) -> usize
     where
         F: FnOnce(WorkerMeta) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>
             + Send
@@ -460,18 +444,15 @@ impl PoolState {
             if completed_ids.contains(&id) {
                 match w.handle.take() {
                     None => {}
-                    Some(h) => {
-                        match h.join() {
-                            Ok(_) => debug!("[Cleanup Thread] Sync task {id} joined and cleaned up."),
-                            Err(e) => {
-                                panic!(
-                                    "[Cleanup Thread Error] Sync task {id} panicked during cleanup: {e:?}"
-                                )
-                            },
+                    Some(h) => match h.join() {
+                        Ok(_) => debug!("[Cleanup Thread] Sync task {id} joined and cleaned up."),
+                        Err(e) => {
+                            panic!(
+                                "[Cleanup Thread Error] Sync task {id} panicked during cleanup: {e:?}"
+                            )
                         }
-                    }
+                    },
                 }
-
             } else {
                 // This task has not yet signaled completion, so it's either still running
                 // or hasn't had a chance to signal. We keep its handle for future cleanup cycles.

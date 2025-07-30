@@ -16,6 +16,12 @@ pub struct DebugDestination {
     sender: Tx<Train>,
 }
 
+impl Default for DebugDestination {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DebugDestination {
     pub fn new() -> Self {
         let (tx, rx) = new_channel("Debug Destination", false);
@@ -59,7 +65,7 @@ impl Destination for DebugDestination {
                     match receiver.recv() {
                         Ok(train) => {
                             if let Some(ref mut w) = writer {
-                                writeln!(w, "{:?}", train).expect("Could not write to debug file.");
+                                writeln!(w, "{train:?}").expect("Could not write to debug file.");
                             }
 
                             debug!("last: {}, {:?}", train.last(), train.values);

@@ -1,24 +1,26 @@
-use crate::processing::destination::{parse_destination, Destinations};
-use crate::processing::option::Configurable;
-use crate::processing::plan::Status::Stopped;
-use crate::processing::source::{parse_source, Sources};
-use crate::processing::station::{Command, Station};
-use crate::processing::transform;
+use crate::analyse::analyse;
 #[cfg(test)]
 use crate::processing::Train;
+use crate::processing::destination::{Destinations, parse_destination};
+use crate::processing::option::Configurable;
+use crate::processing::plan::Status::Stopped;
+use crate::processing::source::{Sources, parse_source};
+use crate::processing::station::{Command, Station};
+use crate::processing::transform;
 use crate::ui::{ConfigContainer, ConfigModel};
-use crate::util::{new_id, HybridThreadPool, Rx};
+use crate::util::{HybridThreadPool, Rx, new_id};
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize, Serializer};
 use serde_json::{Map, Value};
 use std::cmp::PartialEq;
 use std::collections::HashMap;
-use std::sync::{Arc};
+use std::sync::Arc;
 #[cfg(test)]
-use std::sync::{Mutex};
+use std::sync::Mutex;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
+use tracing::info;
 use track_rails::message_generated::protocol::KeyValueU64StationArgs;
 use track_rails::message_generated::protocol::{
     KeyValueStringTransform, KeyValueStringTransformArgs, KeyValueU64Destination,
@@ -39,9 +41,8 @@ pub struct Plan {
     pub thread_mapping: HashMap<usize, usize>,
     pub status: Status,
     pub transforms: HashMap<String, transform::Transform>,
-    pub pool: HybridThreadPool
+    pub pool: HybridThreadPool,
 }
-
 
 #[cfg(test)]
 impl Plan {
@@ -67,7 +68,6 @@ impl Clone for Plan {
         }
     }
 }
-
 
 impl Default for Plan {
     fn default() -> Self {
@@ -105,8 +105,8 @@ impl Status {
 }
 
 impl Plan {
-    pub fn new(id: usize) -> Self {
-        Plan {
+    pub fn new(id: usize, do_analyse: bool) -> Self {
+        let plan = Plan {
             id,
             name: id.to_string(),
             lines: Default::default(),
@@ -118,7 +118,14 @@ impl Plan {
             status: Status::Running,
             transforms: Default::default(),
             pool: Default::default(),
+        };
+        if do_analyse {
+            if let Ok(analyse) = analyse(&plan) {
+                info!("{}", analyse)
+            }
         }
+
+        plan
     }
 
     pub fn control_receiver(&self) -> Arc<Rx<Command>> {
@@ -131,7 +138,7 @@ impl Plan {
 
     pub(crate) fn halt(&mut self) {
         for station in self.stations.values_mut() {
-            if let Some(id) =  self.thread_mapping.get(&station.id) {
+            if let Some(id) = self.thread_mapping.get(&station.id) {
                 self.pool.stop(id)
             }
         }
@@ -201,7 +208,7 @@ impl Plan {
                 .into_iter()
                 .map(|name| {
                     let dump = self.transforms.get(name).unwrap().dump(include_ids);
-                    format!("${}:{}", name, dump)
+                    format!("${name}:{dump}")
                 })
                 .collect::<Vec<_>>()
                 .join("\n")
@@ -238,7 +245,7 @@ impl Plan {
     }
 
     pub(crate) fn send_control(&self, num: &usize, command: Command) {
-        if let Some(id) = self.thread_mapping.get(&num) {
+        if let Some(id) = self.thread_mapping.get(num) {
             self.pool.send_control(id, command);
         }
     }
@@ -251,10 +258,7 @@ impl Plan {
         let control = self.pool.control_receiver();
 
         for station in self.stations.values_mut() {
-            let id = station.operate(
-                self.transforms.clone(),
-                self.pool.clone(),
-            )?;
+            let id = station.operate(self.transforms.clone(), self.pool.clone())?;
 
             self.thread_mapping.insert(station.id, id);
         }
@@ -268,7 +272,7 @@ impl Plan {
                     Command::Ready(id) => {
                         readys.push(id);
                     }
-                    command => return Err(format!("Not known command {:?}", command)),
+                    command => return Err(format!("Not known command {command:?}")),
                 },
                 Err(_) => {
                     if start_time.elapsed().as_secs() > 5 {
@@ -282,13 +286,11 @@ impl Plan {
         for destination in self.destinations.values_mut() {
             let id = destination.operate(self.pool.clone());
 
-
             match control.recv() {
                 Ok(_) => {}
-                Err(err) => return Err(format!("Not known destination {:?}", err)),
+                Err(err) => return Err(format!("Not known destination {err:?}")),
             };
             self.thread_mapping.insert(destination.id(), id);
-
         }
 
         for source in self.sources.values_mut() {
@@ -296,7 +298,7 @@ impl Plan {
 
             match control.recv() {
                 Ok(_) => {}
-                Err(err) => return Err(format!("Not known source {:?}", err)),
+                Err(err) => return Err(format!("Not known source {err:?}")),
             };
 
             self.thread_mapping.insert(source.id(), id);
@@ -309,10 +311,7 @@ impl Plan {
     #[cfg(test)]
     pub(crate) fn clone_station(&mut self, num: usize) -> Result<(), String> {
         let station = self.stations.get_mut(&num).unwrap();
-        let _ = station.operate(
-            self.transforms.clone(),
-            self.pool.clone(),
-        )?;
+        let _ = station.operate(self.transforms.clone(), self.pool.clone())?;
         Ok(())
     }
 
@@ -629,8 +628,7 @@ impl Plan {
     }
 
     fn get_connected_stations(&self, in_out: usize) -> Vec<usize> {
-        let targets = self
-            .stations_to_in_outs
+        self.stations_to_in_outs
             .iter()
             .flat_map(|(stop, in_outs)| {
                 if in_outs.contains(&in_out) {
@@ -639,8 +637,7 @@ impl Plan {
                     vec![]
                 }
             })
-            .collect::<Vec<usize>>();
-        targets
+            .collect::<Vec<usize>>()
     }
 
     pub fn connect_in_out(&mut self, stop: usize, in_out: usize) {
@@ -683,12 +680,12 @@ impl Plan {
 
         let (type_name, template) = stencil
             .split_once('{')
-            .ok_or(format!("Invalid template: {}", stencil))?;
+            .ok_or(format!("Invalid template: {stencil}"))?;
         let json = format!("{{ {} }}", template.trim());
         let options = serde_json::from_str::<Value>(&json)
-            .map_err(|e| format!("Could not parse options for {}: {}", type_name, e))?
+            .map_err(|e| format!("Could not parse options for {type_name}: {e}"))?
             .as_object()
-            .ok_or(format!("Invalid options: {}", template))?
+            .ok_or(format!("Invalid options: {template}"))?
             .clone();
         Ok((stops, type_name, options))
     }
@@ -728,7 +725,7 @@ impl Plan {
     fn get_station(&self, stop_num: &usize) -> Result<&Station, String> {
         self.stations
             .get(stop_num)
-            .ok_or_else(|| format!("Station {} not found", stop_num))
+            .ok_or_else(|| format!("Station {stop_num} not found"))
     }
 
     pub fn layouts_match(&self) -> Result<(), String> {
@@ -767,8 +764,7 @@ impl Plan {
 
                     if let Err(e) = current.accepts(&layout) {
                         return Err(format!(
-                            "On line {} station {} does not accept the previous input due to :{}",
-                            line, stop_num, e
+                            "On line {line} station {stop_num} does not accept the previous input due to :{e}"
                         ));
                     }
 
@@ -803,12 +799,11 @@ impl Plan {
 }
 
 pub fn check_commands(rx: &Rx<Command>) -> bool {
-    if let Ok(command) = rx.try_recv() {
-        if let Command::Stop(_) = command {
-            return true;
-        }
+    if let Ok(Command::Stop(_)) = rx.try_recv() {
+        true
+    } else {
+        false
     }
-    false
 }
 
 enum Stencil {

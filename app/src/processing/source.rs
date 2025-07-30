@@ -1,4 +1,5 @@
 use crate::mqtt::MqttSource;
+use crate::processing::HttpSource;
 use crate::processing::option::Configurable;
 use crate::processing::plan::SourceModel;
 #[cfg(test)]
@@ -6,7 +7,6 @@ use crate::processing::source::Sources::Dummy;
 use crate::processing::source::Sources::{Http, Lite, Mqtt, Tpc};
 #[cfg(test)]
 use crate::processing::tests::DummySource;
-use crate::processing::HttpSource;
 use crate::sql::LiteSource;
 use crate::tpc::TpcSource;
 use crate::ui::ConfigModel;
@@ -26,7 +26,7 @@ pub fn parse_source(type_: &str, options: Map<String, Value>) -> Result<Sources,
         "tpc" => Tpc(TpcSource::parse(options)?),
         #[cfg(test)]
         "dummy" => Dummy(DummySource::parse(options)?),
-        _ => Err(format!("Invalid type: {}", type_))?,
+        _ => Err(format!("Invalid type: {type_}"))?,
     };
     Ok(source)
 }
@@ -74,10 +74,7 @@ pub trait Source: Send + Sync + Configurable {
     where
         Self: Sized;
 
-    fn operate(
-        &mut self,
-        pool: HybridThreadPool,
-    ) -> usize;
+    fn operate(&mut self, pool: HybridThreadPool) -> usize;
 
     #[cfg(test)]
     fn operate_test(&mut self) -> (usize, HybridThreadPool) {

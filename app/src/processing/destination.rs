@@ -1,6 +1,3 @@
-use std::ops::{Deref, DerefMut};
-#[cfg(test)]
-use std::sync::{Arc, Mutex};
 use crate::http::destination::HttpDestination;
 use crate::mqtt::MqttDestination;
 #[cfg(test)]
@@ -15,6 +12,9 @@ use crate::tpc::TpcDestination;
 use crate::util::{HybridThreadPool, Tx};
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use serde_json::{Map, Value};
+use std::ops::{Deref, DerefMut};
+#[cfg(test)]
+use std::sync::{Arc, Mutex};
 use track_rails::message_generated::protocol::{Destination as FlatDestination, DestinationArgs};
 use value::train::Train;
 
@@ -26,7 +26,7 @@ pub fn parse_destination(type_: &str, options: Map<String, Value>) -> Result<Des
         "tpc" => Tpc(TpcDestination::parse(options)?),
         #[cfg(test)]
         "dummy" => Dummy(DummyDestination::parse(options)?),
-        _ => Err(format!("Invalid type: {}", type_))?,
+        _ => Err(format!("Invalid type: {type_}"))?,
     };
     Ok(destination)
 }
@@ -74,10 +74,7 @@ pub trait Destination: Send + Configurable + Sync {
     where
         Self: Sized;
 
-    fn operate(
-        &mut self,
-        pool: HybridThreadPool,
-    ) -> usize;
+    fn operate(&mut self, pool: HybridThreadPool) -> usize;
     fn get_in(&self) -> Tx<Train>;
 
     fn id(&self) -> usize;

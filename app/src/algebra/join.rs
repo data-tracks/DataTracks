@@ -1,8 +1,8 @@
 use crate::algebra::algebra::Algebra;
 use crate::algebra::root::{AlgInputDerivable, AlgOutputDerivable, AlgebraRoot};
 use crate::algebra::{BoxedIterator, ValueIterator};
-use crate::processing::transform::Transform;
 use crate::processing::OutputType::Array;
+use crate::processing::transform::Transform;
 use crate::processing::{ArrayType, Layout};
 use crate::util::reservoir::ValueReservoir;
 use std::collections::HashMap;
@@ -208,13 +208,13 @@ impl Algebra for Join {
     }
 
     fn derive_iterator(&self, root: &AlgebraRoot) -> Result<Self::Iterator, String> {
-        let left_hash = self.left_hash.clone();
-        let right_hash = self.right_hash.clone();
-        let out = self.out.clone();
+        let left_hash = self.left_hash;
+        let right_hash = self.right_hash;
+        let out = self.out;
 
         let children = root.get_children(self.id());
         let left = children
-            .get(0)
+            .first()
             .ok_or("Join has no left child.")?
             .derive_iterator(root)?;
         let right = children

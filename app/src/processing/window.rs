@@ -1,6 +1,6 @@
+use crate::processing::Train;
 use crate::processing::select::WindowDescriptor;
 use crate::processing::window::Window::{Back, Interval, Non};
-use crate::processing::Train;
 use crate::util::TimeUnit;
 use chrono::{Duration, NaiveTime, Timelike};
 use std::collections::BTreeMap;
@@ -106,7 +106,7 @@ fn parse_interval(stencil: &str) -> Result<(i64, TimeUnit), String> {
         if !char.is_numeric() && !digit_passed {
             digit = temp
                 .parse()
-                .map_err(|_| format!("Could not parse {} as time", stencil))?;
+                .map_err(|_| format!("Could not parse {stencil} as time"))?;
             digit_passed = false;
             temp = "".to_string();
         }
@@ -271,7 +271,7 @@ impl IntervalStrategy {
                 break;
             }
         }
-        BTreeMap::from(windows)
+        windows
     }
 
     pub(crate) fn mark(&self, train: &Train) -> Vec<(WindowDescriptor, bool)> {
@@ -308,9 +308,9 @@ mod test {
     use crate::processing::station::Station;
     use crate::processing::tests::dict_values;
     use crate::processing::window::{BackWindow, Window};
-    use crate::util::{new_channel, TimeUnit};
-    use value::train::Train;
+    use crate::util::{TimeUnit, new_channel};
     use value::Value;
+    use value::train::Train;
 
     #[test]
     fn default_behavior() {
@@ -341,7 +341,6 @@ mod test {
         let mut station = Station::new(0);
 
         station.window = Window::Back(BackWindow::new(5, TimeUnit::Millis));
-
 
         let values = dict_values(vec![Value::float(3.3), Value::int(3)]);
         let after = dict_values(vec!["test".into()]);

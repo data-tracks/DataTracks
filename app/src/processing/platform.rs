@@ -181,41 +181,39 @@ fn when(
     // - which window?
     // apply transformation
     // send out
-    let result = Builder::new()
-        .name(String::from(format!("when {}", stop)))
-        .spawn(move || {
-            loop {
-                if let Ok(cmd) = rx.try_recv() {
-                    match cmd {
-                        Command::Stop(_) => return,
-                        Attach(num, (observe, _)) => {
-                            what.attach(num, observe.clone());
-                        }
-                        Detach(num) => {
-                            what.detach(num);
-                        }
-                        _ => {}
+    let result = Builder::new().name(format!("when {stop}")).spawn(move || {
+        loop {
+            if let Ok(cmd) = rx.try_recv() {
+                match cmd {
+                    Command::Stop(_) => return,
+                    Attach(num, (observe, _)) => {
+                        what.attach(num, observe.clone());
                     }
-                }
-
-                let current = watermark_strategy.current();
-
-                // get all "changed" windows
-                let windows = where_.write().select(current);
-                if windows.is_empty() {
-                    continue;
-                }
-
-                // decide if we fire a window, discard or wait
-                match when.select(windows, &current) {
-                    trains if !trains.is_empty() => {
-                        //debug!("trains {:?}", trains);
-                        trains.into_iter().for_each(|(_, t)| what.execute(t));
+                    Detach(num) => {
+                        what.detach(num);
                     }
                     _ => {}
                 }
             }
-        });
+
+            let current = watermark_strategy.current();
+
+            // get all "changed" windows
+            let windows = where_.write().select(current);
+            if windows.is_empty() {
+                continue;
+            }
+
+            // decide if we fire a window, discard or wait
+            match when.select(windows, &current) {
+                trains if !trains.is_empty() => {
+                    //debug!("trains {:?}", trains);
+                    trains.into_iter().for_each(|(_, t)| what.execute(t));
+                }
+                _ => {}
+            }
+        }
+    });
     match result {
         Ok(_) => {}
         Err(err) => error!("{}", err),
@@ -230,11 +228,7 @@ fn optimize(
     transforms: HashMap<String, Transform>,
     sender: Sender,
 ) -> Executor {
-    let enumerator = match transform {
-        Some(transform) => {
-            Some(transform.optimize(transforms, Some(OptimizeStrategy::rule_based())))
-        }
-        None => None,
-    };
+    let enumerator = transform
+        .map(|transform| transform.optimize(transforms, Some(OptimizeStrategy::rule_based())));
     Executor::new(stop, enumerator, sender)
 }

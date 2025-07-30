@@ -1,11 +1,11 @@
+use crate::algebra::Op::{Agg, Binary, Collection, Tuple};
+use crate::algebra::TupleOp::{And, Combine, Index, Input, Or};
 use crate::algebra::aggregate::{AvgOperator, CountOperator, SumOperator};
 use crate::algebra::algebra::{BoxedValueLoader, ValueHandler};
 use crate::algebra::function::{ArgImplementable, Implementable, Operator};
 use crate::algebra::operator::AggOp::{Avg, Count, Sum};
 use crate::algebra::operator::CollectionOp::Unwind;
 use crate::algebra::operator::TupleOp::{Division, Equal, Minus, Multiplication, Not, Plus};
-use crate::algebra::Op::{Agg, Binary, Collection, Tuple};
-use crate::algebra::TupleOp::{And, Combine, Index, Input, Or};
 use crate::algebra::{BoxedIterator, BoxedValueHandler, ValueIterator};
 use crate::processing::transform::Transform;
 use crate::processing::{ArrayType, DictType, Layout, OutputType, TupleType};
@@ -141,7 +141,7 @@ impl Iterator for SetProjectIterator {
     }
 }
 
-fn unwind<'a>(value: Value) -> Vec<Value> {
+fn unwind(value: Value) -> Vec<Value> {
     match value {
         Array(a) => a.values.clone(),
         Dict(d) => d.iter().map(|(_, v)| v.clone()).collect(),
@@ -637,7 +637,7 @@ impl ValueHandler for IndexOp {
                 .clone(),
             Null => Value::null(),
             Wagon(w) => self.process(&w.value),
-            _ => panic!("Could not process {}", value),
+            _ => panic!("Could not process {value}"),
         }
     }
 
@@ -897,20 +897,16 @@ impl Op {
     pub(crate) fn index(index: usize) -> Op {
         Tuple(Index(IndexOp::new(index)))
     }
-
-    pub(crate) fn input() -> Op {
-        Tuple(Input(InputOp {}))
-    }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::algebra::operator::{IndexOp, LiteralOp, NameOp};
     use crate::algebra::Op::Tuple;
     use crate::algebra::Operator;
     use crate::algebra::TupleOp::{
         And, Division, Equal, Index, Literal, Minus, Multiplication, Name, Not, Or, Plus,
     };
+    use crate::algebra::operator::{IndexOp, LiteralOp, NameOp};
     use crate::analyse::{InputDerivable, OutputDerivable};
     use crate::processing::OutputType::{Array, Dict};
     use crate::processing::{ArrayType, DictType, Layout, OutputType};
@@ -1040,6 +1036,6 @@ mod tests {
         assert_eq!(op.derive_input_layout().unwrap(), layout);
 
         let array = Layout::tuple(vec![Some("key1".to_string()), Some("key2".to_string())]);
-        assert_eq!(op.derive_output_layout(HashMap::new(), ).unwrap(), array);
+        assert_eq!(op.derive_output_layout(HashMap::new(),).unwrap(), array);
     }
 }

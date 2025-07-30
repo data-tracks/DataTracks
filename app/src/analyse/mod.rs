@@ -1,3 +1,4 @@
+pub use analyse::analyse;
 pub use layout::InputDerivable;
 pub use layout::OutputDerivable;
 pub use layout::OutputDerivationStrategy;

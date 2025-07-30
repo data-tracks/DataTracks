@@ -1,14 +1,14 @@
-use crate::http::util::{parse_addr, publish_ws, DestinationState, DEFAULT_URL};
+use crate::http::util::{DEFAULT_URL, DestinationState, parse_addr, publish_ws};
+use crate::processing::Train;
 use crate::processing::destination::Destination;
 use crate::processing::option::Configurable;
 use crate::processing::plan::DestinationModel;
 use crate::processing::station::Command;
-use crate::processing::Train;
 use crate::ui::ConfigModel;
-use crate::util::{new_broadcast, new_id, HybridThreadPool, Rx};
 use crate::util::Tx;
-use axum::routing::get;
+use crate::util::{HybridThreadPool, Rx, new_broadcast, new_id};
 use axum::Router;
+use axum::routing::get;
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use tokio::net::TcpListener;
@@ -23,13 +23,14 @@ pub struct HttpDestination {
     sender: Tx<Train>,
 }
 
-
 impl HttpDestination {
     pub fn new<S: AsRef<str>>(url: Option<S>, port: u16) -> Self {
         let sender = new_broadcast("Incoming HTTP Destination");
         HttpDestination {
             id: new_id(),
-            url: url.map(|r| r.as_ref().to_string()).unwrap_or(DEFAULT_URL.to_string()),
+            url: url
+                .map(|r| r.as_ref().to_string())
+                .unwrap_or(DEFAULT_URL.to_string()),
             port,
             sender,
         }
@@ -82,7 +83,7 @@ impl Destination for HttpDestination {
     where
         Self: Sized,
     {
-        let url = options.get("url").map(|url| url.as_str()).flatten();
+        let url = options.get("url").and_then(|url| url.as_str());
         let port = options
             .get("port")
             .map(|port| port.as_u64().unwrap() as u16)
@@ -93,20 +94,20 @@ impl Destination for HttpDestination {
         Ok(destination)
     }
 
-    fn operate(
-        &mut self,
-        pool: HybridThreadPool,
-    ) -> usize {
+    fn operate(&mut self, pool: HybridThreadPool) -> usize {
         let sender = self.sender.clone();
 
         let clone = self.clone();
 
-        pool.execute_async("HTTP Destination", move |meta| {
-            Box::pin(async move {
-                start_destination(clone, meta.ins.1, sender).await;
-            })
-        }, vec![])
-
+        pool.execute_async(
+            "HTTP Destination",
+            move |meta| {
+                Box::pin(async move {
+                    start_destination(clone, meta.ins.1, sender).await;
+                })
+            },
+            vec![],
+        )
     }
 
     fn get_in(&self) -> Tx<Train> {

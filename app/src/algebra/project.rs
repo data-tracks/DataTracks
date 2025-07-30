@@ -5,8 +5,8 @@ use crate::algebra::operator::SetProjectIterator;
 use crate::algebra::root::{AlgInputDerivable, AlgOutputDerivable, AlgebraRoot};
 use crate::algebra::{BoxedIterator, Op, ValueIterator};
 use crate::analyse::{InputDerivable, OutputDerivable};
-use crate::processing::transform::Transform;
 use crate::processing::Layout;
+use crate::processing::transform::Transform;
 use crate::util::reservoir::ValueReservoir;
 use std::collections::HashMap;
 use value::Value;
@@ -78,7 +78,7 @@ impl Iterator for ProjectIterator {
     }
 }
 
-impl<'a> ValueIterator for ProjectIterator {
+impl ValueIterator for ProjectIterator {
     fn get_storages(&self) -> Vec<ValueReservoir> {
         self.input.get_storages()
     }

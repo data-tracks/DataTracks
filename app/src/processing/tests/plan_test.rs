@@ -7,20 +7,20 @@ pub mod dummy {
 
     use crate::algebra::{BoxedIterator, ValueIterator};
     use crate::analyse::{InputDerivable, OutputDerivationStrategy};
+    use crate::processing::Layout;
     use crate::processing::destination::Destination;
     use crate::processing::option::Configurable;
     use crate::processing::plan::{DestinationModel, SourceModel};
     use crate::processing::source::{Source, Sources};
     use crate::processing::station::Command::{Ready, Stop};
     use crate::processing::transform::{Transform, Transformer};
-    use crate::processing::Layout;
     use crate::ui::ConfigModel;
     use crate::util::reservoir::ValueReservoir;
-    use crate::util::{new_channel, new_id, HybridThreadPool, Rx, Tx};
-    
+    use crate::util::{HybridThreadPool, Rx, Tx, new_channel, new_id};
+
     use serde_json::Map;
-    use value::train::Train;
     use value::Value;
+    use value::train::Train;
 
     #[derive(Clone)]
     pub struct DummySource {
@@ -118,10 +118,7 @@ pub mod dummy {
             Ok(source)
         }
 
-        fn operate(
-            &mut self,
-            pool: HybridThreadPool,
-        ) -> usize {
+        fn operate(&mut self, pool: HybridThreadPool) -> usize {
             let id = self.id;
 
             let delay = self.delay;
@@ -132,29 +129,32 @@ pub mod dummy {
             let control = pool.control_sender();
 
             pool.execute_sync(
-                "Dummy Source", move |meta| {
-                control.send(Ready(id));
+                "Dummy Source",
+                move |meta| {
+                    control.send(Ready(id));
 
-                // wait for ready from callee
-                match meta.ins.1.recv() {
-                    Ok(command) => match command {
-                        Ready(_id) => {}
+                    // wait for ready from callee
+                    match meta.ins.1.recv() {
+                        Ok(command) => match command {
+                            Ready(_id) => {}
+                            _ => panic!(),
+                        },
                         _ => panic!(),
-                    },
-                    _ => panic!(),
-                }
-                sleep(initial_delay);
-
-                let mut i = 0;
-                for values in &values {
-                    for sender in &senders {
-                        sender.send(Train::new(values.clone(), i));
-                        i += 1;
                     }
-                    sleep(delay);
-                }
-                control.send(Stop(id));
-            }, vec![])
+                    sleep(initial_delay);
+
+                    let mut i = 0;
+                    for values in &values {
+                        for sender in &senders {
+                            sender.send(Train::new(values.clone(), i));
+                            i += 1;
+                        }
+                        sleep(delay);
+                    }
+                    control.send(Stop(id));
+                },
+                vec![],
+            )
         }
 
         fn outs(&mut self) -> &mut Vec<Tx<Train>> {
@@ -244,18 +244,17 @@ pub mod dummy {
             Ok(destination)
         }
 
-        fn operate(
-            &mut self,
-            pool: HybridThreadPool,
-        ) -> usize {
+        fn operate(&mut self, pool: HybridThreadPool) -> usize {
             let id = self.id;
             let local = self.results();
             let receiver = self.receiver.take().unwrap();
             let result_amount = self.result_size;
 
-            let control =  pool.control_sender();
+            let control = pool.control_sender();
 
-            pool.execute_sync( "Dummy Destination", move |meta| {
+            pool.execute_sync(
+                "Dummy Destination",
+                move |meta| {
                     control.send(Ready(id));
                     let mut shared = local.lock().unwrap();
                     loop {
@@ -278,7 +277,9 @@ pub mod dummy {
                     }
                     drop(shared);
                     control.send(Stop(id));
-            }, vec![])
+                },
+                vec![],
+            )
         }
 
         fn get_in(&self) -> Tx<Train> {
@@ -421,6 +422,7 @@ pub mod dummy {
 
 #[cfg(test)]
 pub mod tests {
+    use crate::processing::Train;
     use crate::processing::destination::{Destination, Destinations};
     use crate::processing::plan::Plan;
     use crate::processing::source::Sources;
@@ -428,7 +430,6 @@ pub mod tests {
     use crate::processing::station::Station;
     use crate::processing::tests::plan_test::dummy::{DummyDestination, DummySource};
     use crate::processing::transform::{FuncTransform, Transform};
-    use crate::processing::Train;
     use crate::util::new_channel;
     use std::any::Any;
     use std::thread::sleep;
@@ -662,7 +663,7 @@ pub mod tests {
             values.push(dict_values(vec![Value::int(3)]));
         }
 
-        let mut plan = Plan::new(0);
+        let mut plan = Plan::new(0, false);
 
         let (source, id) = DummySource::new(values, Duration::from_nanos(3));
 
@@ -729,10 +730,7 @@ pub mod tests {
         let control = plan.control_receiver();
 
         for command in [Stop(0), Stop(2)] {
-            assert_eq!(
-                command.type_id(),
-                control.recv().unwrap().type_id()
-            );
+            assert_eq!(command.type_id(), control.recv().unwrap().type_id());
         }
         let lock = result.lock().unwrap();
         assert_eq!(lock.len(), 1)
@@ -1037,10 +1035,7 @@ pub mod tests {
 
         // wait for startup else whe risk grabbing the lock too early
         for _command in 0..2 {
-            assert!(
-                vec![Stop(source), Stop(destination)]
-                    .contains(&control.recv().unwrap())
-            );
+            assert!(vec![Stop(source), Stop(destination)].contains(&control.recv().unwrap()));
         }
 
         let lock = result.lock().unwrap();

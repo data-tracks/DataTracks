@@ -27,10 +27,6 @@ impl AlgSet {
                 alg = Some(id);
             }
         }
-        if let Some(id) = alg {
-            Some((id, costs))
-        } else {
-            None
-        }
+        alg.map(|id| (id, costs))
     }
 }

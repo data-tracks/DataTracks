@@ -3,13 +3,13 @@ use crate::analyse::{InputDerivable, OutputDerivable, OutputDerivationStrategy};
 use crate::language;
 use crate::language::Language;
 use crate::optimize::OptimizeStrategy;
+use crate::processing::Layout;
 use crate::processing::option::Configurable;
 #[cfg(test)]
 use crate::processing::tests::DummyDatabase;
 #[cfg(test)]
 use crate::processing::transform::Transform::DummyDB;
 use crate::processing::transform::Transform::{Func, Lang, Postgres, SQLite};
-use crate::processing::Layout;
 use crate::sql::{PostgresTransformer, SqliteTransformer};
 use crate::util::reservoir::ValueReservoir;
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
@@ -159,10 +159,10 @@ fn parse_function(stencil: &str) -> Result<Transform, String> {
         .rsplit_once('}')
         .ok_or("Invalid transform format.".to_string())?;
 
-    let options = serde_json::from_str::<serde_json::Value>(&format!("{{{}}}", options))
+    let options = serde_json::from_str::<serde_json::Value>(&format!("{{{options}}}"))
         .unwrap()
         .as_object()
-        .ok_or(format!("Invalid options: {}", options))?
+        .ok_or(format!("Invalid options: {options}"))?
         .clone();
 
     match name.to_lowercase().as_str() {
@@ -174,7 +174,7 @@ fn parse_function(stencil: &str) -> Result<Transform, String> {
         "dummydb" => Ok(DummyDB(DummyDatabase::parse(options)?)),
         "sqlite" => Ok(SQLite(SqliteTransformer::parse(options)?)),
         "postgres" | "postgresql" => Ok(Postgres(PostgresTransformer::parse(options)?)),
-        fun => panic!("Unknown function {}", fun),
+        fun => panic!("Unknown function {fun}"),
     }
 }
 
@@ -438,9 +438,9 @@ mod tests {
     use crate::processing::station::Station;
     use crate::processing::tests::dict_values;
     use crate::processing::transform::Transform::Func;
-    use crate::processing::transform::{build_algebra, FuncTransform};
+    use crate::processing::transform::{FuncTransform, build_algebra};
     use crate::util::new_channel;
-    
+
     use std::collections::HashMap;
     use std::vec;
     use value::train::Train;

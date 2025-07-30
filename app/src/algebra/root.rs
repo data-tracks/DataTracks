@@ -43,9 +43,9 @@ impl AlgebraRoot {
 
     // only add the node to the AlgSet
     pub(crate) fn add_to_set(&mut self, set_id: usize, alternative: usize) {
-        self.sets
-            .get_mut(&set_id)
-            .map(|set| set.alternatives.push(alternative));
+        if let Some(set) = self.sets.get_mut(&set_id) {
+            set.alternatives.push(alternative);
+        }
     }
 
     pub(crate) fn calc_cost(&self) -> Cost {
@@ -68,18 +68,12 @@ impl AlgebraRoot {
             self.sets.insert(id, AlgSet::new(id));
         });
         children.iter().for_each(|child| {
-            self.connection
-                .entry(id)
-                .or_insert_with(HashSet::new)
-                .insert(child.id());
+            self.connection.entry(id).or_default().insert(child.id());
         });
     }
 
     pub(crate) fn add_child(&mut self, id: usize, child_id: usize) {
-        self.connection
-            .entry(id)
-            .or_insert_with(HashSet::new)
-            .insert(child_id);
+        self.connection.entry(id).or_default().insert(child_id);
     }
 
     pub fn get_node(&self, id: usize) -> Option<&Algebraic> {
@@ -100,15 +94,15 @@ impl AlgebraRoot {
 
         // move connections
         for old_id in mappings.keys() {
-            let id = mappings.get(old_id).unwrap().clone();
+            let id = *mappings.get(old_id).unwrap();
             self.connection.insert(
                 id,
                 other
                     .connection
                     .get(old_id)
                     .unwrap()
-                    .into_iter()
-                    .map(|id| mappings.get(id).unwrap().clone())
+                    .iter()
+                    .map(|id| *mappings.get(id).unwrap())
                     .collect(),
             );
         }
@@ -117,7 +111,7 @@ impl AlgebraRoot {
             &mut other
                 .ends
                 .iter()
-                .map(|id| mappings.get(id).unwrap().clone())
+                .map(|id| *mappings.get(id).unwrap())
                 .collect(),
         );
     }
@@ -201,10 +195,8 @@ impl AlgebraRoot {
     pub(crate) fn variable(&mut self, name: String) {
         let id = self.new_id();
         self.nodes.insert(id, Variable(VariableScan::new(id, name)));
-        self.connection.insert(
-            id,
-            HashSet::from_iter(std::mem::take(&mut self.ends).into_iter()),
-        );
+        self.connection
+            .insert(id, HashSet::from_iter(std::mem::take(&mut self.ends)));
         self.add_end_logistics(id);
     }
 
@@ -237,10 +229,8 @@ impl AlgebraRoot {
         let id = self.new_id();
         self.nodes
             .insert(id, Aggregate(algebra::Aggregate::new(id, function, group)));
-        self.connection.insert(
-            id,
-            HashSet::from_iter(std::mem::take(&mut self.ends).into_iter()),
-        );
+        self.connection
+            .insert(id, HashSet::from_iter(std::mem::take(&mut self.ends)));
         self.add_end_logistics(id);
     }
 
@@ -248,10 +238,8 @@ impl AlgebraRoot {
         let id = self.new_id();
         self.nodes
             .insert(id, Algebraic::Project(Project::new(id, project)));
-        self.connection.insert(
-            id,
-            HashSet::from_iter(std::mem::take(&mut self.ends).into_iter()),
-        );
+        self.connection
+            .insert(id, HashSet::from_iter(std::mem::take(&mut self.ends)));
         self.add_end_logistics(id);
     }
 
@@ -259,10 +247,8 @@ impl AlgebraRoot {
         let id = self.new_id();
         self.nodes
             .insert(id, Algebraic::Filter(Filter::new(id, condition)));
-        self.connection.insert(
-            id,
-            HashSet::from_iter(std::mem::take(&mut self.ends).into_iter()),
-        );
+        self.connection
+            .insert(id, HashSet::from_iter(std::mem::take(&mut self.ends)));
         self.add_end_logistics(id);
     }
 
@@ -330,13 +316,13 @@ impl AlgebraRoot {
     }
 
     fn traverse_alg(&self, id: &usize, visitor: &mut dyn Visitor) {
-        if let None = self.nodes.get(id) {
+        if self.nodes.get(id).is_none() {
             return;
         } else if let Some(alg) = self.nodes.get(id) {
-            visitor.visit(&alg);
+            visitor.visit(alg);
         }
 
-        if let None = self.connection.get(id) {
+        if self.connection.get(id).is_none() {
         } else if let Some(id) = self.connection.get(id) {
             id.iter().for_each(|id| {
                 self.traverse_alg(id, visitor);
@@ -350,7 +336,7 @@ impl FromIterator<AlgebraRoot> for Option<AlgebraRoot> {
         let mut iter = iter.into_iter();
 
         let mut first = iter.next()?;
-        while let Some(root) = iter.next() {
+        for root in iter {
             first.append(root);
         }
         Some(first)

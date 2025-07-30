@@ -33,7 +33,7 @@ impl TryFrom<&str> for Language {
         match value {
             "sql" => Ok(Sql),
             "mql" => Ok(Mql),
-            _ => Err(format!("invalid language: {}", value)),
+            _ => Err(format!("invalid language: {value}")),
         }
     }
 }

@@ -1,8 +1,8 @@
 use crate::processing::station::Command;
 use crossbeam::channel::{Receiver, Sender};
 
-use crate::util::{deserialize_message, Tx};
-use crate::util::{new_broadcast, Rx};
+use crate::util::{Rx, new_broadcast};
+use crate::util::{Tx, deserialize_message};
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use std::io;
 use std::io::Error;
@@ -65,7 +65,7 @@ pub trait StreamUser: Clone {
         &mut self,
         stream: TcpStream,
         receiver: Rx<Command>,
-    ) -> impl Future<Output=()> + Send;
+    ) -> impl Future<Output = ()> + Send;
 
     fn interrupt(&mut self) -> Receiver<Command>;
 
@@ -110,7 +110,7 @@ pub async fn ack(stream: &mut TcpStream) -> Result<(), String> {
     stream.write_all(&handle_register().unwrap()).await?;
     Ok(())
 }
-async fn read<'a>(stream: &mut TcpStream) -> Result<String, String> {
+async fn read(stream: &mut TcpStream) -> Result<String, String> {
     let mut len_buf = [0u8; 4];
 
     match stream.read_exact(&mut len_buf).await {
@@ -121,8 +121,8 @@ async fn read<'a>(stream: &mut TcpStream) -> Result<String, String> {
     let mut buffer = vec![0; size];
     stream.read(&mut buffer).await?;
     match deserialize_message(&buffer) {
-        Ok(msg) => Ok(format!("{:?}", msg)),
-        Err(err) => Err(format!("Cannot deserialize {:?}", err)),
+        Ok(msg) => Ok(format!("{msg:?}")),
+        Err(err) => Err(format!("Cannot deserialize {err:?}")),
     }
 }
 
@@ -146,7 +146,8 @@ impl Server {
         rt.block_on(async {
             let listener = match TcpListener::bind(self.addr)
                 .await
-                .map_err(|err| err.to_string()) {
+                .map_err(|err| err.to_string())
+            {
                 Ok(l) => l,
                 Err(_) => return Err(format!("Cannot bind to {}", self.addr)),
             };
@@ -165,25 +166,17 @@ impl Server {
                     Err(err) => Err(err.to_string()),
                 };
 
-                if let Ok(cmd) = rx.try_recv() {
-                    match cmd {
-                        Command::Stop(s) => {
-                            broadcast.send(Command::Stop(s));
-                            return Ok(());
-                        }
-                        _ => {}
-                    }
+                if let Ok(Command::Stop(s)) = rx.try_recv() {
+                    broadcast.send(Command::Stop(s));
+                    return Ok(());
                 }
-                match result {
-                    Ok((stream, _)) => {
-                        // handler for children
-                        let mut clone = user.clone();
-                        let rx = broadcast.subscribe();
-                        tokio::spawn(async move {
-                            clone.handle(stream.into(), rx).await;
-                        });
-                    }
-                    Err(_) => {}
+                if let Ok((stream, _)) = result {
+                    // handler for children
+                    let mut clone = user.clone();
+                    let rx = broadcast.subscribe();
+                    tokio::spawn(async move {
+                        clone.handle(stream.into(), rx).await;
+                    });
                 };
             }
         })?;
