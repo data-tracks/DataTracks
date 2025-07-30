@@ -27,6 +27,13 @@ jobs:
           override: true
       - name: Create ui folder
         run: mkdir -p ui/dist
-      - uses: actions-rs/cargo@v1
+      - name: Run Main Tests
+        uses: actions-rs/cargo@v1
         with:
           command: test
+          args: --package data-tracks
+      - name: Run Value Tests
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --package value
