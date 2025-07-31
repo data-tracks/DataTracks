@@ -514,8 +514,10 @@ name = "cdc"
 version = "0.1.0"
 dependencies = [
  "bollard",
+ "futures-util",
  "postgres",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

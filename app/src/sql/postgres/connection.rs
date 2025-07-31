@@ -2,7 +2,7 @@ use postgres::{Client, NoTls};
 use serde_json::{Map, Number, Value};
 
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct PostgresConnection {
+pub struct PostgresConnection {
     pub(crate) url: String,
     pub(crate) port: u16,
     pub(crate) db: String,
@@ -26,4 +26,10 @@ impl PostgresConnection {
         )
         .map_err(|e| e.to_string())
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::processing::transform::Transform::Postgres;
+    use super::*;
 }
