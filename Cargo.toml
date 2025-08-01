@@ -17,6 +17,9 @@ redb = "2.6.1"
 rumqttc = "0.24.0"
 rumqttd = "0.19.0"
 tokio = { version = "1.38.0", features = ["full"] }
+mongodb = { version = "3.2.4"}
+crossbeam = "0.8.4"
+tracing-test = "0.2.5"
 
 
 # The profile that 'cargo dist' will build with

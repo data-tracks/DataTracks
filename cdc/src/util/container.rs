@@ -1,6 +1,12 @@
+use crate::util::Container::MongoDb;
 use crate::util::container::Container::Postgres;
 use bollard::Docker;
-use bollard::models::{ContainerCreateBody, ContainerSummaryStateEnum, HostConfig, ImageSummary, Mount, MountPoint, MountPointTypeEnum, MountTypeEnum, PortBinding, PortMap};
+use bollard::container::LogOutput;
+use bollard::exec::{CreateExecOptions, StartExecOptions, StartExecResults};
+use bollard::models::{
+    ContainerCreateBody, ContainerSummaryStateEnum, HostConfig, ImageSummary, Mount, PortBinding,
+    PortMap,
+};
 use bollard::query_parameters::{
     CreateContainerOptionsBuilder, CreateImageOptionsBuilder, ListContainersOptionsBuilder,
     ListImagesOptionsBuilder, RemoveContainerOptionsBuilder, StartContainerOptions,
@@ -10,18 +16,22 @@ use futures_util::TryStreamExt;
 use postgres::{Client, NoTls};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
-use postgres::types::IsNull::No;
-use tokio::runtime::Runtime;
+use tokio::runtime::{Builder, Runtime};
 use tracing::info;
 
 pub struct Manager {
     docker: Docker,
+    runtime: Runtime,
 }
 
 impl Manager {
     pub fn new() -> Result<Self, String> {
         let docker = Self::connect()?;
-        Ok(Manager { docker })
+        let runtime = Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|s| s.to_string())?;
+        Ok(Manager { docker, runtime })
     }
 
     pub fn connect() -> Result<Docker, String> {
@@ -43,13 +53,12 @@ impl Manager {
 
         self.create_container(name.as_ref(), &container)?;
         self.start_container(name.as_ref())?;
-        container.wait_ready();
-
-        Ok(())
+        container.wait_ready(name.as_ref(), self);
+        container.after_start(name.as_ref(), self)
     }
 
     pub fn load_image(&self, image: &Image) -> Result<(), String> {
-        let rt = Runtime::new().map_err(|e| e.to_string())?;
+        let rt = &self.runtime;
 
         rt.block_on(async {
             let mut stream = self.docker.create_image(
@@ -71,8 +80,53 @@ impl Manager {
         })
     }
 
+    pub fn exec_command<S: AsRef<str>>(
+        &self,
+        name: S,
+        command: Vec<String>,
+    ) -> Result<Option<String>, String> {
+        let rt = &self.runtime;
+
+        rt.block_on(async {
+            let exec_options = CreateExecOptions {
+                attach_stdout: Some(true),
+                attach_stderr: Some(true),
+                cmd: Some(command),
+                ..Default::default()
+            };
+
+            let exec_create_result = self
+                .docker
+                .create_exec(name.as_ref(), exec_options)
+                .await
+                .map_err(|e| e.to_string())?;
+            let exec_id = exec_create_result.id;
+
+            match self
+                .docker
+                .start_exec(&exec_id, Some(StartExecOptions::default()))
+                .await
+                .map_err(|e| e.to_string())?
+            {
+                StartExecResults::Attached { mut output, .. } => {
+                    while let Some(log) = output.try_next().await.map_err(|e| e.to_string())? {
+                        let mut out = String::from("");
+                        if let LogOutput::StdOut { message } = log {
+                            out +=
+                                &format!("Output from exec: {}", String::from_utf8_lossy(&message));
+                        }
+                        return Ok(Some(out));
+                    }
+                }
+                _ => {}
+            }
+
+            Ok(None)
+        })
+    }
+
     pub fn list_images(&self) -> Result<Vec<ImageSummary>, String> {
-        let rt = Runtime::new().map_err(|e| e.to_string())?;
+        let rt = &self.runtime;
 
         rt.block_on(async {
             self.docker
@@ -87,7 +141,8 @@ impl Manager {
     }
 
     pub fn list_containers(&self) -> Result<Vec<ContainerSummary>, String> {
-        let rt = Runtime::new().map_err(|e| e.to_string())?;
+        let rt = &self.runtime;
+
         rt.block_on(async {
             let options = ListContainersOptionsBuilder::new().all(true).build();
             Ok(self
@@ -129,7 +184,7 @@ impl Manager {
             self.load_image(&container.image())?
         }
 
-        let rt = Runtime::new().map_err(|e| e.to_string())?;
+        let rt = &self.runtime;
 
         rt.block_on(async {
             // create container
@@ -149,6 +204,7 @@ impl Manager {
                 image: Some(container.image().image_name()),
                 env: container.env(),
                 cmd: container.cmds(),
+                hostname: Some(name.as_ref().to_string()),
                 host_config,
                 ..Default::default()
             };
@@ -161,7 +217,7 @@ impl Manager {
     }
 
     pub fn start_container(&self, name: &str) -> Result<(), String> {
-        let rt = Runtime::new().map_err(|e| e.to_string())?;
+        let rt = &self.runtime;
 
         rt.block_on(async {
             self.docker
@@ -173,7 +229,7 @@ impl Manager {
     }
 
     pub fn stop_container(&self, name: &str) -> Result<(), String> {
-        let rt = Runtime::new().map_err(|e| e.to_string())?;
+        let rt = &self.runtime;
         rt.block_on(async {
             self.docker
                 .stop_container(name, Some(StopContainerOptionsBuilder::default().build()))
@@ -183,7 +239,7 @@ impl Manager {
     }
 
     pub fn remove_container<S: AsRef<str>>(&self, name: S) -> Result<(), String> {
-        let rt = Runtime::new().map_err(|e| e.to_string())?;
+        let rt = &self.runtime;
         rt.block_on(async {
             self.docker
                 .remove_container(
@@ -226,66 +282,173 @@ impl From<&bollard::models::ContainerSummary> for ContainerSummary {
 
 pub enum Image {
     Postgres,
+    Mongo,
 }
 
 impl Image {
     pub fn image_name(&self) -> String {
         match self {
             Image::Postgres => "postgres:14.18".to_string(),
+            Image::Mongo => "mongo:8.0.12-noble".to_string(),
         }
     }
 }
 
 pub enum Container {
     Postgres(PostgresContainer),
+    MongoDb(MongoDbContainer),
 }
 
 impl Container {
+    pub(crate) fn after_start<S: AsRef<str>>(
+        &self,
+        name: S,
+        manager: &Manager,
+    ) -> Result<(), String> {
+        match self {
+            Postgres(p) => p.after_start(name, manager),
+            MongoDb(m) => m.after_start(name, manager),
+        }
+    }
+
     pub fn postgres() -> Self {
         Postgres(PostgresContainer::new())
+    }
+
+    pub fn mongo_db() -> Self {
+        MongoDb(MongoDbContainer::new())
     }
 
     fn image(&self) -> Image {
         match self {
             Postgres(p) => p.image(),
+            MongoDb(m) => m.image(),
         }
     }
 
     pub(crate) fn env(&self) -> Option<Vec<String>> {
-        Some(vec![
-            "POSTGRES_PASSWORD=postgres".to_string(),
-            "POSTGRES_USER=postgres".to_string(),
-        ])
+        match self {
+            Postgres(p) => p.env(),
+            MongoDb(m) => m.env(),
+        }
     }
 
     fn port_mappings(&self) -> Option<PortMap> {
         match self {
             Postgres(p) => p.port_mappings(),
+            MongoDb(m) => m.port_mappings(),
         }
     }
 
-    fn mounts(&self) -> Option<Vec<Mount>>{
+    fn mounts(&self) -> Option<Vec<Mount>> {
         None
     }
 
     fn cmds(&self) -> Option<Vec<String>> {
+        match self {
+            Postgres(p) => p.cmds(),
+            MongoDb(m) => m.cmds(),
+        }
+    }
+
+    pub(crate) fn wait_ready<S: AsRef<str>>(&self, name: S, mgr: &Manager) {
+        match self {
+            Postgres(p) => p.wait_ready(),
+            MongoDb(m) => m.wait_ready(name, mgr),
+        }
+    }
+}
+
+pub struct MongoDbContainer {
+    pub version: String,
+    pub url: String,
+    pub port: usize,
+}
+
+impl MongoDbContainer {
+    pub fn new() -> Self {
+        MongoDbContainer {
+            version: "8.0.12-noble".to_string(),
+            url: "127.0.0.1".to_string(),
+            port: 27017,
+        }
+    }
+
+    pub(crate) fn cmds(&self) -> Option<Vec<String>> {
         Some(vec![
-            "postgres".to_string(),
-            "-c".to_string(),
-            "wal_level=logical".to_string(),
-            "-c".to_string(),
-            "max_replication_slots=5".to_string(),
-            "-c".to_string(),
-            "max_wal_senders=5".to_string(),
-            "-c".to_string(),
-            "listen_addresses=*".to_string(),
+            "mongod".to_string(),
+            "--replSet".to_string(),
+            "repl".to_string(),
+            "--bind_ip_all".to_string(),
+            "--port".to_string(),
+            self.port.to_string(),
         ])
     }
 
-    pub(crate) fn wait_ready(&self) {
-        match self {
-            Postgres(p) => p.wait_ready(),
+    pub(crate) fn after_start<S: AsRef<str>>(
+        &self,
+        name: S,
+        manager: &Manager,
+    ) -> Result<(), String> {
+        let init_command = format!(
+            "mongosh --eval \"rs.initiate({{ _id: '{}', members: [{{_id: 0, host: '{}:{}'}}] }})\"",
+            "repl", "localhost", self.port
+        );
+
+        let commands = vec!["sh".to_string(), "-c".to_string(), init_command];
+        manager
+            .exec_command(name, commands)
+            .map(|o| o.map(|o| o.to_string()))
+            // only need a response
+            .and_then(|v| match v {
+                None => Err("No response from exec".to_string()),
+                Some(msg) => {
+                    info!("response: {:?}", msg);
+                    Ok(())
+                },
+            })
+    }
+
+    pub(crate) fn wait_ready<S: AsRef<str>>(&self, name: S, manager: &Manager) {
+        let now = Instant::now();
+        while !self.probe_running(name.as_ref(), manager) && now.elapsed().as_secs() < 3 * 60 {
+            sleep(Duration::from_millis(100));
         }
+    }
+
+    pub(crate) fn probe_running<S: AsRef<str>>(&self, name: S, manager: &Manager) -> bool {
+        let command = vec![
+            "mongosh".to_string(),
+            "--eval".to_string(),
+            "db.runCommand({ ping: 1 })".to_string(),
+        ];
+        manager
+            .exec_command(name.as_ref(), command)
+            .iter()
+            .flatten()
+            .next()
+            .is_some()
+    }
+
+    pub(crate) fn port_mappings(&self) -> Option<PortMap> {
+        let mut map = PortMap::new();
+
+        map.insert(
+            format!("{}/tcp", self.port),
+            Some(vec![PortBinding {
+                host_ip: Some("0.0.0.0".to_string()),
+                host_port: Some(self.port.to_string()),
+            }]),
+        );
+        Some(map)
+    }
+
+    pub(crate) fn image(&self) -> Image {
+        Image::Mongo
+    }
+
+    pub(crate) fn env(&self) -> Option<Vec<String>> {
+        None
     }
 }
 
@@ -302,6 +465,35 @@ impl PostgresContainer {
             url: "127.0.0.1".to_string(),
             port: 5432,
         }
+    }
+
+    pub(crate) fn after_start<S: AsRef<str>>(
+        &self,
+        _name: S,
+        _manager: &Manager,
+    ) -> Result<(), String> {
+        Ok(())
+    }
+
+    pub(crate) fn env(&self) -> Option<Vec<String>> {
+        Some(vec![
+            "POSTGRES_PASSWORD=postgres".to_string(),
+            "POSTGRES_USER=postgres".to_string(),
+        ])
+    }
+
+    pub(crate) fn cmds(&self) -> Option<Vec<String>> {
+        Some(vec![
+            "postgres".to_string(),
+            "-c".to_string(),
+            "wal_level=logical".to_string(),
+            "-c".to_string(),
+            "max_replication_slots=5".to_string(),
+            "-c".to_string(),
+            "max_wal_senders=5".to_string(),
+            "-c".to_string(),
+            "listen_addresses=*".to_string(),
+        ])
     }
 
     pub fn image(&self) -> Image {

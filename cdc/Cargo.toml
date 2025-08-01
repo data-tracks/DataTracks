@@ -7,6 +7,11 @@ edition = "2024"
 postgres = { workspace = true }
 bollard = "0.19.1"
 tokio = { workspace = true }
-tracing = {workspace = true}
+tracing = { workspace = true }
 futures-util = { version = "0.3.31" }
+mongodb = { workspace = true }
+serde = { workspace = true }
+crossbeam = { workspace = true }
+tracing-test = { workspace = true }
+value = {path="../value"}
 #etl = { git = "https://github.com/supabase/etl", features = ["bigquery"] }

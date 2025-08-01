@@ -26,7 +26,7 @@ chrono = {workspace = true}
 logos = "0.15.0"
 serde_json = { workspace = true }
 serde = { workspace = true }
-crossbeam = "0.8.4"
+crossbeam = { workspace = true }
 rand = "0.9.0"
 include_dir = "0.7.4"
 mime_guess = "2.0.5"
@@ -42,7 +42,7 @@ reqwest = { version = "0.12.22", features = ["json", "blocking"] }
 regex = "1.11.1"
 criterion = { workspace = true }
 uuid = { version = "1.17.0", features = ["v4"] }
-tracing-test = "0.2.5"
+tracing-test = { workspace = true}
 rusty-tracks = "0.0.12"
 moka = { version = "0.12.10", features = ["sync"] }
 
