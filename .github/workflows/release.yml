@@ -32,10 +32,10 @@ jobs:
       - name: Checkout to get Cargo.toml
         uses: actions/checkout@v4
 
-      - name: Extract version from app/Cargo.toml
+      - name: Extract version from Cargo.toml
         id: get-version
         run: |
-          VERSION=$(grep '^version' app/Cargo.toml | head -n 1 | sed -E 's/version *= *"(.*)"/\1/')
+          VERSION=$(grep '^version' Cargo.toml | head -n 1 | sed -E 's/version *= *"(.*)"/\1/')
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Create Release
