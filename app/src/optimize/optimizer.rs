@@ -59,7 +59,7 @@ impl RuleBasedOptimizer {
 
 impl Optimizer for RuleBasedOptimizer {
     fn optimize(&mut self, root: AlgebraRoot) -> Result<AlgebraRoot, String> {
-        //let rules = &self.rules.clone();
+        //let rules = &self.rules.clone_boxed();
         let mut root = root.clone();
         let mut round = 0;
         let mut uneventful_rounds = 0;
@@ -153,7 +153,7 @@ impl ChangingVisitor<&mut Algebraic> for RuleBasedOptimizer {
                         .collect::<Vec<_>>();
                     <RuleBasedOptimizer as ChangingVisitor<&mut Algebraic>>::visit(
                         self,
-                        children.get(0).unwrap().id(),
+                        children.first().unwrap().id(),
                         root,
                     );
                     <RuleBasedOptimizer as ChangingVisitor<&mut Algebraic>>::visit(

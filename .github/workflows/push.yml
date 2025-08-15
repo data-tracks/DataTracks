@@ -1,5 +1,6 @@
 on: [push]
 
+# Concurrency configuration to cancel previous runs
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -9,15 +10,16 @@ name: 🫸 Push Continuous Integration
 
 jobs:
 
-  test:
-    name: 🔬 Test Suite
-    # Concurrency configuration to cancel previous runs
-    concurrency:
-      group: ${{ github.ref }}  # Group by branch (ref)
-      cancel-in-progress: true  # Cancel previous in-progress workflows
+  build:
+    name: 🔬 Build
 
     timeout-minutes: 20
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module: [ macro, threading, value, cdc, core, app ]
+
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
@@ -27,6 +29,10 @@ jobs:
           override: true
       - name: Create ui folder
         run: mkdir -p ui/dist
-      - uses: actions-rs/cargo@v1
+
+
+      - name: 🧪 Run ${{ matrix.module }} Tests
+        uses: actions-rs/cargo@v1
         with:
           command: test
+          args: --package ${{ matrix.module }}

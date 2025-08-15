@@ -5,7 +5,7 @@
 # 🚂 DataTracks
 
 [![🫸 Integration Tests](https://github.com/data-tracks/DataTracks/actions/workflows/push.yml/badge.svg?branch=main)](https://github.com/data-tracks/DataTracks/actions/workflows/push.yml)
-![📚 Version Badge](https://img.shields.io/badge/Version-rust%201.88-orange?style=flat)
+![📚 Version Badge](https://img.shields.io/badge/Version-rust%201.89-orange?style=flat)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 
@@ -26,16 +26,19 @@ various degrees of structured and unstructured data.
 
 ## Getting Started
 
-A simple plan which restructures an input MQTT stream and sends it forward might look like this:
+A simple plan which restructures an input MQTT stream, aggregates it with SQLite data and sends it forward might look like this:
 
 ```
-1--2{sql|SELECT {time: $1.timestamp, id: $1.id} FROM $1}--3
+1--2{sql|SELECT {time: $1.timestamp, id: $lite($1.name), name: $1.name} FROM $1}--3
 
 In
 MQTT{...}:1
 
 Out
-MQTT{...}:3
+TPC{...}:3
+
+Transform
+$lite:SQLite{"query":"SELECT \"id\" FROM \"company\" WHERE \"name\" = $",...}
 ```
 
 ## Documentation

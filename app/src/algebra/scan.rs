@@ -1,11 +1,13 @@
-use crate::algebra::algebra::{Algebra, ValueIterator};
+use crate::algebra::algebra::Algebra;
 use crate::algebra::root::{AlgInputDerivable, AlgOutputDerivable, AlgebraRoot};
-use crate::algebra::BoxedIterator;
-use crate::processing::transform::Transform;
 use crate::processing::Layout;
-use crate::util::reservoir::ValueReservoir;
-use crate::util::EmptyIterator;
+use core::util::iterator::BoxedValueIterator;
+use core::util::iterator::EmptyIterator;
+use core::util::iterator::ValueIterator;
+use core::util::reservoir::ValueReservoir;
+
 use std::collections::{HashMap, VecDeque};
+use std::rc::Rc;
 use value::Value;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
@@ -50,7 +52,7 @@ impl ValueIterator for ScanIterator {
         vec![self.storage.clone()]
     }
 
-    fn clone(&self) -> BoxedIterator {
+    fn clone_boxed(&self) -> core::util::iterator::BoxedValueIterator {
         Box::new(ScanIterator {
             index: self.index,
             values: VecDeque::new(),
@@ -58,7 +60,10 @@ impl ValueIterator for ScanIterator {
         })
     }
 
-    fn enrich(&mut self, _transforms: HashMap<String, Transform>) -> Option<BoxedIterator> {
+    fn enrich(
+        &mut self,
+        _transforms: Rc<HashMap<String, BoxedValueIterator>>,
+    ) -> Option<BoxedValueIterator> {
         None
     }
 }
@@ -161,7 +166,7 @@ mod test {
 
     #[test]
     fn simple_scan() {
-        let train = Train::new(transform(vec![3.into(), "test".into()]), 0);
+        let train = Train::new_values(transform(vec![3.into(), "test".into()]), 0, 0);
 
         let mut root = AlgebraRoot::new_scan_index(0);
 
@@ -169,12 +174,12 @@ mod test {
         let binding = handler.get_storages();
         let storage = binding.first().unwrap();
 
-        storage.append(train.values);
+        storage.append(train.content.into_values());
 
         let train_2 = handler.drain_to_train(0);
 
-        assert_eq!(train_2.values, transform(vec![3.into(), "test".into()]));
-        assert_ne!(train_2.values, transform(vec![8.into(), "test".into()]));
+        assert_eq!(train_2.clone().into_values(), transform(vec![3.into(), "test".into()]));
+        assert_ne!(train_2.into_values(), transform(vec![8.into(), "test".into()]));
     }
 
     pub fn transform(values: Vec<Value>) -> Vec<Value> {

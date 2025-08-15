@@ -1,9 +1,10 @@
 use crate::algebra::root::{AlgInputDerivable, AlgOutputDerivable, AlgebraRoot};
-use crate::algebra::{Algebra, BoxedIterator, ValueIterator};
-use crate::processing::transform::Transform;
+use crate::algebra::Algebra;
 use crate::processing::{Layout, OutputType};
-use crate::util::reservoir::ValueReservoir;
+use core::util::reservoir::ValueReservoir;
+use core::{BoxedValueIterator, ValueIterator};
 use std::collections::HashMap;
+use std::rc::Rc;
 use value::Value;
 
 /// "Dummy" table to query for constants, one row
@@ -84,11 +85,11 @@ impl ValueIterator for DualIterator {
         vec![]
     }
 
-    fn clone(&self) -> BoxedIterator {
+    fn clone_boxed(&self) -> BoxedValueIterator {
         Box::new(DualIterator::new())
     }
 
-    fn enrich(&mut self, _transforms: HashMap<String, Transform>) -> Option<BoxedIterator> {
+    fn enrich(&mut self, _transforms: Rc<HashMap<String, BoxedValueIterator>>) -> Option<BoxedValueIterator> {
         None
     }
 }

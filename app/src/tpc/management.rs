@@ -1,13 +1,13 @@
 use crate::management::{Api, Storage};
-use crate::processing::station::Command;
 use crate::tpc::server::{StreamUser, TcpStream};
 use crate::tpc::Server;
-use crate::util::{deserialize_message, new_channel, Tx};
 use crate::util::Rx;
+use crate::util::{deserialize_message, new_channel, Tx};
 use crossbeam::channel::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
+use threading::command::Command;
 use tokio::time::sleep;
 use tracing::{debug, error, info, warn};
 use track_rails::message_generated::protocol::Payload;
@@ -54,7 +54,7 @@ pub struct TpcManagement {
 }
 
 impl StreamUser for TpcManagement {
-    async fn handle(&mut self, mut stream: TcpStream, rx: Rx<Command>) {
+    async fn handle(&mut self, mut stream: TcpStream, rx: Rx<Command>) -> Result<(), String> {
         let mut len_buf = [0u8; 4];
 
         loop {
@@ -78,7 +78,7 @@ impl StreamUser for TpcManagement {
                         Ok(msg) => {
                             if matches!(msg.data_type(), Payload::Disconnect) {
                                 info!("Disconnected from server");
-                                return;
+                                break;
                             }
 
                             match Api::handle_message(self.storage.clone(), self.api.clone(), msg) {
@@ -102,6 +102,7 @@ impl StreamUser for TpcManagement {
                 }
             }
         }
+        Ok(())
     }
 
     fn interrupt(&mut self) -> Receiver<Command> {

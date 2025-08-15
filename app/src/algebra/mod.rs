@@ -1,9 +1,6 @@
 pub use aggregate::Aggregate;
 pub use algebra::Algebra;
 pub use algebra::Algebraic;
-pub use algebra::BoxedIterator;
-pub use algebra::BoxedValueHandler;
-pub use algebra::ValueIterator;
 pub use dual::Dual;
 pub use executor::Executor;
 pub use filter::Filter;
@@ -19,6 +16,7 @@ pub use scan::IndexScan;
 pub use scan::Scan;
 pub use set::AlgSet;
 pub use variable::VariableScan;
+pub use implement::implement_func;
 
 mod aggregate;
 mod algebra;

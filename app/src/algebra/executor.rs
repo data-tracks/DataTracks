@@ -1,13 +1,13 @@
-use crate::algebra::BoxedIterator;
+use core::BoxedValueIterator;
 use crate::processing::Sender;
-use crate::util::reservoir::ValueReservoir;
 use crate::util::Tx;
+use core::util::reservoir::ValueReservoir;
 use std::collections::HashMap;
 use tracing::warn;
 use value::train::Train;
 
 enum WhatStrategy {
-    Task(BoxedIterator, HashMap<usize, ValueReservoir>),
+    Task(BoxedValueIterator, HashMap<usize, ValueReservoir>),
     Direct,
 }
 
@@ -19,7 +19,7 @@ pub struct Executor {
 }
 
 impl Executor {
-    pub fn new(stop: usize, iterator: Option<BoxedIterator>, sender: Sender) -> Self {
+    pub fn new(stop: usize, iterator: Option<BoxedValueIterator>, sender: Sender) -> Self {
         let what = match iterator {
             Some(i) => {
                 let mut map = HashMap::new();
@@ -42,10 +42,10 @@ impl Executor {
         self.sender.remove(num);
     }
 
-    pub fn execute(&mut self, train: Train) {
-        if train.values.is_empty() {
+    pub fn execute(&mut self, train: Train) -> Result<(), String> {
+        if train.content.is_empty() {
             warn!("Train is empty incoming");
-            return;
+            return Ok(());
         }
 
         let train = match &mut self.what {
@@ -57,7 +57,7 @@ impl Executor {
                 storages
                     .get_mut(&train.last())
                     .unwrap()
-                    .append(train.values);
+                    .append(train.content.into());
 
                 let mut train = iter.drain_to_train(self.stop);
                 train.event_time = event_time;
@@ -67,13 +67,13 @@ impl Executor {
             WhatStrategy::Direct => train,
         };
 
-        if train.values.is_empty() {
+        if train.content.is_empty() {
             warn!("Train is empty {}", self.stop);
-            return;
+            return Ok(());
         }
 
         let train = train.mark(self.stop); // mark current as last stop
 
-        self.sender.send(train.flag(self.stop));
+        self.sender.send(train.flag(self.stop))
     }
 }

@@ -91,11 +91,11 @@ impl Dict {
         self.values.append(&mut other.values);
     }
 
-    pub(crate) fn keys(&self) -> Keys<String, Value> {
+    pub(crate) fn keys(&self) -> Keys<'_, String, Value> {
         self.values.keys()
     }
 
-    pub fn values(&self) -> Values<String, Value> {
+    pub fn values(&self) -> Values<'_, String, Value> {
         self.values.values()
     }
 

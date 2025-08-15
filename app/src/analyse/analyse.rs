@@ -39,7 +39,7 @@ impl<'plan> Analyser<'plan> {
             self.check_in_and_out(
                 &mut summery,
                 end,
-                format!("Station {} is not connected to an in or output.", end),
+                format!("Station {end} is not connected to an in or output."),
             );
         });
 

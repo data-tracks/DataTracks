@@ -1,0 +1,25 @@
+[package]
+name = "cdc"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description.workspace = true
+
+[dependencies]
+postgres = { workspace = true }
+bollard = "0.19.2"
+tokio = { workspace = true }
+tracing = { workspace = true }
+futures-util = { version = "0.3.31" }
+mongodb = { workspace = true }
+serde = { workspace = true }
+crossbeam = { workspace = true }
+tracing-test = { workspace = true }
+threading = { workspace = true }
+value = {workspace = true}
+bytes = { workspace = true }
+tokio-postgres = { git = "https://github.com/MaterializeInc/rust-postgres" }
+serde_json = { workspace = true }
+#etl = { git = "https://github.com/supabase/etl", features = ["bigquery"] }

@@ -6,8 +6,8 @@ use crate::util::TriggerType;
 use std::cmp::PartialEq;
 use std::collections::{BTreeMap, HashMap};
 use tracing::debug;
-use value::train::{Train, TrainId};
 use value::Time;
+use value::train::{Train, TrainId};
 
 #[derive(Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Copy, Debug)]
 pub enum WindowDescriptor {
@@ -98,9 +98,9 @@ impl TriggerSelector {
                             // are past the window, did not trigger yet or early
                         } else if current >= &to
                             && (status == &TriggerStatus::Untriggered
-                            || (status == &TriggerStatus::Early
-                            && matches!(self.trigger, TriggerType::Element))
-                            || (self.re_fire))
+                                || (status == &TriggerStatus::Early
+                                    && matches!(self.trigger, TriggerType::Element))
+                                || (self.re_fire))
                         {
                             debug!("trigger onTime or refire");
                             trigger = true;
@@ -110,7 +110,7 @@ impl TriggerSelector {
                         // have not seen this window, are past it
                         if &to <= current
                             && (matches!(self.trigger, TriggerType::Element)
-                            || matches!(self.trigger, TriggerType::WindowEnd))
+                                || matches!(self.trigger, TriggerType::WindowEnd))
                         {
                             // on time, did not fire yet
                             debug!("@ {} trigger onTime {:?}", current, window);
@@ -174,15 +174,15 @@ mod tests {
     use crate::processing::window::{BackWindow, NonWindow, Window};
     use crate::util::TimeUnit;
     use crate::util::TriggerType;
-    use value::train::Train;
     use value::Time;
+    use value::train::Train;
 
     #[test]
     fn test_window_no_window_current() {
         let window = NonWindow {};
         let mut selector = WindowSelector::new(Non(window));
 
-        let mut train = Train::new(vec![3.into()], 0);
+        let mut train = Train::new_values(vec![3.into()], 0, 0);
         train.event_time = Time::new(3, 3);
 
         selector.mark(&train);
@@ -201,7 +201,7 @@ mod tests {
         let window = NonWindow {};
         let mut selector = WindowSelector::new(Non(window));
 
-        let mut train = Train::new(vec![3.into()], 0);
+        let mut train = Train::new_values(vec![3.into()], 0, 0);
         train.event_time = Time::new(3, 3);
 
         selector.mark(&train);
@@ -220,7 +220,7 @@ mod tests {
         let window = BackWindow::new(3, TimeUnit::Millis);
         let mut selector = WindowSelector::new(Window::Back(window));
 
-        let mut train = Train::new(vec![3.into()], 0);
+        let mut train = Train::new_values(vec![3.into()], 0, 0);
         train.event_time = Time::new(3, 0);
 
         selector.mark(&train);
@@ -233,11 +233,11 @@ mod tests {
         let window = BackWindow::new(3, TimeUnit::Millis);
         let mut selector = WindowSelector::new(Window::Back(window));
 
-        let mut train = Train::new(vec![3.into()], 0);
+        let mut train = Train::new_values(vec![3.into()], 0, 0);
         train.event_time = Time::new(3, 0);
         selector.mark(&train);
 
-        let mut train = Train::new(vec![3.into()], 1);
+        let mut train = Train::new_values(vec![3.into()], 1, 0);
         train.event_time = Time::new(3, 0);
         let time = train.event_time;
         selector.mark(&train);
@@ -251,11 +251,11 @@ mod tests {
         let window = BackWindow::new(3, TimeUnit::Millis);
         let mut selector = WindowSelector::new(Window::Back(window));
 
-        let mut train = Train::new(vec![3.into()], 0);
+        let mut train = Train::new_values(vec![3.into()], 0, 0);
         train.event_time = Time::new(3, 0);
         selector.mark(&train);
 
-        let mut train = Train::new(vec![3.into()], 1);
+        let mut train = Train::new_values(vec![3.into()], 1, 0);
         train.event_time = Time::new(4, 0);
         selector.mark(&train);
 
@@ -271,12 +271,12 @@ mod tests {
         let portal = Portal::new().unwrap();
         let mut trigger = TriggerSelector::new(portal.clone(), TriggerType::Element);
 
-        let mut train = Train::new(vec![3.into()], 0);
+        let mut train = Train::new_values(vec![3.into()], 0, 0);
         train.event_time = Time::new(3, 0);
         selector.mark(&train);
         portal.push_train(train);
 
-        let mut train = Train::new(vec![3.into()], 1);
+        let mut train = Train::new_values(vec![3.into()], 1, 0);
         train.event_time = Time::new(4, 0);
 
         let time = train.event_time;
@@ -291,11 +291,11 @@ mod tests {
 
         assert_eq!(values.len(), 2);
 
-        if values.first().cloned().unwrap().1.values.len() == 2 {
+        if values.first().cloned().unwrap().1.len() == 2 {
             // window order is not ordered
-            assert_eq!(values.get(1).cloned().unwrap().1.values.len(), 1);
+            assert_eq!(values.get(1).cloned().unwrap().1.len(), 1);
         } else {
-            assert_eq!(values.first().cloned().unwrap().1.values.len(), 1);
+            assert_eq!(values.first().cloned().unwrap().1.len(), 1);
         }
     }
 }

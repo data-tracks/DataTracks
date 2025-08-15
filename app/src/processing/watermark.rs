@@ -23,7 +23,7 @@ impl WatermarkStrategy {
     pub(crate) fn mark(&self, train: &Train) {
         match self {
             WatermarkStrategy::Monotonic(m) => {
-                m.mark(train);
+                m.mark(train).unwrap();
             }
             WatermarkStrategy::Periodic(p) => {
                 p.mark(train);
@@ -97,7 +97,7 @@ impl MonotonicWatermark {
         MonotonicWatermark::default()
     }
 
-    pub(crate) fn mark(&self, train: &Train) {
+    pub(crate) fn mark(&self, train: &Train) -> Result<(), String> {
         let mut last = self.last.lock().unwrap();
         let time = train.event_time;
         if time > *last {
@@ -108,8 +108,9 @@ impl MonotonicWatermark {
                 .lock()
                 .unwrap()
                 .values()
-                .for_each(|observer| observer.send(time))
+                .try_for_each(|observer| observer.send(time))?;
         }
+        Ok(())
     }
 
     pub(crate) fn detach(&self, num: usize) {

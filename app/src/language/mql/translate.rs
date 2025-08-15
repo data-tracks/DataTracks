@@ -1,6 +1,6 @@
-use crate::algebra::Algebraic;
+use crate::algebra::AlgebraRoot;
 use crate::language::mql::statement::MqlStatement;
 
-pub(crate) fn translate(_query: MqlStatement) -> Result<Algebraic, String> {
+pub(crate) fn translate(query: MqlStatement) -> Result<AlgebraRoot, String> {
     todo!()
 }

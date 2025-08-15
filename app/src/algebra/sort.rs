@@ -1,10 +1,12 @@
 use crate::algebra::root::{AlgInputDerivable, AlgOutputDerivable, AlgebraRoot};
-use crate::algebra::{Algebra, BoxedIterator, BoxedValueHandler, ValueIterator};
-use crate::processing::transform::Transform;
+use crate::algebra::{Algebra};
 use crate::processing::{Direction, Layout, Order};
-use crate::util::reservoir::ValueReservoir;
+use core::util::reservoir::ValueReservoir;
 use std::collections::{BTreeMap, HashMap};
+use std::rc::Rc;
 use value::Value;
+use core::{BoxedValueHandler, ValueIterator, BoxedValueIterator};
+
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Sort {
@@ -24,10 +26,7 @@ impl AlgOutputDerivable for Sort {
         inputs: HashMap<String, Layout>,
         root: &AlgebraRoot,
     ) -> Option<Layout> {
-        Some(
-            root.get_child(self.id)?
-                .derive_output_layout(inputs, root)?,
-        )
+        root.get_child(self.id)?.derive_output_layout(inputs, root)
     }
 }
 
@@ -62,7 +61,7 @@ impl Algebra for Sort {
 
 pub struct SortIterator {
     direction: Direction,
-    input: BoxedIterator,
+    input: BoxedValueIterator,
     handler: BoxedValueHandler,
     sorted: BTreeMap<Value, Vec<Value>>,
 }
@@ -71,7 +70,7 @@ impl Iterator for SortIterator {
     type Item = Value;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let handler = self.handler.clone();
+        let handler = self.handler.clone_boxed();
         for val in self.input.drain() {
             self.sorted
                 .entry(handler.process(&val))
@@ -104,16 +103,16 @@ impl ValueIterator for SortIterator {
         self.input.get_storages()
     }
 
-    fn clone(&self) -> BoxedIterator {
+    fn clone_boxed(&self) -> BoxedValueIterator {
         Box::new(SortIterator {
             direction: self.direction.clone(),
-            input: self.input.clone(),
-            handler: self.handler.clone(),
+            input: self.input.clone_boxed(),
+            handler: self.handler.clone_boxed(),
             sorted: self.sorted.clone(),
         })
     }
 
-    fn enrich(&mut self, transforms: HashMap<String, Transform>) -> Option<BoxedIterator> {
+    fn enrich(&mut self, transforms: Rc<HashMap<String, BoxedValueIterator>>) -> Option<BoxedValueIterator> {
         self.input.enrich(transforms)
     }
 }

@@ -1,11 +1,11 @@
 [package]
-name = "data-tracks"
-version = "0.4.1"
-edition = "2024"
-authors = ["David Lengweiler"]
-license = "GPL-3.0"
-repository = "https://github.com/datomo/DataTracks"
-description = "DataTracks is an prototype system, which provides easy creation and management of complex data streaming workloads for various degrees of structured and unstructured data."
+name = "app"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description.workspace = true
 
 [package.metadata.wix]
 upgrade-guid = "729CD774-9F39-428A-BCD3-0753ED03D697"
@@ -14,11 +14,16 @@ license = false
 eula = false
 
 [dependencies]
-parking_lot = "0.12"
-value = {path="../value"}
-axum = { version = "0.8.1", features = ["ws"] }
-ctrlc = "3.4.5"
-tokio = { version = "1.38.0", features = ["full"] }
+derivative = { workspace = true }
+parking_lot = { workspace = true }
+value = { workspace = true }
+core = { workspace = true }
+threading = { workspace = true }
+axum = { version = "0.8.4", features = ["ws"] }
+ctrlc = "3.4.7"
+postgres = { workspace = true }
+cdc = { workspace = true }
+tokio = { workspace = true }
 tower-http = { version = "0.6.6", features = ["full"] }
 tracing = { workspace = true }
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
@@ -26,25 +31,24 @@ chrono = {workspace = true}
 logos = "0.15.0"
 serde_json = { workspace = true }
 serde = { workspace = true }
-crossbeam = "0.8.4"
-rand = "0.9.0"
+crossbeam = { workspace = true }
+rand = { workspace = true }
 include_dir = "0.7.4"
 mime_guess = "2.0.5"
 rumqttd = { workspace = true }
 rusqlite = { workspace = true }
-postgres = { workspace = true }
-redb = { workspace = true }
-tempfile = "3.20.0"
-thiserror = "2.0.12"
-speedy = { workspace = true }
 flatbuffers = { workspace = true }
 reqwest = { version = "0.12.22", features = ["json", "blocking"] }
 regex = "1.11.1"
 criterion = { workspace = true }
-uuid = { version = "1.17.0", features = ["v4"] }
-tracing-test = "0.2.5"
+tracing-test = { workspace = true}
 rusty-tracks = "0.0.12"
-moka = { version = "0.12.10", features = ["sync"] }
+mongodb = "3.2.4"
+futures-util = "0.3.31"
+
+
+[dev-dependencies]
+macro = { workspace = true }
 
 [dependencies.track-rails]
 git = "https://github.com/data-tracks/TrackRails.git"

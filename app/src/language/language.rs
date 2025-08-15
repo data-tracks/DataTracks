@@ -30,10 +30,10 @@ impl TryFrom<&str> for Language {
     type Error = String;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
-        match value {
+        match value.to_lowercase().as_str() {
             "sql" => Ok(Sql),
             "mql" => Ok(Mql),
-            _ => Err(format!("invalid language: {}", value)),
+            _ => Err(format!("invalid language: {value}")),
         }
     }
 }

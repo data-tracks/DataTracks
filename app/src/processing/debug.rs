@@ -1,9 +1,9 @@
 use crate::processing::Train;
 use crate::processing::destination::Destination;
-use crate::processing::option::Configurable;
-use crate::processing::plan::DestinationModel;
-use crate::util::{HybridThreadPool, new_channel, new_id};
+use crate::util::HybridThreadPool;
 use crate::util::{Rx, Tx};
+use core::ConfigModel;
+use core::Configurable;
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::fs::File;
@@ -11,19 +11,18 @@ use std::io::{BufWriter, Write};
 use tracing::{debug, error};
 
 pub struct DebugDestination {
-    id: usize,
     receiver: Option<Rx<Train>>,
-    sender: Tx<Train>,
+}
+
+impl Default for DebugDestination {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl DebugDestination {
     pub fn new() -> Self {
-        let (tx, rx) = new_channel("Debug Destination", false);
-        DebugDestination {
-            id: new_id(),
-            receiver: Some(rx),
-            sender: tx,
-        }
+        DebugDestination { receiver: None }
     }
 }
 
@@ -37,6 +36,14 @@ impl Configurable for DebugDestination {
     }
 }
 
+impl TryFrom<HashMap<String, ConfigModel>> for DebugDestination {
+    type Error = String;
+
+    fn try_from(value: HashMap<String, ConfigModel>) -> Result<Self, Self::Error> {
+        todo!()
+    }
+}
+
 impl Destination for DebugDestination {
     fn parse(_options: Map<String, Value>) -> Result<Self, String>
     where
@@ -45,67 +52,40 @@ impl Destination for DebugDestination {
         Ok(DebugDestination::new())
     }
 
-    fn operate(&mut self, pool: HybridThreadPool) -> usize {
+    fn operate(&mut self, id: usize, tx: Tx<Train>, pool: HybridThreadPool) -> Result<usize, String> {
         let receiver = self.receiver.take().unwrap();
 
-        pool.execute_sync(
-            "Debug Destination",
-            move |_args| {
-                let mut writer = None;
-                if let Ok(file) = File::create("../../../debug.txt") {
-                    writer = Some(BufWriter::new(file));
-                }
-                loop {
-                    match receiver.recv() {
-                        Ok(train) => {
-                            if let Some(ref mut w) = writer {
-                                writeln!(w, "{:?}", train).expect("Could not write to debug file.");
-                            }
+        pool.execute_sync("Debug Destination", move |_args| {
+            let mut writer = None;
+            if let Ok(file) = File::create("../../../debug.txt") {
+                writer = Some(BufWriter::new(file));
+            }
+            loop {
+                match receiver.recv() {
+                    Ok(train) => {
+                        if let Some(ref mut w) = writer {
+                            writeln!(w, "{train:?}").expect("Could not write to debug file.");
+                        }
 
-                            debug!("last: {}, {:?}", train.last(), train.values);
-                        }
-                        Err(e) => {
-                            error!("{}", e)
-                        }
+                        debug!("last: {}, {:?}", train.last(), train.content);
                     }
-
-                    if let Some(ref mut w) = writer {
-                        w.flush().unwrap();
+                    Err(e) => {
+                        error!("{}", e)
                     }
                 }
-            },
-            vec![],
-        )
-    }
 
-    fn get_in(&self) -> Tx<Train> {
-        self.sender.clone()
-    }
-
-    fn id(&self) -> usize {
-        self.id
+                if let Some(ref mut w) = writer {
+                    w.flush().unwrap();
+                }
+            }
+        })
     }
 
     fn type_(&self) -> String {
         String::from("Debug")
     }
 
-    fn serialize(&self) -> DestinationModel {
-        DestinationModel {
-            type_name: String::from("Debug"),
-            id: self.id.to_string(),
-            configs: HashMap::new(),
-        }
-    }
-
-    fn serialize_default() -> Option<DestinationModel>
-    where
-        Self: Sized,
-    {
-        Some(DestinationModel {
-            type_name: String::from("Debug"),
-            id: String::from("Debug"),
-            configs: HashMap::new(),
-        })
+    fn get_configs(&self) -> HashMap<String, ConfigModel> {
+        HashMap::new()
     }
 }

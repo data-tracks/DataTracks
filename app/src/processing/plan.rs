@@ -1,24 +1,27 @@
-use crate::processing::destination::{parse_destination, Destinations};
-use crate::processing::option::Configurable;
-use crate::processing::plan::Status::Stopped;
-use crate::processing::source::{parse_source, Sources};
-use crate::processing::station::{Command, Station};
-use crate::processing::transform;
+use crate::analyse::analyse;
 #[cfg(test)]
 use crate::processing::Train;
-use crate::ui::{ConfigContainer, ConfigModel};
-use crate::util::{new_id, HybridThreadPool, Rx};
+use crate::processing::destination::{DestinationHolder, Destinations};
+use crate::processing::plan::Status::Stopped;
+use crate::processing::source::{SourceHolder, Sources};
+use crate::processing::station::Station;
+use crate::processing::transform;
+use crate::util::{HybridThreadPool, Rx, new_id};
+use core::LineModel;
+use core::StopModel;
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use serde::ser::SerializeStruct;
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Serialize, Serializer};
 use serde_json::{Map, Value};
 use std::cmp::PartialEq;
 use std::collections::HashMap;
-use std::sync::{Arc};
+use std::sync::Arc;
 #[cfg(test)]
-use std::sync::{Mutex};
+use std::sync::Mutex;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
+use threading::command::Command;
+use tracing::{debug, info};
 use track_rails::message_generated::protocol::KeyValueU64StationArgs;
 use track_rails::message_generated::protocol::{
     KeyValueStringTransform, KeyValueStringTransformArgs, KeyValueU64Destination,
@@ -34,14 +37,13 @@ pub struct Plan {
     pub lines: HashMap<usize, Vec<usize>>,
     pub stations: HashMap<usize, Station>,
     pub stations_to_in_outs: HashMap<usize, Vec<usize>>,
-    pub sources: HashMap<usize, Sources>,
-    pub destinations: HashMap<usize, Destinations>,
+    pub sources: HashMap<usize, SourceHolder>,
+    pub destinations: HashMap<usize, DestinationHolder>,
     pub thread_mapping: HashMap<usize, usize>,
     pub status: Status,
-    pub transforms: HashMap<String, transform::Transform>,
-    pub pool: HybridThreadPool
+    pub transforms: HashMap<String, transform::Transforms>,
+    pub pool: HybridThreadPool,
 }
-
 
 #[cfg(test)]
 impl Plan {
@@ -67,7 +69,6 @@ impl Clone for Plan {
         }
     }
 }
-
 
 impl Default for Plan {
     fn default() -> Self {
@@ -104,9 +105,11 @@ impl Status {
     }
 }
 
+const WAIT_TIME_S: u64 = 10;
+
 impl Plan {
-    pub fn new(id: usize) -> Self {
-        Plan {
+    pub fn new(id: usize, do_analyse: bool) -> Self {
+        let plan = Plan {
             id,
             name: id.to_string(),
             lines: Default::default(),
@@ -118,7 +121,14 @@ impl Plan {
             status: Status::Running,
             transforms: Default::default(),
             pool: Default::default(),
+        };
+        if do_analyse {
+            if let Ok(analyse) = analyse(&plan) {
+                info!("{}", analyse)
+            }
         }
+
+        plan
     }
 
     pub fn control_receiver(&self) -> Arc<Rx<Command>> {
@@ -129,12 +139,13 @@ impl Plan {
         self.name = name;
     }
 
-    pub(crate) fn halt(&mut self) {
+    pub(crate) fn halt(&mut self) -> Result<(), String> {
         for station in self.stations.values_mut() {
-            if let Some(id) =  self.thread_mapping.get(&station.id) {
-                self.pool.stop(id)
+            if let Some(id) = self.thread_mapping.get(&station.id) {
+                self.pool.stop(id)?
             }
         }
+        Ok(())
     }
 
     pub(crate) fn dump(&self, include_ids: bool) -> String {
@@ -201,7 +212,7 @@ impl Plan {
                 .into_iter()
                 .map(|name| {
                     let dump = self.transforms.get(name).unwrap().dump(include_ids);
-                    format!("${}:{}", name, dump)
+                    format!("${name}:{dump}")
                 })
                 .collect::<Vec<_>>()
                 .join("\n")
@@ -237,10 +248,11 @@ impl Plan {
         dump
     }
 
-    pub(crate) fn send_control(&self, num: &usize, command: Command) {
-        if let Some(id) = self.thread_mapping.get(&num) {
-            self.pool.send_control(id, command);
+    pub(crate) fn send_control(&self, num: &usize, command: Command) -> Result<(), String> {
+        if let Some(id) = self.thread_mapping.get(num) {
+            self.pool.send_control(id, command)?;
         }
+        Ok(())
     }
 
     pub fn operate(&mut self) -> Result<(), String> {
@@ -251,10 +263,7 @@ impl Plan {
         let control = self.pool.control_receiver();
 
         for station in self.stations.values_mut() {
-            let id = station.operate(
-                self.transforms.clone(),
-                self.pool.clone(),
-            )?;
+            let id = station.operate(self.transforms.clone(), self.pool.clone())?;
 
             self.thread_mapping.insert(station.id, id);
         }
@@ -268,10 +277,10 @@ impl Plan {
                     Command::Ready(id) => {
                         readys.push(id);
                     }
-                    command => return Err(format!("Not known command {:?}", command)),
+                    command => return Err(format!("Not known command {command:?}")),
                 },
                 Err(_) => {
-                    if start_time.elapsed().as_secs() > 5 {
+                    if start_time.elapsed().as_secs() > WAIT_TIME_S {
                         return Err("Stations did not start properly".to_string());
                     }
                     sleep(Duration::from_secs(1));
@@ -279,25 +288,48 @@ impl Plan {
             }
         }
 
+        let start_time = Instant::now();
         for destination in self.destinations.values_mut() {
-            let id = destination.operate(self.pool.clone());
+            let id = destination.id();
+            let in_sender = destination.sender.clone();
+            let id = destination.operate(id, in_sender, self.pool.clone())?;
 
+            loop {
+                debug!("waiting for source {}", destination.id());
+                match control.try_recv() {
+                    Ok(Command::Ready(source_id)) if destination.id() == source_id => break,
+                    Ok(other) => println!("Destination got {} instead of {}", other, Command::Ready(id)),
+                    _ => {
+                        if start_time.elapsed().as_secs() > WAIT_TIME_S {
+                            return Err(format!("Destination {} did not start properly", destination.name()));
+                        }
+                        sleep(Duration::from_secs(1));
+                    },
+                };
+            }
 
-            match control.recv() {
-                Ok(_) => {}
-                Err(err) => return Err(format!("Not known destination {:?}", err)),
-            };
             self.thread_mapping.insert(destination.id(), id);
-
         }
 
+        let start_time = Instant::now();
         for source in self.sources.values_mut() {
-            let id = source.operate(self.pool.clone());
+            let id = source.id();
+            let outs = source.outs().clone();
+            let id = source.operate(id, outs.into(), self.pool.clone())?;
 
-            match control.recv() {
-                Ok(_) => {}
-                Err(err) => return Err(format!("Not known source {:?}", err)),
-            };
+            loop {
+                debug!("waiting for source {}", source.id());
+                match control.try_recv() {
+                    Ok(Command::Ready(source_id)) if source.id() == source_id => break,
+                    Ok(other) => println!("Source got {} instead of {}", other, Command::Ready(id)),
+                    _ => {
+                        if start_time.elapsed().as_secs() > WAIT_TIME_S {
+                            return Err(format!("Source {} did not start properly", source.name()));
+                        }
+                        sleep(Duration::from_secs(1));
+                    }
+                };
+            }
 
             self.thread_mapping.insert(source.id(), id);
         }
@@ -309,10 +341,7 @@ impl Plan {
     #[cfg(test)]
     pub(crate) fn clone_station(&mut self, num: usize) -> Result<(), String> {
         let station = self.stations.get_mut(&num).unwrap();
-        let _ = station.operate(
-            self.transforms.clone(),
-            self.pool.clone(),
-        )?;
+        let _ = station.operate(self.transforms.clone(), self.pool.clone())?;
         Ok(())
     }
 
@@ -544,7 +573,7 @@ impl Plan {
                     builder,
                     &KeyValueStringTransformArgs {
                         key: Some(key),
-                        value: Some(fb_transform),
+                        value: fb_transform,
                     },
                 )
             })
@@ -629,8 +658,7 @@ impl Plan {
     }
 
     fn get_connected_stations(&self, in_out: usize) -> Vec<usize> {
-        let targets = self
-            .stations_to_in_outs
+        self.stations_to_in_outs
             .iter()
             .flat_map(|(stop, in_outs)| {
                 if in_outs.contains(&in_out) {
@@ -639,8 +667,7 @@ impl Plan {
                     vec![]
                 }
             })
-            .collect::<Vec<usize>>();
-        targets
+            .collect::<Vec<usize>>()
     }
 
     pub fn connect_in_out(&mut self, stop: usize, in_out: usize) {
@@ -650,12 +677,12 @@ impl Plan {
             .push(in_out);
     }
 
-    pub(crate) fn add_source(&mut self, source: Sources) {
+    pub(crate) fn add_source(&mut self, source: SourceHolder) {
         let id = source.id();
         self.sources.insert(id, source);
     }
 
-    pub(crate) fn add_destination(&mut self, destination: Destinations) {
+    pub(crate) fn add_destination(&mut self, destination: DestinationHolder) {
         let id = destination.id();
         self.destinations.insert(id, destination);
     }
@@ -663,12 +690,23 @@ impl Plan {
     fn parse_in(&mut self, stencil: &str) -> Result<(), String> {
         let (stops, type_, options) = Self::split_name_options(stencil)?;
 
-        let source = parse_source(type_, options)?;
+        let source: SourceHolder = Sources::try_from((type_.to_string(), options))?.into();
         let id = source.id();
         self.add_source(source);
         for stop in stops {
             self.connect_in_out(stop, id);
         }
+
+        Ok(())
+    }
+
+    fn parse_out(&mut self, stencil: &str) -> Result<(), String> {
+        let (stops, type_, options) = Self::split_name_options(stencil)?;
+
+        let out: DestinationHolder = Destinations::try_from((type_.to_string(), options))?.into();
+        let id = out.id();
+        self.add_destination(out);
+        stops.iter().for_each(|s| self.connect_in_out(*s, id));
 
         Ok(())
     }
@@ -683,43 +721,32 @@ impl Plan {
 
         let (type_name, template) = stencil
             .split_once('{')
-            .ok_or(format!("Invalid template: {}", stencil))?;
+            .ok_or(format!("Invalid template: {stencil}"))?;
         let json = format!("{{ {} }}", template.trim());
         let options = serde_json::from_str::<Value>(&json)
-            .map_err(|e| format!("Could not parse options for {}: {}", type_name, e))?
+            .map_err(|e| format!("Could not parse options for {type_name}: {e}"))?
             .as_object()
-            .ok_or(format!("Invalid options: {}", template))?
+            .ok_or(format!("Invalid options: {template}"))?
             .clone();
         Ok((stops, type_name, options))
-    }
-
-    fn parse_out(&mut self, stencil: &str) -> Result<(), String> {
-        let (stops, type_, options) = Self::split_name_options(stencil)?;
-
-        let out = parse_destination(type_, options)?;
-        let id = out.id();
-        self.add_destination(out);
-        stops.iter().for_each(|s| self.connect_in_out(*s, id));
-
-        Ok(())
     }
 
     fn parse_transform(&mut self, stencil: &str) -> Result<(), String> {
         let (name, stencil) = stencil
             .split_once(':')
             .ok_or("No name for transformer provided")?;
-        let transform = transform::Transform::parse(stencil)?;
+        let transform = transform::Transforms::try_from(stencil)?;
 
         self.add_transform(name.trim_start_matches('$'), transform);
         Ok(())
     }
 
-    fn add_transform(&mut self, name: &str, transform: transform::Transform) {
+    fn add_transform(&mut self, name: &str, transform: transform::Transforms) {
         self.transforms.insert(name.to_string(), transform);
     }
 
     #[cfg(test)]
-    pub fn get_transformation(&mut self, name: &str) -> Result<&mut transform::Transform, String> {
+    pub fn get_transformation(&mut self, name: &str) -> Result<&mut transform::Transforms, String> {
         self.transforms
             .get_mut(name)
             .ok_or("No transform found".to_string())
@@ -728,7 +755,7 @@ impl Plan {
     fn get_station(&self, stop_num: &usize) -> Result<&Station, String> {
         self.stations
             .get(stop_num)
-            .ok_or_else(|| format!("Station {} not found", stop_num))
+            .ok_or_else(|| format!("Station {stop_num} not found"))
     }
 
     pub fn layouts_match(&self) -> Result<(), String> {
@@ -767,8 +794,7 @@ impl Plan {
 
                     if let Err(e) = current.accepts(&layout) {
                         return Err(format!(
-                            "On line {} station {} does not accept the previous input due to :{}",
-                            line, stop_num, e
+                            "On line {line} station {stop_num} does not accept the previous input due to :{e}"
                         ));
                     }
 
@@ -800,15 +826,6 @@ impl Plan {
         }
         befores
     }
-}
-
-pub fn check_commands(rx: &Rx<Command>) -> bool {
-    if let Ok(command) = rx.try_recv() {
-        if let Command::Stop(_) = command {
-            return true;
-        }
-    }
-    false
 }
 
 enum Stencil {
@@ -856,7 +873,7 @@ impl Serialize for &Plan {
         for (num, stops) in &self.lines {
             lines.insert(
                 num.to_string(),
-                Line {
+                LineModel {
                     num: *num,
                     stops: stops.clone(),
                 },
@@ -875,7 +892,7 @@ impl Serialize for &Plan {
                 .unwrap_or(vec![]);
             stops.insert(
                 num.to_string(),
-                Stop {
+                StopModel {
                     num: *num,
                     transform: stop.transform.clone().map(|t| t.into()),
                     sources: ins_outs
@@ -898,78 +915,6 @@ impl Serialize for &Plan {
 
         state.serialize_field("stops", &stops)?;
         state.end()
-    }
-}
-
-#[derive(Serialize)]
-struct Line {
-    num: usize,
-    stops: Vec<usize>,
-}
-
-#[derive(Serialize, Deserialize)]
-struct Stop {
-    num: usize,
-    transform: Option<ConfigContainer>,
-    sources: Vec<SourceModel>,
-    destinations: Vec<DestinationModel>,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct SourceModel {
-    pub(crate) type_name: String,
-    pub(crate) id: String,
-    pub(crate) configs: HashMap<String, ConfigModel>,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct DestinationModel {
-    pub(crate) type_name: String,
-    pub(crate) id: String,
-    pub(crate) configs: HashMap<String, ConfigModel>,
-}
-
-#[derive(Serialize, Deserialize)]
-struct Transform {
-    language: String,
-    query: String,
-}
-
-impl From<transform::Transform> for ConfigContainer {
-    fn from(value: transform::Transform) -> Self {
-        match value {
-            transform::Transform::Func(_) => {
-                let mut map = HashMap::new();
-                map.insert(String::from("type"), "Function".into());
-                map.insert(String::from("query"), "".into());
-                ConfigContainer::new(String::from("Transform"), map)
-            }
-            transform::Transform::Lang(l) => {
-                let mut map = HashMap::new();
-                map.insert(String::from("language"), l.language.name().into());
-                map.insert(String::from("query"), l.query.into());
-                ConfigContainer::new(String::from("Transform"), map)
-            }
-
-            transform::Transform::SQLite(l) => {
-                let mut map = HashMap::new();
-                map.insert(String::from("query"), l.query.get_query().into());
-                map.insert(String::from("path"), l.connector.path.clone().into());
-                ConfigContainer::new(l.name(), map)
-            }
-            transform::Transform::Postgres(p) => {
-                let mut map = HashMap::new();
-                map.insert(String::from("query"), p.query.get_query().into());
-                map.insert(String::from("url"), p.connector.url.clone().into());
-                map.insert(String::from("port"), p.connector.port.into());
-                map.insert(String::from("db"), p.connector.db.clone().into());
-                ConfigContainer::new(p.name(), map)
-            }
-            #[cfg(test)]
-            transform::Transform::DummyDB(_) => {
-                panic!("Dummy DB transform is not supported");
-            }
-        }
     }
 }
 
@@ -1082,7 +1027,7 @@ mod test {
             "\
             1--2\n\
             In\n\
-            Mqtt{\"port\":8080,\"url\":\"127.0.0.1\"}:1\
+            Mqtt{\"url\":\"127.0.0.1\",\"port\":8080}:1\
             ",
         ];
 
@@ -1098,7 +1043,7 @@ mod test {
             "\
             1--2\n\
             In\n\
-            Mqtt{\"port\":8080,\"url\":\"127.0.0.1\"}:1\n\
+            Mqtt{\"url\":\"127.0.0.1\",\"port\":8080}:1\n\
             Out\n\
             Dummy{\"result_size\":0}:1\
             ",
@@ -1127,12 +1072,44 @@ mod test {
     }
 
     #[test]
+    fn stencil_postgres_source() {
+        let stencils = vec![
+            "\
+            1--2\n\
+            In\n\
+            Postgres{\"url\":\"localhost\",\"port\":5383,\"schema\":\"public\",\"table\":\"test\"}:1\
+            ",
+        ];
+
+        for stencil in stencils {
+            let plan = Plan::parse(stencil).unwrap();
+            assert_eq!(plan.dump(false), stencil)
+        }
+    }
+
+    #[test]
+    fn stencil_mongo_source() {
+        let stencils = vec![
+            "\
+            1--2\n\
+            In\n\
+            MongoDb{\"url\":\"localhost\",\"port\":5383,\"database\":\"public\",\"collection\":\"test\"}:1\
+            ",
+        ];
+
+        for stencil in stencils {
+            let plan = Plan::parse(stencil).unwrap();
+            assert_eq!(plan.dump(false), stencil)
+        }
+    }
+
+    #[test]
     fn stencil_multiple_sources() {
         let stencils = vec![
             "\
             1--2\n\
             In\n\
-            Mqtt{\"port\":8080,\"url\":\"127.0.0.1\"}:1,2\n\
+            Mqtt{\"url\":\"127.0.0.1\",\"port\":8080}:1,2\n\
             ",
         ];
 

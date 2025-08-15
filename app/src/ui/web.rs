@@ -1,12 +1,10 @@
+use core::models::configuration::ConfigModel;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use crate::management::{Api, Storage};
-use crate::mqtt::MqttSource;
-use crate::processing::destination::Destination;
-use crate::processing::source::Source;
-use crate::processing::{DebugDestination, HttpSource, Plan};
-use crate::ui::ConfigModel;
+use crate::processing::destination::{Destinations};
+use crate::processing::Plan;
 use crate::util::deserialize_message;
 use axum::body::Body;
 use axum::extract::ws::{Message, WebSocket};
@@ -23,6 +21,7 @@ use tokio::runtime::Runtime;
 use tower_http::cors::CorsLayer;
 use tracing::{debug, error, info};
 use track_rails::message_generated::protocol::Payload;
+use crate::processing::source::Sources;
 /*curl --header "Content-Type: application/json" --request POST --json '{"name":"wordcount","plan":"0--1{sql|SELECT * FROM $0}--2\nIn\nHttp{\"url\": \"localhost\", \"port\": \"3666\"}:0\nOut\nHttp{\"url\": \"localhost\", \"port\": \"4666\"}:2"}' http://localhost:2666/plans/create*/
 /*curl --header "Content-Type: application/json" --request POST --json '{"name":"wordcount"}' http://localhost:2666/plans/start*/
 
@@ -93,7 +92,7 @@ pub async fn startup(storage: Arc<Mutex<Storage>>) {
 
     let listener = match TcpListener::bind(&addr).await {
         Ok(listener) => listener,
-        Err(error) => panic!("Unable to bind to {}: {}", addr, error),
+        Err(error) => panic!("Unable to bind to {addr}: {error}"),
     };
     debug!("router initialized, now listening on port {}", port);
     info!("DataTracks (TrackView) started: http://localhost:{}", port);
@@ -165,11 +164,8 @@ async fn get_plans(State(state): State<WebState>) -> impl IntoResponse {
 }
 
 async fn get_options(State(_state): State<WebState>) -> impl IntoResponse {
-    let sources = vec![
-        HttpSource::serialize_default().unwrap(),
-        MqttSource::serialize_default().unwrap(),
-    ];
-    let destinations = vec![DebugDestination::serialize_default().unwrap()];
+    let sources = Sources::get_default_configs();
+    let destinations = Destinations::get_default_configs();
     let msg = json!( {"sources": &sources, "destinations": &destinations});
     Json(msg)
 }
@@ -221,11 +217,15 @@ async fn stop_plan(
 ) -> impl IntoResponse {
     debug!("{:?}", payload);
 
-    state
+    let res = state
         .storage
         .lock()
         .unwrap()
         .stop_plan_by_name(payload.name);
+
+    if let Err(e) = res {
+        return (StatusCode::BAD_REQUEST, e.to_string());
+    }
 
     // Return a response
     (StatusCode::OK, "Plan stopped".to_string())
@@ -255,24 +255,25 @@ async fn create_in_outs(
 }
 
 fn create_source(state: &WebState, payload: CreateInOutsPayload) -> Result<(), String> {
-    let source = match payload.type_name.to_lowercase().as_str() {
-        "mqtt" => <MqttSource as Source>::from(payload.configs),
-        "http" => <HttpSource as Source>::from(payload.configs),
-        _ => {
-            return Err("Unknown source".to_string());
-        }
-    };
+    let source = Sources::try_from((payload.type_name.to_lowercase().to_string(), payload.configs))?;
 
     state
         .storage
         .lock()
         .unwrap()
-        .add_source(payload.plan_id, payload.stop_id, source?);
+        .add_source(payload.plan_id, payload.stop_id, source.into());
     Ok(())
 }
 
-fn create_destination(_state: &WebState, _payload: CreateInOutsPayload) -> Result<(), String> {
-    Err("Unknown source".to_string())
+fn create_destination(state: &WebState, payload: CreateInOutsPayload) -> Result<(), String> {
+    let destination = Destinations::try_from((payload.type_name.to_lowercase().to_string(), payload.configs))?;
+
+    state
+        .storage
+        .lock()
+        .unwrap()
+        .add_destination(payload.plan_id, payload.stop_id, destination.into());
+    Ok(())
 }
 
 #[derive(Deserialize, Debug)]

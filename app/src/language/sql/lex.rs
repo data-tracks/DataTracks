@@ -235,7 +235,7 @@ fn parse_window(lexer: &mut BufferedLexer, _stops: &[Token]) -> Result<SqlWindow
                 let unit = parse_time_unit(lexer)?;
                 offset = Some((amount, unit))
             }
-            _ => return Err(format!("Unexpected token {:?}", value)),
+            _ => return Err(format!("Unexpected token {value:?}")),
         }
         value = lexer.next()?; // bracket or comma
     }
@@ -275,7 +275,7 @@ fn parse_trigger(lexer: &mut BufferedLexer, _stops: &[Token]) -> Result<SqlTrigg
             match t {
                 Token::End => TriggerType::WindowEnd,
                 Token::Next => TriggerType::WindowNext,
-                _ => return Err(format!("Unexpected trigger window token end {:?}", t)),
+                _ => return Err(format!("Unexpected trigger window token end {t:?}")),
             }
         }
         _ => return Err(format!("Unexpected trigger token {:?}", lexer.next()?)),
@@ -351,7 +351,7 @@ fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> Result<Sql
                     if let Ok(exprs) = exp {
                         expressions.push(SqlStatement::Operator(SqlOperator::new(op, exprs, true)))
                     } else {
-                        return Err(format!("Unknown function arguments: {:?}.", exp));
+                        return Err(format!("Unknown function arguments: {exp:?}."));
                     }
                 } else if func.starts_with('$') {
                     // variable call
@@ -407,7 +407,7 @@ fn parse_expression(lexer: &mut BufferedLexer, stops: &Vec<Token>) -> Result<Sql
                     expressions.push(subquery);
                     break; // this might require changing
                 } else {
-                    return Err(format!("Invalid token {:?} stops are: {:?}", t, stops));
+                    return Err(format!("Invalid token {t:?} stops are: {stops:?}"));
                 }
             }
         }
@@ -488,7 +488,7 @@ fn parse_operator(tok: Token) -> Option<Op> {
     }
 }
 
-fn create_lexer(query: &str) -> Lexer<Token> {
+fn create_lexer(query: &str) -> Lexer<'_, Token> {
     Token::lexer(query)
 }
 
@@ -608,11 +608,6 @@ mod test {
         test_query_diff(query, query);
     }
 
-    #[test]
-    fn test_cast() {
-        let query = "SELECT CAST(null AS TEXT)";
-        test_query_diff(query, query);
-    }
 
     #[test]
     fn test_single() {

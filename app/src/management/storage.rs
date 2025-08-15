@@ -1,9 +1,9 @@
 use crate::http::util;
 use crate::http::util::{DestinationState, parse_addr};
-use crate::processing::destination::{Destinations};
+use crate::processing::destination::{DestinationHolder, Destinations};
 use crate::processing::plan::Status;
-use crate::processing::source::{Sources};
-use crate::processing::station::Command;
+use crate::processing::source::{SourceHolder, Sources};
+use crate::processing::transform::Transforms;
 use crate::processing::{Plan, Train};
 use crate::util::Tx;
 use crate::util::new_channel;
@@ -18,22 +18,25 @@ use tokio::sync::oneshot::Sender;
 use tower_http::cors::CorsLayer;
 use tracing::error;
 use track_rails::message_generated::protocol::CreatePlanRequest;
+use threading::command::Command;
 use value::Time;
-use crate::processing::transform::Transform;
+
+type SourceStorage = Mutex<HashMap<String, fn(Map<String, Value>) -> Sources>>;
+type DestinationStorage = Mutex<HashMap<String, fn(Map<String, Value>) -> Destinations>>;
+type TransformStorage = Mutex<HashMap<String, fn(Map<String, Value>) -> Transforms>>;
 
 #[derive(Default)]
 pub struct Storage {
     pub plans: Mutex<HashMap<usize, Plan>>,
-    pub ins: Mutex<HashMap<String, fn(Map<String, Value>) -> Sources>>,
-    pub outs: Mutex<HashMap<String, fn(Map<String, Value>) -> Destinations>>,
-    pub transforms: Mutex<HashMap<String, fn(String, Value) -> Transform>>,
+    pub ins: SourceStorage,
+    pub outs: DestinationStorage,
+    pub transforms: TransformStorage,
     pub attachments: Mutex<HashMap<usize, Attachment>>,
 }
 
 pub struct Attachment {
     data_port: u16,
     watermark_port: u16,
-    sender: Tx<Train>,
     wm_sender: Tx<Time>,
     shutdown_channel: Sender<bool>,
     wm_shutdown_channel: Sender<bool>,
@@ -43,7 +46,6 @@ impl Attachment {
     pub fn new(
         data_port: u16,
         watermark_port: u16,
-        sender: Tx<Train>,
         wm_sender: Tx<Time>,
         shutdown_channel: Sender<bool>,
         wm_shutdown_channel: Sender<bool>,
@@ -52,7 +54,6 @@ impl Attachment {
             watermark_port,
             wm_sender,
             data_port,
-            sender,
             wm_shutdown_channel,
             shutdown_channel,
         }
@@ -137,7 +138,6 @@ impl Storage {
         let attachment = Attachment::new(
             data_port,
             watermark_port,
-            tx.clone(),
             water_tx.clone(),
             sh_tx,
             water_sh_tx,
@@ -170,7 +170,7 @@ impl Storage {
         let mut plans = self.plans.lock().unwrap();
         plans
             .remove(&id)
-            .ok_or(format!("No plan with id {}", id))
+            .ok_or(format!("No plan with id {id}"))
             .map(|_| ())
     }
 
@@ -181,8 +181,8 @@ impl Storage {
                 .lock()
                 .unwrap()
                 .clone()
-                .iter()
-                .map(|(_, plan)| plan.clone())
+                .values()
+                .map(|plan| plan.clone())
                 .collect();
         }
 
@@ -200,7 +200,7 @@ impl Storage {
         plans.insert(plan.id, plan);
     }
 
-    pub fn add_source(&mut self, plan_id: usize, stop_id: usize, source: Sources) {
+    pub fn add_source(&mut self, plan_id: usize, stop_id: usize, source: SourceHolder) {
         let mut plans = self.plans.lock().unwrap();
         let id = source.id();
         if let Some(p) = plans.get_mut(&plan_id) {
@@ -209,7 +209,7 @@ impl Storage {
         }
     }
 
-    pub fn add_destination(&mut self, plan_id: usize, stop_id: usize, destination: Destinations) {
+    pub fn add_destination(&mut self, plan_id: usize, stop_id: usize, destination: DestinationHolder) {
         let mut plans = self.plans.lock().unwrap();
         let id = destination.id();
         if let Some(p) = plans.get_mut(&plan_id) {
@@ -248,18 +248,18 @@ impl Storage {
         }
     }
 
-    pub fn stop_plan(&mut self, id: usize) {
+    pub fn stop_plan(&mut self, id: usize) -> Result<(), String> {
         let mut lock = self.plans.lock().unwrap();
         let plan = lock.get_mut(&id);
         match plan {
-            None => {}
+            None => Ok(()),
             Some(p) => {
-                p.halt();
+                p.halt()
             }
         }
     }
 
-    pub fn stop_plan_by_name(&mut self, name: String) {
+    pub fn stop_plan_by_name(&mut self, name: String) -> Result<(), String> {
         let mut lock = self.plans.lock().unwrap();
         let plan = lock
             .iter_mut()
@@ -267,9 +267,9 @@ impl Storage {
             .map(|(_, plan)| plan)
             .next();
         match plan {
-            None => {}
+            None => Ok(()),
             Some(p) => {
-                p.halt();
+                p.halt()
             }
         }
     }
@@ -294,23 +294,25 @@ impl Storage {
         let tx = self.start_http_attacher(source_id, data_port, watermark_port);
         let mut lock = self.plans.lock().unwrap();
         let plan = lock.get_mut(&plan_id).unwrap();
-        plan.send_control(&stop_id, Command::Attach(source_id, tx));
+        plan.send_control(&stop_id, Command::Attach(source_id, tx))?;
         Ok((data_port, watermark_port))
     }
 
-    pub fn detach(&mut self, source_id: usize, plan_id: usize, stop_id: usize) {
+    pub fn detach(&mut self, source_id: usize, plan_id: usize, stop_id: usize) -> Result<(), String> {
         let attach = self.attachments.lock().unwrap();
         let values = attach.get(&source_id);
         if values.is_none() {
-            return;
+            return Ok(());
         }
 
         let mut lock = self.plans.lock().unwrap();
         let plan = lock.get_mut(&plan_id).unwrap();
-        plan.send_control(&stop_id, Command::Detach(source_id));
+        plan.send_control(&stop_id, Command::Detach(source_id))?;
         let mut lock = self.attachments.lock().unwrap();
         if lock.remove(&source_id).is_none() {
-            error!("Could not remove")
-        };
+            Err("Could not remove".to_string())
+        }else {
+            Ok(())
+        }
     }
 }

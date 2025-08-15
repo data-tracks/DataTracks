@@ -1,6 +1,6 @@
+use crate::management::Storage;
 use crate::management::api::Status::Error;
 use crate::management::permission::ApiPermission;
-use crate::management::Storage;
 use flatbuffers::FlatBufferBuilder;
 use std::sync::{Arc, Mutex};
 use tracing::field::debug;
@@ -60,10 +60,11 @@ impl Api {
                 handle_stop_plan(msg.data_as_stop_plan_request().unwrap(), storage, api)
             }
             Payload::GetPlansRequest => {
-                debug!("Received a GET");
+                debug!("Received a GET Plans");
                 handle_get_plans(&storage, msg.data_as_get_plans_request().unwrap())
             }
             Payload::GetPlanRequest => {
+                debug!("Received a GET plan");
                 todo!()
             }
             Payload::Train => {
@@ -88,16 +89,20 @@ impl Api {
                 None => build_status_response(Error(String::from("Incorrect Request"))),
                 Some(u) => {
                     let mut storage = storage.lock().unwrap();
-                    storage.detach(0, u.plan_id() as usize, u.stop_id() as usize);
+                    let res = storage.detach(0, u.plan_id() as usize, u.stop_id() as usize);
                     drop(storage);
-                    Self::empty_msg()
+
+                    match res {
+                        Ok(_) => Self::empty_msg(),
+                        Err(_) => build_status_response(Error(String::from("Incorrect Request")))
+                    }
                 }
             },
             _ => build_status_response(Error(String::from("Invalid Request"))),
         }
     }
 
-    fn empty_msg<'a>() -> Result<Vec<u8>, Vec<u8>> {
+    fn empty_msg() -> Result<Vec<u8>, Vec<u8>> {
         build_status_response(Error("Empty message".to_string()))
     }
 
@@ -135,7 +140,10 @@ fn handle_stop_plan(
 ) -> Result<Vec<u8>, Vec<u8>> {
     let id = rx.id() as usize;
     let mut storage = storage.lock().unwrap();
-    storage.stop_plan(id);
+    match storage.stop_plan(id) {
+        Ok(_) => {}
+        Err(_) => return build_status_response(Error(String::from("Incorrect Request")))
+    }
 
     let mut builder = FlatBufferBuilder::new();
 

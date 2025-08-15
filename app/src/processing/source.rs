@@ -1,106 +1,57 @@
 use crate::mqtt::MqttSource;
-use crate::processing::option::Configurable;
-use crate::processing::plan::SourceModel;
+use crate::postgres::PostgresSource;
+use crate::mongo::MongoDbSource;
+use crate::processing::HttpSource;
+use crate::processing::source::Sources::{Http, Lite, Mongo, Mqtt, Postgres, Tpc};
 #[cfg(test)]
 use crate::processing::source::Sources::Dummy;
-use crate::processing::source::Sources::{Http, Lite, Mqtt, Tpc};
-#[cfg(test)]
-use crate::processing::tests::DummySource;
-use crate::processing::HttpSource;
-use crate::sql::LiteSource;
+use crate::sqlite::LiteSource;
 use crate::tpc::TpcSource;
-use crate::ui::ConfigModel;
-use crate::util::{HybridThreadPool, Tx};
+use crate::util::new_id;
+use core::ConfigModel;
+use core::Source;
+use core::SourceModel;
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
+use threading::channel::Tx;
 use track_rails::message_generated::protocol::{Source as FlatSource, SourceArgs};
 use value::train::Train;
-
-pub fn parse_source(type_: &str, options: Map<String, Value>) -> Result<Sources, String> {
-    let source = match type_.to_ascii_lowercase().as_str() {
-        "mqtt" => Mqtt(MqttSource::parse(options)?),
-        "sqlite" => Lite(LiteSource::parse(options)?),
-        "http" => Http(HttpSource::parse(options)?),
-        "tpc" => Tpc(TpcSource::parse(options)?),
-        #[cfg(test)]
-        "dummy" => Dummy(DummySource::parse(options)?),
-        _ => Err(format!("Invalid type: {}", type_))?,
-    };
-    Ok(source)
-}
+#[cfg(test)]
+use crate::tests::DummySource;
 
 #[derive(Clone)]
-pub enum Sources {
-    Mqtt(MqttSource),
-    Lite(LiteSource),
-    Http(HttpSource),
-    Tpc(TpcSource),
-    #[cfg(test)]
-    Dummy(DummySource),
+pub struct SourceHolder {
+    id: usize,
+    sender: Vec<Tx<Train>>,
+    source: Sources,
 }
 
-impl Deref for Sources {
-    type Target = dyn Source;
-
-    fn deref(&self) -> &Self::Target {
-        match self {
-            Mqtt(m) => m,
-            Lite(s) => s,
-            Http(h) => h,
-            Tpc(t) => t,
-            #[cfg(test)]
-            Dummy(d) => d,
+impl SourceHolder {
+    pub fn new(source: Sources) -> SourceHolder {
+        SourceHolder {
+            id: new_id(),
+            sender: vec![],
+            source,
         }
     }
-}
-
-impl DerefMut for Sources {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        match self {
-            Mqtt(m) => m,
-            Lite(s) => s,
-            Http(h) => h,
-            Tpc(t) => t,
-            #[cfg(test)]
-            Dummy(d) => d,
-        }
-    }
-}
-
-pub trait Source: Send + Sync + Configurable {
-    fn parse(options: Map<String, Value>) -> Result<Self, String>
-    where
-        Self: Sized;
-
-    fn operate(
-        &mut self,
-        pool: HybridThreadPool,
-    ) -> usize;
-
-    #[cfg(test)]
-    fn operate_test(&mut self) -> (usize, HybridThreadPool) {
-        let pool = HybridThreadPool::new();
-        let id = self.operate(pool.clone());
-        (id, pool)
+    pub fn add_out(&mut self, out: Tx<Train>) {
+        self.sender.push(out);
     }
 
-    fn add_out(&mut self, out: Tx<Train>) {
-        self.outs().push(out);
+    pub fn outs(&mut self) -> &mut Vec<Tx<Train>> {
+        &mut self.sender
     }
 
-    fn outs(&mut self) -> &mut Vec<Tx<Train>>;
-
-    fn id(&self) -> usize;
-
-    fn type_(&self) -> String;
-
-    fn dump_source(&self, _include_id: bool) -> String {
-        Configurable::dump(self).to_string()
+    pub fn id(&self) -> usize {
+        self.id
     }
 
-    fn flatternize<'a>(&self, builder: &mut FlatBufferBuilder<'a>) -> WIPOffset<FlatSource<'a>> {
+    pub fn flatternize<'a>(
+        &self,
+        builder: &mut FlatBufferBuilder<'a>,
+    ) -> WIPOffset<FlatSource<'a>> {
         let name = Some(builder.create_string(&self.name().to_string()));
         let type_ = Some(builder.create_string(&self.type_().to_string()));
 
@@ -114,13 +65,156 @@ pub trait Source: Send + Sync + Configurable {
         )
     }
 
-    fn serialize(&self) -> SourceModel;
+    pub fn serialize(&self) -> SourceModel {
+        let configs = self.get_configs();
+        SourceModel {
+            type_name: self.type_().to_string(),
+            id: self.id.to_string(),
+            configs,
+        }
+    }
+}
 
-    fn from(configs: HashMap<String, ConfigModel>) -> Result<Sources, String>
-    where
-        Self: Sized;
+impl Deref for SourceHolder {
+    type Target = Sources;
+    fn deref(&self) -> &Self::Target {
+        &self.source
+    }
+}
 
-    fn serialize_default() -> Result<SourceModel, ()>
+impl DerefMut for SourceHolder {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.source
+    }
+}
+
+impl TryFrom<(String, Map<String, Value>)> for Sources {
+    type Error = String;
+
+    fn try_from(value: (String, Map<String, Value>)) -> Result<Self, Self::Error> {
+        let source_type = value.0;
+        let options = value.1;
+        let source = match source_type.to_lowercase().as_str() {
+            "mqtt" => Mqtt(MqttSource::try_from(options)?),
+            "sqlite" => Lite(LiteSource::try_from(options)?),
+            "http" => Http(HttpSource::try_from(options)?),
+            "tpc" => Tpc(TpcSource::try_from(options)?),
+            "postgres" | "postgresql" | "pg" => Postgres(PostgresSource::try_from(options)?),
+            "mongo" | "mongodb" => Mongo(MongoDbSource::try_from(options)?),
+            #[cfg(test)]
+            "dummy" => Dummy(DummySource::try_from(options)?),
+            _ => Err(format!("Invalid source type: {source_type}"))?,
+        };
+        Ok(source)
+    }
+}
+
+impl TryFrom<(String, HashMap<String, ConfigModel>)> for Sources {
+    type Error = String;
+
+    fn try_from(value: (String, HashMap<String, ConfigModel>)) -> Result<Self, Self::Error> {
+        let source_type = value.0;
+        let options = value.1;
+        let source = match source_type.to_lowercase().as_str() {
+            "mqtt" => Mqtt(MqttSource::try_from(options)?),
+            "sqlite" => Lite(LiteSource::try_from(options)?),
+            "http" => Http(HttpSource::try_from(options)?),
+            "tpc" => Tpc(TpcSource::try_from(options)?),
+            "postgres" | "postgresql" | "pg" => Postgres(PostgresSource::try_from(options)?),
+            "mongo" | "mongodb" => Mongo(MongoDbSource::try_from(options)?),
+            #[cfg(test)]
+            "dummy" => Dummy(DummySource::try_from(options)?),
+            _ => Err(format!("Invalid source type: {source_type}"))?,
+        };
+        Ok(source)
+    }
+}
+
+#[derive(Clone)]
+pub enum Sources {
+    Mqtt(MqttSource),
+    Lite(LiteSource),
+    Postgres(PostgresSource),
+    Http(HttpSource),
+    Tpc(TpcSource),
+    Mongo(MongoDbSource),
+    #[cfg(test)]
+    Dummy(DummySource),
+}
+
+impl Sources {
+    pub(crate) fn get_default_configs() -> Vec<SourceModel> {
+        let values = vec![
+            ("MQTT".to_string(), MqttSource::get_default_configs()),
+            ("HTTP".to_string(), HttpSource::get_default_configs()),
+        ];
+
+        values
+            .into_iter()
+            .map(|(name, config)| Self::serialize_default(name, config).unwrap())
+            .collect()
+    }
+
+    fn serialize_default(
+        name: String,
+        configs: HashMap<String, ConfigModel>,
+    ) -> Result<SourceModel, ()>
     where
-        Self: Sized;
+        Self: Sized,
+    {
+        Ok(SourceModel {
+            type_name: name.clone(),
+            id: name,
+            configs,
+        })
+    }
+}
+
+impl Deref for Sources {
+    type Target = dyn Source;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Mqtt(m) => m,
+            Lite(l) => l,
+            Postgres(p) => p,
+            Http(h) => h,
+            Tpc(t) => t,
+            #[cfg(test)]
+            Dummy(d) => d,
+            Sources::Mongo(m) => m
+        }
+    }
+}
+
+impl DerefMut for Sources {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        match self {
+            Mqtt(m) => m,
+            Lite(l) => l,
+            Postgres(p) => p,
+            Http(h) => h,
+            Tpc(t) => t,
+            #[cfg(test)]
+            Dummy(d) => d,
+            Sources::Mongo(m) => m
+        }
+    }
+}
+
+impl Into<SourceHolder> for Sources {
+    fn into(self) -> SourceHolder {
+        #[cfg(test)]
+        {
+            if let Dummy(d) = self {
+                return SourceHolder {
+                    id: d.id,
+                    sender: vec![],
+                    source: Dummy(d),
+                };
+            }
+        }
+
+        SourceHolder::new(self)
+    }
 }

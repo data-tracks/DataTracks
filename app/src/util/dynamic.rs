@@ -1,5 +1,6 @@
 use crate::processing::Layout;
 use crate::util::StringBuilder;
+use std::fmt::{Display, Formatter};
 use value::Value;
 use value::Value::{Array, Dict};
 
@@ -19,24 +20,31 @@ pub struct DynamicQuery {
     replace_type: ReplaceType,
 }
 
+impl Display for DynamicQuery {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.query)
+    }
+}
+
 impl DynamicQuery {
-    pub fn build_dynamic_query(query: String) -> Self {
+    pub fn build_dynamic_query<S: AsRef<str>>(query: S) -> Self {
         let mut parts = vec![];
 
         let mut temp = StringBuilder::new();
         let mut is_text = false;
         let mut is_dynamic = false;
 
-        for char in query.chars() {
-            if is_dynamic && char.is_whitespace() {
+        for char in query.as_ref().chars() {
+            if is_dynamic && (char.is_whitespace() || char == ',' || char == ')' || char == ';') {
                 // we finish the value
                 if temp.is_empty() {
-                    parts.push(DynamicQuery::full());
+                   // parts.push(DynamicQuery::full());
                 } else if let Ok(num) = temp.build_and_clear().parse::<usize>() {
                     parts.push(DynamicQuery::index(num));
                 } else {
                     parts.push(DynamicQuery::text(temp.build_and_clear()));
                 }
+                temp.append(char);
                 is_dynamic = false
             } else if char == '"' {
                 is_text = !is_text;
@@ -49,28 +57,46 @@ impl DynamicQuery {
                 temp.append(char);
             }
         }
-
-        DynamicQuery::new(query, parts)
+        if !temp.is_empty() {
+            if is_dynamic {
+                if let Ok(num) = temp.build_and_clear().parse::<usize>() {
+                    parts.push(DynamicQuery::index(num));
+                } else {
+                    parts.push(DynamicQuery::text(temp.build_and_clear()));
+                }
+            }else {
+                parts.push(DynamicQuery::text(temp.build_and_clear()));
+            }
+        }
+        DynamicQuery::new(query.as_ref().to_string(), parts)
     }
 
     pub(crate) fn get_parts(&self) -> Vec<Segment> {
         self.parts.clone()
     }
 
-    pub(crate) fn replace_indexed_query(&self, prefix: &str, placeholder: Option<&str>) -> String {
+    pub(crate) fn replace_indexed_query(&self, prefix: &str, placeholder: Option<&str>, start_offset: usize) -> String {
         let mut builder = StringBuilder::new();
-        let mut i = 0;
+
         for part in &self.parts {
             match part {
-                Segment::Static(s) => builder.append_string(s),
+                Segment::Static(s) => {
+                    builder.append_string(s);
+                    continue
+                },
                 Segment::DynamicIndex(_) | Segment::DynamicKey(_) | Segment::DynamicFull => {
+                    let index = match part {
+                        Segment::DynamicIndex(i) => (i + start_offset).to_string(),
+                        Segment::DynamicKey(k) => k.to_string(),
+                        _ => continue,
+                    };
+
                     let index = match placeholder {
-                        None => i.to_string(),
+                        None => index,
                         Some(placeholder) => placeholder.to_owned(),
                     };
-                    let key = format!("{}{}", prefix, index);
+                    let key = format!("{prefix}{index}");
                     builder.append_string(&key);
-                    i += 1;
                 }
             }
         }
@@ -138,12 +164,17 @@ impl DynamicQuery {
         self.query.clone()
     }
 
-    pub fn prepare_query(
+    pub fn prepare_query(&self, prefix: &str, placeholder: Option<&str>, start_offset: usize) -> Result<String, String> {
+        Ok(self.prepare_query_transform(prefix, placeholder, start_offset)?.0)
+    }
+
+    pub fn prepare_query_transform(
         &self,
         prefix: &str,
         placeholder: Option<&str>,
-    ) -> (String, ValueExtractor) {
-        let query = self.replace_indexed_query(prefix, placeholder);
+        start_offset: usize
+    ) -> Result<(String, ValueExtractor), String> {
+        let query = self.replace_indexed_query(prefix, placeholder, start_offset);
         let parts = self
             .parts
             .iter()
@@ -175,21 +206,19 @@ impl DynamicQuery {
             })
             .collect();
 
-        (
-            query,
-            Box::new(move |value| {
-                parts
-                    .iter()
-                    .map(|part| {
-                        let mut value = value.clone();
-                        while let Value::Wagon(w) = value {
-                            value = w.clone().unwrap();
-                        }
-                        part(&value)
-                    })
-                    .collect()
-            }),
-        )
+        let inserter = Box::new(move |value: &Value| {
+            parts
+                .iter()
+                .map(|part| {
+                    let mut value = value.clone();
+                    while let Value::Wagon(w) = value {
+                        value = w.clone().unwrap();
+                    }
+                    part(&value)
+                })
+                .collect()
+        });
+        Ok((query, inserter))
     }
 
     fn text(text: String) -> Segment {
@@ -222,4 +251,32 @@ pub enum Segment {
     DynamicIndex(usize),
     DynamicKey(String),
     DynamicFull,
+}
+
+#[cfg(test)]
+pub mod test {
+    use super::*;
+    #[test]
+    fn test_basic() {
+        let query = String::from("SELECT * FROM $0;");
+        let dynamic = DynamicQuery::build_dynamic_query(query.clone());
+
+        assert_eq!(dynamic.prepare_query("$", None, 0).unwrap(), "SELECT * FROM $0;");
+    }
+
+    #[test]
+    fn test_basic_normalize() {
+        let query = String::from("SELECT * FROM $1,$2;");
+        let dynamic = DynamicQuery::build_dynamic_query(query.clone());
+
+        assert_eq!(dynamic.prepare_query("$", None, 0).unwrap(), "SELECT * FROM $1,$2;");
+    }
+
+    #[test]
+    fn test_basic_repetition() {
+        let query = String::from("SELECT * FROM $0,$1,$0;");
+        let dynamic = DynamicQuery::build_dynamic_query(query.clone());
+
+        assert_eq!(dynamic.prepare_query("$", None, 0).unwrap(), "SELECT * FROM $0,$1,$0;");
+    }
 }

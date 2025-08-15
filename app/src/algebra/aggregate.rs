@@ -1,18 +1,22 @@
-use crate::algebra::algebra::BoxedValueLoader;
 use crate::algebra::function::Implementable;
 use crate::algebra::operator::{AggOp, IndexOp};
 use crate::algebra::root::{AlgInputDerivable, AlgOutputDerivable, AlgebraRoot};
 use crate::algebra::Op::Tuple;
 use crate::algebra::TupleOp::{Index, Input};
-use crate::algebra::{Algebra, BoxedIterator, BoxedValueHandler, Op, Operator, ValueIterator};
+use crate::algebra::{Algebra, Op, Operator};
 use crate::analyse::{InputDerivable, OutputDerivable};
-use crate::processing::transform::Transform;
 use crate::processing::OutputType::Array;
 use crate::processing::{ArrayType, Layout};
-use crate::util::reservoir::ValueReservoir;
+use core::util::iterator::BoxedValueIterator;
+use core::util::iterator::BoxedValueHandler;
+use core::util::iterator::BoxedValueLoader;
+use core::util::iterator::ValueIterator;
+use core::util::iterator::ValueLoader;
+use core::util::reservoir::ValueReservoir;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
+use std::rc::Rc;
 use value::Value;
 use value::Value::Null;
 
@@ -56,7 +60,7 @@ fn extract(operator: &mut Operator, aggs: &mut Vec<Agg>) {
             let i = aggs.len() + 1; // first is grouped
             aggs.push((a.clone(), op));
             // we replace with index operation on whole input
-            operator.op = Op::Tuple(Index(IndexOp::new(i)));
+            operator.op = Tuple(Index(IndexOp::new(i)));
             operator.operands = vec![Operator::input()]
         }
         Tuple(Input(_)) => {
@@ -153,7 +157,7 @@ impl Algebra for Aggregate {
 type AggHandler = (BoxedValueLoader, BoxedValueHandler);
 
 pub struct AggIterator {
-    input: BoxedIterator,
+    input: BoxedValueIterator,
     groups: HashMap<u64, Vec<Value>>,
     hashes: HashMap<u64, Value>,
     output_func: BoxedValueHandler,
@@ -165,7 +169,7 @@ pub struct AggIterator {
 
 impl AggIterator {
     pub fn new(
-        input: BoxedIterator,
+        input: BoxedValueIterator,
         aggregates: Vec<AggHandler>,
         output_func: BoxedValueHandler,
         group: BoxedValueHandler,
@@ -203,7 +207,7 @@ impl AggIterator {
             let mut aggregates = self
                 .aggregates
                 .iter()
-                .map(|(agg, op)| ((*agg).clone(), (*op).clone()))
+                .map(|(agg, op)| (agg.clone_boxed(), op.clone_boxed()))
                 .collect::<Vec<_>>();
 
             for value in values {
@@ -252,19 +256,19 @@ impl ValueIterator for AggIterator {
         self.input.get_storages()
     }
 
-    fn clone(&self) -> BoxedIterator {
+    fn clone_boxed(&self) -> BoxedValueIterator {
         Box::new(AggIterator::new(
-            self.input.clone(),
+            self.input.clone_boxed(),
             self.aggregates
                 .iter()
-                .map(|(a, o)| ((*a).clone(), (*o).clone()))
+                .map(|(a, o)| (a.clone_boxed(), o.clone_boxed()))
                 .collect(),
-            self.output_func.clone(),
-            self.hasher.clone(),
+            self.output_func.clone_boxed(),
+            self.hasher.clone_boxed(),
         ))
     }
 
-    fn enrich(&mut self, transforms: HashMap<String, Transform>) -> Option<BoxedIterator> {
+    fn enrich(&mut self, transforms: Rc<HashMap<String, BoxedValueIterator>>) -> Option<BoxedValueIterator> {
         let input = self.input.enrich(transforms);
 
         if let Some(input) = input {
@@ -272,14 +276,6 @@ impl ValueIterator for AggIterator {
         };
         None
     }
-}
-
-pub trait ValueLoader {
-    fn clone(&self) -> BoxedValueLoader;
-
-    fn load(&mut self, value: &Value);
-
-    fn get(&self) -> Value;
 }
 
 #[derive(Clone, Debug)]
@@ -294,7 +290,7 @@ impl CountOperator {
 }
 
 impl ValueLoader for CountOperator {
-    fn clone(&self) -> BoxedValueLoader {
+    fn clone_boxed(&self) -> BoxedValueLoader {
         Box::new(CountOperator::new())
     }
 
@@ -321,7 +317,7 @@ impl SumOperator {
 }
 
 impl ValueLoader for SumOperator {
-    fn clone(&self) -> BoxedValueLoader {
+    fn clone_boxed(&self) -> BoxedValueLoader {
         Box::new(SumOperator::new())
     }
 
@@ -350,7 +346,7 @@ impl AvgOperator {
 }
 
 impl ValueLoader for AvgOperator {
-    fn clone(&self) -> BoxedValueLoader {
+    fn clone_boxed(&self) -> BoxedValueLoader {
         Box::new(AvgOperator::new())
     }
 

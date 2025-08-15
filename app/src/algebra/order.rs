@@ -1,5 +1,6 @@
 use crate::algebra::implement::implement;
-use crate::algebra::{BoxedValueHandler, Operator};
+use crate::algebra::{Operator};
+use core::BoxedValueHandler;
 
 #[derive(Debug, Clone, Default, Eq, Hash, PartialEq)]
 pub enum Order {

@@ -1,18 +1,24 @@
 use crate::algebra::algebra::Algebra;
 use crate::algebra::root::{AlgInputDerivable, AlgOutputDerivable, AlgebraRoot};
-use crate::algebra::{BoxedIterator, ValueIterator};
-use crate::processing::transform::Transform;
 use crate::processing::OutputType::Array;
 use crate::processing::{ArrayType, Layout};
-use crate::util::reservoir::ValueReservoir;
+use core::util::reservoir::ValueReservoir;
+use core::BoxedValueIterator;
+use core::ValueIterator;
 use std::collections::HashMap;
+use std::rc::Rc;
+use derivative::Derivative;
 use value::Value;
 
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Debug, Eq, Derivative)]
+#[derivative(PartialEq, Hash)]
 pub struct Join {
     id: usize,
+    #[derivative(PartialEq="ignore")]
     left_hash: fn(&Value) -> Value,
+    #[derivative(PartialEq="ignore")]
     right_hash: fn(&Value) -> Value,
+    #[derivative(PartialEq="ignore")]
     out: fn(Value, Value) -> Value,
 }
 
@@ -35,8 +41,8 @@ impl Join {
 pub struct JoinIterator {
     left_hash: fn(&Value) -> Value,
     right_hash: fn(&Value) -> Value,
-    left: BoxedIterator,
-    right: BoxedIterator,
+    left: BoxedValueIterator,
+    right: BoxedValueIterator,
     out: fn(Value, Value) -> Value,
     cache_left: Vec<(Value, Value)>,
     cache_right: Vec<(Value, Value)>,
@@ -49,8 +55,8 @@ impl JoinIterator {
         left_hash: fn(&Value) -> Value,
         right_hash: fn(&Value) -> Value,
         output: fn(Value, Value) -> Value,
-        left: BoxedIterator,
-        right: BoxedIterator,
+        left: BoxedValueIterator,
+        right: BoxedValueIterator,
     ) -> Self {
         JoinIterator {
             left_hash,
@@ -140,17 +146,17 @@ impl ValueIterator for JoinIterator {
         left
     }
 
-    fn clone(&self) -> BoxedIterator {
+    fn clone_boxed(&self) -> BoxedValueIterator {
         Box::new(JoinIterator::new(
             self.left_hash,
             self.right_hash,
             self.out,
-            self.left.clone(),
-            self.right.clone(),
+            self.left.clone_boxed(),
+            self.right.clone_boxed(),
         ))
     }
 
-    fn enrich(&mut self, transforms: HashMap<String, Transform>) -> Option<BoxedIterator> {
+    fn enrich(&mut self, transforms: Rc<HashMap<String, BoxedValueIterator>>) -> Option<BoxedValueIterator> {
         let left = self.left.enrich(transforms.clone());
         let right = self.right.enrich(transforms);
 
@@ -208,13 +214,13 @@ impl Algebra for Join {
     }
 
     fn derive_iterator(&self, root: &AlgebraRoot) -> Result<Self::Iterator, String> {
-        let left_hash = self.left_hash.clone();
-        let right_hash = self.right_hash.clone();
-        let out = self.out.clone();
+        let left_hash = self.left_hash;
+        let right_hash = self.right_hash;
+        let out = self.out;
 
         let children = root.get_children(self.id());
         let left = children
-            .get(0)
+            .first()
             .ok_or("Join has no left child.")?
             .derive_iterator(root)?;
         let right = children
@@ -255,10 +261,10 @@ mod test {
 
         let res = handle.drain_to_train(3);
         assert_eq!(
-            res.values,
+            res.content.clone().into_values(),
             vec![Value::Dict(Dict::from(vec![5.5.into(), 5.5.into()]))]
         );
-        assert_ne!(res.values, vec![Value::Dict(Dict::from(vec![]))]);
+        assert_ne!(res.content.into_values(), vec![Value::Dict(Dict::from(vec![]))]);
     }
 
     #[test]
@@ -285,13 +291,13 @@ mod test {
 
         let res = handle.drain_to_train(3);
         assert_eq!(
-            res.values,
+            res.clone().into_values(),
             vec![
                 Value::Dict(Dict::from(vec![5.5.into(), 5.5.into()])),
                 Value::Dict(Dict::from(vec![5.5.into(), 5.5.into()]))
             ]
         );
-        assert_ne!(res.values, vec![vec![].into()]);
+        assert_ne!(res.into_values(), vec![vec![].into()]);
     }
 
     pub fn transform(values: Vec<Value>) -> Vec<Value> {

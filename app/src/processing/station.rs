@@ -1,12 +1,11 @@
 use std::collections::HashMap;
-use std::fmt::{Debug, Formatter};
 use track_rails::message_generated::protocol::StationArgs;
 
 use crate::processing::layout::Layout;
 use crate::processing::plan::PlanStage;
 use crate::processing::platform::Platform;
 use crate::processing::sender::Sender;
-use crate::processing::transform::Transform;
+use crate::processing::transform::Transforms;
 use crate::processing::watermark::WatermarkStrategy;
 use crate::processing::window::Window;
 use crate::util::{HybridThreadPool, TriggerType};
@@ -15,7 +14,6 @@ use crate::util::{new_channel, new_id};
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use tracing::debug;
 use track_rails::message_generated::protocol::Station as FlatStation;
-use value::Time;
 use value::train::Train;
 
 #[derive(Clone)]
@@ -25,7 +23,7 @@ pub struct Station {
     pub incoming: (Tx<Train>, Rx<Train>),
     pub outgoing: Sender,
     pub window: Window,
-    pub transform: Option<Transform>,
+    pub transform: Option<Transforms>,
     pub trigger: TriggerType,
     pub block: Vec<usize>,
     pub inputs: Vec<usize>,
@@ -65,7 +63,11 @@ impl Station {
             builder.create_vector(&self.block.iter().map(|b| *b as u64).collect::<Vec<_>>());
         let inputs =
             builder.create_vector(&self.inputs.iter().map(|b| *b as u64).collect::<Vec<_>>());
-        let transform = self.transform.clone().map(|t| t.flatternize(builder));
+        let transform = self
+            .transform
+            .clone()
+            .map(|t| t.flatternize(builder))
+            .flatten();
         FlatStation::create(
             builder,
             &StationArgs {
@@ -168,7 +170,7 @@ impl Station {
         for stage in parts {
             match stage.0 {
                 PlanStage::Window => station.set_window(Window::parse(stage.1)?),
-                PlanStage::Transform => station.set_transform(Transform::parse(&stage.1)?),
+                PlanStage::Transform => station.set_transform(Transforms::try_from(stage.1)?),
                 PlanStage::Layout => station.add_explicit_layout(Layout::parse(&stage.1)),
                 PlanStage::Num => {
                     let mut num = stage.1;
@@ -179,7 +181,7 @@ impl Station {
                     }
                     station.set_stop(
                         num.parse()
-                            .map_err(|err| format!("Could not parse stop number: {}", err))?,
+                            .map_err(|err| format!("Could not parse stop number: {err}"))?,
                     )
                 }
             }
@@ -221,7 +223,7 @@ impl Station {
         self.window = window;
     }
 
-    pub(crate) fn set_transform(&mut self, transform: Transform) {
+    pub(crate) fn set_transform(&mut self, transform: Transforms) {
         self.transform = Some(transform);
     }
 
@@ -235,7 +237,7 @@ impl Station {
     }
 
     #[cfg(test)]
-    pub(crate) fn fake_receive(&mut self, train: Train) {
+    pub(crate) fn fake_receive(&mut self, train: Train) -> Result<(), String> {
         self.incoming.0.send(train)
     }
 
@@ -257,77 +259,32 @@ impl Station {
         self.incoming.0.clone()
     }
 
-
     #[cfg(test)]
-    pub(crate) fn operate_test (
+    pub(crate) fn operate_test(
         &mut self,
-        transforms: HashMap<String, Transform>) -> (usize, HybridThreadPool)  {
+        transforms: HashMap<String, Transforms>,
+    ) -> (usize, HybridThreadPool) {
         let pool = HybridThreadPool::default();
-        let id = self.operate(transforms, pool.clone() ).unwrap();
+        let id = self.operate(transforms, pool.clone()).unwrap();
         (id, pool)
     }
 
     pub(crate) fn operate(
         &mut self,
-        transforms: HashMap<String, Transform>,
+        transforms: HashMap<String, Transforms>,
         pool: HybridThreadPool,
     ) -> Result<usize, String> {
         let mut platform = Platform::new(self, transforms);
         let stop = self.stop;
 
-        Ok(pool.execute_sync(
-            format!("Station {}", self.id),
-            move |args| {
-                debug!("Starting station {stop}");
-                platform.operate(args).unwrap();
-            },
-            vec![],
-        ))
+        pool.execute_sync(format!("Station {}", self.id), move |args| {
+            debug!("Starting station {stop}");
+            platform.operate(args)
+        })
     }
 
     fn add_explicit_layout(&mut self, layout: Layout) {
         self.layout = layout;
-    }
-}
-
-#[derive(Clone)]
-pub enum Command {
-    Stop(usize),
-    Ready(usize),
-    Overflow(usize),
-    Threshold(usize),
-    Okay(usize),
-    Attach(usize, (Tx<Train>, Tx<Time>)),
-    Detach(usize),
-}
-
-#[cfg(test)]
-impl PartialEq for Command {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Command::Ready(a), Command::Ready(b)) => a.eq(b),
-            (Command::Stop(a), Command::Stop(b)) => a.eq(b),
-            (Command::Overflow(a), Command::Overflow(b)) => a.eq(b),
-            (Command::Threshold(a), Command::Threshold(b)) => a.eq(b),
-            (Command::Okay(a), Command::Okay(b)) => a.eq(b),
-            (Command::Attach(a, _), Command::Attach(b, _)) => a.eq(b),
-            (Command::Detach(a), Command::Detach(b)) => a.eq(b),
-            _ => false,
-        }
-    }
-}
-
-impl Debug for Command {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Command::Stop(s) => f.debug_tuple("Stop").field(s).finish(),
-            Command::Ready(r) => f.debug_tuple("Ready").field(r).finish(),
-            Command::Overflow(o) => f.debug_tuple("Overflow").field(o).finish(),
-            Command::Threshold(t) => f.debug_tuple("Threshold").field(t).finish(),
-            Command::Okay(o) => f.debug_tuple("Okay").field(o).finish(),
-            Command::Attach(id, _) => f.debug_tuple("Attach").field(id).finish(),
-            Command::Detach(id) => f.debug_tuple("Detach").field(id).finish(),
-        }
     }
 }
 
@@ -340,15 +297,14 @@ pub mod tests {
     use std::time::{Duration, Instant};
 
     use crate::processing::plan::Plan;
-    use crate::processing::station::Command::{Okay, Ready, Stop, Threshold};
     use crate::processing::station::Station;
-    pub use crate::processing::tests::dict_values;
-    use crate::processing::transform::{FuncTransform, Transform};
-    use crate::util::Rx;
+    use crate::processing::transform::{FuncTransform, Transforms};
+    #[cfg(test)]
+    pub use crate::tests::dict_values;
     use crate::util::{TimeUnit, TriggerType};
-    use crate::util::{Tx, new_channel};
-    
 
+    use threading::channel::{Rx, Tx, new_channel};
+    use threading::command::Command::{Okay, Ready, Stop, Threshold};
     use tracing_test::traced_test;
     use value::train::Train;
     use value::{Dict, Time, Value};
@@ -373,12 +329,14 @@ pub mod tests {
 
         station.add_out(0, tx).unwrap();
         let (_, pool) = station.operate_test(HashMap::new());
-        station.fake_receive(Train::new(values.clone(), 0));
+        station
+            .fake_receive(Train::new_values(values.clone(), 0, 0))
+            .unwrap();
 
         let res = rx.recv();
         match res {
             Ok(t) => {
-                for (i, value) in t.values.iter().enumerate() {
+                for (i, value) in t.into_values().iter().enumerate() {
                     assert_eq!(value, &values[i]);
                     assert_ne!(&Value::text(""), value.as_dict().unwrap().get("$").unwrap())
                 }
@@ -406,18 +364,18 @@ pub mod tests {
         let (id, pool) = first.operate_test(HashMap::new());
         let id_2 = second.operate(HashMap::new(), pool.clone()).unwrap();
 
-        input.send(Train::new(values.clone(), 0));
+        input.send(Train::new_values(values.clone(), 0, 0)).unwrap();
 
         let res = output_rx.recv().unwrap();
-        assert_eq!(res.values.clone(), values);
-        assert_ne!(res.values.clone(), vec![Value::null().into()]);
+        assert_eq!(res.clone().into_values(), values);
+        assert_ne!(res.into_values().clone(), vec![Value::null().into()]);
 
         assert!(output_rx.try_recv().is_err());
 
         drop(input); // close the channel
 
-        pool.stop(&id);
-        pool.stop(&id_2);
+        pool.stop(&id).unwrap();
+        pool.stop(&id_2).unwrap();
     }
 
     #[test]
@@ -454,11 +412,13 @@ pub mod tests {
     fn too_high() {
         let (mut station, train_sender, _rx) = create_test_station(10);
 
-        let (id, pool) = station.operate_test( HashMap::new());
-        pool.send_control(&id, Threshold(3));
+        let (id, pool) = station.operate_test(HashMap::new());
+        pool.send_control(&id, Threshold(3)).unwrap();
 
         for _ in 0..1_000 {
-            train_sender.send(Train::new(dict_values(vec![Value::int(3)]), 0));
+            train_sender
+                .send(Train::new_values(dict_values(vec![Value::int(3)]), 0, 0))
+                .unwrap();
         }
 
         let receiver = pool.control_receiver();
@@ -469,20 +429,23 @@ pub mod tests {
         }
     }
 
+    // ignorde for now
     fn too_high_two() {
         let (mut station, train_sender, _rx) = create_test_station(100);
 
         let (id, pool) = station.operate_test(HashMap::new());
-        pool.send_control(&id, Threshold(3));
+        pool.send_control(&id, Threshold(3)).unwrap();
 
-        let (id, pool) = station.operate_test( HashMap::new());
-        pool.send_control(&id, Threshold(3));
+        let (id, pool) = station.operate_test(HashMap::new());
+        pool.send_control(&id, Threshold(3)).unwrap();
 
         // second platform
         let _ = station.operate(HashMap::new(), pool.clone()).unwrap();
 
         for _ in 0..1_000 {
-            train_sender.send(Train::new(dict_values(vec![Value::int(3)]), 0));
+            train_sender
+                .send(Train::new_values(dict_values(vec![Value::int(3)]), 0, 0))
+                .unwrap();
         }
 
         let receiver = pool.control_receiver();
@@ -498,14 +461,23 @@ pub mod tests {
         let (_, pool) = station.operate_test(HashMap::new());
 
         for i in 0..500usize {
-            train_sender.send(Train::new(dict_values(vec![Value::int(i as i64)]), i));
+            train_sender
+                .send(Train::new_values(
+                    dict_values(vec![Value::int(i as i64)]),
+                    i,
+                    0,
+                ))
+                .unwrap();
         }
         let _ = station.operate(HashMap::new(), pool.clone());
         for i in 0..500usize {
-            train_sender.send(Train::new(
-                dict_values(vec![Value::int((500 + i) as i64)]),
-                500 + i,
-            ));
+            train_sender
+                .send(Train::new_values(
+                    dict_values(vec![Value::int((500 + i) as i64)]),
+                    500 + i,
+                    0,
+                ))
+                .unwrap();
         }
 
         let receiver = pool.control_receiver();
@@ -515,7 +487,7 @@ pub mod tests {
         }
         let mut trains = vec![];
 
-        while trains.iter().map(|v: &Train| v.values.len()).sum::<usize>() < 1_000 {
+        while trains.iter().map(|v: &Train| v.len()).sum::<usize>() < 1_000 {
             trains.push(rx.recv().unwrap())
         }
         //debug!("{:?}", trains);
@@ -525,7 +497,7 @@ pub mod tests {
         }
 
         assert_eq!(
-            trains.iter().map(|t| t.values.len()).sum::<usize>(),
+            trains.iter().map(|t| t.len()).sum::<usize>(),
             1_000,
             "{:?}",
             trains.last().unwrap()
@@ -540,7 +512,7 @@ pub mod tests {
         let amount = 10_000;
 
         for i in 0..amount {
-            trains.push(Train::new(values.clone(), i));
+            trains.push(Train::new_values(values.clone(), i, 0));
         }
 
         let receiver = pool.control_receiver();
@@ -553,10 +525,10 @@ pub mod tests {
         let time = Instant::now();
 
         for train in trains {
-            train_sender.send(train);
+            train_sender.send(train).unwrap();
         }
 
-        while values.iter().map(|t: &Train| t.values.len()).sum::<usize>() < amount {
+        while values.iter().map(|t: &Train| t.len()).sum::<usize>() < amount {
             values.push(rx.recv().unwrap());
         }
 
@@ -568,7 +540,7 @@ pub mod tests {
             elapsed.div_f64(amount as f64)
         );
 
-        pool.control_sender().send(Stop(0));
+        pool.control_sender().send(Stop(0)).unwrap();
     }
 
     mod overhead {
@@ -611,13 +583,7 @@ pub mod tests {
         }
     }
 
-    fn create_test_station(
-        duration: u64,
-    ) -> (
-        Station,
-        Tx<Train>,
-        Rx<Train>,
-    ) {
+    fn create_test_station(duration: u64) -> (Station, Tx<Train>, Rx<Train>) {
         let mut station = Station::new(0);
         let train_sender = station.get_in();
         let (tx, rx) = new_channel("test", false);
@@ -625,13 +591,12 @@ pub mod tests {
         let time = duration.clone();
 
         station.set_transform(match duration {
-            0 => Transform::Func(FuncTransform::new(Arc::new(move |_num, value| value))),
-            _ => Transform::Func(FuncTransform::new(Arc::new(move |_num, value| {
+            0 => Transforms::Func(FuncTransform::new(Arc::new(move |_num, value| value))),
+            _ => Transforms::Func(FuncTransform::new(Arc::new(move |_num, value| {
                 sleep(Duration::from_millis(time));
                 value
             }))),
         });
-
 
         (station, train_sender, rx)
     }
@@ -703,7 +668,7 @@ pub mod tests {
             .into_iter()
             .enumerate()
             .map(|(i, (val, mark, out))| {
-                let mut train = Train::new(vec![val], i);
+                let mut train = Train::new_values(vec![val], i, 0);
                 train.event_time = Time::new(mark as i64, 0);
                 (train, out)
             })
@@ -711,13 +676,13 @@ pub mod tests {
 
         let (_, pool) = station.operate_test(Default::default());
         pool.control_receiver().recv().unwrap(); // wait for go from station
-        pool.control_sender().send(Ready(0)); // start station
+        pool.control_sender().send(Ready(0)).unwrap(); // start station
 
         let mut time = 0;
         for (train, out) in trains {
             let wait = out - time;
             sleep(Duration::from_millis(wait)); // wait util we can send train
-            station.fake_receive(train);
+            station.fake_receive(train).unwrap();
             time += wait; // we are farther along
         }
 
@@ -729,7 +694,7 @@ pub mod tests {
             assert!(result.len() >= answers);
         }
 
-        pool.control_sender().send(Stop(0)); // stop station
+        pool.control_sender().send(Stop(0)).unwrap(); // stop station
     }
 
     fn receive(rx: Rx<Train>, duration: Duration) -> Vec<Train> {

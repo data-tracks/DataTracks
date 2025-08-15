@@ -1,21 +1,43 @@
 [workspace]
 resolver = "2"
-members = ["app", "value"]
+members = ["core", "app", "value", "cdc", "threading", "macro"]
 
+
+[workspace.package]
+version = "0.5.0"
+edition = "2024"
+authors = ["datomo <dave.lengw@gmail.com>"]
+license = "GPL-3.0"
+repository = "https://github.com/datomo/DataTracks"
+description = "DataTracks is an prototype system, which provides easy creation and management of complex data streaming workloads for various degrees of structured and unstructured data."
 
 [workspace.dependencies]
 speedy = "0.8.7"
 serde = { version = "1.0.219", features = ["derive"] }
-serde_json = "1.0.141"
+serde_json = "1.0.142"
+bytes = "1.10.1"
 tracing = "0.1.41"
 chrono = "0.4.41"
 flatbuffers = "25.2.10"
 postgres = "0.19.10"
 rusqlite = { version = "0.37.0", features = ["bundled"] }
 criterion = "0.7.0"
-redb = "2.6.1"
+redb = "3.0.0"
 rumqttc = "0.24.0"
 rumqttd = "0.19.0"
+tokio = { version = "1.47.1", features = ["full"] }
+mongodb = { version = "3.2.4"}
+crossbeam = "0.8.4"
+value = { path="./value" }
+cdc = { path="./cdc" }
+core = { path = "./core" }
+threading = { path = "./threading" }
+tracing-test = "0.2.5"
+uuid = { version = "1.17.0", features = ["v4"] }
+rand = "0.9.2"
+parking_lot = "0.12.4"
+macro = { path = "./macro" }
+derivative = "2.2.0"
 
 
 # The profile that 'cargo dist' will build with

@@ -1,4 +1,4 @@
-use fs_extra::dir::{copy, CopyOptions};
+use fs_extra::dir::{CopyOptions, copy};
 use std::fs;
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -90,7 +90,7 @@ fn check_command(cmd: &str, error_msg: &str) -> Result<(), String> {
         .stdout(Stdio::null()) // Suppress stdout
         .stderr(Stdio::null()) // Suppress stderr
         .output()
-        .map_err(|e| format!("{}: {}", error_msg, e))
+        .map_err(|e| format!("{error_msg}: {e}"))
         .and_then(|output| {
             if output.status.success() {
                 Ok(())

@@ -1,11 +1,11 @@
 use crate::http::source::SourceState;
 use crate::processing::Train;
 use crate::util::{Rx, Tx};
+use axum::Json;
 use axum::extract::ws::{Message, Utf8Bytes, WebSocket};
 use axum::extract::{State, WebSocketUpgrade};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::Json;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::net::{IpAddr, SocketAddr};
@@ -24,8 +24,14 @@ pub async fn receive(
 
     let train = transform_to_train(payload);
 
-    for out in state.source.lock().unwrap().iter() {
-        out.send(train.clone());
+    match state.source.lock().unwrap().send(train) {
+        Ok(_) => {}
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Error sending message to source thread".to_string(),
+            );
+        }
     }
 
     // Return a response
@@ -38,8 +44,8 @@ pub fn transform_to_train(payload: Value) -> Train {
         Ok(msg) => msg,
         Err(_) => {
             let mut map = BTreeMap::new();
-            map.insert(String::from("$"), v.into());
-            Train::new(vec![value::Value::Dict(Dict::new(map))], 0)
+            map.insert(String::from("$"), (&v).into());
+            Train::new_values(vec![value::Value::Dict(Dict::new(map))], 0, 0)
         }
     }
     .mark(0)
@@ -59,13 +65,11 @@ pub fn parse_addr<S: AsRef<str>>(url: S, port: u16) -> Result<SocketAddr, String
 
             rt.block_on(async {
                 match &url {
-                    url if url.parse::<IpAddr>().is_ok() => {
-                        format!("{url}:{port}", url = url, port = port)
-                            .parse::<SocketAddr>()
-                            .map_err(|e| format!("Failed to parse address: {}", e))
-                            .unwrap()
-                    }
-                    _ => tokio::net::lookup_host(format!("{url}:{port}", url = url, port = port))
+                    url if url.parse::<IpAddr>().is_ok() => format!("{url}:{port}")
+                        .parse::<SocketAddr>()
+                        .map_err(|e| format!("Failed to parse address: {e}"))
+                        .unwrap(),
+                    _ => tokio::net::lookup_host(format!("{url}:{port}"))
                         .await
                         .unwrap()
                         .next()
@@ -79,7 +83,7 @@ pub fn parse_addr<S: AsRef<str>>(url: S, port: u16) -> Result<SocketAddr, String
 
     match result {
         Ok(socket_addr) => Ok(socket_addr),
-        Err(err) => Err(format!("Failed to parse socket Address: {:?}", err)),
+        Err(err) => Err(format!("Failed to parse socket Address: {err:?}")),
     }
 }
 
@@ -108,7 +112,7 @@ impl RxWrapper {
         match self {
             RxWrapper::Train(t) => t.recv().map(|t| serde_json::to_string(&t).unwrap().into()),
             RxWrapper::Time(t) => t.recv().map(|t| {
-                serde_json::to_string(&Train::new(vec![t.into()], 0))
+                serde_json::to_string(&Train::new_values(vec![t.into()], 0, 0))
                     .unwrap()
                     .into()
             }),
@@ -199,8 +203,10 @@ async fn handle_receive_socket(mut socket: WebSocket, state: SourceState) {
                 };
 
                 debug!("New train created: {:?}", train);
-                for out in state.source.lock().unwrap().iter_mut() {
-                    out.send(train.clone());
+
+                match state.source.lock().unwrap().send(train) {
+                    Ok(_) => {}
+                    Err(err) => warn!("Failed to send message after retry: {}", err),
                 }
             }
             _ => warn!("Error while reading from socket: {:?}", msg),

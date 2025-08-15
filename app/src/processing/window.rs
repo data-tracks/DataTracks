@@ -1,6 +1,6 @@
+use crate::processing::Train;
 use crate::processing::select::WindowDescriptor;
 use crate::processing::window::Window::{Back, Interval, Non};
-use crate::processing::Train;
 use crate::util::TimeUnit;
 use chrono::{Duration, NaiveTime, Timelike};
 use std::collections::BTreeMap;
@@ -106,7 +106,7 @@ fn parse_interval(stencil: &str) -> Result<(i64, TimeUnit), String> {
         if !char.is_numeric() && !digit_passed {
             digit = temp
                 .parse()
-                .map_err(|_| format!("Could not parse {} as time", stencil))?;
+                .map_err(|_| format!("Could not parse {stencil} as time"))?;
             digit_passed = false;
             temp = "".to_string();
         }
@@ -271,7 +271,7 @@ impl IntervalStrategy {
                 break;
             }
         }
-        BTreeMap::from(windows)
+        windows
     }
 
     pub(crate) fn mark(&self, train: &Train) -> Vec<(WindowDescriptor, bool)> {
@@ -300,17 +300,17 @@ impl IntervalStrategy {
 
 #[cfg(test)]
 mod test {
+    use crate::processing::station::Station;
+    use crate::tests::dict_values;
+    use crate::processing::window::{BackWindow, Window};
+    use crate::util::{TimeUnit, new_channel};
     use std::collections::HashMap;
     use std::thread::sleep;
     use std::time::Duration;
-
-    use crate::processing::station::Command::Ready;
-    use crate::processing::station::Station;
-    use crate::processing::tests::dict_values;
-    use crate::processing::window::{BackWindow, Window};
-    use crate::util::{new_channel, TimeUnit};
-    use value::train::Train;
+    use r#macro::limited;
+    use threading::command::Command::Ready;
     use value::Value;
+    use value::train::Train;
 
     #[test]
     fn default_behavior() {
@@ -321,13 +321,15 @@ mod test {
         let (tx, rx) = new_channel("test", false);
 
         station.add_out(0, tx).unwrap();
-        let (id, pool) = station.operate_test(HashMap::new());
-        station.fake_receive(Train::new(values.clone(), 0));
+        let (_, pool) = station.operate_test(HashMap::new());
+        station
+            .fake_receive(Train::new_values(values.clone(), 0, 0))
+            .unwrap();
 
         match rx.recv() {
             Ok(t) => {
-                assert_eq!(values.len(), t.values.len());
-                for (i, value) in t.values.into_iter().enumerate() {
+                assert_eq!(values.len(), t.len());
+                for (i, value) in t.into_values().into_iter().enumerate() {
                     assert_eq!(value, values[i]);
                     assert_ne!(Value::text(""), *value.as_dict().unwrap().get("$").unwrap())
                 }
@@ -337,11 +339,11 @@ mod test {
     }
 
     #[test]
+    #[limited(s = 30)]
     fn back_behavior() {
         let mut station = Station::new(0);
 
         station.window = Window::Back(BackWindow::new(5, TimeUnit::Millis));
-
 
         let values = dict_values(vec![Value::float(3.3), Value::int(3)]);
         let after = dict_values(vec!["test".into()]);
@@ -349,33 +351,37 @@ mod test {
         let (tx, rx) = new_channel("test", false);
 
         station.add_out(0, tx).unwrap();
-        let (id, pool) = station.operate_test(HashMap::new());
+        let (_, pool) = station.operate_test(HashMap::new());
         // wait for read
         assert_eq!(Ready(0), pool.control_receiver().recv().unwrap());
 
         for (i, value) in values.iter().enumerate() {
-            station.fake_receive(Train::new(vec![value.clone()], i));
+            station
+                .fake_receive(Train::new_values(vec![value.clone()], i, 0))
+                .unwrap();
         }
         sleep(Duration::from_millis(50));
 
         let mut results = vec![];
         // receive first 2
-        for _ in 0..2 {
-            results.push(rx.recv().unwrap())
-        }
 
-        station.fake_receive(Train::new(after.clone(), 2));
+        results.push(rx.recv().unwrap());
+        results.push(rx.recv().unwrap());
+
+        station
+            .fake_receive(Train::new_values(after.clone(), 2, 0))
+            .unwrap();
 
         //receive last
         results.push(rx.recv().unwrap());
 
         // 1. train
         assert_eq!(
-            results.remove(0).values.get(0).unwrap(),
-            values.get(0).unwrap()
+            results.remove(0).into_values().first().unwrap(),
+            values.first().unwrap()
         );
         // 2. " or 1. & 2. depending on how fast it was handled
-        let res = results.remove(0).values;
+        let res = results.remove(0).into_values();
 
         if res.len() == 1 {
             assert_eq!(res.get(0).unwrap(), values.get(0).unwrap());
@@ -388,6 +394,6 @@ mod test {
         }
 
         // 3. "
-        assert_eq!(results.remove(0).values, after);
+        assert_eq!(results.remove(0).into_values(), after);
     }
 }

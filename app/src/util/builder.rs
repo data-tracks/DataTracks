@@ -2,6 +2,12 @@ pub struct StringBuilder {
     string: String,
 }
 
+impl Default for StringBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl StringBuilder {
     pub fn new() -> Self {
         StringBuilder {

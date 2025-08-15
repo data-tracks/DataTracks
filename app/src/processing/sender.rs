@@ -25,12 +25,13 @@ impl Sender {
         self.outs.remove(&id);
     }
 
-    pub fn send(&self, train: Train) {
+    pub fn send(&self, train: Train) -> Result<(), String> {
         for out in &self.outs {
             if out.1.len() > 10_000 {
                 warn!("too large {}, size {}", out.1.name(), out.1.len());
             }
-            out.1.send(train.clone());
+            out.1.send(train.clone())?;
         }
+        Ok(())
     }
 }

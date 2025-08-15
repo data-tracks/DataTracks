@@ -2,7 +2,7 @@ use crate::analyse::OutputDerivationStrategy::{QueryBased, Undefined};
 use crate::language::Language;
 use crate::processing::Layout;
 use crate::processing::transform::build_algebra;
-use OutputDerivationStrategy::{Combined, ContentBased, External, UserDefined};
+use OutputDerivationStrategy::{Combined, External, UserDefined};
 use std::collections::HashMap;
 
 pub trait InputDerivable {
@@ -16,7 +16,7 @@ pub trait OutputDerivable {
 #[derive(Clone, Debug, PartialEq, Default)]
 pub enum OutputDerivationStrategy {
     QueryBased(QueryBasedStrategy),
-    ContentBased,
+    // ContentBased, todo
     UserDefined(Layout),
     External(ExternalStrategy),
     Combined(CombinedStrategy),
@@ -40,7 +40,6 @@ impl OutputDerivationStrategy {
     pub fn derive_output_layout(&self, inputs: HashMap<String, Layout>) -> Option<Layout> {
         match self {
             QueryBased(strategy) => strategy.derive_output_layout(),
-            ContentBased => todo!(),
             UserDefined(layout) => Some(layout.clone()),
             External(e) => e.derive_output_layout(),
             Combined(comb) => comb.derive_output_layout(inputs),

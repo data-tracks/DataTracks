@@ -58,25 +58,22 @@ fn apply_rule_to_child(rule: &MergeRule, id: usize, root: &mut AlgebraRoot) {
             } else {
                 return;
             };
-            match child {
-                Algebraic::Filter(f_child) => {
-                    let new_id = root.new_id();
-                    let alg = Algebraic::Filter(Filter::new(
-                        new_id,
-                        Operator::new(
-                            Op::and(),
-                            vec![f.condition.clone(), f_child.condition.clone()],
-                        ),
-                    ));
+            if let Algebraic::Filter(f_child) = child {
+                let new_id = root.new_id();
+                let alg = Algebraic::Filter(Filter::new(
+                    new_id,
+                    Operator::new(
+                        Op::and(),
+                        vec![f.condition.clone(), f_child.condition.clone()],
+                    ),
+                ));
 
-                    root.add_to_set(id, new_id);
-                    root.add_node(alg);
+                root.add_to_set(id, new_id);
+                root.add_node(alg);
 
-                    if let Some(child) = root.get_child(f_child.id()) {
-                        root.add_child(new_id, child.id())
-                    }
+                if let Some(child) = root.get_child(f_child.id()) {
+                    root.add_child(new_id, child.id())
                 }
-                _ => {}
             }
         }
         (MergeRule::Project, Algebraic::Project(p)) => {
@@ -86,22 +83,19 @@ fn apply_rule_to_child(rule: &MergeRule, id: usize, root: &mut AlgebraRoot) {
                 return;
             };
 
-            match child {
-                Algebraic::Project(p_child) => {
-                    let new_id = root.new_id();
-                    let alg = Algebraic::Project(Project::new(
-                        new_id,
-                        OperatorMerger::merge(&p_child.project, &mut p.project.clone()),
-                    ));
+            if let Algebraic::Project(p_child) = child {
+                let new_id = root.new_id();
+                let alg = Algebraic::Project(Project::new(
+                    new_id,
+                    OperatorMerger::merge(&p_child.project, &mut p.project.clone()),
+                ));
 
-                    root.add_to_set(id, new_id);
-                    root.add_node(alg);
+                root.add_to_set(id, new_id);
+                root.add_node(alg);
 
-                    if let Some(child) = root.get_child(p_child.id()) {
-                        root.add_child(new_id, child.id())
-                    }
+                if let Some(child) = root.get_child(p_child.id()) {
+                    root.add_child(new_id, child.id())
                 }
-                _ => {}
             }
         }
         _ => {}
@@ -122,15 +116,6 @@ impl OperatorMerger<'_> {
 impl CreatingVisitor<&mut Operator, Operator> for OperatorMerger<'_> {
     fn visit(&self, parent: &mut Operator) -> Operator {
         match &parent.op {
-            Op::Binary(_b) => {
-                parent.operands = parent
-                    .operands
-                    .iter()
-                    .cloned()
-                    .map(|mut o| self.visit(&mut o))
-                    .collect();
-                parent.clone()
-            }
             Op::Agg(AggOp::Count | AggOp::Sum | AggOp::Avg) => {
                 parent.operands = parent
                     .operands

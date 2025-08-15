@@ -90,7 +90,7 @@ fn handle_from(from: SqlStatement) -> Result<AlgebraRoot, String> {
         SqlStatement::Variable(v) => handle_variable(v),
         SqlStatement::Operator(o) => handle_collection_operator(o),
         SqlStatement::Select(s) => handle_select(s),
-        err => Err(format!("Could not translate FROM clause: {:?}", err)),
+        err => Err(format!("Could not translate FROM clause: {err:?}")),
     }
 }
 
@@ -186,7 +186,7 @@ fn handle_field(column: SqlStatement, aliases: &Vec<String>) -> Result<Operator,
             Ok(Operator::new(Op::combine(), operators))
         }
         SqlStatement::Value(v) => Ok(Operator::literal(v.value)),
-        err => Err(format!("Could not translate operator: {:?}", err)),
+        err => Err(format!("Could not translate operator: {err:?}")),
     }
 }
 
@@ -200,7 +200,7 @@ fn handle_table(identifier: SqlIdentifier) -> Result<AlgebraRoot, String> {
                 rest.parse::<usize>()
                     .map_err(|_| "Could not parse number".to_string())
             })
-            .map(|num| AlgebraRoot::new_scan_index(num))?,
+            .map(AlgebraRoot::new_scan_index)?,
         name => AlgebraRoot::new_scan_name(name),
     };
     if !names.is_empty() {

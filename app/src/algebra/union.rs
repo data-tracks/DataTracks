@@ -1,10 +1,11 @@
 use crate::algebra::root::{AlgInputDerivable, AlgOutputDerivable, AlgebraRoot};
-use crate::algebra::{Algebra, BoxedIterator, ValueIterator};
-use crate::processing::transform::Transform;
+use crate::algebra::{Algebra};
 use crate::processing::Layout;
-use crate::util::reservoir::ValueReservoir;
+use core::util::reservoir::ValueReservoir;
 use std::collections::HashMap;
+use std::rc::Rc;
 use value::Value;
+use core::{BoxedValueIterator, ValueIterator};
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Union {
@@ -72,7 +73,7 @@ impl Algebra for Union {
 
 pub struct UnionIterator {
     distinct: bool,
-    inputs: Vec<BoxedIterator>,
+    inputs: Vec<BoxedValueIterator>,
     index: usize,
 }
 
@@ -104,10 +105,10 @@ impl ValueIterator for UnionIterator {
             .unwrap()
     }
 
-    fn clone(&self) -> BoxedIterator {
-        let mut inputs: Vec<BoxedIterator> = vec![];
+    fn clone_boxed(&self) -> BoxedValueIterator {
+        let mut inputs: Vec<BoxedValueIterator> = vec![];
         for iter in &self.inputs {
-            inputs.push((*iter).clone());
+            inputs.push((*iter).clone_boxed());
         }
         Box::new(UnionIterator {
             distinct: self.distinct,
@@ -116,7 +117,7 @@ impl ValueIterator for UnionIterator {
         })
     }
 
-    fn enrich(&mut self, transforms: HashMap<String, Transform>) -> Option<BoxedIterator> {
+    fn enrich(&mut self, transforms: Rc<HashMap<String, BoxedValueIterator>>) -> Option<BoxedValueIterator> {
         self.inputs = self
             .inputs
             .iter_mut()
@@ -125,7 +126,7 @@ impl ValueIterator for UnionIterator {
                 if let Some(input) = input {
                     input
                 } else {
-                    (*i).clone()
+                    (*i).clone_boxed()
                 }
             })
             .collect();

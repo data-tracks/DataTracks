@@ -5,6 +5,11 @@ mod parse;
 mod statement;
 mod translate;
 
-pub(crate) fn transform(_query: &str) -> Result<AlgebraRoot, String> {
-    todo!()
+pub use statement::MqlStatement;
+
+pub use lex::parse;
+
+pub(crate) fn transform(query: &str) -> Result<AlgebraRoot, String> {
+    let parse = lex::parse(query)?;
+    translate::translate(parse)
 }

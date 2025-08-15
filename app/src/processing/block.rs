@@ -1,7 +1,7 @@
-use crate::processing::block::Block::{All, Non, Specific};
 use crate::processing::Train;
-use std::collections::hash_map::Drain;
+use crate::processing::block::Block::{All, Non, Specific};
 use std::collections::HashMap;
+use std::collections::hash_map::Drain;
 use value::Value;
 
 pub enum Block {
@@ -69,7 +69,7 @@ impl SpecificBlock {
 fn merge_buffer(drain: Drain<usize, Vec<Value>>) -> Vec<Train> {
     let mut trains = vec![];
     for (last, values) in drain {
-        trains.push(Train::new(values, 0).mark(last));
+        trains.push(Train::new_values(values, 0, 0).mark(last));
     }
     trains
 }

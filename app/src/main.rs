@@ -14,13 +14,16 @@ mod http;
 mod language;
 mod management;
 mod mqtt;
+mod postgres;
+mod mongo;
 mod processing;
-mod sql;
+mod sqlite;
 mod ui;
 mod util;
 
 mod optimize;
 mod tpc;
+mod tests;
 
 fn main() {
     setup_logging();

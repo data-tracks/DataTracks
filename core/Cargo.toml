@@ -1,0 +1,21 @@
+[package]
+name = "core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description.workspace = true
+
+[dependencies]
+serde_json = { workspace = true }
+serde = { workspace = true }
+threading = { workspace = true }
+value = { workspace = true }
+redb = { workspace = true }
+moka = { version = "0.12.10", features = ["sync"] }
+uuid = { workspace = true }
+tempfile = "3.20.0"
+speedy = { workspace = true }
+parking_lot = { workspace = true }
+

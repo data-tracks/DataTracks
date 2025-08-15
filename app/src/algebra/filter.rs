@@ -1,12 +1,13 @@
-use crate::algebra::algebra::{Algebra, BoxedIterator, ValueIterator};
+use crate::algebra::algebra::Algebra;
 use crate::algebra::implement::implement;
 use crate::algebra::root::{AlgInputDerivable, AlgOutputDerivable, AlgebraRoot};
-use crate::algebra::{BoxedValueHandler, Operator};
+use crate::algebra::Operator;
 use crate::analyse::InputDerivable;
-use crate::processing::transform::Transform;
 use crate::processing::Layout;
-use crate::util::reservoir::ValueReservoir;
+use core::util::reservoir::ValueReservoir;
+use core::{BoxedValueIterator, BoxedValueHandler, ValueIterator};
 use std::collections::HashMap;
+use std::rc::Rc;
 use value::Value;
 
 /// Applies filter operations like "WHERE name = 'Peter'"
@@ -23,7 +24,7 @@ impl Filter {
 }
 
 pub struct FilterIterator {
-    input: BoxedIterator,
+    input: BoxedValueIterator,
     condition: BoxedValueHandler,
 }
 
@@ -47,20 +48,20 @@ impl ValueIterator for FilterIterator {
         self.input.get_storages()
     }
 
-    fn clone(&self) -> BoxedIterator {
+    fn clone_boxed(&self) -> BoxedValueIterator {
         Box::new(FilterIterator {
-            input: self.input.clone(),
-            condition: self.condition.clone(),
+            input: self.input.clone_boxed(),
+            condition: self.condition.clone_boxed(),
         })
     }
 
-    fn enrich(&mut self, transforms: HashMap<String, Transform>) -> Option<BoxedIterator> {
+    fn enrich(&mut self, transforms: Rc<HashMap<String, BoxedValueIterator>>) -> Option<BoxedValueIterator> {
         let input = self.input.enrich(transforms);
 
         if let Some(input) = input {
             self.input = Box::new(FilterIterator {
                 input,
-                condition: self.condition.clone(),
+                condition: self.condition.clone_boxed(),
             });
         };
         None

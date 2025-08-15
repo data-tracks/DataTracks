@@ -1,18 +1,17 @@
-use crate::mqtt::{broker, DEFAULT_URL};
-use crate::processing::option::Configurable;
-use crate::processing::plan::SourceModel;
-use crate::processing::source::Sources::Mqtt;
-use crate::processing::source::{Source, Sources};
-use crate::processing::station::Command::Ready;
-use crate::processing::{plan, Train};
-use crate::ui::{ConfigModel, StringModel};
-use crate::util::{new_id, HybridThreadPool};
-use crate::util::Tx;
+use crate::mqtt::{DEFAULT_URL, broker};
+use crate::processing::Train;
+use crate::util::HybridThreadPool;
+use core::ConfigModel;
+use core::Configurable;
+use core::Source;
+use core::StringModel;
 use rumqttd::Notification;
 use serde_json::Map;
 use std::collections::{BTreeMap, HashMap};
-use std::time::Duration;
 use std::str;
+use std::time::Duration;
+use threading::command::Command::Ready;
+use threading::multi::MultiSender;
 use tracing::{debug, info, warn};
 use value::{Dict, Value};
 
@@ -20,10 +19,8 @@ use value::{Dict, Value};
 // mosquitto_pub -h 127.0.0.1 -p 6666 -t "test/topic2" -m "Hello fromtods2" -i "testclient"
 #[derive(Clone)]
 pub struct MqttSource {
-    id: usize,
     url: String,
     port: u16,
-    outs: Vec<Tx<Train>>,
 }
 
 impl Configurable for MqttSource {
@@ -49,32 +46,53 @@ impl MqttSource {
     pub fn new<S: AsRef<str>>(url: Option<S>, port: u16) -> Self {
         MqttSource {
             port,
-            url: url.map(|r| r.as_ref().to_string()).unwrap_or(DEFAULT_URL.to_string()),
-            id: new_id(),
-            outs: Vec::new(),
+            url: url
+                .map(|r| r.as_ref().to_string())
+                .unwrap_or(DEFAULT_URL.to_string()),
         }
+    }
+
+    pub fn get_default_configs() -> HashMap<String, ConfigModel> {
+        let mut configs = HashMap::new();
+        configs.insert(
+            String::from("port"),
+            ConfigModel::String(StringModel::new("7777")),
+        );
+        configs
+    }
+}
+
+impl TryFrom<HashMap<String, ConfigModel>> for MqttSource {
+    type Error = String;
+
+    fn try_from(configs: HashMap<String, ConfigModel>) -> Result<Self, Self::Error> {
+        let port = if let Some(port) = configs.get("port") {
+            port.as_int()?
+        } else {
+            return Err(String::from("Could not create MqttSource."));
+        };
+        let url = configs.get("url").map(|u| u.as_str());
+
+        Ok(MqttSource::new(url, port as u16))
+    }
+}
+
+impl TryFrom<Map<String, serde_json::Value>> for MqttSource {
+    type Error = String;
+
+    fn try_from(options: Map<String, serde_json::Value>) -> Result<Self, Self::Error> {
+        let port = options.get("port").unwrap().as_u64().unwrap_or(9999);
+        let url = options.get("url").and_then(|url| url.as_str());
+        Ok(MqttSource::new(url, port as u16))
     }
 }
 
 impl Source for MqttSource {
-    fn parse(options: Map<String, serde_json::Value>) -> Result<Self, String> {
-        let port = options.get("port").unwrap().as_u64().unwrap_or(9999);
-        let url = options
-            .get("url")
-            .map(|url| url.as_str()).flatten();
-        Ok(MqttSource::new(url, port as u16))
-    }
-
-    fn operate(
-        &mut self,
-        pool: HybridThreadPool,
-    ) -> usize {
+    fn operate(&mut self, id: usize, outs: MultiSender<Train>, pool: HybridThreadPool) -> Result<usize, String> {
         debug!("starting mqtt source...");
 
-        let outs = self.outs.clone();
         let port = self.port;
         let url = self.url.clone();
-        let id = self.id;
 
         let control = pool.control_sender();
 
@@ -87,12 +105,12 @@ impl Source for MqttSource {
                 });
 
                 info!("Embedded MQTT broker for receiving is running...");
-                control.send(Ready(id));
+                control.send(Ready(id))?;
 
-                link_tx.subscribe("#").unwrap(); // all topics
+                link_tx.subscribe("#").map_err(|err| err.to_string())?; // all topics
 
                 loop {
-                    if plan::check_commands(&meta.ins.1) {
+                    if meta.should_stop() {
                         break;
                     }
                     if let Some(notification) = link_rx.recv().unwrap() {
@@ -107,7 +125,7 @@ impl Source for MqttSource {
                                     "$topic".to_string(),
                                     Value::text(str::from_utf8(&f.publish.topic).unwrap()),
                                 );
-                                send_message(Value::dict(dict).as_dict().unwrap(), &outs)
+                                send_message(Value::dict(dict).as_dict().unwrap(), &outs)?
                             }
                             msg => {
                                 warn!("Received unexpected message: {:?}", msg);
@@ -118,56 +136,26 @@ impl Source for MqttSource {
                     }
                 }
                 warn!("MQTT broker has been stopped.");
+                Ok(())
             })
-        }, vec![])
-    }
-
-    fn outs(&mut self) -> &mut Vec<Tx<Train>> {
-        &mut self.outs
-    }
-
-    fn id(&self) -> usize {
-        self.id
+        })
     }
 
     fn type_(&self) -> String {
         String::from("MQTT")
     }
 
-    fn serialize(&self) -> SourceModel {
-        SourceModel {
-            type_name: String::from("Mqtt"),
-            id: self.id.to_string(),
-            configs: HashMap::new(),
-        }
-    }
-
-    fn from(configs: HashMap<String, ConfigModel>) -> Result<Sources, String> {
-        let port = if let Some(port) = configs.get("port") {
-            port.as_int()?
-        } else {
-            return Err(String::from("Could not create MqttSource."));
-        };
-        let url = configs.get("url").map(|u| u.as_str());
-
-        Ok(Mqtt(MqttSource::new(url, port as u16)))
-    }
-
-    fn serialize_default() -> Result<SourceModel, ()> {
+    fn get_configs(&self) -> HashMap<String, ConfigModel> {
         let mut configs = HashMap::new();
         configs.insert(
             String::from("port"),
-            ConfigModel::String(StringModel::new("7777")),
+            ConfigModel::String(StringModel::new(&self.port.to_string())),
         );
-        Ok(SourceModel {
-            type_name: String::from("Mqtt"),
-            id: String::from("Mqtt"),
-            configs,
-        })
+        configs
     }
 }
 
-pub fn send_message(dict: Dict, outs: &[Tx<Train>]) {
-    let train = Train::new(vec![Value::Dict(dict)], 0);
-    outs.iter().for_each(|out| out.send(train.clone()));
+pub fn send_message(dict: Dict, outs: &MultiSender<Train>) -> Result<(), String> {
+    let train = Train::new_values(vec![Value::Dict(dict)], 0, 0);
+    outs.send(train)
 }

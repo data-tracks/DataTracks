@@ -1,5 +1,5 @@
 use crate::algebra::function::{Implementable, Operator};
-use crate::algebra::BoxedValueHandler;
+use core::BoxedValueHandler;
 
 pub fn implement(function: &Operator) -> BoxedValueHandler {
     implement_func(function)

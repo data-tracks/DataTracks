@@ -1,4 +1,4 @@
-use crate::algebra::aggregate::{Aggregate, ValueLoader};
+use crate::algebra::aggregate::Aggregate;
 use crate::algebra::dual::Dual;
 use crate::algebra::filter::Filter;
 use crate::algebra::join::Join;
@@ -10,18 +10,11 @@ use crate::algebra::union::Union;
 use crate::algebra::variable::VariableScan;
 use crate::algebra::Scan;
 use crate::optimize::Cost;
-use crate::processing::transform::Transform;
-use crate::processing::{Layout, Train};
-use crate::util::reservoir::ValueReservoir;
+use crate::processing::Layout;
+use core::util::iterator::BoxedValueIterator;
 use std::collections::HashMap;
 use std::ops::Mul;
 use value::Value;
-
-pub type BoxedIterator = Box<dyn ValueIterator<Item = Value> + Send + 'static>;
-
-pub type BoxedValueHandler = Box<dyn ValueHandler + Send + 'static>;
-
-pub type BoxedValueLoader = Box<dyn ValueLoader + Send + 'static>;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub enum Algebraic {
@@ -67,7 +60,7 @@ impl Algebraic {
             Algebraic::Join(j) => {
                 let children = root.get_children(j.id());
                 Cost::new(2)
-                    + children.get(0).unwrap().calc_cost(root)
+                    + children.first().unwrap().calc_cost(root)
                     + children.get(1).unwrap().calc_cost(root)
             }
             Algebraic::Union(u) => {
@@ -130,7 +123,7 @@ impl AlgOutputDerivable for Algebraic {
 }
 
 impl Algebra for Algebraic {
-    type Iterator = BoxedIterator;
+    type Iterator = BoxedValueIterator;
 
     fn id(&self) -> usize {
         match self {
@@ -185,40 +178,4 @@ pub trait Algebra: Clone + AlgInputDerivable + AlgOutputDerivable {
     fn derive_iterator(&self, root: &AlgebraRoot) -> Result<Self::Iterator, String>;
 }
 
-pub trait ValueHandler: Send {
-    fn process(&self, value: &Value) -> Value;
 
-    fn clone(&self) -> BoxedValueHandler;
-}
-
-pub struct IdentityHandler;
-
-impl IdentityHandler {
-    pub fn new() -> BoxedValueHandler {
-        Box::new(IdentityHandler {})
-    }
-}
-impl ValueHandler for IdentityHandler {
-    fn process(&self, value: &Value) -> Value {
-        value.clone()
-    }
-    fn clone(&self) -> Box<dyn ValueHandler + Send + 'static> {
-        Box::new(IdentityHandler)
-    }
-}
-
-pub trait ValueIterator: Iterator<Item = Value> + Send + 'static {
-    fn get_storages(&self) -> Vec<ValueReservoir>;
-
-    fn drain(&mut self) -> Vec<Value> {
-        self.into_iter().collect()
-    }
-
-    fn drain_to_train(&mut self, stop: usize) -> Train {
-        Train::new(self.drain(), 0).mark(stop)
-    }
-
-    fn clone(&self) -> BoxedIterator;
-
-    fn enrich(&mut self, transforms: HashMap<String, Transform>) -> Option<BoxedIterator>;
-}

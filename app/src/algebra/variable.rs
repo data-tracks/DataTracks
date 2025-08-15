@@ -1,9 +1,10 @@
 use crate::algebra::root::{AlgInputDerivable, AlgOutputDerivable, AlgebraRoot};
-use crate::algebra::{Algebra, BoxedIterator, ValueIterator};
+use crate::algebra::Algebra;
 use crate::processing::Layout;
-use crate::processing::transform::Transform;
-use crate::util::reservoir::ValueReservoir;
+use core::util::reservoir::ValueReservoir;
+use core::{BoxedValueIterator, ValueIterator};
 use std::collections::HashMap;
+use std::rc::Rc;
 use value::Value;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
@@ -51,7 +52,6 @@ impl Algebra for VariableScan {
             root.get_children(self.id())
                 .iter()
                 .map(|i| i.derive_iterator(root))
-                .into_iter()
                 .collect::<Result<Vec<_>, String>>()?,
         ))
     }
@@ -59,11 +59,11 @@ impl Algebra for VariableScan {
 
 pub struct BareVariableIterator {
     name: String,
-    inputs: Vec<BoxedIterator>,
+    inputs: Vec<BoxedValueIterator>,
 }
 
 impl BareVariableIterator {
-    pub(crate) fn new(name: String, inputs: Vec<BoxedIterator>) -> Self {
+    pub(crate) fn new(name: String, inputs: Vec<BoxedValueIterator>) -> Self {
         BareVariableIterator { name, inputs }
     }
 }
@@ -81,33 +81,33 @@ impl ValueIterator for BareVariableIterator {
         unreachable!("Not correctly enriched")
     }
 
-    fn clone(&self) -> BoxedIterator {
+    fn clone_boxed(&self) -> BoxedValueIterator {
         Box::new(BareVariableIterator {
             name: self.name.clone(),
-            inputs: self.inputs.iter().map(|i| (*i).clone()).collect(),
+            inputs: self.inputs.iter().map(|i| (*i).clone_boxed()).collect(),
         })
     }
 
-    fn enrich(&mut self, transforms: HashMap<String, Transform>) -> Option<BoxedIterator> {
+    fn enrich(&mut self, transforms: Rc<HashMap<String, BoxedValueIterator>>) -> Option<BoxedValueIterator> {
         let transform = transforms.get(&self.name).unwrap();
         let name = self.name.clone();
         Some(Box::new(VariableIterator::new(
             name.into(),
-            self.inputs.iter().map(|v| (*v).clone()).collect(),
-            transform.optimize(transforms.clone(), None),
+            self.inputs.iter().map(|v| v.clone_boxed()).collect(),
+            transform.clone_boxed(),
         )))
     }
 }
 
 pub struct VariableIterator {
-    transform: BoxedIterator,
-    inputs: Vec<BoxedIterator>,
+    transform: BoxedValueIterator,
+    inputs: Vec<BoxedValueIterator>,
     store: ValueReservoir,
     name: Value,
 }
 
 impl VariableIterator {
-    pub(crate) fn new(name: Value, inputs: Vec<BoxedIterator>, transform: BoxedIterator) -> Self {
+    pub(crate) fn new(name: Value, inputs: Vec<BoxedValueIterator>, transform: BoxedValueIterator) -> Self {
         let store = transform.get_storages().pop().unwrap();
 
         VariableIterator {
@@ -161,15 +161,15 @@ impl ValueIterator for VariableIterator {
             .unwrap()
     }
 
-    fn clone(&self) -> BoxedIterator {
+    fn clone_boxed(&self) -> BoxedValueIterator {
         Box::new(VariableIterator::new(
             self.name.clone(),
-            self.inputs.iter().map(|v| (*v).clone()).collect(),
-            self.transform.clone(),
+            self.inputs.iter().map(|v| (*v).clone_boxed()).collect(),
+            self.transform.clone_boxed(),
         ))
     }
 
-    fn enrich(&mut self, _transforms: HashMap<String, Transform>) -> Option<BoxedIterator> {
+    fn enrich(&mut self, _transforms: Rc<HashMap<String, BoxedValueIterator>>) -> Option<BoxedValueIterator> {
         None
     }
 }

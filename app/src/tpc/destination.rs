@@ -1,48 +1,58 @@
-use crate::processing::destination::Destination;
-use crate::processing::option::Configurable;
-use crate::processing::plan::DestinationModel;
-use crate::processing::station::Command;
 use crate::processing::Train;
-use crate::tpc::server::{ack, StreamUser, TcpStream};
-use crate::tpc::{Server, DEFAULT_URL};
-use crate::ui::{ConfigModel, NumberModel, StringModel};
-use crate::util::{new_broadcast, HybridThreadPool};
-use crate::util::new_id;
+use crate::processing::destination::Destination;
+use crate::tpc::server::{StreamUser, TcpStream, ack};
+use crate::tpc::{DEFAULT_URL, Server};
+use crate::util::HybridThreadPool;
 use crate::util::Rx;
 use crate::util::Tx;
+use core::ConfigModel;
+use core::Configurable;
+use core::NumberModel;
+use core::StringModel;
 use crossbeam::channel::{Receiver, Sender};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
+use threading::command::Command;
 use tokio::time::sleep;
 use tracing::{debug, error};
 
 #[derive(Clone)]
 pub struct TpcDestination {
-    id: usize,
     port: u16,
     url: String,
-    sender: Tx<Train>,
-    control: Option<Arc<Tx<Command>>>,
-
+    run_parameter: Option<(Arc<Tx<Command>>, Tx<Train>, usize)>,
 }
 
 impl TpcDestination {
     pub fn new<S: AsRef<str>>(url: Option<S>, port: u16) -> Self {
-        let tx = new_broadcast("TPC Destination");
-
         TpcDestination {
-            id: new_id(),
             port,
-            url: url.map(|r| r.as_ref().to_string()).unwrap_or(DEFAULT_URL.to_string()),
-            sender: tx,
-            control: None,
+            url: url
+                .map(|r| r.as_ref().to_string())
+                .unwrap_or(DEFAULT_URL.to_string()),
+            run_parameter: None,
         }
     }
 
     pub fn port(&self) -> u16 {
         self.port
+    }
+}
+
+impl TryFrom<HashMap<String, ConfigModel>> for TpcDestination {
+    type Error = String;
+
+    fn try_from(configs: HashMap<String, ConfigModel>) -> Result<Self, Self::Error> {
+        let port = if let Some(port) = configs.get("port") {
+            port.as_int()?
+        } else {
+            return Err(String::from("Could not create TpcDestination."));
+        };
+        let url = configs.get("url").map(|u| u.as_str());
+
+        Ok(TpcDestination::new(url, port as u16))
     }
 }
 
@@ -60,20 +70,19 @@ impl Configurable for TpcDestination {
 }
 
 impl StreamUser for TpcDestination {
-    async fn handle(&mut self, mut stream: TcpStream, rx: Rx<Command>) {
-        let control = self.control.clone().unwrap();
-
-        let receiver = self.sender.subscribe();
+    async fn handle(&mut self, mut stream: TcpStream, rx: Rx<Command>) -> Result<(), String> {
+        let (control, sender, id) = self.run_parameter.clone().unwrap();
+        let receiver = sender.subscribe();
 
         match ack(&mut stream).await {
             Ok(_) => {}
             Err(err) => {
                 error!("TPC Destination Register{:?}", err);
-                return;
+                return Ok(());
             }
         }
 
-        control.send(Command::Ready(self.id));
+        control.send(Command::Ready(id))?;
         let mut retry = 3;
         loop {
             match rx.try_recv() {
@@ -90,7 +99,7 @@ impl StreamUser for TpcDestination {
                     Err(err) => {
                         if retry < 1 {
                             error!("Error TPC Destination disconnected {:?}", err);
-                            return;
+                            return Err(err.to_string());
                         }
                         retry -= 1;
                     }
@@ -100,6 +109,7 @@ impl StreamUser for TpcDestination {
                 }
             }
         }
+        Ok(())
     }
 
     fn interrupt(&mut self) -> Receiver<Command> {
@@ -119,15 +129,12 @@ impl Destination for TpcDestination {
             return Err(String::from("Port not specified"));
         };
 
-        let url =  options.get("url").map(|url| url.as_str()).flatten();
+        let url = options.get("url").and_then(|url| url.as_str());
 
         Ok(Self::new(url, port))
     }
 
-    fn operate(
-        &mut self,
-        pool: HybridThreadPool,
-    ) -> usize {
+    fn operate(&mut self, id: usize, tx: Tx<Train>, pool: HybridThreadPool) -> Result<usize, String> {
         debug!("starting tpc destination...");
 
         let url = self.url.clone();
@@ -135,37 +142,20 @@ impl Destination for TpcDestination {
 
         let server = Server::new(url.clone(), port);
 
-        self.control = Some(pool.control_sender());
+        self.run_parameter = Some((pool.control_sender(), tx, id));
 
         let clone = self.clone();
 
-        let id = self.id;
-
-        let id = pool.execute_sync("TPC Destination".to_string(), move |meta| {
-            match server.start(id, clone, meta.output_channel, Arc::new(meta.ins.1)) {
-                Ok(_) => {}
-                Err(err) => error!("Error on TPC Destination thread{:?}", err),
-            }
-        }, vec![]);
-
-
-        id
-
-    }
-
-    fn get_in(&self) -> Tx<Train> {
-        self.sender.clone()
-    }
-
-    fn id(&self) -> usize {
-        self.id
+        pool.execute_sync("TPC Destination".to_string(), move |meta| {
+            server.start(id, clone, meta.output_channel, Arc::new(meta.ins.1))
+        })
     }
 
     fn type_(&self) -> String {
         String::from("TPC")
     }
 
-    fn serialize(&self) -> DestinationModel {
+    fn get_configs(&self) -> HashMap<String, ConfigModel> {
         let mut configs = HashMap::new();
         configs.insert(
             "url".to_string(),
@@ -175,17 +165,6 @@ impl Destination for TpcDestination {
             "port".to_string(),
             ConfigModel::Number(NumberModel::new(self.port as i64)),
         );
-        DestinationModel {
-            type_name: self.name(),
-            id: self.id.to_string(),
-            configs,
-        }
-    }
-
-    fn serialize_default() -> Option<DestinationModel>
-    where
-        Self: Sized,
-    {
-        None
+        configs
     }
 }

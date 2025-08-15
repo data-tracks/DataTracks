@@ -38,7 +38,7 @@ impl Manager {
             .spawn(|| start_web(web_storage))
         {
             Ok(handle) => handle,
-            Err(err) => panic!("Failed to start HTTP Interface {}", err),
+            Err(err) => panic!("Failed to start HTTP Interface {err}"),
         };
         self.handles.push(handle);
         let handle = match thread::Builder::new()
@@ -46,7 +46,7 @@ impl Manager {
             .spawn(|| start_tpc("localhost".to_string(), 5959, tpc_storage))
         {
             Ok(handle) => handle,
-            Err(err) => panic!("Failed to start TPC Interface {}", err),
+            Err(err) => panic!("Failed to start TPC Interface {err}"),
         };
         self.handles.push(handle);
     }
@@ -110,7 +110,7 @@ fn add_producer() {
 
         let message = "Hello from Rust!";
 
-        let mut train = Train::new(vec![message.into()], 0);
+        let mut train = Train::new_values(vec![message.into()], 0, 0);
         train.event_time = Time::now();
 
         let train = serde_json::to_string(&train).unwrap_or(message.to_string());

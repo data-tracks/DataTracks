@@ -1,25 +1,26 @@
+use crate::Value::Wagon;
 use crate::array::Array;
 use crate::date::Date;
 use crate::dict::Dict;
-use crate::r#type::ValType;
 use crate::text::Text;
 use crate::time::Time;
+use crate::r#type::ValType;
 use crate::value::Value::Null;
-use crate::Value::Wagon;
-use crate::{bool, wagon, Bool, Float, Int};
+use crate::{Bool, Float, Int, bool, wagon};
 use bytes::{BufMut, BytesMut};
 use flatbuffers::{FlatBufferBuilder, ForwardsUOffset, Vector, WIPOffset};
 use json::JsonValue;
+use mongodb::bson::{Bson, Document};
 use postgres::types::{IsNull, Type};
 use redb::{Key, TypeName};
 use rumqttc::{Event, Incoming};
-use rumqttd::protocol::Publish;
 use rumqttd::Notification;
+use rumqttd::protocol::Publish;
 use rusqlite::types::{FromSqlResult, ToSqlOutput, ValueRef};
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 use std::cmp::{Ordering, PartialEq};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap};
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
@@ -136,8 +137,8 @@ impl Value {
         Wagon(wagon::Wagon::new(value, origin))
     }
 
-    pub fn dict_from_kv(key: &str, value: Value) -> Value {
-        Self::dict_from_pairs(vec![(key, value)])
+    pub fn dict_from_kv<S: AsRef<str>>(key: S, value: Value) -> Value {
+        Self::dict_from_pairs(vec![(key.as_ref(), value)])
     }
 
     pub fn dict_from_pairs(pairs: Vec<(&str, Value)>) -> Value {
@@ -598,9 +599,16 @@ impl From<&JsonValue> for Value {
 
 impl From<serde_json::Value> for Value {
     fn from(value: serde_json::Value) -> Self {
+        (&value).into()
+    }
+}
+
+
+impl From<&serde_json::Value> for Value {
+    fn from(value: &serde_json::Value) -> Self {
         match value {
             serde_json::Value::Null => Value::null(),
-            serde_json::Value::Bool(b) => Value::bool(b),
+            serde_json::Value::Bool(b) => Value::bool(*b),
             serde_json::Value::Number(n) => {
                 if n.is_f64() {
                     Value::float(n.as_f64().unwrap())
@@ -608,7 +616,7 @@ impl From<serde_json::Value> for Value {
                     Value::int(n.as_i64().unwrap())
                 }
             }
-            serde_json::Value::String(s) => Value::text(&s),
+            serde_json::Value::String(s) => Value::text(s),
             serde_json::Value::Array(a) => {
                 let mut values = vec![];
                 for value in a {
@@ -621,17 +629,17 @@ impl From<serde_json::Value> for Value {
     }
 }
 
-impl From<serde_json::Map<String, serde_json::Value>> for Value {
-    fn from(value: serde_json::Map<String, serde_json::Value>) -> Self {
+impl From<&serde_json::Map<String, serde_json::Value>> for Value {
+    fn from(value: &serde_json::Map<String, serde_json::Value>) -> Self {
         Value::Dict(value.into())
     }
 }
 
-impl From<serde_json::Map<String, serde_json::Value>> for Dict {
-    fn from(value: serde_json::Map<String, serde_json::Value>) -> Self {
+impl From<&serde_json::Map<String, serde_json::Value>> for Dict {
+    fn from(value: &serde_json::Map<String, serde_json::Value>) -> Self {
         let mut map = BTreeMap::new();
         for (key, value) in value {
-            map.insert(key, value.into());
+            map.insert(key.clone(), value.into());
         }
         Dict::new(map)
     }
@@ -719,7 +727,7 @@ impl TryFrom<Event> for Dict {
                         Value::text(str::from_utf8(&p.payload).map_err(|e| e.to_string())?),
                     );
                     map.insert("$topic".to_string(), Value::text(&p.topic));
-                    Ok(Value::dict(map).as_dict().unwrap())
+                    Ok(Value::dict(map).as_dict()?)
                 }
                 _ => Err(format!("Unexpected Incoming publish {i:?}"))?,
             },
@@ -875,6 +883,46 @@ impl From<postgres::Row> for Value {
     }
 }
 
+impl From<Document> for Value {
+    fn from(doc: Document) -> Self {
+        (&doc).into()
+    }
+}
+
+impl From<&Document> for Value {
+    fn from(doc: &Document) -> Self {
+        let mut map: BTreeMap<String, Value> = BTreeMap::new();
+        doc.iter().for_each(|(k, v)| {
+            map.insert(k.to_string(), v.clone().into());
+        });
+
+        Value::dict(map)
+    }
+}
+
+impl From<&Bson> for Value {
+    fn from(bson: &Bson) -> Self {
+        match bson {
+            Bson::Double(d) => Value::float(*d),
+            Bson::String(s) => Value::text(s.as_str()),
+            Bson::Document(d) => d.into(),
+            Bson::Boolean(b) => Value::bool(*b),
+            Bson::Null => Value::null(),
+            Bson::Int32(i) => Value::int(*i as i64),
+            Bson::Int64(i) => Value::int(*i),
+            Bson::Undefined => Value::null(),
+            Bson::ObjectId(id) => Value::text(&id.to_string()),
+            _ => todo!(),
+        }
+    }
+}
+
+impl From<Bson> for Value {
+    fn from(bson: Bson) -> Self {
+        (&bson).into()
+    }
+}
+
 impl<'a> postgres::types::FromSql<'a> for Value {
     fn from_sql(ty: &Type, raw: &'a [u8]) -> Result<Self, Box<dyn Error + Sync + Send>> {
         match *ty {
@@ -996,8 +1044,8 @@ impl rusqlite::types::ToSql for Value {
 #[cfg(test)]
 mod tests {
     use crate::value::Value;
-    use std::collections::hash_map::DefaultHasher;
     use std::collections::HashMap;
+    use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
     use std::vec;
 

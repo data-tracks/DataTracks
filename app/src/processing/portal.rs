@@ -1,9 +1,9 @@
-use crate::util::Storage;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 use tracing::error;
 use value::train::{Train, TrainId};
 use value::Time;
+use core::Storage;
 
 pub struct Portal {
     shared_state: Arc<Mutex<SharedState>>,
@@ -66,7 +66,7 @@ struct SharedState {
 
 impl SharedState {
     fn new() -> Result<Self, String> {
-        let database = Storage::new_temp().unwrap();
+        let database = Storage::new_temp()?;
         Ok(SharedState {
             timestamps: Default::default(),
             storage: database,

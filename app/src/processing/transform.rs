@@ -1,21 +1,27 @@
-use crate::algebra::{AlgebraRoot, BoxedIterator, ValueIterator};
+use crate::algebra::AlgebraRoot;
 use crate::analyse::{InputDerivable, OutputDerivable, OutputDerivationStrategy};
 use crate::language;
 use crate::language::Language;
 use crate::optimize::OptimizeStrategy;
-use crate::processing::option::Configurable;
-#[cfg(test)]
-use crate::processing::tests::DummyDatabase;
-#[cfg(test)]
-use crate::processing::transform::Transform::DummyDB;
-use crate::processing::transform::Transform::{Func, Lang, Postgres, SQLite};
 use crate::processing::Layout;
-use crate::sql::{PostgresTransformer, SqliteTransformer};
-use crate::util::reservoir::ValueReservoir;
+#[cfg(test)]
+use crate::tests::DummyDatabase;
+#[cfg(test)]
+use crate::processing::transform::Transforms::DummyDB;
+use crate::processing::transform::Transforms::{Func, Lang, Postgres, SQLite};
+use core::Configurable;
+use core::ContainerConfig;
+use core::util::iterator::BoxedValueIterator;
+use core::util::iterator::ValueIterator;
+use core::util::reservoir::ValueReservoir;
+
+use crate::postgres::PostgresTransformer;
+use crate::sqlite::SqliteTransformer;
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use serde_json::Map;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
+use std::rc::Rc;
 use std::sync::Arc;
 use track_rails::message_generated::protocol::{
     LanguageTransform as FlatLanguageTransform, Transform as FlatTransform,
@@ -26,7 +32,7 @@ use track_rails::message_generated::protocol::{
 use value::Value;
 
 #[derive(Debug, PartialEq)]
-pub enum Transform {
+pub enum Transforms {
     Func(FuncTransform),
     Lang(LanguageTransform),
     SQLite(SqliteTransformer),
@@ -35,7 +41,7 @@ pub enum Transform {
     DummyDB(DummyDatabase),
 }
 
-impl Clone for Transform {
+impl Clone for Transforms {
     fn clone(&self) -> Self {
         match self {
             Func(f) => Func(Clone::clone(f)),
@@ -48,26 +54,13 @@ impl Clone for Transform {
     }
 }
 
-impl Default for Transform {
+impl Default for Transforms {
     fn default() -> Self {
         Func(FuncTransform::default())
     }
 }
 
-impl Transform {
-    pub fn parse(stencil: &str) -> Result<Transform, String> {
-        if !stencil.contains('|') {
-            return parse_function(stencil);
-        }
-        match stencil.split_once('|') {
-            None => Err("Wrong transform format.".to_string()),
-            Some((module, query)) => match Language::try_from(module) {
-                Ok(lang) => Ok(Lang(LanguageTransform::parse(lang, query))),
-                Err(_) => Err("Wrong transform format.".to_string()),
-            },
-        }
-    }
-
+impl Transforms {
     pub fn derive_input_layout(&self) -> Option<Layout> {
         match self {
             Func(f) => f.derive_input_layout(),
@@ -75,7 +68,7 @@ impl Transform {
             SQLite(t) => t.derive_input_layout(),
             Postgres(p) => p.derive_input_layout(),
             #[cfg(test)]
-            Transform::DummyDB(_) => todo!(),
+            DummyDB(_) => panic!("No DummyDB"),
         }
     }
 
@@ -86,7 +79,7 @@ impl Transform {
             SQLite(c) => c.derive_output_layout(inputs),
             Postgres(p) => p.derive_output_layout(inputs),
             #[cfg(test)]
-            DummyDB(_) => todo!(),
+            DummyDB(_) => panic!("No DummyDB"),
         }
     }
 
@@ -115,18 +108,22 @@ impl Transform {
     pub fn flatternize<'a>(
         &self,
         builder: &mut FlatBufferBuilder<'a>,
-    ) -> WIPOffset<FlatTransform<'a>> {
+    ) -> Option<WIPOffset<FlatTransform<'a>>> {
         match self {
-            Lang(l) => l.flatternize(builder),
-            _ => todo!(),
+            Lang(l) => Some(l.flatternize(builder)),
+            Func(_) => None,
+            SQLite(s) => Some(s.flatternize(builder)),
+            Postgres(_) => todo!(),
+            #[cfg(test)]
+            DummyDB(_) => todo!(),
         }
     }
 
     pub fn optimize(
         &self,
-        transforms: HashMap<String, Transform>,
+        transforms: HashMap<String, BoxedValueIterator>,
         optimizer: Option<OptimizeStrategy>,
-    ) -> BoxedIterator {
+    ) -> BoxedValueIterator {
         match self {
             Func(f) => f.derive_iter(),
             Lang(f) => {
@@ -138,7 +135,7 @@ impl Transform {
                 };
 
                 let mut initial = optimized.derive_iterator().unwrap();
-                let iter = initial.enrich(transforms);
+                let iter = initial.enrich(Rc::new(transforms));
                 if let Some(iter) = iter { iter } else { initial }
             }
             SQLite(c) => c.optimize(transforms),
@@ -149,7 +146,32 @@ impl Transform {
     }
 }
 
-fn parse_function(stencil: &str) -> Result<Transform, String> {
+impl TryFrom<&str> for Transforms {
+    type Error = String;
+
+    fn try_from(stencil: &str) -> Result<Self, Self::Error> {
+        if !stencil.contains('|') {
+            return parse_function(stencil);
+        }
+        match stencil.split_once('|') {
+            None => Err("Wrong transform format.".to_string()),
+            Some((module, query)) => match Language::try_from(module) {
+                Ok(lang) => Ok(Lang(LanguageTransform::parse(lang, query))),
+                Err(_) => Err("Wrong transform format.".to_string()),
+            },
+        }
+    }
+}
+
+impl TryFrom<String> for Transforms {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Transforms::try_from(value.as_ref())
+    }
+}
+
+fn parse_function(stencil: &str) -> Result<Transforms, String> {
     let (name, options) = stencil
         .split_once('{')
         .ok_or("Invalid transform format.".to_string())?;
@@ -159,10 +181,10 @@ fn parse_function(stencil: &str) -> Result<Transform, String> {
         .rsplit_once('}')
         .ok_or("Invalid transform format.".to_string())?;
 
-    let options = serde_json::from_str::<serde_json::Value>(&format!("{{{}}}", options))
+    let options = serde_json::from_str::<serde_json::Value>(&format!("{{{options}}}"))
         .unwrap()
         .as_object()
-        .ok_or(format!("Invalid options: {}", options))?
+        .ok_or(format!("Invalid options: {options}"))?
         .clone();
 
     match name.to_lowercase().as_str() {
@@ -174,11 +196,49 @@ fn parse_function(stencil: &str) -> Result<Transform, String> {
         "dummydb" => Ok(DummyDB(DummyDatabase::parse(options)?)),
         "sqlite" => Ok(SQLite(SqliteTransformer::parse(options)?)),
         "postgres" | "postgresql" => Ok(Postgres(PostgresTransformer::parse(options)?)),
-        fun => panic!("Unknown function {}", fun),
+        fun => panic!("Unknown function {fun}"),
     }
 }
 
-impl Configurable for Transform {
+impl From<Transforms> for ContainerConfig {
+    fn from(value: Transforms) -> Self {
+        match value {
+            Func(_) => {
+                let mut map = HashMap::new();
+                map.insert(String::from("type"), "Function".into());
+                map.insert(String::from("query"), "".into());
+                ContainerConfig::new(String::from("Transform"), map)
+            }
+            Lang(l) => {
+                let mut map = HashMap::new();
+                map.insert(String::from("language"), l.language.name().into());
+                map.insert(String::from("query"), l.query.into());
+                ContainerConfig::new(String::from("Transform"), map)
+            }
+
+            SQLite(l) => {
+                let mut map = HashMap::new();
+                map.insert(String::from("query"), l.query.get_query().into());
+                map.insert(String::from("path"), l.connector.path.clone().into());
+                ContainerConfig::new(l.name(), map)
+            }
+            Postgres(p) => {
+                let mut map = HashMap::new();
+                map.insert(String::from("query"), p.query.get_query().into());
+                map.insert(String::from("url"), p.connector.url.clone().into());
+                map.insert(String::from("port"), p.connector.port.into());
+                map.insert(String::from("db"), p.connector.db.clone().into());
+                ContainerConfig::new(p.name(), map)
+            }
+            #[cfg(test)]
+            DummyDB(_) => {
+                panic!("Dummy DB transform is not supported");
+            }
+        }
+    }
+}
+
+impl Configurable for Transforms {
     fn name(&self) -> String {
         match self {
             Func(_) => "Func".to_string(),
@@ -205,10 +265,7 @@ impl Configurable for Transform {
 pub trait Transformer: Clone + Sized + Configurable + InputDerivable + OutputDerivable {
     fn parse(options: Map<String, serde_json::Value>) -> Result<Self, String>;
 
-    fn optimize(
-        &self,
-        transforms: HashMap<String, Transform>,
-    ) -> Box<dyn ValueIterator<Item = Value> + Send>;
+    fn optimize(&self, transforms: HashMap<String, BoxedValueIterator>) -> BoxedValueIterator;
 
     fn get_output_derivation_strategy(&self) -> &OutputDerivationStrategy;
 }
@@ -385,7 +442,7 @@ impl FuncTransform {
 }
 
 pub struct FuncIter {
-    pub input: BoxedIterator,
+    pub input: BoxedValueIterator,
     pub func: Arc<dyn Fn(i64, Value) -> Value + Send + Sync>,
 }
 
@@ -415,14 +472,17 @@ impl ValueIterator for FuncIter {
         self.input.get_storages()
     }
 
-    fn clone(&self) -> BoxedIterator {
+    fn clone_boxed(&self) -> BoxedValueIterator {
         Box::new(FuncIter {
-            input: self.input.clone(),
+            input: self.input.clone_boxed(),
             func: self.func.clone(),
         })
     }
 
-    fn enrich(&mut self, transforms: HashMap<String, Transform>) -> Option<BoxedIterator> {
+    fn enrich(
+        &mut self,
+        transforms: Rc<HashMap<String, BoxedValueIterator>>,
+    ) -> Option<BoxedValueIterator> {
         let func = self.input.enrich(transforms);
 
         if let Some(func) = func {
@@ -436,11 +496,11 @@ impl ValueIterator for FuncIter {
 mod tests {
     use crate::language::Language;
     use crate::processing::station::Station;
-    use crate::processing::tests::dict_values;
-    use crate::processing::transform::Transform::Func;
-    use crate::processing::transform::{build_algebra, FuncTransform};
+    use crate::tests::dict_values;
+    use crate::processing::transform::Transforms::Func;
+    use crate::processing::transform::{FuncTransform, build_algebra};
     use crate::util::new_channel;
-    
+
     use std::collections::HashMap;
     use std::vec;
     use value::train::Train;
@@ -465,13 +525,15 @@ mod tests {
 
         station.add_out(0, tx).unwrap();
         let (_, pool) = station.operate_test(HashMap::new());
-        station.fake_receive(Train::new(values.clone(), 0));
+        station
+            .fake_receive(Train::new_values(values.clone(), 0, 0))
+            .unwrap();
 
         let res = rx.recv();
         match res {
             Ok(t) => {
-                assert_eq!(values.len(), t.values.len());
-                for (i, value) in t.values.into_iter().enumerate() {
+                assert_eq!(values.len(), t.len());
+                for (i, value) in t.into_values().into_iter().enumerate() {
                     assert_eq!(
                         value.as_dict().unwrap().get_data().unwrap().clone(),
                         &values[i].as_dict().unwrap().get_data().unwrap().clone() + &Value::int(3)
@@ -503,13 +565,15 @@ mod tests {
 
         station.add_out(0, tx).unwrap();
         let (_, pool) = station.operate_test(HashMap::new());
-        station.fake_receive(Train::new(values.clone(), 0));
+        station
+            .fake_receive(Train::new_values(values.clone(), 0, 0))
+            .unwrap();
 
         let res = rx.recv();
         match res {
             Ok(t) => {
-                assert_eq!(values.len(), t.values.len());
-                for (i, value) in t.values.into_iter().enumerate() {
+                assert_eq!(values.len(), t.len());
+                for (i, value) in t.into_values().into_iter().enumerate() {
                     assert_eq!(
                         value.as_dict().unwrap().get_data().unwrap().clone(),
                         values
@@ -676,7 +740,7 @@ mod tests {
                 }
 
                 let result = t.drain_to_train(0);
-                assert_eq!(result.values, output);
+                assert_eq!(result.into_values(), output);
             }
             Err(_) => panic!("Failed"),
         }
@@ -690,7 +754,7 @@ mod tests {
                 t.get_storages().first().unwrap().append(input);
 
                 let result = t.drain_to_train(0);
-                assert_eq!(result.values, output);
+                assert_eq!(result.into_values(), output);
             }
             Err(_) => panic!("Failed"),
         }
@@ -705,7 +769,7 @@ mod tests {
                 t.get_storages().first().unwrap().append(input);
 
                 let result = t.drain_to_train(0);
-                let result = result.values;
+                let result = result.into_values();
                 for result in &result {
                     assert!(output.contains(result))
                 }
