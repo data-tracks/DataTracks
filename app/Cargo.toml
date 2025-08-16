@@ -1,5 +1,5 @@
 [package]
-name = "app"
+name = "data-tracks"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -28,7 +28,7 @@ tower-http = { version = "0.6.6", features = ["full"] }
 tracing = { workspace = true }
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 chrono = {workspace = true}
-logos = "0.15.0"
+logos = "0.15.1"
 serde_json = { workspace = true }
 serde = { workspace = true }
 crossbeam = { workspace = true }
@@ -38,7 +38,7 @@ mime_guess = "2.0.5"
 rumqttd = { workspace = true }
 rusqlite = { workspace = true }
 flatbuffers = { workspace = true }
-reqwest = { version = "0.12.22", features = ["json", "blocking"] }
+reqwest = { version = "0.12.23", features = ["json", "blocking"] }
 regex = "1.11.1"
 criterion = { workspace = true }
 tracing-test = { workspace = true}

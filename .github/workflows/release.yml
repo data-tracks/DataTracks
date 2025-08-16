@@ -5,11 +5,6 @@ permissions:
 on:
   workflow_dispatch:
     inputs:
-      description:
-        description: 'Description Text'
-        required: false
-        type: string
-        default: ""
       draft:
         description: 'Draft Release'
         required: false
@@ -46,7 +41,7 @@ jobs:
           prerelease: ${{ inputs.prerelease }}
           name: Release ${{ steps.get-version.outputs.version }}
           tag_name: ${{ steps.get-version.outputs.version }}
-          body: ${{ inputs.description }}
+          body_path: CHANGELOG.md
         env:
           GITHUB_TOKEN: ${{ github.token }}
 

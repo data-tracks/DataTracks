@@ -69,7 +69,7 @@ fn build_ui() {
 
     let mut options = CopyOptions::new();
     options.overwrite = true; // Overwrite existing files in the destination
-    options.copy_inside = true; // Copy the *contents* of angular_dist_browser_path into static_output_dir
+    options.content_only = true; // Copy the *contents* of angular_dist_browser_path into static_output_dir
 
     copy("../ui/dist/track-view.ng/browser", UI_TARGET, &options).unwrap();
 

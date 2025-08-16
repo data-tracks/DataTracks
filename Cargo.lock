@@ -137,46 +137,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "app"
-version = "0.5.0"
-dependencies = [
- "axum 0.8.4",
- "cdc",
- "chrono",
- "core",
- "criterion",
- "crossbeam",
- "ctrlc",
- "derivative",
- "flatbuffers",
- "fs_extra",
- "futures-util",
- "include_dir",
- "logos",
- "macro",
- "mime_guess",
- "mongodb",
- "parking_lot",
- "postgres",
- "rand 0.9.2",
- "regex",
- "reqwest",
- "rumqttd",
- "rusqlite",
- "rusty-tracks",
- "serde",
- "serde_json",
- "threading",
- "tokio",
- "tower-http",
- "tracing",
- "tracing-subscriber",
- "tracing-test",
- "track-rails 0.1.1",
- "value",
-]
-
-[[package]]
 name = "asn1-rs"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -955,6 +915,46 @@ name = "data-encoding"
 version = "2.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2a2330da5de22e8a3cb63252ce2abb30116bf5265e89c0e01bc17015ce30a476"
+
+[[package]]
+name = "data-tracks"
+version = "0.5.0"
+dependencies = [
+ "axum 0.8.4",
+ "cdc",
+ "chrono",
+ "core",
+ "criterion",
+ "crossbeam",
+ "ctrlc",
+ "derivative",
+ "flatbuffers",
+ "fs_extra",
+ "futures-util",
+ "include_dir",
+ "logos",
+ "macro",
+ "mime_guess",
+ "mongodb",
+ "parking_lot",
+ "postgres",
+ "rand 0.9.2",
+ "regex",
+ "reqwest",
+ "rumqttd",
+ "rusqlite",
+ "rusty-tracks",
+ "serde",
+ "serde_json",
+ "threading",
+ "tokio",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+ "tracing-test",
+ "track-rails 0.1.1",
+ "value",
+]
 
 [[package]]
 name = "der-parser"
