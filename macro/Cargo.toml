@@ -9,7 +9,7 @@ description.workspace = true
 
 [dependencies]
 quote = "1.0"
-syn = { version = "2.0.104", features = ["full"] }
+syn = { version = "2.0.106", features = ["full"] }
 
 [lib]
 proc-macro = true
