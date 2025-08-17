@@ -8,7 +8,7 @@ version = "0.5.1"
 edition = "2024"
 authors = ["datomo <dave.lengw@gmail.com>"]
 license = "GPL-3.0"
-repository = "https://github.com/datomo/DataTracks"
+repository = "https://github.com/data-tracks/DataTracks"
 description = "DataTracks is an prototype system, which provides easy creation and management of complex data streaming workloads for various degrees of structured and unstructured data."
 
 [workspace.dependencies]

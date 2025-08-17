@@ -1,8 +1,5 @@
-# Introduction of CDC Stream Capabilities
+# Fixing UI Communication
 
 ---
 
-- added events 
-- streamlining worker management
-- added MongoDB source and destination
-- added Postgres source and destination
+- Adjusted incorrect ```Status``` creation in UI 
