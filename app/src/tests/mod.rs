@@ -3,6 +3,7 @@ mod advertise;
 pub mod plan_test;
 mod replication;
 mod wordcount;
+mod replay;
 
 #[cfg(test)]
 pub use replication::tests::init_postgres_table;

@@ -141,7 +141,7 @@ impl Algebra for Project {
                 .collect::<Vec<_>>()
                 .first()
                 .map(|o| o.clone_boxed())
-                .unwrap_or(IdentityHandler::new());
+                .unwrap_or(IdentityHandler::new_boxed());
             Ok(ProjectIter::ValueSetProjectIterator(
                 SetProjectIterator::new(
                     root.get_child(self.id)

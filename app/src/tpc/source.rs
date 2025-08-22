@@ -39,12 +39,12 @@ impl TpcSource {
         }
     }
 
-    fn send(&self, train: Train) -> Result<(), String> {
+    pub(crate) fn send(&self, train: Train) -> Result<(), String> {
         self.outs.iter().try_for_each(|out| out.send(train.clone()))
     }
 
     #[cfg(test)]
-    fn operate_test(&mut self) -> (usize, HybridThreadPool) {
+    pub(crate) fn operate_test(&mut self) -> (usize, HybridThreadPool) {
         let pool = HybridThreadPool::new();
         let id = self.operate(0, MultiSender::new(vec![]), pool.clone()).unwrap();
         (id, pool)

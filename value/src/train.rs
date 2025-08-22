@@ -122,6 +122,10 @@ impl Train {
         self.content.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.content.is_empty()
+    }
+
     pub fn flag(mut self, stop: usize) -> Self {
         match self.content {
             TrainContent::Values(v) => {

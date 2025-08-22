@@ -63,7 +63,7 @@ impl Clone for Box<dyn ValueHandler> {
 pub struct IdentityHandler;
 
 impl IdentityHandler {
-    pub fn new() -> BoxedValueHandler {
+    pub fn new_boxed() -> BoxedValueHandler {
         Box::new(IdentityHandler {})
     }
 }

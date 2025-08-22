@@ -29,8 +29,6 @@ pub struct WorkerMeta {
     id: usize,
     pub ins: (Tx<Command>, Rx<Command>),
     pub output_channel: Arc<Tx<Command>>,
-    name: String,
-    depends_on: Vec<usize>,
 }
 
 impl WorkerMeta {
@@ -46,16 +44,10 @@ impl From<(WorkerArgs, Arc<Tx<Command>>)> for WorkerMeta {
             id: args.0.id,
             ins,
             output_channel: args.1,
-            name: args.0.name,
-            depends_on: args.0.depends_on,
         }
     }
 }
 
-enum Worker {
-    Sync(SyncWorker),
-    Async(AsyncWorker),
-}
 
 /// Represents a single worker thread within the pool.
 struct SyncWorker {
