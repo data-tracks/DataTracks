@@ -10,6 +10,8 @@ use std::time::Duration;
 use tokio::runtime::Handle;
 use tokio::task::JoinHandle;
 use tracing::{debug, info};
+use error::error::TrackError;
+use error::error::TrackError::DefaultError;
 
 const ASYNC_WORKERS: usize = 20;
 
@@ -59,7 +61,7 @@ enum Worker {
 
 /// Represents a single worker thread within the pool.
 struct SyncWorker {
-    handle: Option<thread::JoinHandle<Result<(), String>>>,
+    handle: Option<thread::JoinHandle<Result<(), TrackError>>>,
     meta: WorkerMeta,
 }
 
@@ -69,7 +71,7 @@ impl SyncWorker {
     /// - If it receives a `Sync` job, it executes the closure directly on its thread.
     /// - If it receives an `Async` job, it spawns the `Future` onto the provided Tokio runtime handle.
     fn new(
-        task: Box<dyn FnOnce(WorkerMeta) -> Result<(), String> + Send + 'static>,
+        task: Box<dyn FnOnce(WorkerMeta) -> Result<(), TrackError> + Send + 'static>,
         args: WorkerArgs,
         output_channel: Arc<Tx<Command>>,
         finished_ids_handle: Arc<Mutex<Vec<usize>>>,
@@ -96,7 +98,7 @@ impl SyncWorker {
 
 struct AsyncWorker {
     meta: WorkerMeta,
-    handle: Option<JoinHandle<Result<(), String>>>,
+    handle: Option<JoinHandle<Result<(), TrackError>>>,
 }
 
 impl AsyncWorker {
@@ -109,7 +111,7 @@ impl AsyncWorker {
     ) -> Self
     where
         F: FnOnce(WorkerMeta) -> Fut + Send + 'static,
-        Fut: Future<Output = Result<(), String>> + Send + 'static,
+        Fut: Future<Output = Result<(), TrackError>> + Send + 'static,
     {
         debug!(
             "[Worker {}] Spawning async task onto Tokio runtime.",
@@ -168,11 +170,11 @@ impl HybridThreadPool {
         self.state.control_receiver()
     }
 
-    pub fn send_control(&self, id: &usize, command: Command) -> Result<(), String> {
+    pub fn send_control(&self, id: &usize, command: Command) -> Result<(), TrackError> {
         self.state.send_control(id, command)
     }
 
-    pub fn stop(&self, id: &usize) -> Result<(), String> {
+    pub fn stop(&self, id: &usize) -> Result<(), TrackError> {
         self.state.stop(id)
     }
 
@@ -180,18 +182,18 @@ impl HybridThreadPool {
         self.state.join(id).unwrap()
     }
 
-    pub fn execute_async<F, S: AsRef<str>>(&self, name: S, f: F) -> Result<usize, String>
+    pub fn execute_async<F, S: AsRef<str>>(&self, name: S, f: F) -> Result<usize, TrackError>
     where
-        F: FnOnce(WorkerMeta) -> Pin<Box<dyn Future<Output = Result<(), String>> + Send + 'static>>
+        F: FnOnce(WorkerMeta) -> Pin<Box<dyn Future<Output = Result<(), TrackError>> + Send + 'static>>
             + Send
             + 'static,
     {
         Ok(self.state.execute_async(name, f, vec![]))
     }
 
-    pub fn execute_sync<F, S: AsRef<str>>(&self, name: S, f: F) -> Result<usize, String>
+    pub fn execute_sync<F, S: AsRef<str>>(&self, name: S, f: F) -> Result<usize, TrackError>
     where
-        F: FnOnce(WorkerMeta) -> Result<(), String> + Send + 'static,
+        F: FnOnce(WorkerMeta) -> Result<(), TrackError> + Send + 'static,
     {
         Ok(self.state.execute_sync(name, f, vec![]))
     }
@@ -274,7 +276,7 @@ impl PoolState {
         self.control.1.clone()
     }
 
-    fn stop(&self, id: &usize) -> Result<(), String> {
+    fn stop(&self, id: &usize) -> Result<(), TrackError> {
         if let Some(sync_worker) = self.sync_workers.lock().unwrap().get(id) {
             sync_worker.meta.ins.0.send(Stop(sync_worker.meta.id))
         } else if let Some(async_worker) = self.async_workers.lock().unwrap().get(id) {
@@ -284,10 +286,10 @@ impl PoolState {
         }
     }
 
-    fn join(&self, id: &usize) -> Result<(), String> {
+    fn join(&self, id: &usize) -> Result<(), TrackError> {
         if let Some(w) = self.sync_workers.lock().unwrap().get_mut(id) {
             if let Some(handle) = w.handle.take() {
-                handle.join().map_err(|_| "Error joining thread")??;
+                handle.join().map_err(|_| DefaultError("Error joining thread".to_string()))??;
             }
         } else if let Some(w) = self.async_workers.lock().unwrap().get_mut(id)
             && let Some(handle) = w.handle.take() {
@@ -305,7 +307,7 @@ impl PoolState {
         }
     }
 
-    fn send_control(&self, num: &usize, command: Command) -> Result<(), String> {
+    fn send_control(&self, num: &usize, command: Command) -> Result<(), TrackError> {
         if let Some(w) = self.sync_workers.lock().unwrap().get_mut(num) {
             w.meta.ins.0.send(command)?;
         } else if let Some(w) = self.async_workers.lock().unwrap().get_mut(num) {
@@ -319,7 +321,7 @@ impl PoolState {
     /// and executed directly on that thread.
     fn execute_sync<F, S: AsRef<str>>(&self, name: S, f: F, depends_on: Vec<usize>) -> usize
     where
-        F: FnOnce(WorkerMeta) -> Result<(), String> + Send + 'static,
+        F: FnOnce(WorkerMeta) -> Result<(), TrackError> + Send + 'static,
     {
         let depends_on_clone = depends_on.clone();
 
@@ -351,7 +353,7 @@ impl PoolState {
     fn execute_async<F, Fut, S: AsRef<str>>(&self, name: S, f: F, depends_on: Vec<usize>) -> usize
     where
         F: FnOnce(WorkerMeta) -> Fut + Send + 'static,
-        Fut: Future<Output = Result<(), String>> + Send + 'static,
+        Fut: Future<Output = Result<(), TrackError>> + Send + 'static,
     {
         let depends_on_clone = depends_on.clone();
 

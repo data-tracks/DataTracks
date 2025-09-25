@@ -10,6 +10,7 @@ use threading::channel::Tx;
 use threading::command::Command::Ready;
 use threading::pool::HybridThreadPool;
 use tracing::debug;
+use error::error::TrackError;
 use value::train::Train;
 
 #[derive(Clone)]
@@ -26,7 +27,7 @@ impl MongoDbDestination {
         port: u16,
         query: S1,
         database: S2,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, TrackError> {
         let query = MongoDynamicQuery::new(query.as_ref())?;
         Ok(MongoDbDestination {
             database: database.as_ref().to_string(),
@@ -52,30 +53,30 @@ impl Configurable for MongoDbDestination {
 }
 
 impl TryFrom<HashMap<String, ConfigModel>> for MongoDbDestination {
-    type Error = String;
+    type Error = TrackError;
 
     fn try_from(configs: HashMap<String, ConfigModel>) -> Result<Self, Self::Error> {
         let port = if let Some(port) = configs.get("port") {
             port.as_int()?
         } else {
-            return Err(String::from("Could not create MqttSource."));
+            return Err(TrackError::from("Could not create MqttSource."));
         };
         let url = if let Some(url) = configs.get("url") {
             url.as_str()
         } else {
-            return Err(String::from("No url provided"));
+            return Err(TrackError::from("No url provided"));
         };
 
         let query = if let Some(query) = configs.get("query") {
             query.as_str()
         } else {
-            return Err(String::from("No query provided"));
+            return Err(TrackError::from("No query provided"));
         };
 
         let db = if let Some(db) = configs.get("database") {
             db.as_str()
         } else {
-            return Err(String::from("No database provided"));
+            return Err(TrackError::from("No database provided"));
         };
 
 
@@ -84,7 +85,7 @@ impl TryFrom<HashMap<String, ConfigModel>> for MongoDbDestination {
 }
 
 impl Destination for MongoDbDestination {
-    fn parse(options: Map<String, Value>) -> Result<Self, String>
+    fn parse(options: Map<String, Value>) -> Result<Self, TrackError>
     where
         Self: Sized,
     {
@@ -114,7 +115,7 @@ impl Destination for MongoDbDestination {
         MongoDbDestination::new(url, port, query, db)
     }
 
-    fn operate(&mut self, id: usize, tx: Tx<Train>, pool: HybridThreadPool) -> Result<usize, String> {
+    fn operate(&mut self, id: usize, tx: Tx<Train>, pool: HybridThreadPool) -> Result<usize, TrackError> {
         let cdc = MongoDbCdc::new(
             self.url.clone(),
             self.port,

@@ -11,6 +11,7 @@ use threading::command::Command;
 use tokio::time::sleep;
 use tracing::{debug, error, info, warn};
 use track_rails::message_generated::protocol::Payload;
+use error::error::TrackError;
 
 pub fn start_tpc(url: String, port: u16, storage: Arc<Mutex<Storage>>) {
     let res = thread::Builder::new()
@@ -54,7 +55,7 @@ pub struct TpcManagement {
 }
 
 impl StreamUser for TpcManagement {
-    async fn handle(&mut self, mut stream: TcpStream, rx: Rx<Command>) -> Result<(), String> {
+    async fn handle(&mut self, mut stream: TcpStream, rx: Rx<Command>) -> Result<(), TrackError> {
         let mut len_buf = [0u8; 4];
 
         loop {

@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::thread::sleep;
 use std::time::Duration;
 use tracing::debug;
+use error::error::TrackError;
 use threading::command::Command::Ready;
 use value::train::Train;
 
@@ -83,7 +84,7 @@ impl TryFrom<HashMap<String, ConfigModel>> for PostgresDestination {
 }
 
 impl Destination for PostgresDestination {
-    fn parse(options: Map<String, Value>) -> Result<Self, String>
+    fn parse(options: Map<String, Value>) -> Result<Self, TrackError>
     where
         Self: Sized,
     {
@@ -122,7 +123,7 @@ impl Destination for PostgresDestination {
         id: usize,
         tx: Tx<Train>,
         pool: HybridThreadPool,
-    ) -> Result<usize, String> {
+    ) -> Result<usize, TrackError> {
         let query = self.query.clone();
 
         let (query, _) = query.prepare_query_transform("$", None, 1)?;

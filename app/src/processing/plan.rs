@@ -30,6 +30,7 @@ use track_rails::message_generated::protocol::{
 };
 use track_rails::message_generated::protocol::{KeyValueU64VecU64, KeyValueU64VecU64Args};
 use track_rails::message_generated::protocol::{Plan as FlatPlan, PlanArgs};
+use error::error::TrackError;
 
 pub struct Plan {
     pub id: usize,
@@ -139,7 +140,7 @@ impl Plan {
         self.name = name;
     }
 
-    pub(crate) fn halt(&mut self) -> Result<(), String> {
+    pub(crate) fn halt(&mut self) -> Result<(), TrackError> {
         for station in self.stations.values_mut() {
             if let Some(id) = self.thread_mapping.get(&station.id) {
                 self.pool.stop(id)?
@@ -248,14 +249,14 @@ impl Plan {
         dump
     }
 
-    pub(crate) fn send_control(&self, num: &usize, command: Command) -> Result<(), String> {
+    pub(crate) fn send_control(&self, num: &usize, command: Command) -> Result<(), TrackError> {
         if let Some(id) = self.thread_mapping.get(num) {
             self.pool.send_control(id, command)?;
         }
         Ok(())
     }
 
-    pub fn operate(&mut self) -> Result<(), String> {
+    pub fn operate(&mut self) -> Result<(), TrackError> {
         self.connect_stops()?;
         self.connect_destinations()?;
         self.connect_sources()?;
@@ -277,11 +278,11 @@ impl Plan {
                     Command::Ready(id) => {
                         readys.push(id);
                     }
-                    command => return Err(format!("Not known command {command:?}")),
+                    command => return Err(TrackError::from("Not known command {command:?}")),
                 },
                 Err(_) => {
                     if start_time.elapsed().as_secs() > WAIT_TIME_S {
-                        return Err("Stations did not start properly".to_string());
+                        return Err(TrackError::from("Stations did not start properly".to_string()));
                     }
                     sleep(Duration::from_secs(1));
                 }
@@ -301,7 +302,7 @@ impl Plan {
                     Ok(other) => println!("Destination got {} instead of {}", other, Command::Ready(id)),
                     _ => {
                         if start_time.elapsed().as_secs() > WAIT_TIME_S {
-                            return Err(format!("Destination {} did not start properly", destination.name()));
+                            return Err(TrackError::from(format!("Destination {} did not start properly", destination.name())));
                         }
                         sleep(Duration::from_secs(1));
                     },
@@ -324,7 +325,7 @@ impl Plan {
                     Ok(other) => println!("Source got {} instead of {}", other, Command::Ready(id)),
                     _ => {
                         if start_time.elapsed().as_secs() > WAIT_TIME_S {
-                            return Err(format!("Source {} did not start properly", source.name()));
+                            return Err(TrackError::from(format!("Source {} did not start properly", source.name())));
                         }
                         sleep(Duration::from_secs(1));
                     }
@@ -339,13 +340,13 @@ impl Plan {
     }
 
     #[cfg(test)]
-    pub(crate) fn clone_station(&mut self, num: usize) -> Result<(), String> {
+    pub(crate) fn clone_station(&mut self, num: usize) -> Result<(), TrackError> {
         let station = self.stations.get_mut(&num).unwrap();
         let _ = station.operate(self.transforms.clone(), self.pool.clone())?;
         Ok(())
     }
 
-    fn connect_stops(&mut self) -> Result<(), String> {
+    fn connect_stops(&mut self) -> Result<(), TrackError> {
         for (line, stops) in &self.lines {
             let mut stops_iter = stops.iter();
 
@@ -375,7 +376,7 @@ impl Plan {
         Ok(())
     }
 
-    pub fn parse(stencil: &str) -> Result<Self, String> {
+    pub fn parse(stencil: &str) -> Result<Self, TrackError> {
         let mut plan = Plan::default();
         let mut phase = Stencil::Network;
 
@@ -687,7 +688,7 @@ impl Plan {
         self.destinations.insert(id, destination);
     }
 
-    fn parse_in(&mut self, stencil: &str) -> Result<(), String> {
+    fn parse_in(&mut self, stencil: &str) -> Result<(), TrackError> {
         let (stops, type_, options) = Self::split_name_options(stencil)?;
 
         let source: SourceHolder = Sources::try_from((type_.to_string(), options))?.into();
@@ -700,7 +701,7 @@ impl Plan {
         Ok(())
     }
 
-    fn parse_out(&mut self, stencil: &str) -> Result<(), String> {
+    fn parse_out(&mut self, stencil: &str) -> Result<(), TrackError> {
         let (stops, type_, options) = Self::split_name_options(stencil)?;
 
         let out: DestinationHolder = Destinations::try_from((type_.to_string(), options))?.into();
@@ -711,7 +712,7 @@ impl Plan {
         Ok(())
     }
 
-    fn split_name_options<'a>(stencil: &'a str) -> Result<StopNameOptions<'a>, String> {
+    fn split_name_options<'a>(stencil: &'a str) -> Result<StopNameOptions<'a>, TrackError> {
         let (stencil, stops) = stencil.rsplit_once("}:").unwrap();
         let stops = stops
             .split(',')

@@ -1,3 +1,4 @@
+use error::error::TrackError;
 use crate::channel::Tx;
 
 #[derive(Clone)]
@@ -10,7 +11,7 @@ impl<T: Clone + Send + Sync + 'static> MultiSender<T> {
         MultiSender { outs }
     }
 
-    pub fn send(&self, msg: T) -> Result<(), String> {
+    pub fn send(&self, msg: T) -> Result<(), TrackError> {
         self.outs.iter().try_for_each(|out| out.send(msg.clone()))
     }
 }

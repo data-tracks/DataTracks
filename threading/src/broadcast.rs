@@ -3,6 +3,7 @@ use crate::one_shot::{SingleRx, SingleTx};
 use parking_lot::Mutex;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
+use error::error::TrackError;
 
 #[derive(Clone)]
 pub struct BroadcastTx<T: Send + Clone + 'static> {
@@ -64,9 +65,9 @@ impl<T: Clone + Send + 'static> BroadcastTx<T> {
         self.inner.lock().iter().map(|s| s.len()).sum()
     }
 
-    pub fn send(&self, value: T) -> Result<(), String> {
+    pub fn send(&self, value: T) -> Result<(), TrackError> {
         let inner = self.inner.lock();
-        inner.iter().try_for_each(|tx| tx.send(value.clone()).map_err(|e| e.to_string()))
+        inner.iter().try_for_each(|tx| tx.send(value.clone()))
     }
 }
 

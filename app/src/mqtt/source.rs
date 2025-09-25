@@ -13,6 +13,7 @@ use std::time::Duration;
 use threading::command::Command::Ready;
 use threading::multi::MultiSender;
 use tracing::{debug, info, warn};
+use error::error::TrackError;
 use value::{Dict, Value};
 
 // mosquitto_sub -h 127.0.0.1 -p 8888 -t "test/topic2" -i "id"
@@ -88,7 +89,7 @@ impl TryFrom<Map<String, serde_json::Value>> for MqttSource {
 }
 
 impl Source for MqttSource {
-    fn operate(&mut self, id: usize, outs: MultiSender<Train>, pool: HybridThreadPool) -> Result<usize, String> {
+    fn operate(&mut self, id: usize, outs: MultiSender<Train>, pool: HybridThreadPool) -> Result<usize, TrackError> {
         debug!("starting mqtt source...");
 
         let port = self.port;
@@ -155,7 +156,7 @@ impl Source for MqttSource {
     }
 }
 
-pub fn send_message(dict: Dict, outs: &MultiSender<Train>) -> Result<(), String> {
+pub fn send_message(dict: Dict, outs: &MultiSender<Train>) -> Result<(), TrackError> {
     let train = Train::new_values(vec![Value::Dict(dict)], 0, 0);
     outs.send(train)
 }

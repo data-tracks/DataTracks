@@ -4,6 +4,7 @@ use tracing::error;
 use value::train::{Train, TrainId};
 use value::Time;
 use core::Storage;
+use error::error::TrackError;
 
 pub struct Portal {
     shared_state: Arc<Mutex<SharedState>>,
@@ -11,7 +12,7 @@ pub struct Portal {
 
 /// Thread-safe implementation for a train saver
 impl Portal {
-    pub fn new() -> Result<Self, String> {
+    pub fn new() -> Result<Self, TrackError> {
         Ok(Portal {
             shared_state: Arc::new(Mutex::new(SharedState::new()?)),
         })

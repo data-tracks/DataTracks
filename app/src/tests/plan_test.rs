@@ -24,6 +24,7 @@ pub mod dummy {
     use crate::processing::source::Sources::Dummy;
     use crate::processing::source::{SourceHolder, Sources};
     use serde_json::Map;
+    use error::error::TrackError;
     use threading::command::Command::{Ready, Stop};
     use threading::multi::MultiSender;
     use value::Value;
@@ -162,7 +163,7 @@ pub mod dummy {
             id: usize,
             outs: MultiSender<Train>,
             pool: HybridThreadPool,
-        ) -> Result<usize, String> {
+        ) -> Result<usize, TrackError> {
             let delay = self.delay;
             let initial_delay = self.initial_delay;
             let values = self.values.take().unwrap();
@@ -240,7 +241,7 @@ pub mod dummy {
     }
 
     impl Destination for DummyDestination {
-        fn parse(options: Map<String, serde_json::Value>) -> Result<Self, String> {
+        fn parse(options: Map<String, serde_json::Value>) -> Result<Self, TrackError> {
             let result_size = options.get("result_size").unwrap().as_u64().unwrap() as usize;
 
             let id = if let Some(id) = options.get("id") {
@@ -254,7 +255,7 @@ pub mod dummy {
             Ok(destination)
         }
 
-        fn operate(&mut self, id: usize, tx: Tx<Train>, pool: HybridThreadPool) -> Result<usize, String> {
+        fn operate(&mut self, id: usize, tx: Tx<Train>, pool: HybridThreadPool) -> Result<usize, TrackError> {
             let local = self.results();
             let receiver = tx.subscribe();
             let result_amount = self.result_size;

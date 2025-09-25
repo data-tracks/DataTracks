@@ -16,6 +16,7 @@ use tokio::time::sleep;
 use tokio_postgres::types::PgLsn;
 use tokio_postgres::{CopyBothDuplex, NoTls, SimpleQueryMessage};
 use tracing::{debug, info};
+use error::error::TrackError;
 use value::train::Train;
 
 const SECONDS_FROM_UNIX_EPOCH_TO_2000: u128 = 946_684_800;
@@ -187,7 +188,7 @@ impl ChangeDataCapture for PostgresCdc {
         id: usize,
         outs: MultiSender<Train>,
         pool: HybridThreadPool,
-    ) -> Result<usize, String> {
+    ) -> Result<usize, TrackError> {
         if !self.watch_init {
             self.init()?;
         }

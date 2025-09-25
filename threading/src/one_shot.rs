@@ -1,5 +1,6 @@
 use crossbeam::channel::{unbounded, Receiver, RecvTimeoutError, Sender};
 use std::time::Duration;
+use error::error::TrackError;
 
 pub(crate) fn new_channel<Msg: Send + Clone, S: AsRef<str>>(
     name: S,
@@ -51,8 +52,8 @@ impl<F: Send> SingleTx<F> {
         SingleRx(self.1.clone(), self.name(), self.3)
     }
 
-    pub(crate) fn send(&self, msg: F) -> Result<(), String> {
-        self.0.send(msg).map_err(|e| e.to_string())
+    pub(crate) fn send(&self, msg: F) -> Result<(), TrackError> {
+        self.0.send(msg).map_err(|e| e.to_string().into())
     }
 
     pub(crate) fn len(&self) -> usize {

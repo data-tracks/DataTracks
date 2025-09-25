@@ -17,6 +17,7 @@ use track_rails::message_generated::protocol::{
     Message, MessageArgs, OkStatus, OkStatusArgs, Payload, RegisterResponse, RegisterResponseArgs,
     Status,
 };
+use error::error::TrackError;
 use threading::command::Command;
 
 pub struct Server {
@@ -65,14 +66,14 @@ pub trait StreamUser: Clone {
         &mut self,
         stream: TcpStream,
         receiver: Rx<Command>,
-    ) -> impl Future<Output = Result<(), String>> + Send;
+    ) -> impl Future<Output = Result<(), TrackError>> + Send;
 
     fn interrupt(&mut self) -> Receiver<Command>;
 
     fn control(&mut self) -> Sender<Command>;
 }
 
-pub fn handle_register() -> Result<Vec<u8>, String> {
+pub fn handle_register() -> Result<Vec<u8>, TrackError> {
     let mut builder = FlatBufferBuilder::new();
 
     let permissions: Vec<WIPOffset<&str>> = vec![];
@@ -138,18 +139,18 @@ impl Server {
         user: impl StreamUser + Send + 'static,
         control_tx: Arc<Tx<Command>>,
         control_rx: Arc<Rx<Command>>,
-    ) -> Result<(), String> {
-        let rt = Runtime::new().map_err(|err| err.to_string())?;
+    ) -> Result<(), TrackError> {
+        let rt = Runtime::new().map_err(|err| TrackError::from(err))?;
 
         let accept_timeout = Duration::from_millis(100);
 
         rt.block_on(async {
             let listener = match TcpListener::bind(self.addr)
                 .await
-                .map_err(|err| err.to_string())
+                .map_err(|err| TrackError::from(err))
             {
                 Ok(l) => l,
-                Err(_) => return Err(format!("Cannot bind to {}", self.addr)),
+                Err(_) => return Err(TrackError::from(format!("Cannot bind to {}", self.addr))),
             };
             info!("TPC server listening {}...", self.addr);
 
@@ -160,10 +161,10 @@ impl Server {
             loop {
                 let result = match timeout(accept_timeout, listener.accept())
                     .await
-                    .map_err(|err| err.to_string())
+                    .map_err(|err| TrackError::from(err.to_string()))
                 {
-                    Ok(res) => res.map_err(|err| err.to_string()),
-                    Err(err) => Err(err.to_string()),
+                    Ok(res) => res.map_err(|err| TrackError::from(err)),
+                    Err(err) => Err(TrackError::from(err)),
                 };
 
                 if let Ok(Command::Stop(s)) = control_rx.try_recv() {
@@ -176,7 +177,7 @@ impl Server {
                     let rx = broadcast.subscribe();
                     tokio::spawn(async move {
                         clone.handle(stream.into(), rx).await?;
-                        Ok::<(), String>(())
+                        Ok::<(), TrackError>(())
                     });
                 };
             }

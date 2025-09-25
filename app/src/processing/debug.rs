@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use tracing::{debug, error};
+use error::error::TrackError;
 
 pub struct DebugDestination {
     receiver: Option<Rx<Train>>,
@@ -45,14 +46,14 @@ impl TryFrom<HashMap<String, ConfigModel>> for DebugDestination {
 }
 
 impl Destination for DebugDestination {
-    fn parse(_options: Map<String, Value>) -> Result<Self, String>
+    fn parse(_options: Map<String, Value>) -> Result<Self, TrackError>
     where
         Self: Sized,
     {
         Ok(DebugDestination::new())
     }
 
-    fn operate(&mut self, id: usize, tx: Tx<Train>, pool: HybridThreadPool) -> Result<usize, String> {
+    fn operate(&mut self, id: usize, tx: Tx<Train>, pool: HybridThreadPool) -> Result<usize, TrackError> {
         let receiver = self.receiver.take().unwrap();
 
         pool.execute_sync("Debug Destination", move |_args| {

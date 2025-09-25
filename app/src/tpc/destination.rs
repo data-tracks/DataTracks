@@ -17,6 +17,7 @@ use std::time::Duration;
 use threading::command::Command;
 use tokio::time::sleep;
 use tracing::{debug, error};
+use error::error::TrackError;
 
 #[derive(Clone)]
 pub struct TpcDestination {
@@ -70,7 +71,7 @@ impl Configurable for TpcDestination {
 }
 
 impl StreamUser for TpcDestination {
-    async fn handle(&mut self, mut stream: TcpStream, rx: Rx<Command>) -> Result<(), String> {
+    async fn handle(&mut self, mut stream: TcpStream, rx: Rx<Command>) -> Result<(), TrackError> {
         let (control, sender, id) = self.run_parameter.clone().unwrap();
         let receiver = sender.subscribe();
 
@@ -99,7 +100,7 @@ impl StreamUser for TpcDestination {
                     Err(err) => {
                         if retry < 1 {
                             error!("Error TPC Destination disconnected {:?}", err);
-                            return Err(err.to_string());
+                            return Err(TrackError::from(err));
                         }
                         retry -= 1;
                     }
@@ -122,11 +123,11 @@ impl StreamUser for TpcDestination {
 }
 
 impl Destination for TpcDestination {
-    fn parse(options: Map<String, Value>) -> Result<Self, String> {
+    fn parse(options: Map<String, Value>) -> Result<Self, TrackError> {
         let port = if let Some(port) = options.get("port") {
             port.as_i64().unwrap() as u16
         } else {
-            return Err(String::from("Port not specified"));
+            return Err(TrackError::from("Port not specified"));
         };
 
         let url = options.get("url").and_then(|url| url.as_str());
@@ -134,7 +135,7 @@ impl Destination for TpcDestination {
         Ok(Self::new(url, port))
     }
 
-    fn operate(&mut self, id: usize, tx: Tx<Train>, pool: HybridThreadPool) -> Result<usize, String> {
+    fn operate(&mut self, id: usize, tx: Tx<Train>, pool: HybridThreadPool) -> Result<usize, TrackError> {
         debug!("starting tpc destination...");
 
         let url = self.url.clone();

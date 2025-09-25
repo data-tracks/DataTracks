@@ -13,6 +13,7 @@ use track_rails::message_generated::protocol::{
     RegisterResponseArgs, StartPlanRequest, StartPlanResponse, StartPlanResponseArgs,
     Status as ProtStatus, StopPlanRequest, StopPlanResponse, StopPlanResponseArgs,
 };
+use error::error::TrackError;
 
 #[derive(Debug, Default)]
 pub struct Api {
@@ -80,7 +81,10 @@ impl Api {
                 Some(b) => {
                     let mut storage = storage.lock().unwrap();
                     let (data_port, watermark_port) =
-                        storage.attach(usize::MAX, b.plan_id() as usize, b.stop_id() as usize)?;
+                        match storage.attach(usize::MAX, b.plan_id() as usize, b.stop_id() as usize) {
+                            Ok((d, w)) => (d,w),
+                            Err(_) => return build_status_response(Error(String::from("Incorrect  Bind Request")))
+                        };
                     drop(storage);
                     Self::build_bind_response(data_port as usize, watermark_port as usize)
                 }

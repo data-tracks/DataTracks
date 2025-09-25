@@ -9,6 +9,7 @@ use rusqlite::params_from_iter;
 use serde_json::Map;
 use std::collections::HashMap;
 use std::time::Duration;
+use error::error::TrackError;
 use threading::command::Command::Ready;
 
 #[derive(Clone)]
@@ -66,7 +67,7 @@ impl Configurable for LiteDestination {
 }
 
 impl Destination for LiteDestination {
-    fn parse(options: Map<String, serde_json::Value>) -> Result<Self, String>
+    fn parse(options: Map<String, serde_json::Value>) -> Result<Self, TrackError>
     where
         Self: Sized,
     {
@@ -78,7 +79,7 @@ impl Destination for LiteDestination {
         Ok(destination)
     }
 
-    fn operate(&mut self, id: usize, tx: Tx<Train>, pool: HybridThreadPool) -> Result<usize, String> {
+    fn operate(&mut self, id: usize, tx: Tx<Train>, pool: HybridThreadPool) -> Result<usize, TrackError> {
         let query = self.query.clone();
         let path = self.path.clone();
         let rx = tx.subscribe();

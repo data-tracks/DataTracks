@@ -7,6 +7,7 @@ use threading::multi::MultiSender;
 use threading::pool::HybridThreadPool;
 use tokio::time::sleep;
 use tracing::debug;
+use error::error::TrackError;
 use value::train::Train;
 
 #[derive(Default, Clone)]
@@ -68,7 +69,7 @@ impl ChangeDataCapture for MongoDbCdc {
         id: usize,
         outs: MultiSender<Train>,
         pool: HybridThreadPool,
-    ) -> Result<usize, String> {
+    ) -> Result<usize, TrackError> {
         let connection_uri = self.get_connection_string();
 
         let target = self.target.clone();

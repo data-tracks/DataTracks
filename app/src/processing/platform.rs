@@ -22,6 +22,7 @@ use parking_lot::RwLock;
 use threading::command::Command;
 use threading::command::Command::{Attach, Detach, Okay, Ready, Threshold};
 use tracing::{error};
+use error::error::TrackError;
 
 const IDLE_TIMEOUT: Duration = Duration::from_nanos(10);
 const BATCH_SIZE: usize = 100;
@@ -72,7 +73,7 @@ impl Platform {
         }
     }
 
-    pub(crate) fn operate(&mut self, meta: WorkerMeta) -> Result<(), String> {
+    pub(crate) fn operate(&mut self, meta: WorkerMeta) -> Result<(), TrackError> {
         let process = optimize(
             self.stop,
             self.transform.clone(),

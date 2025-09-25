@@ -15,3 +15,4 @@ tracing = { workspace = true }
 parking_lot = { workspace = true }
 tokio = { workspace = true }
 value = { workspace = true }
+error = {workspace = true}

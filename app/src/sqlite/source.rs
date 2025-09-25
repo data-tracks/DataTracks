@@ -7,6 +7,7 @@ use core::Source;
 use rusqlite::params;
 use serde_json::{Map, Value};
 use std::collections::HashMap;
+use error::error::TrackError;
 use threading::command::Command::{Ready, Stop};
 use threading::multi::MultiSender;
 
@@ -75,7 +76,7 @@ impl TryFrom<Map<String, Value>> for LiteSource {
 }
 
 impl Source for LiteSource {
-    fn operate(&mut self, id: usize, outs: MultiSender<Train>, pool: HybridThreadPool) -> Result<usize, String> {
+    fn operate(&mut self, id: usize, outs: MultiSender<Train>, pool: HybridThreadPool) -> Result<usize, TrackError> {
         let query = self.query.to_owned();
         let connection = self.connector.clone();
 

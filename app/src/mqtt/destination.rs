@@ -12,6 +12,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 use threading::command::Command::Ready;
 use tracing::{debug, error, info};
+use error::error::TrackError;
 
 impl TryFrom<HashMap<String, ConfigModel>> for MqttDestination {
     type Error = String;
@@ -72,11 +73,11 @@ impl Configurable for MqttDestination {
 }
 
 impl Destination for MqttDestination {
-    fn parse(options: Map<String, Value>) -> Result<Self, String> {
+    fn parse(options: Map<String, Value>) -> Result<Self, TrackError> {
         let port = if let Some(port) = options.get("port") {
             port.as_i64().unwrap() as u16
         } else {
-            return Err(String::from("Port not specified"));
+            return Err("Port not specified".into());
         };
 
         let url = options.get("url").and_then(|url| url.as_str());
@@ -84,7 +85,7 @@ impl Destination for MqttDestination {
         Ok(Self::new(url, port))
     }
 
-    fn operate(&mut self, id: usize, tx: Tx<Train>, pool: HybridThreadPool) -> Result<usize, String> {
+    fn operate(&mut self, id: usize, tx: Tx<Train>, pool: HybridThreadPool) -> Result<usize, TrackError> {
         debug!("starting mqtt destination...");
 
         let url = self.url.clone();

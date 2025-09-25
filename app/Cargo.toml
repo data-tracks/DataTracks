@@ -17,6 +17,7 @@ eula = false
 derivative = { workspace = true }
 parking_lot = { workspace = true }
 value = { workspace = true }
+error = { workspace = true }
 core = { workspace = true }
 threading = { workspace = true }
 axum = { version = "0.8.4", features = ["ws"] }
