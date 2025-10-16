@@ -27,7 +27,7 @@ cdc = { workspace = true }
 tokio = { workspace = true }
 tower-http = { version = "0.6.6", features = ["full"] }
 tracing = { workspace = true }
-tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
 chrono = {workspace = true}
 logos = "0.15.1"
 serde_json = { workspace = true }

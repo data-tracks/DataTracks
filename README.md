@@ -113,3 +113,8 @@ GROUP BY "salary"
 
 [GPLv3](https://www.gnu.org/licenses/)
 
+### Update Submodules
+
+```shell
+git submodule update --recursive --remote
+```
