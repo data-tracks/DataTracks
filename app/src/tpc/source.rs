@@ -18,6 +18,7 @@ use threading::multi::MultiSender;
 use tokio::time::sleep;
 use tracing::{debug, info, warn};
 use track_rails::message_generated::protocol::Payload;
+use error::error::TrackError;
 
 #[derive(Clone)]
 pub struct TpcSource {
@@ -39,7 +40,7 @@ impl TpcSource {
         }
     }
 
-    fn send(&self, train: Train) -> Result<(), String> {
+    fn send(&self, train: Train) -> Result<(), TrackError> {
         self.outs.iter().try_for_each(|out| out.send(train.clone()))
     }
 
@@ -100,7 +101,7 @@ impl TryFrom<Map<String, Value>> for TpcSource {
 }
 
 impl Source for TpcSource {
-    fn operate(&mut self, id: usize, outs: MultiSender<Train>, pool: HybridThreadPool) -> Result<usize, String> {
+    fn operate(&mut self, id: usize, outs: MultiSender<Train>, pool: HybridThreadPool) -> Result<usize, TrackError> {
         debug!("Starting TPC source...");
 
         let port = self.port;
@@ -134,7 +135,7 @@ impl Source for TpcSource {
 }
 
 impl StreamUser for TpcSource {
-    async fn handle(&mut self, mut stream: TcpStream, rx: Rx<Command>) -> Result<(), String> {
+    async fn handle(&mut self, mut stream: TcpStream, rx: Rx<Command>) -> Result<(), TrackError> {
         let mut len_buf = [0u8; 4];
 
         loop {

@@ -15,6 +15,7 @@ use threading::pool::WorkerMeta;
 use tokio::net::TcpListener;
 use tower_http::cors::CorsLayer;
 use tracing::log::debug;
+use error::error::TrackError;
 use threading::command::Command::Ready;
 
 // ws: npx wscat -c ws://127.0.0.1:3666/ws/data
@@ -45,7 +46,7 @@ async fn start_source(
     http: HttpSource,
     meta: WorkerMeta,
     id: usize,
-) -> Result<(), String> {
+) -> Result<(), TrackError> {
     debug!(
         "starting http source on {url}:{port}...",
         url = http.url,
@@ -88,7 +89,7 @@ async fn start_source(
     axum::serve(listener, app)
         .with_graceful_shutdown(server_shutdown_future)
         .await
-        .map_err(|err| format!("failed to start HTTP server: {}", err))
+        .map_err(|err| format!("failed to start HTTP server: {}", err).into())
 }
 
 impl Configurable for HttpSource {
@@ -148,7 +149,7 @@ impl Source for HttpSource {
         id: usize,
         outs: MultiSender<Train>,
         pool: HybridThreadPool,
-    ) -> Result<usize, String> {
+    ) -> Result<usize, TrackError> {
         let clone = self.clone();
 
         pool.execute_async("HTTP Source", move |meta| {

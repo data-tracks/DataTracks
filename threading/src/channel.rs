@@ -1,3 +1,4 @@
+use error::error::TrackError;
 use crate::broadcast::{BroadcastRx, BroadcastTx};
 use crate::one_shot;
 use crate::one_shot::{SingleRx, SingleTx};
@@ -23,9 +24,9 @@ impl<T: Clone + Send + 'static> Tx<T> {
         }
     }
 
-    pub fn send(&self, item: T) -> Result<(), String> {
+    pub fn send(&self, item: T) -> Result<(), TrackError> {
         match self {
-            Tx::Single(s) => s.send(item).map_err(|e| e.to_string()),
+            Tx::Single(s) => s.send(item),
             Tx::Broadcast(s) => s.send(item),
         }
     }

@@ -6,6 +6,7 @@ use core::Configurable;
 use core::Source;
 use serde_json::{Map, Value};
 use std::collections::HashMap;
+use error::error::TrackError;
 use threading::multi::MultiSender;
 use value::train::Train;
 
@@ -95,7 +96,7 @@ impl TryFrom<Map<String, Value>> for PostgresSource {
 }
 
 impl Source for PostgresSource {
-    fn operate(&mut self, id: usize, outs: MultiSender<Train>, pool: HybridThreadPool) -> Result<usize, String> {
+    fn operate(&mut self, id: usize, outs: MultiSender<Train>, pool: HybridThreadPool) -> Result<usize, TrackError> {
         let mut cdc = PostgresCdc::new(
             self.url.clone(),
             self.port,

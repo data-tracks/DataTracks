@@ -18,7 +18,8 @@ serde = { workspace = true }
 crossbeam = { workspace = true }
 tracing-test = { workspace = true }
 threading = { workspace = true }
-value = {workspace = true}
+value = { workspace = true }
+error = { workspace = true }
 bytes = { workspace = true }
 tokio-postgres = { git = "https://github.com/MaterializeInc/rust-postgres" }
 serde_json = { workspace = true }

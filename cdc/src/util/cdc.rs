@@ -1,3 +1,4 @@
+use error::error::TrackError;
 #[cfg(test)]
 use threading::channel::new_broadcast;
 #[cfg(test)]
@@ -8,7 +9,7 @@ use value::train::Train;
 
 pub trait ChangeDataCapture {
     #[cfg(test)]
-    fn listen_test(&mut self) -> Result<(HybridThreadPool, Tx<Train>), String> {
+    fn listen_test(&mut self) -> Result<(HybridThreadPool, Tx<Train>), TrackError> {
         let tx = new_broadcast("test");
         let pool = HybridThreadPool::new();
         let _id = self.listen(0, vec![tx.clone()].into(), pool.clone())?;
@@ -20,5 +21,5 @@ pub trait ChangeDataCapture {
         id: usize,
         outs: MultiSender<Train>,
         pool: HybridThreadPool,
-    ) -> Result<usize, String>;
+    ) -> Result<usize, TrackError>;
 }

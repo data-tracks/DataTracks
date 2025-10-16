@@ -3,6 +3,7 @@ use crate::util::Tx;
 use chrono::Duration;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use error::error::TrackError;
 use value::Time;
 
 /// Thread-safe and shareable watermarks
@@ -97,7 +98,7 @@ impl MonotonicWatermark {
         MonotonicWatermark::default()
     }
 
-    pub(crate) fn mark(&self, train: &Train) -> Result<(), String> {
+    pub(crate) fn mark(&self, train: &Train) -> Result<(), TrackError> {
         let mut last = self.last.lock().unwrap();
         let time = train.event_time;
         if time > *last {

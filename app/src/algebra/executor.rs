@@ -4,6 +4,7 @@ use crate::util::Tx;
 use core::util::reservoir::ValueReservoir;
 use std::collections::HashMap;
 use tracing::warn;
+use error::error::TrackError;
 use value::train::Train;
 
 enum WhatStrategy {
@@ -42,7 +43,7 @@ impl Executor {
         self.sender.remove(num);
     }
 
-    pub fn execute(&mut self, train: Train) -> Result<(), String> {
+    pub fn execute(&mut self, train: Train) -> Result<(), TrackError> {
         if train.content.is_empty() {
             warn!("Train is empty incoming");
             return Ok(());

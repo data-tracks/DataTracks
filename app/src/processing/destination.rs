@@ -21,6 +21,7 @@ use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, Mutex};
 use threading::channel::new_broadcast;
 use track_rails::message_generated::protocol::{Destination as FlatDestination, DestinationArgs};
+use error::error::TrackError;
 use value::train::Train;
 
 #[derive(Clone)]
@@ -105,7 +106,7 @@ impl Into<DestinationHolder> for Destinations {
 }
 
 impl TryFrom<(String, Map<String, Value>)> for Destinations {
-    type Error = String;
+    type Error = TrackError;
 
     fn try_from(value: (String, Map<String, Value>)) -> Result<Self, Self::Error> {
         let destination_type = value.0;
@@ -126,7 +127,7 @@ impl TryFrom<(String, Map<String, Value>)> for Destinations {
 }
 
 impl TryFrom<(String, HashMap<String, ConfigModel>)> for Destinations {
-    type Error = String;
+    type Error = TrackError;
 
     fn try_from(value: (String, HashMap<String, ConfigModel>)) -> Result<Self, Self::Error> {
         let source_type = value.0;
@@ -219,11 +220,11 @@ impl DerefMut for Destinations {
 }
 
 pub trait Destination: Send + Configurable + Sync {
-    fn parse(options: Map<String, Value>) -> Result<Self, String>
+    fn parse(options: Map<String, Value>) -> Result<Self, TrackError>
     where
         Self: Sized;
 
-    fn operate(&mut self, id: usize, tx: Tx<Train>, pool: HybridThreadPool) -> Result<usize, String>;
+    fn operate(&mut self, id: usize, tx: Tx<Train>, pool: HybridThreadPool) -> Result<usize, TrackError>;
 
     fn type_(&self) -> String;
 

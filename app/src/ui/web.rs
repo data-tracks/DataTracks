@@ -21,6 +21,7 @@ use tokio::runtime::Runtime;
 use tower_http::cors::CorsLayer;
 use tracing::{debug, error, info};
 use track_rails::message_generated::protocol::Payload;
+use error::error::TrackError;
 use crate::processing::source::Sources;
 /*curl --header "Content-Type: application/json" --request POST --json '{"name":"wordcount","plan":"0--1{sql|SELECT * FROM $0}--2\nIn\nHttp{\"url\": \"localhost\", \"port\": \"3666\"}:0\nOut\nHttp{\"url\": \"localhost\", \"port\": \"4666\"}:2"}' http://localhost:2666/plans/create*/
 /*curl --header "Content-Type: application/json" --request POST --json '{"name":"wordcount"}' http://localhost:2666/plans/start*/
@@ -244,7 +245,7 @@ async fn create_in_outs(
         }
         "destination" => {
             if let Err(value) = create_destination(&state, payload) {
-                return (StatusCode::BAD_REQUEST, value);
+                return (StatusCode::BAD_REQUEST, value.to_string());
             }
         }
         _ => {}
@@ -265,7 +266,7 @@ fn create_source(state: &WebState, payload: CreateInOutsPayload) -> Result<(), S
     Ok(())
 }
 
-fn create_destination(state: &WebState, payload: CreateInOutsPayload) -> Result<(), String> {
+fn create_destination(state: &WebState, payload: CreateInOutsPayload) -> Result<(), TrackError> {
     let destination = Destinations::try_from((payload.type_name.to_lowercase().to_string(), payload.configs))?;
 
     state

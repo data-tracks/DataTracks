@@ -18,6 +18,7 @@ use tokio::sync::oneshot::Sender;
 use tower_http::cors::CorsLayer;
 use tracing::error;
 use track_rails::message_generated::protocol::CreatePlanRequest;
+use error::error::TrackError;
 use threading::command::Command;
 use value::Time;
 
@@ -248,7 +249,7 @@ impl Storage {
         }
     }
 
-    pub fn stop_plan(&mut self, id: usize) -> Result<(), String> {
+    pub fn stop_plan(&mut self, id: usize) -> Result<(), TrackError> {
         let mut lock = self.plans.lock().unwrap();
         let plan = lock.get_mut(&id);
         match plan {
@@ -259,7 +260,7 @@ impl Storage {
         }
     }
 
-    pub fn stop_plan_by_name(&mut self, name: String) -> Result<(), String> {
+    pub fn stop_plan_by_name(&mut self, name: String) -> Result<(), TrackError> {
         let mut lock = self.plans.lock().unwrap();
         let plan = lock
             .iter_mut()
@@ -279,7 +280,7 @@ impl Storage {
         source_id: usize,
         plan_id: usize,
         stop_id: usize,
-    ) -> Result<(u16, u16), String> {
+    ) -> Result<(u16, u16), TrackError> {
         {
             let attach = self.attachments.lock().unwrap();
             let values = attach.get(&source_id);
@@ -298,7 +299,7 @@ impl Storage {
         Ok((data_port, watermark_port))
     }
 
-    pub fn detach(&mut self, source_id: usize, plan_id: usize, stop_id: usize) -> Result<(), String> {
+    pub fn detach(&mut self, source_id: usize, plan_id: usize, stop_id: usize) -> Result<(), TrackError> {
         let attach = self.attachments.lock().unwrap();
         let values = attach.get(&source_id);
         if values.is_none() {
@@ -310,7 +311,7 @@ impl Storage {
         plan.send_control(&stop_id, Command::Detach(source_id))?;
         let mut lock = self.attachments.lock().unwrap();
         if lock.remove(&source_id).is_none() {
-            Err("Could not remove".to_string())
+            Err(TrackError::from("Could not remove"))
         }else {
             Ok(())
         }

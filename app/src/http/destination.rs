@@ -13,6 +13,7 @@ use std::collections::HashMap;
 use tokio::net::TcpListener;
 use tower_http::cors::CorsLayer;
 use tracing::debug;
+use error::error::TrackError;
 use threading::command::Command::Ready;
 use threading::pool::WorkerMeta;
 
@@ -81,7 +82,7 @@ async fn start_destination(
     meta: WorkerMeta,
     rx: Tx<Train>,
     id: usize,
-) -> Result<(), String> {
+) -> Result<(), TrackError> {
     debug!(
         "starting http destination on {url}:{port}...",
         url = http.url,
@@ -105,11 +106,11 @@ async fn start_destination(
     meta.output_channel.send(Ready(id))?;
     axum::serve(listener, app)
         .await
-        .map_err(|err| err.to_string())
+        .map_err(|err| err.into())
 }
 
 impl Destination for HttpDestination {
-    fn parse(options: Map<String, Value>) -> Result<Self, String>
+    fn parse(options: Map<String, Value>) -> Result<Self, TrackError>
     where
         Self: Sized,
     {
@@ -124,7 +125,7 @@ impl Destination for HttpDestination {
         Ok(destination)
     }
 
-    fn operate(&mut self, id: usize, tx: Tx<Train>, pool: HybridThreadPool) -> Result<usize, String> {
+    fn operate(&mut self, id: usize, tx: Tx<Train>, pool: HybridThreadPool) -> Result<usize, TrackError> {
         let clone = self.clone();
 
         pool.execute_async(format!("HTTP Destination {}", id), move |meta| {

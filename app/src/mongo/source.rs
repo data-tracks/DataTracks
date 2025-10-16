@@ -3,6 +3,7 @@ use core::ConfigModel;
 use core::Source;
 use serde_json::{Map, Value};
 use std::collections::HashMap;
+use error::error::TrackError;
 use threading::multi::MultiSender;
 use threading::pool::HybridThreadPool;
 use value::train::Train;
@@ -101,7 +102,7 @@ impl core::processing::configuration::Configurable for MongoDbSource {
 }
 
 impl Source for MongoDbSource {
-    fn operate(&mut self, id: usize, outs: MultiSender<Train>, pool: HybridThreadPool) -> Result<usize, String> {
+    fn operate(&mut self, id: usize, outs: MultiSender<Train>, pool: HybridThreadPool) -> Result<usize, TrackError> {
         let mut cdc = MongoDbCdc::new(self.url.clone(), self.port, self.entity.clone())?;
 
         cdc.listen(id, outs, pool)

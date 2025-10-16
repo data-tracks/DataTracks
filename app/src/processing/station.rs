@@ -14,6 +14,7 @@ use crate::util::{new_channel, new_id};
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use tracing::debug;
 use track_rails::message_generated::protocol::Station as FlatStation;
+use error::error::TrackError;
 use value::train::Train;
 
 #[derive(Clone)]
@@ -237,7 +238,7 @@ impl Station {
     }
 
     #[cfg(test)]
-    pub(crate) fn fake_receive(&mut self, train: Train) -> Result<(), String> {
+    pub(crate) fn fake_receive(&mut self, train: Train) -> Result<(), TrackError> {
         self.incoming.0.send(train)
     }
 
@@ -273,7 +274,7 @@ impl Station {
         &mut self,
         transforms: HashMap<String, Transforms>,
         pool: HybridThreadPool,
-    ) -> Result<usize, String> {
+    ) -> Result<usize, TrackError> {
         let mut platform = Platform::new(self, transforms);
         let stop = self.stop;
 
