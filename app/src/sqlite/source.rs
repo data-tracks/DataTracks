@@ -84,7 +84,7 @@ impl Source for LiteSource {
 
         pool.execute_async("SQLite Source", move |meta| {
             Box::pin(async move {
-                let conn = connection.connect().await.unwrap();
+                let conn = connection.connect().unwrap();
                 let mut prepared = conn.prepare_cached(query.as_str()).unwrap();
                 control.send(Ready(id))?;
                 let count = prepared.column_count();

@@ -29,14 +29,9 @@ use crate::processing::source::Sources;
 // Embed the entire directory
 static ASSETS_DIR: Dir<'_> = include_dir!("./target/ui");
 
-pub fn start_web(storage: Arc<Mutex<Storage>>) {
-    // Create a new Tokio runtime
-    let rt = Runtime::new().unwrap();
-
-    rt.block_on(async {
-        startup(storage).await;
-        debug!("Startup done.")
-    })
+pub async fn start_web(storage: Storage) {
+    startup(storage).await;
+    debug!("Startup done.")
 }
 
 async fn serve_embedded_file(path: String) -> impl IntoResponse {
@@ -61,7 +56,7 @@ async fn serve_embedded_file(path: String) -> impl IntoResponse {
     }
 }
 
-pub async fn startup(storage: Arc<Mutex<Storage>>) {
+pub async fn startup(storage: Storage) {
     debug!("initializing router...");
 
     // We could also read our port in from the environment as well
@@ -75,17 +70,7 @@ pub async fn startup(storage: Arc<Mutex<Storage>>) {
 
     let app = Router::new()
         .route("/ws", get(websocket_handler))
-        .route("/plans", get(get_plans))
-        .route("/plans/create", post(create_plan))
-        .route("/plans/stop", post(stop_plan))
-        .route("/plans/start", post(start_plan))
-        .route("/inouts/create", post(create_in_outs))
-        .route("/options", get(get_options))
         .route("/status", get(get_status))
-        .route(
-            "/{*path}",
-            get(|path: Path<String>| serve_embedded_file(path.to_string())),
-        )
         .route("/", get(|| serve_embedded_file(String::from("/"))))
         .with_state(state)
         .layer(CorsLayer::permissive());
@@ -149,20 +134,6 @@ async fn handle_socket(state: WebState, mut socket: WebSocket) {
     }
 }
 
-async fn get_plans(State(state): State<WebState>) -> impl IntoResponse {
-    let plans = state
-        .storage
-        .lock()
-        .unwrap()
-        .plans
-        .lock()
-        .unwrap()
-        .values()
-        .map(|plan| serde_json::to_value(plan).unwrap())
-        .collect::<Value>();
-    let msg = json!( {"plans": &plans});
-    Json(msg)
-}
 
 async fn get_options(State(_state): State<WebState>) -> impl IntoResponse {
     let sources = Sources::get_default_configs();
@@ -190,92 +161,9 @@ async fn create_plan(
     };
 
     plan.set_name(payload.name);
-    state.storage.lock().unwrap().add_plan(plan);
-
-    // Return a response
-    (StatusCode::OK, "Plan created".to_string())
+    todo!()
 }
 
-async fn start_plan(
-    State(state): State<WebState>,
-    Json(payload): Json<PlanPayload>,
-) -> impl IntoResponse {
-    debug!("{:?}", payload);
-
-    state
-        .storage
-        .lock()
-        .unwrap()
-        .start_plan_by_name(payload.name);
-
-    // Return a response
-    (StatusCode::OK, "Plan started".to_string())
-}
-
-async fn stop_plan(
-    State(state): State<WebState>,
-    Json(payload): Json<PlanPayload>,
-) -> impl IntoResponse {
-    debug!("{:?}", payload);
-
-    let res = state
-        .storage
-        .lock()
-        .unwrap()
-        .stop_plan_by_name(payload.name);
-
-    if let Err(e) = res {
-        return (StatusCode::BAD_REQUEST, e.to_string());
-    }
-
-    // Return a response
-    (StatusCode::OK, "Plan stopped".to_string())
-}
-
-async fn create_in_outs(
-    State(state): State<WebState>,
-    Json(payload): Json<CreateInOutsPayload>,
-) -> impl IntoResponse {
-    debug!("{:?}", payload);
-    match payload.category.as_str() {
-        "source" => {
-            if let Err(value) = create_source(&state, payload) {
-                return (StatusCode::BAD_REQUEST, value);
-            }
-        }
-        "destination" => {
-            if let Err(value) = create_destination(&state, payload) {
-                return (StatusCode::BAD_REQUEST, value.to_string());
-            }
-        }
-        _ => {}
-    }
-
-    // Return a response
-    (StatusCode::OK, "Created".to_string())
-}
-
-fn create_source(state: &WebState, payload: CreateInOutsPayload) -> Result<(), String> {
-    let source = Sources::try_from((payload.type_name.to_lowercase().to_string(), payload.configs))?;
-
-    state
-        .storage
-        .lock()
-        .unwrap()
-        .add_source(payload.plan_id, payload.stop_id, source.into());
-    Ok(())
-}
-
-fn create_destination(state: &WebState, payload: CreateInOutsPayload) -> Result<(), TrackError> {
-    let destination = Destinations::try_from((payload.type_name.to_lowercase().to_string(), payload.configs))?;
-
-    state
-        .storage
-        .lock()
-        .unwrap()
-        .add_destination(payload.plan_id, payload.stop_id, destination.into());
-    Ok(())
-}
 
 #[derive(Deserialize, Debug)]
 struct CreatePlanPayload {
@@ -294,7 +182,7 @@ struct CreateInOutsPayload {
 
 #[derive(Clone)]
 struct WebState {
-    pub storage: Arc<Mutex<Storage>>,
+    pub storage: Storage,
     pub api: Arc<Mutex<Api>>,
 }
 

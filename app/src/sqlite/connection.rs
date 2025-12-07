@@ -20,7 +20,7 @@ impl SqliteConnector {
         options.insert(String::from("path"), Value::String(self.path.clone()));
     }
 
-    pub(crate) async fn connect(&self) -> Result<Connection, String> {
+    pub(crate) fn connect(&self) -> Result<Connection, String> {
         Connection::open(format!("sqlite:{}", self.path)).map_err(|e| e.to_string())
     }
 

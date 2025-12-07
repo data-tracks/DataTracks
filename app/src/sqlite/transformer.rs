@@ -1,21 +1,26 @@
 use crate::analyse::{InputDerivable, OutputDerivationStrategy};
 use crate::language::Language;
-use crate::processing::Layout;
 use crate::processing::transform::Transformer;
-use crate::util::{DynamicQuery, new_id};
-use core::Configurable;
+use crate::processing::Layout;
+use crate::util::{new_id, DynamicQuery};
 use core::util::iterator::BoxedValueIterator;
 use core::util::iterator::ValueIterator;
 use core::util::reservoir::ValueReservoir;
+use core::Configurable;
 
 use crate::sqlite::connection::SqliteConnector;
-use rusqlite::{ToSql, params_from_iter};
+use async_stream::stream;
+use flatbuffers::{FlatBufferBuilder, WIPOffset};
+use futures_util::Stream;
+use rusqlite::{params_from_iter, ToSql};
 use serde_json::Map;
 use std::collections::HashMap;
+use std::pin::Pin;
 use std::rc::Rc;
-use flatbuffers::{FlatBufferBuilder, WIPOffset};
-use tokio::runtime::Runtime;
-use track_rails::message_generated::protocol::{LanguageTransform, LanguageTransformArgs, Transform, TransformArgs, TransformType};
+use std::task::{Context, Poll};
+use track_rails::message_generated::protocol::{
+    LanguageTransform, LanguageTransformArgs, Transform, TransformArgs, TransformType,
+};
 use value::Value;
 
 #[derive(Debug, PartialEq, Clone)]
@@ -25,7 +30,6 @@ pub struct SqliteTransformer {
     pub connector: SqliteConnector,
     output_derivation_strategy: OutputDerivationStrategy,
 }
-
 
 impl SqliteTransformer {
     fn new(query: String, path: String) -> SqliteTransformer {
@@ -43,10 +47,7 @@ impl SqliteTransformer {
         }
     }
 
-    pub fn flatternize<'a>(
-        &self,
-        builder: &mut FlatBufferBuilder<'a>,
-    ) -> WIPOffset<Transform<'a>> {
+    pub fn flatternize<'a>(&self, builder: &mut FlatBufferBuilder<'a>) -> WIPOffset<Transform<'a>> {
         let query = builder.create_string(&self.query.to_string());
         let name = builder.create_string("Language");
         let args = LanguageTransform::create(
@@ -56,7 +57,7 @@ impl SqliteTransformer {
                 query: Some(query),
             },
         )
-            .as_union_value();
+        .as_union_value();
         Transform::create(
             builder,
             &TransformArgs {
@@ -142,24 +143,20 @@ impl SqliteIterator {
     }
 
     fn query_values(&self, value: Value) -> Result<Vec<Value>, String> {
-        let runtime = Runtime::new().unwrap();
-        let query = self.query.clone();
-        runtime.block_on(async {
-            let connection = self.connector.connect().await.unwrap();
-            let (query, value_function) = query.prepare_query_transform("$", None, 1)?;
-            let mut prepared = connection.prepare_cached(&query).unwrap();
-            let count = prepared.column_count();
-            let mut iter = prepared
-                .query(params_from_iter(
-                    value_function(&value).iter().map(|v| v.to_sql().unwrap()),
-                ))
-                .unwrap();
-            let mut values = vec![];
-            while let Ok(Some(row)) = iter.next() {
-                values.push((row, count).try_into().unwrap());
-            }
-            Ok(values)
-        })
+        let connection = self.connector.connect()?;
+        let (query, value_function) = self.query.prepare_query_transform("$", None, 1)?;
+        let mut prepared = connection.prepare_cached(&query).unwrap();
+        let count = prepared.column_count();
+        let mut iter = prepared
+            .query(params_from_iter(
+                value_function(&value).iter().map(|v| v.to_sql().unwrap()),
+            ))
+            .unwrap();
+        let mut values = vec![];
+        while let Ok(Some(row)) = iter.next() {
+            values.push((row, count).try_into().unwrap());
+        }
+        Ok(values)
     }
 }
 

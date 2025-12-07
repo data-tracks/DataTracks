@@ -1,25 +1,12 @@
-use crate::http::util;
-use crate::http::util::{DestinationState, parse_addr};
-use crate::processing::destination::{DestinationHolder, Destinations};
-use crate::processing::plan::Status;
-use crate::processing::source::{SourceHolder, Sources};
+use crate::processing::destination::Destinations;
+use crate::processing::ledger::Ledger;
+use crate::processing::source::Sources;
 use crate::processing::transform::Transforms;
-use crate::processing::{Plan, Train};
 use crate::util::Tx;
-use crate::util::new_channel;
-use axum::Router;
-use axum::routing::get;
 use serde_json::{Map, Value};
 use std::collections::HashMap;
-use std::sync::Mutex;
-use tokio::net::TcpListener;
-use tokio::sync::oneshot;
+use std::sync::{Arc, Mutex};
 use tokio::sync::oneshot::Sender;
-use tower_http::cors::CorsLayer;
-use tracing::error;
-use track_rails::message_generated::protocol::CreatePlanRequest;
-use error::error::TrackError;
-use threading::command::Command;
 use value::Time;
 
 type SourceStorage = Mutex<HashMap<String, fn(Map<String, Value>) -> Sources>>;
@@ -28,11 +15,19 @@ type TransformStorage = Mutex<HashMap<String, fn(Map<String, Value>) -> Transfor
 
 #[derive(Default)]
 pub struct Storage {
-    pub plans: Mutex<HashMap<usize, Plan>>,
-    pub ins: SourceStorage,
-    pub outs: DestinationStorage,
-    pub transforms: TransformStorage,
-    pub attachments: Mutex<HashMap<usize, Attachment>>,
+    link: Arc<Mutex<State>>,
+}
+impl Clone for Storage {
+    fn clone(&self) -> Self {
+        Storage {
+            link: self.link.clone(),
+        }
+    }
+}
+
+#[derive(Default)]
+struct State {
+    pub plans: HashMap<usize, Ledger>,
 }
 
 pub struct Attachment {
@@ -62,258 +57,25 @@ impl Attachment {
 }
 
 impl Storage {
-    pub(crate) fn new() -> Storage {
-        Default::default()
-    }
 
-    pub fn start_http_attacher(
-        &mut self,
-        id: usize,
-        data_port: u16,
-        watermark_port: u16,
-    ) -> (Tx<Train>, Tx<Time>) {
-        let addr = match parse_addr("127.0.0.1", data_port) {
-            Ok(addr) => addr,
-            Err(err) => panic!("{}", err),
-        };
+    pub fn add_plan(&mut self, plan: Ledger) -> Result<(), String> {
+        let mut state = self.link.lock().unwrap();
 
-        let (tx, _) = new_channel::<Train, &str>("HTTP Attacher", true);
-
-        let (sh_tx, sh_rx) = oneshot::channel();
-        let tx_clone = tx.clone();
-
-        tokio::spawn(async move {
-            let state = DestinationState::train("HTTP Attacher", tx_clone);
-            let app = Router::new()
-                .route("/ws", get(util::publish_ws))
-                .layer(CorsLayer::permissive())
-                .with_state(state);
-
-            let listener = match TcpListener::bind(&addr).await {
-                Ok(listener) => listener,
-                Err(err) => panic!("Error attach {err}"),
-            };
-            match axum::serve(listener, app)
-                .with_graceful_shutdown(async move {
-                    sh_rx.await.ok();
-                })
-                .await
-            {
-                Ok(_) => {}
-                Err(err) => error!("{}", err),
-            }
-        });
-
-        // watermark
-        let addr = match parse_addr("127.0.0.1", watermark_port) {
-            Ok(addr) => addr,
-            Err(err) => panic!("{}", err),
-        };
-
-        let (water_sh_tx, water_sh_rx) = oneshot::channel();
-        let (water_tx, _) = new_channel::<Time, &str>("HTTP Attacher Watermark", true);
-
-        let water_tx_clone = water_tx.clone();
-        tokio::spawn(async move {
-            let state = DestinationState::time("HTTP Watermark Attacher", water_tx_clone);
-            let app = Router::new()
-                .route("/ws", get(util::publish_ws))
-                .layer(CorsLayer::permissive())
-                .with_state(state);
-
-            let listener = match TcpListener::bind(&addr).await {
-                Ok(listener) => listener,
-                Err(err) => panic!("Error attach {err}"),
-            };
-            match axum::serve(listener, app)
-                .with_graceful_shutdown(async move {
-                    water_sh_rx.await.ok();
-                })
-                .await
-            {
-                Ok(_) => {}
-                Err(err) => error!("{}", err),
-            }
-        });
-
-        let attachment = Attachment::new(
-            data_port,
-            watermark_port,
-            water_tx.clone(),
-            sh_tx,
-            water_sh_tx,
-        );
-
-        self.attachments.lock().unwrap().insert(id, attachment);
-        (tx, water_tx)
-    }
-
-    pub fn create_plan(&mut self, create_plan: CreatePlanRequest) -> Result<usize, String> {
-        if create_plan.name().is_some() && create_plan.plan().is_some() {
-            let plan = Plan::parse(create_plan.plan().unwrap());
-
-            let mut plan = match plan {
-                Ok(plan) => plan,
-                Err(err) => return Err(err.to_string()),
-            };
-
-            let id = plan.id;
-
-            plan.set_name(create_plan.name().unwrap().to_string());
-            self.add_plan(plan);
-            Ok(id)
-        } else {
-            Err("No name provided with create plan".to_string())
-        }
-    }
-
-    pub fn delete_plan(&mut self, id: usize) -> Result<(), String> {
-        let mut plans = self.plans.lock().unwrap();
-        plans
-            .remove(&id)
+        let id = plan.id;
+        state
+            .plans
+            .insert(plan.id, plan)
             .ok_or(format!("No plan with id {id}"))
             .map(|_| ())
     }
 
-    pub fn get_plans_by_name<S: AsRef<str>>(&self, name: S) -> Vec<Plan> {
-        if name.as_ref().trim().is_empty() || name.as_ref().trim() == "*" {
-            return self
-                .plans
-                .lock()
-                .unwrap()
-                .clone()
-                .values()
-                .map(|plan| plan.clone())
-                .collect();
-        }
+    pub fn delete_plan(&mut self, id: usize) -> Result<(), String> {
+        let mut state = self.link.lock().unwrap();
 
-        self.plans
-            .lock()
-            .unwrap()
-            .iter()
-            .filter(|(_, p)| p.name.matches(name.as_ref()).next().is_some())
-            .map(|(_, p)| p.clone())
-            .collect()
-    }
-
-    pub fn add_plan(&mut self, plan: Plan) {
-        let mut plans = self.plans.lock().unwrap();
-        plans.insert(plan.id, plan);
-    }
-
-    pub fn add_source(&mut self, plan_id: usize, stop_id: usize, source: SourceHolder) {
-        let mut plans = self.plans.lock().unwrap();
-        let id = source.id();
-        if let Some(p) = plans.get_mut(&plan_id) {
-            p.add_source(source);
-            p.connect_in_out(stop_id, id);
-        }
-    }
-
-    pub fn add_destination(&mut self, plan_id: usize, stop_id: usize, destination: DestinationHolder) {
-        let mut plans = self.plans.lock().unwrap();
-        let id = destination.id();
-        if let Some(p) = plans.get_mut(&plan_id) {
-            p.add_destination(destination);
-            p.connect_in_out(stop_id, id);
-        }
-    }
-
-    pub fn start_plan_by_name(&mut self, name: String) {
-        let mut lock = self.plans.lock().unwrap();
-        let plan = lock
-            .iter_mut()
-            .filter(|(_id, plan)| plan.name == name)
-            .map(|(_, plan)| plan)
-            .next();
-        match plan {
-            None => {}
-            Some(p) => {
-                p.operate().unwrap();
-            }
-        }
-    }
-
-    pub fn start_plan(&mut self, id: usize) {
-        let mut lock = self.plans.lock().unwrap();
-        let plan = lock.get_mut(&id);
-        match plan {
-            None => {}
-            Some(p) => {
-                p.status = Status::Running;
-                match p.operate() {
-                    Ok(_) => {}
-                    Err(err) => error!("{}", err),
-                }
-            }
-        }
-    }
-
-    pub fn stop_plan(&mut self, id: usize) -> Result<(), TrackError> {
-        let mut lock = self.plans.lock().unwrap();
-        let plan = lock.get_mut(&id);
-        match plan {
-            None => Ok(()),
-            Some(p) => {
-                p.halt()
-            }
-        }
-    }
-
-    pub fn stop_plan_by_name(&mut self, name: String) -> Result<(), TrackError> {
-        let mut lock = self.plans.lock().unwrap();
-        let plan = lock
-            .iter_mut()
-            .filter(|(_id, plan)| plan.name == name)
-            .map(|(_, plan)| plan)
-            .next();
-        match plan {
-            None => Ok(()),
-            Some(p) => {
-                p.halt()
-            }
-        }
-    }
-
-    pub fn attach(
-        &mut self,
-        source_id: usize,
-        plan_id: usize,
-        stop_id: usize,
-    ) -> Result<(u16, u16), TrackError> {
-        {
-            let attach = self.attachments.lock().unwrap();
-            let values = attach.get(&source_id);
-            if let Some(attachment) = values {
-                return Ok((attachment.data_port, attachment.watermark_port));
-            }
-        }
-
-        let data_port = 3131;
-        let watermark_port = 4141;
-
-        let tx = self.start_http_attacher(source_id, data_port, watermark_port);
-        let mut lock = self.plans.lock().unwrap();
-        let plan = lock.get_mut(&plan_id).unwrap();
-        plan.send_control(&stop_id, Command::Attach(source_id, tx))?;
-        Ok((data_port, watermark_port))
-    }
-
-    pub fn detach(&mut self, source_id: usize, plan_id: usize, stop_id: usize) -> Result<(), TrackError> {
-        let attach = self.attachments.lock().unwrap();
-        let values = attach.get(&source_id);
-        if values.is_none() {
-            return Ok(());
-        }
-
-        let mut lock = self.plans.lock().unwrap();
-        let plan = lock.get_mut(&plan_id).unwrap();
-        plan.send_control(&stop_id, Command::Detach(source_id))?;
-        let mut lock = self.attachments.lock().unwrap();
-        if lock.remove(&source_id).is_none() {
-            Err(TrackError::from("Could not remove"))
-        }else {
-            Ok(())
-        }
+        state
+            .plans
+            .remove(&id)
+            .ok_or(format!("No plan with id {id}"))
+            .map(|_| ())
     }
 }

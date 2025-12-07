@@ -1,0 +1,14 @@
+[package]
+name = "util"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description.workspace = true
+
+[dependencies]
+bollard = "0.19.4"
+tokio = { workspace = true }
+tracing = { workspace = true }
+futures-util = "0.3.31"

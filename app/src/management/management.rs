@@ -3,104 +3,81 @@ use crate::processing::{Plan, Train};
 use crate::tpc::start_tpc;
 use crate::ui::start_web;
 use reqwest::blocking::Client;
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
+use tokio::task::JoinSet;
 use tracing::{error, info};
+use engine::Engine;
 use value::Time;
 
 #[derive(Default)]
 pub struct Manager {
-    storage: Arc<Mutex<Storage>>,
-    handles: Vec<thread::JoinHandle<()>>,
+    storage: Storage,
+    engines: HashMap<usize, Engine>,
+    joins: JoinSet<()>,
 }
 
 impl Manager {
     pub fn new() -> Manager {
         Manager {
-            storage: Arc::new(Mutex::new(Storage::new())),
-            handles: vec![],
+            joins: JoinSet::new(),
+            storage: Storage::default(),
+            engines: HashMap::new(),
         }
     }
 
-    fn get_storage(&self) -> Arc<Mutex<Storage>> {
+    fn get_storage(&self) -> Storage {
         self.storage.clone()
     }
 
-    pub fn start(&mut self) {
-        add_default(self.get_storage());
+    pub async fn start(mut self) {
+        let ctrl_c_signal = tokio::signal::ctrl_c();
 
+        let mut join_set: JoinSet<()> = JoinSet::new();
+
+        //add_default(self.get_storage());
+
+        self.start_services();
+
+        for (name, engine) in Engine::start_all().await.unwrap().into_iter().enumerate() {
+            self.engines.insert(name, engine);
+        }
+
+
+        tokio::select! {
+                _ = ctrl_c_signal => {
+                    info!("#️⃣ Ctrl-C received!");
+                }
+                Some(res) = join_set.join_next() => {
+                    if let Err(e) = res {
+                        error!("\nFatal Error: A core task crashed: {:?}", e);
+                    }
+                }
+        }
+
+
+        for (_, mut e) in self.engines.drain() {
+            e.stop().await.unwrap();
+        }
+
+        // Clean up all remaining running tasks
+        info!("🧹 Aborting remaining tasks...");
+        join_set.abort_all();
+        while join_set.join_next().await.is_some() {}
+
+        info!("✅  All services shut down. Exiting.");
+    }
+
+    fn start_services(&mut self) {
         let web_storage = self.get_storage();
         let tpc_storage = self.get_storage();
 
-        let handle = match thread::Builder::new()
-            .name("HTTP Interface".to_string())
-            .spawn(|| start_web(web_storage))
-        {
-            Ok(handle) => handle,
-            Err(err) => panic!("Failed to start HTTP Interface {err}"),
-        };
-        self.handles.push(handle);
-        let handle = match thread::Builder::new()
-            .name("TPC Interface".to_string())
-            .spawn(|| start_tpc("localhost".to_string(), 5959, tpc_storage))
-        {
-            Ok(handle) => handle,
-            Err(err) => panic!("Failed to start TPC Interface {err}"),
-        };
-        self.handles.push(handle);
-    }
+        self.joins.spawn(start_web(web_storage));
 
-    pub fn shutdown(&mut self) {
-        for handle in self.handles.drain(..) {
-            if handle.is_finished() {
-                info!("Thread finished.");
-            } else {
-                info!(
-                    "Waiting for thread to finish {:?}...",
-                    handle.thread().name().unwrap_or("unknown")
-                );
-            }
-
-            match handle.join() {
-                Ok(_) => info!("Thread joined successfully."),
-                Err(err) => error!("Thread panicked: {:?}", err),
-            }
-        }
-    }
-}
-
-fn add_default(storage: Arc<Mutex<Storage>>) {
-    let res = thread::Builder::new()
-        .name("Default Plan".to_string())
-        .spawn(move || {
-            let mut plan = Plan::parse(
-                "\
-                1--2{sql|SELECT $1 FROM $1}[2s]--3\n\
-                In\n\
-                HTTP{\"port\": \"5555\"}:1\n\
-                MQTT{\"port\": 6666}:1\n\
-                TPC{\"port\": 9999}:1\n\
-                Out\n\
-                MQTT{\"port\": 8888}:3\n\
-                TPC{\"port\": 8686}:3\n\
-                HTTP{\"port\": 9696}:3",
-            )
-            .unwrap();
-
-            let id = plan.id;
-            plan.set_name("Default".to_string());
-            let mut lock = storage.lock().unwrap();
-            lock.add_plan(plan);
-            lock.start_plan(id);
-            drop(lock);
-
-            add_producer();
-        });
-
-    match res {
-        Ok(_) => {}
-        Err(err) => error!("{}", err),
+        self.joins
+            .spawn(start_tpc("localhost".to_string(), 5959, tpc_storage));
     }
 }
 

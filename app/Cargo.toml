@@ -46,6 +46,8 @@ tracing-test = { workspace = true}
 rusty-tracks = "0.0.12"
 mongodb = "3.2.4"
 futures-util = "0.3.31"
+async-stream = { workspace = true }
+engine = { workspace = true}
 
 
 [dev-dependencies]

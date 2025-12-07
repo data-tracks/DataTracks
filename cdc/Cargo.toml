@@ -9,7 +9,6 @@ description.workspace = true
 
 [dependencies]
 postgres = { workspace = true }
-bollard = "0.19.2"
 tokio = { workspace = true }
 tracing = { workspace = true }
 futures-util = { version = "0.3.31" }

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["core", "app", "value", "cdc", "threading", "macro"]
+members = ["core", "app", "value", "cdc", "threading", "macro", "engine", "util"]
 
 
 [workspace.package]
@@ -13,33 +13,37 @@ description = "DataTracks is an prototype system, which provides easy creation a
 
 [workspace.dependencies]
 speedy = "0.8.7"
-serde = { version = "1.0.219", features = ["derive"] }
+serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
-bytes = "1.10.1"
-tracing = "0.1.41"
+bytes = "1.11.0"
+tracing = "0.1.43"
 chrono = "0.4.42"
 flatbuffers = "25.9.23"
-postgres = "0.19.11"
+postgres = { version = "0.19.12" }
+tokio-postgres = "0.7.15"
 rusqlite = { version = "0.37.0", features = ["bundled"] }
-criterion = "0.7.0"
-redb = "3.0.0"
-rumqttc = "0.25.0"
-rumqttd = "0.19.0"
-tokio = { version = "1.47.1", features = ["full"] }
-mongodb = { version = "3.3.0"}
+criterion = "0.8.0"
+redb = "3.1.0"
+rumqttc = "0.25.1"
+rumqttd = "0.20.0"
+tokio = { version = "1.48.0", features = ["full"] }
+mongodb = { version = "3.4.1"}
 crossbeam = "0.8.4"
 value = { path="./value" }
 cdc = { path="./cdc" }
 core = { path = "./core" }
 threading = { path = "./threading" }
+util = {path = "./util" }
+engine = { path = "engine" }
 error = { path = "./error" }
 tracing-test = "0.2.5"
-uuid = { version = "1.18.1", features = ["v4"] }
+uuid = { version = "1.19.0", features = ["v4"] }
 rand = "0.9.2"
-parking_lot = "0.12.4"
+parking_lot = "0.12.5"
 macro = { path = "./macro" }
 derivative = "2.2.0"
-thiserror = "2.0.16"
+thiserror = "2.0.17"
+async-stream = "0.3.6"
 
 
 # The profile that 'cargo dist' will build with

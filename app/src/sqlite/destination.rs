@@ -86,7 +86,7 @@ impl Destination for LiteDestination {
 
         pool.execute_async("SQLite Destination", move |meta| {
             Box::pin(async move {
-                let conn = SqliteConnector::new(&path).connect().await.unwrap();
+                let conn = SqliteConnector::new(&path).connect().unwrap();
                 let (query, value_functions) = query.prepare_query_transform("$", None, 1)?;
 
                 meta.output_channel.send(Ready(id))?;

@@ -13,7 +13,7 @@ use tracing::{debug, error, info, warn};
 use track_rails::message_generated::protocol::Payload;
 use error::error::TrackError;
 
-pub fn start_tpc(url: String, port: u16, storage: Arc<Mutex<Storage>>) {
+pub async fn start_tpc(url: String, port: u16, storage: Storage) {
     let res = thread::Builder::new()
         .name("TPC Interface".to_string())
         .spawn(move || startup(url, port, storage));
@@ -24,7 +24,7 @@ pub fn start_tpc(url: String, port: u16, storage: Arc<Mutex<Storage>>) {
     debug!("Startup done.")
 }
 
-fn startup(url: String, port: u16, storage: Arc<Mutex<Storage>>) {
+fn startup(url: String, port: u16, storage: Storage) {
     let (tx, rx) = new_channel("Management TPC", false);
     let tx = Arc::new(tx);
     let rx = Arc::new(rx);
@@ -34,7 +34,7 @@ fn startup(url: String, port: u16, storage: Arc<Mutex<Storage>>) {
         interrupt: tx.clone(),
         control: rx.clone(),
         api: Arc::new(Mutex::new(Api::admin())),
-        storage: Arc::clone(&storage),
+        storage: storage.clone(),
     };
     info!(
         "DataTracks (TrackRails) protocol listening on: http://localhost:{}",
@@ -50,7 +50,7 @@ fn startup(url: String, port: u16, storage: Arc<Mutex<Storage>>) {
 pub struct TpcManagement {
     interrupt: Arc<Tx<Command>>,
     control: Arc<Rx<Command>>,
-    storage: Arc<Mutex<Storage>>,
+    storage: Storage,
     api: Arc<Mutex<Api>>,
 }
 
