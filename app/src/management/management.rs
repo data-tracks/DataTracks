@@ -4,6 +4,7 @@ use crate::tpc::start_tpc;
 use crate::ui::start_web;
 use reqwest::blocking::Client;
 use std::collections::HashMap;
+use std::error::Error;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -32,7 +33,7 @@ impl Manager {
         self.storage.clone()
     }
 
-    pub async fn start(mut self) {
+    pub async fn start(mut self) -> Result<(), Box<dyn Error>> {
         let ctrl_c_signal = tokio::signal::ctrl_c();
 
         let mut join_set: JoinSet<()> = JoinSet::new();
@@ -41,9 +42,11 @@ impl Manager {
 
         self.start_services();
 
-        for (name, engine) in Engine::start_all().await.unwrap().into_iter().enumerate() {
+        for (name, engine) in Engine::start_all().await?.into_iter().enumerate() {
             self.engines.insert(name, engine);
         }
+
+        let kafka = sink::kafka::start().await?;
 
 
         tokio::select! {
@@ -57,10 +60,13 @@ impl Manager {
                 }
         }
 
-
+        info!("Stopping engines...");
         for (_, mut e) in self.engines.drain() {
-            e.stop().await.unwrap();
+            e.stop().await?;
         }
+
+        info!("Stopping kafka...");
+        kafka.stop().await?;
 
         // Clean up all remaining running tasks
         info!("🧹 Aborting remaining tasks...");
@@ -68,6 +74,8 @@ impl Manager {
         while join_set.join_next().await.is_some() {}
 
         info!("✅  All services shut down. Exiting.");
+
+        Ok(())
     }
 
     fn start_services(&mut self) {

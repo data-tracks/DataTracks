@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use std::error::Error;
 use bollard::Docker;
 use bollard::container::LogOutput;
 use bollard::exec::{CreateExecOptions, StartExecOptions, StartExecResults};
@@ -5,11 +7,7 @@ use bollard::models::{
     ContainerCreateBody, ContainerSummaryStateEnum, HostConfig, ImageSummary, Mount, PortBinding,
     PortMap,
 };
-use bollard::query_parameters::{
-    CreateContainerOptionsBuilder, CreateImageOptionsBuilder, ListContainersOptionsBuilder,
-    ListImagesOptionsBuilder, RemoveContainerOptionsBuilder, StartContainerOptions,
-    StopContainerOptionsBuilder,
-};
+use bollard::query_parameters::{CreateContainerOptionsBuilder, CreateImageOptionsBuilder, ListContainersOptionsBuilder, ListImagesOptionsBuilder, RemoveContainerOptions, RemoveContainerOptionsBuilder, StartContainerOptions, StopContainerOptions, StopContainerOptionsBuilder};
 use futures_util::TryStreamExt;
 
 use std::thread::sleep;
@@ -192,6 +190,114 @@ impl Manager {
                 .map_err(|err| err.to_string())
         })
     }
+}
+
+pub struct Mapping{
+    pub container: u16,
+    pub host: u16
+}
+
+pub async fn start_container(
+    name: &str,
+    image: &str,
+    mappings: Vec<Mapping>,
+    env_vars: Option<Vec<String>>,
+) -> Result<(), Box<dyn Error>> {
+    let docker = match Manager::connect() {
+        Ok(d) => d,
+        Err(e) => {
+            return if e.contains("HyperLegacyError") {
+                Err(Box::from("Docker is probably not running"))
+            } else {
+                Err(Box::from(e))
+            }
+        }
+    };
+
+    let option = ListContainersOptionsBuilder::new().all(true).build();
+
+    let list = docker.list_containers(Some(option)).await?;
+
+    if list.into_iter().any(|c| {
+        c.names
+            .unwrap()
+            .first()
+            .into_iter()
+            .any(|n| n.to_lowercase() == format!("/{}",name))
+    }) {
+        stop(name).await?;
+    }
+
+    let options = CreateImageOptionsBuilder::new().from_image(image).build();
+
+    let mut status = docker.create_image(Some(options), None, None);
+
+    while let Some(msg) = status.try_next().await? {
+        if let Some(status) = msg.status {
+            info!("Pull Status: {}", status);
+        }
+    }
+
+    let mut exposed_ports = HashMap::new();
+    let mut port_bindings = HashMap::new();
+
+    for mapping in mappings {
+        // 1. Define the specific Host Port and IP
+        let binding = PortBinding {
+            // Listen on all host interfaces
+            host_ip: Some("127.0.0.1".to_string()),
+            // Map to host port 5432
+            host_port: Some(mapping.host.to_string()),
+        };
+
+        // 2. Create the HostConfig's PortBindings map
+        port_bindings.insert(
+            format!("{}/{}", mapping.host.to_string(), "tcp"),
+            Some(vec![binding]),
+        );
+
+        // 4. Create the ExposedPorts map for the container config
+        exposed_ports.insert(
+            format!("{}/{}", mapping.container.to_string(), "tcp"),
+            HashMap::new(),
+        );
+    }
+
+    // 3. Create the HostConfig
+    let host_config = HostConfig {
+        port_bindings: Some(port_bindings),
+        ..Default::default()
+    };
+
+
+    let options = CreateContainerOptionsBuilder::new().name(name).build();
+
+    let config = ContainerCreateBody {
+        image: Some(image.to_string()),
+        exposed_ports: Some(exposed_ports),
+        host_config: Some(host_config),
+        env: env_vars,
+        ..Default::default()
+    };
+
+    docker.create_container(Some(options), config).await?;
+
+    docker
+        .start_container(name, None::<StartContainerOptions>)
+        .await?;
+    Ok(())
+}
+
+pub async fn stop(name: &str) -> Result<(), Box<dyn Error>> {
+    let docker = Manager::connect()?;
+    docker
+        .stop_container(name, None::<StopContainerOptions>)
+        .await?;
+    docker
+        .remove_container(name, None::<RemoveContainerOptions>)
+        .await?;
+    info!("⏸️ Stopped container {}", name);
+    Ok(())
 }
 
 #[derive(Debug)]

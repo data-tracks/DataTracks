@@ -1,0 +1,123 @@
+use crate::engine;
+use neo4rs::Graph;
+use reqwest::Client;
+use serde::Deserialize;
+use std::error::Error;
+use std::time::Duration;
+use tokio::time::{sleep, Instant};
+use tracing::info;
+use util::container;
+use util::container::Mapping;
+
+pub struct Neo4j {
+    pub(crate) host: String,
+    pub(crate) port: u16,
+    pub(crate) user: String,
+    pub(crate) password: String,
+    pub(crate) database: String,
+    pub(crate) graph: Option<Graph>,
+}
+
+#[derive(Debug, Deserialize)]
+struct TxMetrics {
+    // These paths depend on the specific Neo4j version and configuration
+    // Often, metrics are exposed as a JSON map or Prometheus text format
+    #[serde(rename = "neo4j.transaction.commits")]
+    commits: f64,
+    #[serde(rename = "neo4j.transaction.rollbacks")]
+    rollbacks: f64,
+}
+
+impl Neo4j {
+    pub(crate) async fn start(&mut self) -> Result<(), Box<dyn Error>> {
+        container::start_container(
+            "engine-neo4j",
+            "neo4j:latest",
+            vec![
+                Mapping {
+                    container: 7687,
+                    host: 7687,
+                },
+                Mapping {
+                    container: 7474,
+                    host: 7474,
+                },
+            ],
+            Some(vec![format!("NEO4J_AUTH=neo4j/{}", "neoneoneo")]),
+        )
+        .await?;
+
+        let uri = format!("{}:{}", self.host, self.port);
+
+        let graph = Graph::new(&uri, self.user.clone(), self.password.clone())?;
+
+        let start_time = Instant::now();
+
+        loop {
+            match graph.run("MATCH (n) RETURN n").await {
+                Ok(_) => break,
+                Err(e) => {
+                    let time = Instant::now();
+                    if time.duration_since(start_time).as_secs() > 60 {
+                        return Err(Box::new(e));
+                    }
+                    sleep(Duration::from_secs(2)).await;
+                }
+            }
+        }
+
+        info!("️️☑️ Connected to postgres neo4j");
+        self.graph = Some(graph);
+
+        self.check_throughput().await?;
+        Ok(())
+    }
+
+    pub(crate) async fn stop(&mut self) -> Result<(), Box<dyn Error>> {
+        container::stop("engine-neo4j").await
+    }
+
+    async fn check_throughput(&self) -> Result<(), Box<dyn Error>> {
+        let http_client = Client::new();
+        let management_uri = "http://localhost:7474";
+
+        let interval_seconds = 5.0;
+        let url = format!("{}/db/neo4j/management/metrics/json", management_uri); // Example endpoint
+
+        info!("--- Monitoring Neo4j TPS ---");
+
+        // Function to fetch metrics (simplified for a hypothetical JSON endpoint)
+        let fetch_metrics = |client: Client, url: String| async move {
+            let resp = client
+                .get(url)
+                .basic_auth(self.user.clone(), Some(self.password.clone()))
+                .send()
+                .await?;
+            let json_map: serde_json::Value = resp.json().await?;
+            // Manually navigate the map to extract required values
+            Ok::<TxMetrics, Box<dyn Error>>(TxMetrics {
+                commits: json_map["neo4j.transaction.commits"]["count"]
+                    .as_f64()
+                    .unwrap_or(0.0),
+                rollbacks: json_map["neo4j.transaction.rollbacks"]["count"]
+                    .as_f64()
+                    .unwrap_or(0.0),
+            })
+        };
+
+        // Read 1
+        let start = fetch_metrics(http_client.clone(), url.clone()).await?;
+        sleep(Duration::from_secs_f64(interval_seconds)).await;
+
+        // Read 2
+        let end = fetch_metrics(http_client, url).await?;
+
+        // Calculate TPS
+        let total_tx = (end.commits - start.commits) + (end.rollbacks - start.rollbacks);
+        let tps = total_tx / interval_seconds;
+
+        info!("✅ Throughput (TPS): {:.2}", tps);
+
+        Ok(())
+    }
+}

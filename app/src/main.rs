@@ -28,7 +28,7 @@ async fn main() {
     util::logo();
 
     let mut manager = Manager::new();
-    manager.start().await;
+    manager.start().await.unwrap()
 }
 
 fn setup_logging() {

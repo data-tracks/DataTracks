@@ -48,6 +48,7 @@ mongodb = "3.2.4"
 futures-util = "0.3.31"
 async-stream = { workspace = true }
 engine = { workspace = true}
+sink = { workspace = true }
 
 
 [dev-dependencies]

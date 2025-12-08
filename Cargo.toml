@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["core", "app", "value", "cdc", "threading", "macro", "engine", "util"]
+members = ["core", "app", "value", "cdc", "threading", "macro", "engine", "util", "sink"]
 
 
 [workspace.package]
@@ -34,6 +34,7 @@ cdc = { path="./cdc" }
 core = { path = "./core" }
 threading = { path = "./threading" }
 util = {path = "./util" }
+sink = { path = "./sink" }
 engine = { path = "engine" }
 error = { path = "./error" }
 tracing-test = "0.2.5"

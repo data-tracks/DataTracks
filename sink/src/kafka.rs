@@ -1,0 +1,267 @@
+use rdkafka::admin::{AdminClient, AdminOptions, NewTopic, TopicReplication};
+use rdkafka::consumer::{Consumer, StreamConsumer};
+use rdkafka::producer::{FutureProducer, FutureRecord, Producer};
+use rdkafka::{ClientConfig, Message};
+use serde::Serialize;
+use serde_json::json;
+use std::error::Error;
+use std::fmt::format;
+use std::time::Duration;
+use tracing::{error, info};
+use util::container;
+use util::container::Mapping;
+
+const TOPIC: &str = "poly"; // The topic to consume from
+const GROUP_ID: &str = "rust-kafka-sink-group"; // Consumer group ID
+
+struct KafkaSink {
+    broker: String,
+}
+
+impl KafkaSink {
+    pub async fn start(&mut self) -> Result<(), Box<dyn Error>> {
+        let consumer: StreamConsumer = ClientConfig::new()
+            .set("group.id", GROUP_ID)
+            .set("bootstrap.servers", self.broker.as_str())
+            .set("enable.auto.commit", "false") // Set to false to manually commit offsets after sinking
+            .set("session.timeout.ms", "6000")
+            .set("auto.offset.reset", "earliest") // Start consuming from the beginning if no offset is found
+            .create()?;
+
+        // 2. Subscribe to the topic
+        consumer.subscribe(&[TOPIC])?;
+
+        println!("Consumer running. Waiting for messages on topic: {}", TOPIC);
+
+        // 3. Start the Consumption Loop
+        loop {
+            // Asynchronously wait for a message from the stream
+            match consumer.recv().await {
+                Ok(msg) => {
+                    let payload = match msg.payload_view::<str>() {
+                        Some(Ok(s)) => s,
+                        Some(Err(_)) => {
+                            eprintln!("Error deserializing message payload.");
+                            continue;
+                        }
+                        None => {
+                            eprintln!("Received message with no payload.");
+                            continue;
+                        }
+                    };
+
+                    println!("Received message: {:?}", payload);
+
+                    // --- Sink Logic: This is where you write to the external system ---
+                    match serde_json::from_str::<SinkRecord>(payload) {
+                        Ok(record) => {
+                            // In a real application, this would be a database write, an HTTP call, etc.
+                            println!(
+                                "-> SINKING record ID {} with value: {}",
+                                record.id, record.value
+                            );
+
+                            // ** Example of sinking to a hypothetical database function **
+                            // if let Err(e) = sink_to_database(&record).await {
+                            //     eprintln!("Failed to sink record: {:?}", e);
+                            //     // Decide whether to exit or retry/DLQ (Dead Letter Queue)
+                            // }
+
+                            // 4. Commit the offset manually after successful sinking
+                            // This ensures the message is only processed once (At-Least-Once semantics)
+                            consumer.commit_message(&msg, rdkafka::consumer::CommitMode::Async)?;
+                        }
+                        Err(e) => {
+                            eprintln!(
+                                "Failed to deserialize JSON: {}. Raw payload: {}",
+                                e, payload
+                            );
+                            // Log the error and move on, or send to a DLQ
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Kafka error: {}", e);
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+struct SinkRecord {
+    id: u32,
+    value: String,
+}
+
+pub struct Kafka {
+    host: String,
+    port: u16,
+}
+
+const TIMEOUT_MS: i32 = 5000;
+
+impl Kafka {
+    pub async fn new(host: &str, port: u16) -> Self {
+        Kafka {
+            host: host.to_string(),
+            port,
+        }
+    }
+
+    pub async fn start(&self) -> Result<(), Box<dyn Error>> {
+        container::start_container(
+            "kafka-mock",
+            "apache/kafka:latest",
+            vec![Mapping {
+                container: 9092,
+                host: self.port,
+            }],
+            None,
+        )
+        .await?;
+
+        self.check_kafka_cluster_health().await?;
+        info!("Kafka mock server started");
+
+        Ok(())
+    }
+
+    pub async fn stop(&self) -> Result<(), Box<dyn Error>> {
+        container::stop("kafka-mock").await
+    }
+
+    pub async fn send(&self, record: SinkRecord) -> Result<(), Box<dyn Error>> {
+        let producer: FutureProducer = ClientConfig::new()
+            .set("bootstrap.servers", format!("{}:{}", self.host, self.port))
+            .set("message.timeout.ms", "5000") // Max time to wait for a message to be delivered
+            .create()
+            .expect("Producer creation failed");
+
+        info!("Attempting to send message to topic '{}'...", TOPIC);
+
+        let msg = serde_json::to_vec(&record)?;
+        // 2. Define the message (FutureRecord)
+        // The FutureRecord specifies the target topic, payload (value), and key.
+        let record = FutureRecord::to(TOPIC).payload(&msg).key("test");
+
+        // 3. Send the message and await the result
+        // The 'send' call enqueues the message and returns a Future.
+        let result = producer.send(record, Duration::from_secs(0)).await;
+
+        // 4. Handle the delivery result
+        match result {
+            Ok(delivery) => {
+                info!(
+                    "✅ Message successfully delivered to partition {} at offset {}",
+                    delivery.partition, delivery.offset
+                );
+            }
+            Err((kafka_error, _original_message)) => {
+                error!("❌ Failed to deliver message: {:?}", kafka_error);
+                // The original_message contains the undelivered FutureRecord
+            }
+        }
+
+        // Explicitly flush the producer queue before the application exits
+        producer
+            .flush(Duration::from_secs(5))
+            .map_err(|err| Box::from(err.to_string()))
+    }
+
+    pub(crate) async fn create_topic(&self) -> Result<(), Box<dyn Error>> {
+        let admin_client: AdminClient<_> = ClientConfig::new()
+            .set("bootstrap.servers", format!("{}:{}", self.host, self.port))
+            .create()
+            .expect("AdminClient creation failed");
+
+        // 2. Define the new topic configuration
+        let new_topic = NewTopic::new(TOPIC, 3, TopicReplication::Fixed(1));
+
+        // Add optional topic configuration if needed (e.g., retention.ms)
+        // new_topic.set("retention.ms", "86400000");
+
+        // 3. Create the topic
+        println!(
+            "Attempting to create topic '{}' with {} partitions...",
+            TOPIC, 3
+        );
+
+        let options = AdminOptions::new().operation_timeout(Some(Duration::from_secs(10)));
+
+        match admin_client.create_topics(&[new_topic], &options).await {
+            Ok(results) => {
+                for result in results {
+                    match result {
+                        Ok(topic_result) => {
+                            println!("✅ Topic created successfully: {}", topic_result)
+                        }
+                        Err((name, error)) => {
+                            eprintln!("❌ Failed to create topic '{}': {:?}", name, error);
+                            // Check for the 'TopicAlreadyExists' error if you want to ignore it
+
+                            println!("(Topic already exists, which is acceptable in this case).");
+                        }
+                    }
+                }
+            }
+            Err(e) => eprintln!("❌ Admin operation failed: {:?}", e),
+        }
+        Ok(())
+    }
+
+    async fn check_kafka_cluster_health(&self) -> Result<(), String> {
+        let broker = format!("{}:{}", self.host, self.port);
+        let consumer: StreamConsumer = ClientConfig::new()
+            .set("group.id", "health-check-consumer")
+            .set("bootstrap.servers", broker)
+            .create()
+            .map_err(|e| format!("Consumer creation failed: {}", e))?;
+
+        // 2. Call fetch_metadata
+        // Passing `None` for the topic requests metadata for *all* topics,
+        // which reliably forces a broker connection and cluster discovery.
+        let timeout = Duration::from_secs(5);
+        match consumer.fetch_metadata(None, timeout) {
+            Ok(metadata) => {
+                // Success: Metadata was retrieved. Check for active brokers.
+                if metadata.brokers().is_empty() {
+                    return Err(
+                        "Cluster metadata retrieved but no active brokers found.".to_string()
+                    );
+                }
+                Ok(())
+            }
+            Err(e) => Err(format!("fetch_metadata failed (Timeout/Error): {}", e)),
+        }
+    }
+}
+
+pub async fn start() -> Result<Kafka, Box<dyn Error>> {
+    let kafka = Kafka::new("localhost", 9092).await;
+    kafka.start().await?;
+    kafka.create_topic().await?;
+
+    tokio::spawn(async {
+        let mut sink = KafkaSink {
+            broker: "localhost:9092".to_string(),
+        };
+        sink.start().await.map_err(|e| e.to_string())?;
+        Ok::<(), String>(())
+    });
+
+    kafka
+        .send(SinkRecord {
+            id: 0,
+            value: "Success".to_string(),
+        })
+        .await?;
+    kafka
+        .send(SinkRecord {
+            id: 1,
+            value: "Success2".to_string(),
+        })
+        .await?;
+
+    Ok(kafka)
+}
