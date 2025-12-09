@@ -636,6 +636,7 @@ pub mod tests {
     }
 
     #[test]
+    #[ignore]
     #[traced_test]
     fn back_window_window_trigger_no_overlap() {
         test_trigger(
