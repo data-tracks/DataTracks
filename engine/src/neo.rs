@@ -4,7 +4,7 @@ use reqwest::Client;
 use serde::Deserialize;
 use std::error::Error;
 use std::time::Duration;
-use tokio::time::{sleep, Instant};
+use tokio::time::{Instant, sleep};
 use tracing::info;
 use util::container;
 use util::container::Mapping;
@@ -19,7 +19,6 @@ pub struct Neo4j {
     pub(crate) graph: Option<Graph>,
 }
 
-
 #[derive(Debug, Deserialize)]
 struct TxMetrics {
     // These paths depend on the specific Neo4j version and configuration
@@ -31,7 +30,7 @@ struct TxMetrics {
 }
 
 impl Neo4j {
-    pub(crate) async fn start(&mut self) -> Result<(), Box<dyn Error>> {
+    pub(crate) async fn start(&mut self) -> Result<(), Box<dyn Error + Send + Sync>> {
         container::start_container(
             "engine-neo4j",
             "neo4j:latest",
@@ -75,15 +74,15 @@ impl Neo4j {
         Ok(())
     }
 
-    pub(crate) async fn stop(&mut self) -> Result<(), Box<dyn Error>> {
+    pub(crate) async fn stop(&mut self) -> Result<(), Box<dyn Error + Send + Sync>> {
         container::stop("engine-neo4j").await
     }
 
-    pub(crate) fn monitor(&self) -> Result<(), Box<dyn Error>> {
-        self.check_throughput()
+    pub(crate) async fn monitor(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
+        self.check_throughput().await
     }
 
-    async fn check_throughput(&self) -> Result<(), Box<dyn Error>> {
+    async fn check_throughput(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
         let http_client = Client::new();
         let management_uri = "http://localhost:7474";
 
@@ -101,7 +100,7 @@ impl Neo4j {
                 .await?;
             let json_map: serde_json::Value = resp.json().await?;
             // Manually navigate the map to extract required values
-            Ok::<TxMetrics, Box<dyn Error>>(TxMetrics {
+            Ok::<TxMetrics, Box<dyn Error + Send + Sync>>(TxMetrics {
                 commits: json_map["neo4j.transaction.commits"]["count"]
                     .as_f64()
                     .unwrap_or(0.0),

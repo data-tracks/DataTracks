@@ -2,7 +2,7 @@
 <img alt="Logo" height="300" src="https://github.com/data-tracks/assets/blob/main/logo/logo.png?raw=true" title="DataTrack" width="300"/>
 </p>
 
-# 🚂 DataTracks
+# 🚂 DataTracks -- Model-agnostic Streaming Engine for Database Systems
 
 [![🫸 Integration Tests](https://github.com/data-tracks/DataTracks/actions/workflows/push.yml/badge.svg?branch=main)](https://github.com/data-tracks/DataTracks/actions/workflows/push.yml)
 ![📚 Version Badge](https://img.shields.io/badge/Version-rust%201.89-orange?style=flat)

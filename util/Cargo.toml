@@ -12,3 +12,4 @@ bollard = "0.19.4"
 tokio = { workspace = true }
 tracing = { workspace = true }
 futures-util = "0.3.31"
+thiserror = "2.0.17"

@@ -109,7 +109,7 @@ impl Kafka {
         }
     }
 
-    pub async fn start(&self) -> Result<(), Box<dyn Error>> {
+    pub async fn start(&self) -> Result<(), Box<dyn Error + Sync + Send>> {
         container::start_container(
             "kafka-mock",
             "apache/kafka:latest",
@@ -127,11 +127,11 @@ impl Kafka {
         Ok(())
     }
 
-    pub async fn stop(&self) -> Result<(), Box<dyn Error>> {
+    pub async fn stop(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
         container::stop("kafka-mock").await
     }
 
-    pub async fn send(&self, record: SinkRecord) -> Result<(), Box<dyn Error>> {
+    pub async fn send(&self, record: SinkRecord) -> Result<(), Box<dyn Error + Send + Sync>> {
         let producer: FutureProducer = ClientConfig::new()
             .set("bootstrap.servers", format!("{}:{}", self.host, self.port))
             .set("message.timeout.ms", "5000") // Max time to wait for a message to be delivered
@@ -169,7 +169,7 @@ impl Kafka {
             .map_err(|err| Box::from(err.to_string()))
     }
 
-    pub(crate) async fn create_topic(&self) -> Result<(), Box<dyn Error>> {
+    pub(crate) async fn create_topic(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
         let admin_client: AdminClient<_> = ClientConfig::new()
             .set("bootstrap.servers", format!("{}:{}", self.host, self.port))
             .create()
@@ -237,7 +237,7 @@ impl Kafka {
     }
 }
 
-pub async fn start() -> Result<Kafka, Box<dyn Error>> {
+pub async fn start() -> Result<Kafka, Box<dyn Error + Send + Sync>> {
     let kafka = Kafka::new("localhost", 9092).await;
     kafka.start().await?;
     kafka.create_topic().await?;

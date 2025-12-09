@@ -5158,6 +5158,7 @@ version = "0.5.1"
 dependencies = [
  "bollard",
  "futures-util",
+ "thiserror 2.0.17",
  "tokio",
  "tracing",
 ]

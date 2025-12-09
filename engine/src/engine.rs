@@ -3,7 +3,9 @@ use crate::mongo::MongoDB;
 use crate::neo::Neo4j;
 use crate::postgres::Postgres;
 use std::error::Error;
+use std::time::Duration;
 use tokio::spawn;
+use tokio::time::sleep;
 
 #[derive(Clone)]
 pub enum Engine {
@@ -13,7 +15,7 @@ pub enum Engine {
 }
 
 impl Engine {
-    pub async fn start_all() -> Result<Vec<Engine>, Box<dyn Error>> {
+    pub async fn start_all() -> Result<Vec<Engine>, Box<dyn Error + Send + Sync>> {
         let mut engines = vec![];
 
         let mut pg = Engine::postgres();
@@ -35,7 +37,7 @@ impl Engine {
         Ok(engines)
     }
 
-    pub async fn start(&mut self) -> Result<(), Box<dyn Error>> {
+    pub async fn start(&mut self) -> Result<(), Box<dyn Error + Send + Sync>> {
         match self {
             Engine::Postgres(p) => p.start().await,
             Engine::MongoDB(m) => m.start().await,
@@ -43,7 +45,7 @@ impl Engine {
         }
     }
 
-    pub async fn stop(&mut self) -> Result<(), Box<dyn Error>> {
+    pub async fn stop(&mut self) -> Result<(), Box<dyn Error + Send + Sync>> {
         match self {
             Engine::Postgres(p) => p.stop().await,
             Engine::MongoDB(m) => m.stop().await,
@@ -51,14 +53,17 @@ impl Engine {
         }
     }
 
-    pub async fn monitor(&mut self) -> Result<(), Box<dyn Error>> {
+    pub async fn monitor(&mut self) -> Result<(), Box<dyn Error + Send + Sync>> {
         let engine = self.clone();
 
         spawn(async move {
-            match engine {
-                Engine::Postgres(mut p) => p.monitor().await,
-                Engine::MongoDB(m) => m.monitor(),
-                Engine::Neo4j(n) => n.monitor(),
+            loop {
+                match &engine {
+                    Engine::Postgres(p) => p.monitor().await.unwrap(),
+                    Engine::MongoDB(m) => m.monitor().await.unwrap(),
+                    Engine::Neo4j(n) => n.monitor().await.unwrap(),
+                }
+                sleep(Duration::from_secs(5)).await;
             }
         });
         Ok(())

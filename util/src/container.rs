@@ -1,3 +1,4 @@
+use bollard::Docker;
 use bollard::container::LogOutput;
 use bollard::exec::{CreateExecOptions, StartExecOptions, StartExecResults};
 use bollard::models::{
@@ -8,7 +9,6 @@ use bollard::query_parameters::{
     ListImagesOptionsBuilder, RemoveContainerOptions, RemoveContainerOptionsBuilder,
     StartContainerOptions, StopContainerOptions, StopContainerOptionsBuilder,
 };
-use bollard::Docker;
 use futures_util::TryStreamExt;
 use std::collections::HashMap;
 use std::error::Error;
@@ -107,7 +107,12 @@ impl Manager {
     }
 
     pub async fn list_images_by_names(&self) -> Result<Vec<String>, String> {
-        Ok(self.list_images().await?.iter().map(|i| i.id.clone()).collect())
+        Ok(self
+            .list_images()
+            .await?
+            .iter()
+            .map(|i| i.id.clone())
+            .collect())
     }
 
     pub async fn list_containers(&self) -> Result<Vec<ContainerSummary>, String> {
@@ -124,7 +129,8 @@ impl Manager {
 
     pub async fn list_containers_by_name(&self) -> Result<Vec<String>, String> {
         Ok(self
-            .list_containers().await?
+            .list_containers()
+            .await?
             .iter()
             .map(|c| c.name.clone())
             .collect())
@@ -177,7 +183,7 @@ pub async fn start_container(
     image: &str,
     mappings: Vec<Mapping>,
     env_vars: Option<Vec<String>>,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), Box<dyn Error + Send + Sync>> {
     let docker = match Manager::connect() {
         Ok(d) => d,
         Err(e) => {
@@ -262,7 +268,7 @@ pub async fn start_container(
     Ok(())
 }
 
-pub async fn stop(name: &str) -> Result<(), Box<dyn Error>> {
+pub async fn stop(name: &str) -> Result<(), Box<dyn Error + Send + Sync>> {
     let docker = Manager::connect()?;
     docker
         .stop_container(name, None::<StopContainerOptions>)

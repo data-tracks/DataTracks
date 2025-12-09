@@ -1,7 +1,8 @@
 use crate::engine;
+use mongodb::Client;
 use mongodb::bson::doc;
 use mongodb::options::{ClientOptions, ServerApi, ServerApiVersion};
-use mongodb::Client;
+use serde::Serialize;
 use std::collections::HashMap;
 use std::error::Error;
 use std::time::Duration;
@@ -16,7 +17,7 @@ pub struct MongoDB {
 }
 
 impl MongoDB {
-    pub(crate) async fn start(&mut self) -> Result<(), Box<dyn Error>> {
+    pub(crate) async fn start(&mut self) -> Result<(), Box<dyn Error + Send + Sync>> {
         container::start_container(
             "engine-mongodb",
             "mongo:latest",
@@ -51,15 +52,15 @@ impl MongoDB {
         Ok(())
     }
 
-    pub(crate) fn monitor(&self) -> Result<(), Box<dyn Error>> {
-        self.measure_opcounters()
+    pub(crate) async fn monitor(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
+        self.measure_opcounters().await
     }
 
-    pub(crate) async fn stop(&mut self) -> Result<(), Box<dyn Error>> {
+    pub(crate) async fn stop(&mut self) -> Result<(), Box<dyn Error + Send + Sync>> {
         container::stop("engine-mongodb").await
     }
 
-    async fn get_opcounters(&self) -> Result<HashMap<String, i64>, Box<dyn Error>> {
+    async fn get_opcounters(&self) -> Result<HashMap<String, i64>, Box<dyn Error + Send + Sync>> {
         match &self.client {
             None => Err(Box::from("No client")),
             Some(client) => {
@@ -85,7 +86,7 @@ impl MongoDB {
         }
     }
 
-    async fn measure_opcounters(&self) -> Result<(), Box<dyn Error>> {
+    async fn measure_opcounters(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
         let interval_seconds = 5.0;
         let start_counts = self.get_opcounters().await?;
         sleep(Duration::from_secs_f64(interval_seconds)).await;

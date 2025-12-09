@@ -2,6 +2,7 @@ use crate::management::storage::Storage;
 use crate::processing::{Plan, Train};
 use crate::tpc::start_tpc;
 use crate::ui::start_web;
+use engine::Engine;
 use reqwest::blocking::Client;
 use std::collections::HashMap;
 use std::error::Error;
@@ -10,7 +11,6 @@ use std::thread;
 use std::time::Duration;
 use tokio::task::JoinSet;
 use tracing::{error, info};
-use engine::Engine;
 use value::Time;
 
 #[derive(Default)]
@@ -33,7 +33,7 @@ impl Manager {
         self.storage.clone()
     }
 
-    pub async fn start(mut self) -> Result<(), Box<dyn Error>> {
+    pub async fn start(mut self) -> Result<(), Box<dyn Error + Send + Sync>> {
         let ctrl_c_signal = tokio::signal::ctrl_c();
 
         let mut join_set: JoinSet<()> = JoinSet::new();
@@ -47,7 +47,6 @@ impl Manager {
         }
 
         let kafka = sink::kafka::start().await?;
-
 
         tokio::select! {
                 _ = ctrl_c_signal => {

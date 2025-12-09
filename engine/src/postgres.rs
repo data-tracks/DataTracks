@@ -21,9 +21,8 @@ struct TxCounts {
     rollback: i64,
 }
 
-
 impl Postgres {
-    pub(crate) async fn start(&mut self) -> Result<(), Box<dyn Error>> {
+    pub(crate) async fn start(&mut self) -> Result<(), Box<dyn Error + Send + Sync>> {
         container::start_container(
             "engine-postgres",
             "postgres:latest",
@@ -45,15 +44,15 @@ impl Postgres {
         Ok(())
     }
 
-    pub(crate) async fn stop(&mut self) -> Result<(), Box<dyn Error>> {
+    pub(crate) async fn stop(&mut self) -> Result<(), Box<dyn Error + Send + Sync>> {
         container::stop("engine-postgres").await
     }
 
-    pub(crate) async fn monitor(&mut self) -> Result<(), Box<dyn Error>> {
+    pub(crate) async fn monitor(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
         self.check_throughput().await
     }
 
-    async fn check_throughput(&mut self) -> Result<(), Box<dyn Error>> {
+    async fn check_throughput(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
         let interval_seconds = 5;
         info!("--- Monitoring TPS over {} seconds ---", interval_seconds);
 
@@ -74,7 +73,7 @@ impl Postgres {
         Ok(())
     }
 
-    async fn get_tx_counts(&self) -> Result<TxCounts, Box<dyn Error>> {
+    async fn get_tx_counts(&self) -> Result<TxCounts, Box<dyn Error + Send + Sync>> {
         match &self.client {
             None => {}
             Some(client) => {
