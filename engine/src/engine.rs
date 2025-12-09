@@ -16,11 +16,15 @@ pub enum Engine {
 
 impl Engine {
     pub async fn start_all() -> Result<Vec<Engine>, Box<dyn Error + Send + Sync>> {
-        let mut engines = vec![];
+        let mut engines: Vec<Engine> = vec![];
 
         let mut pg = Engine::postgres();
         pg.start().await?;
         pg.monitor().await?;
+        pg.create_tables().await?;
+        for _ in 0..1_000_000 {
+            pg.insert_data().await?;
+        }
 
         let mut mongodb = Engine::mongo_db();
         mongodb.start().await?;
@@ -30,9 +34,9 @@ impl Engine {
         neo4j.start().await?;
         neo4j.monitor().await?;
 
-        engines.push(pg);
-        engines.push(mongodb);
-        engines.push(neo4j);
+        engines.push(pg.into());
+        engines.push(mongodb.into());
+        engines.push(neo4j.into());
 
         Ok(engines)
     }
@@ -69,8 +73,8 @@ impl Engine {
         Ok(())
     }
 
-    pub fn postgres() -> Self {
-        Engine::Postgres(Postgres {
+    pub fn postgres() -> Postgres {
+        Postgres {
             connector: PostgresConnection {
                 url: "localhost".to_string(),
                 port: 5432,
@@ -79,21 +83,21 @@ impl Engine {
                 password: "postgres".to_string(),
             },
             client: None,
-        })
+        }
     }
 
-    fn mongo_db() -> Self {
-        Engine::MongoDB(MongoDB { client: None })
+    fn mongo_db() -> MongoDB {
+        MongoDB { client: None }
     }
 
-    fn neo4j() -> Self {
-        Engine::Neo4j(Neo4j {
+    fn neo4j() -> Neo4j {
+        Neo4j {
             host: "localhost".to_string(),
             port: 7687,
             user: "neo4j".to_string(),
             password: "neoneoneo".to_string(),
             database: "neo4j".to_string(),
             graph: None,
-        })
+        }
     }
 }

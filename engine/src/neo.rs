@@ -1,4 +1,4 @@
-use crate::engine;
+use crate::{engine, Engine};
 use neo4rs::Graph;
 use reqwest::Client;
 use serde::Deserialize;
@@ -27,6 +27,12 @@ struct TxMetrics {
     commits: f64,
     #[serde(rename = "neo4j.transaction.rollbacks")]
     rollbacks: f64,
+}
+
+impl Into<Engine> for Neo4j {
+    fn into(self) -> Engine {
+        Engine::Neo4j(self)
+    }
 }
 
 impl Neo4j {
@@ -67,7 +73,7 @@ impl Neo4j {
             }
         }
 
-        info!("️️☑️ Connected to postgres neo4j");
+        info!("️️☑️ Connected to neo4j");
         self.graph = Some(graph);
 
         self.check_throughput().await?;
@@ -89,7 +95,6 @@ impl Neo4j {
         let interval_seconds = 5.0;
         let url = format!("{}/db/neo4j/management/metrics/json", management_uri); // Example endpoint
 
-        info!("--- Monitoring Neo4j TPS ---");
 
         // Function to fetch metrics (simplified for a hypothetical JSON endpoint)
         let fetch_metrics = |client: Client, url: String| async move {

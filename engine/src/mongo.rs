@@ -1,7 +1,7 @@
-use crate::engine;
-use mongodb::Client;
+use crate::{engine, Engine};
 use mongodb::bson::doc;
 use mongodb::options::{ClientOptions, ServerApi, ServerApiVersion};
+use mongodb::Client;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::error::Error;
@@ -10,10 +10,17 @@ use tokio::time::{sleep, timeout};
 use tracing::info;
 use util::container;
 use util::container::Mapping;
+use crate::neo::Neo4j;
 
 #[derive(Clone)]
 pub struct MongoDB {
     pub(crate) client: Option<Client>,
+}
+
+impl Into<Engine> for MongoDB {
+    fn into(self) -> Engine {
+        Engine::MongoDB(self)
+    }
 }
 
 impl MongoDB {
@@ -94,16 +101,17 @@ impl MongoDB {
         // Second read
         let end_counts = self.get_opcounters().await?;
 
-        info!("\nMetrics (Ops/Sec):");
+        let mut text = "✅ Metrics (Ops/Sec):".to_string();
 
         // Calculate and print the rate for each counter
         for (op_type, end_count) in end_counts {
             if let Some(start_count) = start_counts.get(&op_type) {
                 let diff = end_count - start_count;
                 let rate = diff as f64 / interval_seconds;
-                println!("  * {}: {:.2}", op_type, rate);
+                text += &format!(", {}: {:.2}", op_type, rate);
             }
         }
+        info!("{}", text);
 
         Ok(())
     }

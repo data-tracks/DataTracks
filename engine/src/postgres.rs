@@ -1,10 +1,12 @@
 use crate::connection::PostgresConnection;
-use crate::engine;
+use crate::neo::Neo4j;
+use crate::{engine, Engine};
 use std::error::Error;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::spawn;
 use tokio::time::{sleep, timeout};
-use tokio_postgres::{Client, GenericClient};
+use tokio_postgres::{Client, GenericClient, SimpleQueryMessage};
 use tracing::info;
 use util::container;
 use util::container::{Manager, Mapping};
@@ -19,6 +21,12 @@ pub struct Postgres {
 struct TxCounts {
     commit: i64,
     rollback: i64,
+}
+
+impl Into<Engine> for Postgres {
+    fn into(self) -> Engine {
+        Engine::Postgres(self)
+    }
 }
 
 impl Postgres {
@@ -49,12 +57,19 @@ impl Postgres {
     }
 
     pub(crate) async fn monitor(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
-        self.check_throughput().await
+        let clone = self.clone();
+        spawn(async move {
+            loop {
+                clone.check_throughput().await.unwrap();
+                sleep(Duration::from_secs(5)).await;
+            }
+        });
+        Ok(())
     }
 
     async fn check_throughput(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
         let interval_seconds = 5;
-        info!("--- Monitoring TPS over {} seconds ---", interval_seconds);
+        //info!("--- Monitoring TPS over {} seconds ---", interval_seconds);
 
         // Initial read
         let start_counts = self.get_tx_counts().await?;
@@ -70,6 +85,41 @@ impl Postgres {
 
         info!("✅ Throughput (TPS): {:.2}", tps);
 
+        Ok(())
+    }
+
+    pub async fn create_tables(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
+        match &self.client {
+            None => return Err(Box::from("could not create postgres database")),
+            Some(client) => {
+                let create_table_query = "
+                CREATE TABLE IF NOT EXISTS users (
+                    id SERIAL PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    age INT
+                )";
+                client.execute(create_table_query, &[]).await?;
+                info!("Table 'users' ensured to exist.");
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn insert_data(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
+        match &self.client {
+            None => return Err(Box::from("could not create postgres database")),
+            Some(client) => {
+                let user_name = "Alice";
+                let user_age = 30;
+
+                let insert_query = "INSERT INTO users (name, age) VALUES ($1, $2)";
+                let rows_affected = client
+                    .execute(insert_query, &[&user_name, &user_age])
+                    .await?;
+
+                //info!("Inserted {} row(s) into 'users'.", rows_affected);
+            }
+        }
         Ok(())
     }
 
