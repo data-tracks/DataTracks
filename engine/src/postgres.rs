@@ -1,6 +1,7 @@
 use crate::connection::PostgresConnection;
 use crate::engine;
 use std::error::Error;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::{sleep, timeout};
 use tokio_postgres::{Client, GenericClient};
@@ -8,9 +9,10 @@ use tracing::info;
 use util::container;
 use util::container::{Manager, Mapping};
 
+#[derive(Clone)]
 pub struct Postgres {
     pub(crate) connector: PostgresConnection,
-    pub(crate) client: Option<Client>,
+    pub(crate) client: Option<Arc<Client>>,
 }
 
 #[derive(Debug)]
@@ -18,6 +20,7 @@ struct TxCounts {
     commit: i64,
     rollback: i64,
 }
+
 
 impl Postgres {
     pub(crate) async fn start(&mut self) -> Result<(), Box<dyn Error>> {
@@ -35,7 +38,7 @@ impl Postgres {
         let client = self.connector.connect().await?;
         info!("☑️ Connected to postgres database");
         timeout(Duration::from_secs(5), client.check_connection()).await??;
-        self.client = Some(client);
+        self.client = Some(Arc::new(client));
 
         self.check_throughput().await?;
 
@@ -44,6 +47,10 @@ impl Postgres {
 
     pub(crate) async fn stop(&mut self) -> Result<(), Box<dyn Error>> {
         container::stop("engine-postgres").await
+    }
+
+    pub(crate) async fn monitor(&mut self) -> Result<(), Box<dyn Error>> {
+        self.check_throughput().await
     }
 
     async fn check_throughput(&mut self) -> Result<(), Box<dyn Error>> {

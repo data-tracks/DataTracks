@@ -5,6 +5,7 @@ use crate::postgres::Postgres;
 use std::error::Error;
 use tokio::spawn;
 
+#[derive(Clone)]
 pub enum Engine {
     Postgres(Postgres),
     MongoDB(MongoDB),
@@ -17,17 +18,19 @@ impl Engine {
 
         let mut pg = Engine::postgres();
         pg.start().await?;
+        pg.monitor().await?;
 
         let mut mongodb = Engine::mongo_db();
         mongodb.start().await?;
+        mongodb.monitor().await?;
 
         let mut neo4j = Engine::neo4j();
         neo4j.start().await?;
+        neo4j.monitor().await?;
 
         engines.push(pg);
         engines.push(mongodb);
         engines.push(neo4j);
-
 
         Ok(engines)
     }
@@ -46,6 +49,19 @@ impl Engine {
             Engine::MongoDB(m) => m.stop().await,
             Engine::Neo4j(n) => n.stop().await,
         }
+    }
+
+    pub async fn monitor(&mut self) -> Result<(), Box<dyn Error>> {
+        let engine = self.clone();
+
+        spawn(async move {
+            match engine {
+                Engine::Postgres(mut p) => p.monitor().await,
+                Engine::MongoDB(m) => m.monitor(),
+                Engine::Neo4j(n) => n.monitor(),
+            }
+        });
+        Ok(())
     }
 
     pub fn postgres() -> Self {

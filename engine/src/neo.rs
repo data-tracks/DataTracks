@@ -9,6 +9,7 @@ use tracing::info;
 use util::container;
 use util::container::Mapping;
 
+#[derive(Clone)]
 pub struct Neo4j {
     pub(crate) host: String,
     pub(crate) port: u16,
@@ -17,6 +18,7 @@ pub struct Neo4j {
     pub(crate) database: String,
     pub(crate) graph: Option<Graph>,
 }
+
 
 #[derive(Debug, Deserialize)]
 struct TxMetrics {
@@ -75,6 +77,10 @@ impl Neo4j {
 
     pub(crate) async fn stop(&mut self) -> Result<(), Box<dyn Error>> {
         container::stop("engine-neo4j").await
+    }
+
+    pub(crate) fn monitor(&self) -> Result<(), Box<dyn Error>> {
+        self.check_throughput()
     }
 
     async fn check_throughput(&self) -> Result<(), Box<dyn Error>> {

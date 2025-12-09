@@ -10,6 +10,7 @@ use tracing::info;
 use util::container;
 use util::container::Mapping;
 
+#[derive(Clone)]
 pub struct MongoDB {
     pub(crate) client: Option<Client>,
 }
@@ -48,6 +49,10 @@ impl MongoDB {
 
         self.measure_opcounters().await?;
         Ok(())
+    }
+
+    pub(crate) fn monitor(&self) -> Result<(), Box<dyn Error>> {
+        self.measure_opcounters()
     }
 
     pub(crate) async fn stop(&mut self) -> Result<(), Box<dyn Error>> {
