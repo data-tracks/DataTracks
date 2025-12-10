@@ -1,4 +1,6 @@
 use std::error::Error;
+use std::time::Duration;
+use tokio::time::sleep;
 use tokio_postgres::{Client, NoTls};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -28,25 +30,33 @@ impl PostgresConnection {
     }
 
     pub async fn connect(&self) -> Result<Client, Box<dyn Error + Send + Sync>> {
-        let (client, connection) = tokio_postgres::connect(
-            &format!(
-                "dbname={db} host={host} port={port} user={user} password={password}",
-                db = self.db,
-                host = self.url,
-                port = self.port,
-                user = self.user,
-                password = self.password
-            ),
-            NoTls,
-        )
-        .await?;
+        let connection_string = format!(
+            "dbname={db} host={host} port={port} user={user} password={password}",
+            db = self.db,
+            host = self.url,
+            port = self.port,
+            user = self.user,
+            password = self.password
+        );
 
-        tokio::spawn(async move {
-            if let Err(e) = connection.await {
-                eprintln!("connection error: {}", e);
+        for _ in 0..3 {
+            let res = tokio_postgres::connect(&connection_string, NoTls).await;
+
+            match res {
+                Ok((client, connection)) => {
+                    tokio::spawn(async move {
+                        if let Err(e) = connection.await {
+                            eprintln!("connection error: {}", e);
+                        }
+                    });
+
+                    return Ok(client);
+                }
+                Err(_) => {
+                    sleep(Duration::from_secs(3)).await;
+                }
             }
-        });
-
-        Ok(client)
+        }
+        Err(Box::from("timeout while connecting to postgres"))
     }
 }

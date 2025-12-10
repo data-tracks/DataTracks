@@ -1,4 +1,3 @@
-use bollard::Docker;
 use bollard::container::LogOutput;
 use bollard::exec::{CreateExecOptions, StartExecOptions, StartExecResults};
 use bollard::models::{
@@ -9,14 +8,12 @@ use bollard::query_parameters::{
     ListImagesOptionsBuilder, RemoveContainerOptions, RemoveContainerOptionsBuilder,
     StartContainerOptions, StopContainerOptions, StopContainerOptionsBuilder,
 };
+use bollard::{API_DEFAULT_VERSION, Docker};
 use futures_util::TryStreamExt;
 use std::collections::HashMap;
 use std::error::Error;
 
-use std::thread::sleep;
-use std::time::{Duration, Instant};
-use tokio::runtime::{Builder, Runtime};
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 
 pub struct Manager {
     docker: Docker,
