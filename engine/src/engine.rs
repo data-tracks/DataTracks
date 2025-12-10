@@ -22,17 +22,25 @@ impl Engine {
         pg.start().await?;
         pg.monitor().await?;
         pg.create_tables().await?;
-        for _ in 0..1_000_000 {
+        for _ in 0..1_000 {
             pg.insert_data().await?;
         }
 
         let mut mongodb = Engine::mongo_db();
         mongodb.start().await?;
         mongodb.monitor().await?;
+        mongodb.create_collection().await?;
+        for _ in 0..1_000 {
+            mongodb.insert_data().await?;
+        }
+
 
         let mut neo4j = Engine::neo4j();
         neo4j.start().await?;
         neo4j.monitor().await?;
+        for _ in 0..1_000 {
+            neo4j.insert_data().await?;
+        }
 
         engines.push(pg.into());
         engines.push(mongodb.into());

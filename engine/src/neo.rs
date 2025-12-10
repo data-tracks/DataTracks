@@ -1,10 +1,11 @@
 use crate::{engine, Engine};
-use neo4rs::Graph;
+use neo4rs::{query, Graph};
 use reqwest::Client;
 use serde::Deserialize;
 use std::error::Error;
 use std::time::Duration;
-use tokio::time::{Instant, sleep};
+use tokio::spawn;
+use tokio::time::{sleep, Instant};
 use tracing::info;
 use util::container;
 use util::container::Mapping;
@@ -85,7 +86,39 @@ impl Neo4j {
     }
 
     pub(crate) async fn monitor(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
-        self.check_throughput().await
+        let clone = self.clone();
+        spawn(async move {
+            loop {
+                clone.check_throughput().await.unwrap();
+                sleep(Duration::from_secs(5)).await;
+            }
+        });
+        Ok(())
+    }
+
+    pub(crate) async fn insert_data(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
+        match &self.graph {
+            None => Err(Box::from("No graph")),
+            Some(g) => {
+                let cypher_query = "
+                    CREATE (p:Person {name: $name, age: $age, is_active: $active})
+                    RETURN p
+                ";
+
+                match g
+                    .run(
+                        query(cypher_query)
+                            .param("name", "Jane Doe")
+                            .param("age", 25)
+                            .param("active", true),
+                    )
+                    .await
+                {
+                    Ok(_) => Ok(()),
+                    Err(e) => Err(Box::new(e)),
+                }
+            }
+        }
     }
 
     async fn check_throughput(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -94,7 +127,6 @@ impl Neo4j {
 
         let interval_seconds = 5.0;
         let url = format!("{}/db/neo4j/management/metrics/json", management_uri); // Example endpoint
-
 
         // Function to fetch metrics (simplified for a hypothetical JSON endpoint)
         let fetch_metrics = |client: Client, url: String| async move {

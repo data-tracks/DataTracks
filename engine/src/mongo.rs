@@ -1,3 +1,4 @@
+use crate::neo::Neo4j;
 use crate::{engine, Engine};
 use mongodb::bson::doc;
 use mongodb::options::{ClientOptions, ServerApi, ServerApiVersion};
@@ -6,11 +7,11 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::error::Error;
 use std::time::Duration;
+use tokio::spawn;
 use tokio::time::{sleep, timeout};
 use tracing::info;
 use util::container;
 use util::container::Mapping;
-use crate::neo::Neo4j;
 
 #[derive(Clone)]
 pub struct MongoDB {
@@ -59,8 +60,52 @@ impl MongoDB {
         Ok(())
     }
 
+    pub(crate) async fn insert_data(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
+        match &self.client {
+            None => Err(Box::from("No client")),
+            Some(client) => {
+                let user_document = doc! {
+                    "name": "Alice Smith",
+                    "age": 30,
+                    "email": "alice.smith@example.com",
+                    "hobbies": ["reading", "hiking", "coding"],
+                    "address": {
+                        "street": "123 Main St",
+                        "city": "Anytown"
+                    }
+                };
+
+                client
+                    .database("public")
+                    .collection("test")
+                    .insert_one(user_document)
+                    .await?;
+
+                Ok(())
+            }
+        }
+    }
+
     pub(crate) async fn monitor(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
-        self.measure_opcounters().await
+        let clone = self.clone();
+        spawn(async move {
+            loop {
+                clone.measure_opcounters().await.unwrap();
+                sleep(Duration::from_secs(5)).await;
+            }
+        });
+        Ok(())
+    }
+
+    pub(crate) async fn create_collection(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
+        match &self.client {
+            None => Err(Box::from("No client")),
+            Some(client) => {
+                client.database("public").create_collection("test").await?;
+
+                Ok(())
+            }
+        }
     }
 
     pub(crate) async fn stop(&mut self) -> Result<(), Box<dyn Error + Send + Sync>> {
