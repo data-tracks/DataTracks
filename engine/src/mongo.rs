@@ -12,6 +12,7 @@ use tokio::time::{sleep, timeout};
 use tracing::info;
 use util::container;
 use util::container::Mapping;
+use value::Value;
 
 #[derive(Clone)]
 pub struct MongoDB {
@@ -58,6 +59,21 @@ impl MongoDB {
 
         self.measure_opcounters().await?;
         Ok(())
+    }
+
+    pub(crate) async fn store(&self, value: Value) -> Result<(), Box<dyn Error + Send + Sync>> {
+        match &self.client {
+            None => Err(Box::from("No client")),
+            Some(client) => {
+                client
+                    .database("public")
+                    .collection("test")
+                    .insert_one(value)
+                    .await?;
+
+                Ok(())
+            }
+        }
     }
 
     pub(crate) async fn insert_data(&self) -> Result<(), Box<dyn Error + Send + Sync>> {

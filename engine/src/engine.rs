@@ -6,6 +6,7 @@ use std::error::Error;
 use std::time::Duration;
 use tokio::spawn;
 use tokio::time::sleep;
+use value::{Float, Value};
 
 #[derive(Clone)]
 pub enum Engine {
@@ -15,6 +16,14 @@ pub enum Engine {
 }
 
 impl Engine {
+    pub async fn store(&self, value: Value) {
+        match self {
+            Engine::Postgres(p) => p.store(value),
+            Engine::MongoDB(m) => m.store(value),
+            Engine::Neo4j(n) => n.store(value),
+        }
+    }
+
     pub async fn start_all() -> Result<Vec<Engine>, Box<dyn Error + Send + Sync>> {
         let mut engines: Vec<Engine> = vec![];
 
@@ -34,7 +43,6 @@ impl Engine {
             mongodb.insert_data().await?;
         }
 
-
         let mut neo4j = Engine::neo4j();
         neo4j.start().await?;
         neo4j.monitor().await?;
@@ -47,6 +55,26 @@ impl Engine {
         engines.push(neo4j.into());
 
         Ok(engines)
+    }
+
+    /// Mixture between current running tx, complexity of mapping (and user suggestion).
+    pub fn cost(&self, value: &Value) -> Float {
+        match self {
+            Engine::Postgres(p) => p.cost(value),
+            Engine::MongoDB(m) => m.cost(value),
+            Engine::Neo4j(n) => n.cost(value),
+        }
+    }
+
+    /// Move pending operations on most efficient engine.
+    pub fn reshaping(&mut self) -> Result<(), Box<dyn Error + Send + Sync>> {
+        todo!()
+    }
+
+
+    /// Merge partitions or direct access to dynamically built view
+    pub fn retrieve(&self, entity_name: String, query: String) -> Result<Value, Box<dyn Error + Send + Sync>> {
+        todo!()
     }
 
     pub async fn start(&mut self) -> Result<(), Box<dyn Error + Send + Sync>> {

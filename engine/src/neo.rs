@@ -1,14 +1,16 @@
 use crate::{engine, Engine};
-use neo4rs::{query, Graph};
+use neo4rs::{query, BoltType, Graph};
 use reqwest::Client;
 use serde::Deserialize;
 use std::error::Error;
 use std::time::Duration;
+use serde::de::Unexpected::Str;
 use tokio::spawn;
 use tokio::time::{sleep, Instant};
 use tracing::info;
 use util::container;
 use util::container::Mapping;
+use value::Value;
 
 #[derive(Clone)]
 pub struct Neo4j {
@@ -121,6 +123,26 @@ impl Neo4j {
         }
     }
 
+    pub(crate) async fn store(&self, value: Value) -> Result<(), Box<dyn Error + Send + Sync>> {
+        match &self.graph {
+            None => Err(Box::from("No graph")),
+            Some(g) => {
+                let cypher_query = self.query(&value);
+
+                match g
+                    .run(
+                        query(&cypher_query)
+                            .param("value", value),
+                    )
+                    .await
+                {
+                    Ok(_) => Ok(()),
+                    Err(e) => Err(Box::new(e)),
+                }
+            }
+        }
+    }
+
     async fn check_throughput(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
         let http_client = Client::new();
         let management_uri = "http://localhost:7474";
@@ -162,4 +184,9 @@ impl Neo4j {
 
         Ok(())
     }
+
+    fn query(&self, value: &Value) -> String {
+        String::from("CREATE (p:Person {value: $value}) RETURN p")
+    }
 }
+

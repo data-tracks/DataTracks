@@ -10,6 +10,7 @@ use tokio_postgres::{Client, GenericClient, SimpleQueryMessage};
 use tracing::info;
 use util::container;
 use util::container::{Manager, Mapping};
+use value::Value;
 
 #[derive(Clone)]
 pub struct Postgres {
@@ -54,6 +55,24 @@ impl Postgres {
 
     pub(crate) async fn stop(&mut self) -> Result<(), Box<dyn Error + Send + Sync>> {
         container::stop("engine-postgres").await
+    }
+
+    pub(crate) async fn store(&self, value: Value) -> Result<(), Box<dyn Error + Send + Sync>> {
+        match &self.client {
+            None => return Err(Box::from("could not create postgres database")),
+            Some(client) => {
+                let user_name = "Alice";
+                let user_age = 30;
+
+                let insert_query = "INSERT INTO users (name, age) VALUES ($1, $2)";
+                let rows_affected = client
+                    .execute(insert_query, &[&user_name, &user_age])
+                    .await?;
+
+                //info!("Inserted {} row(s) into 'users'.", rows_affected);
+            }
+        }
+        Ok(())
     }
 
     pub(crate) async fn monitor(&self) -> Result<(), Box<dyn Error + Send + Sync>> {

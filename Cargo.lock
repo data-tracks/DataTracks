@@ -1328,6 +1328,7 @@ dependencies = [
  "tokio-postgres 0.7.15",
  "tracing",
  "util",
+ "value",
 ]
 
 [[package]]
@@ -5192,6 +5193,7 @@ dependencies = [
  "flatbuffers",
  "json",
  "mongodb",
+ "neo4rs",
  "postgres",
  "redb",
  "rumqttc",

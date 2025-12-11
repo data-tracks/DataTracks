@@ -26,6 +26,7 @@ use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::ops::{Add, AddAssign, Div, Mul, Sub};
 use std::str;
+use neo4rs::{BoltBoolean, BoltFloat, BoltInteger, BoltLocalTime, BoltNull, BoltString, BoltType};
 use tracing::debug;
 use track_rails::message_generated::protocol::{
     Null as FlatNull, NullArgs, Value as FlatValue, ValueWrapper, ValueWrapperArgs,
@@ -342,6 +343,19 @@ impl TryFrom<&Vector<'_, ForwardsUOffset<ValueWrapper<'_>>>> for Value {
         _value: &Vector<'_, ForwardsUOffset<ValueWrapper<'_>>>,
     ) -> Result<Self, Self::Error> {
         todo!()
+    }
+}
+
+impl From<Value> for BoltType {
+    fn from(value: Value) -> Self {
+        match value {
+            Value::Int(i) => BoltType::Integer(BoltInteger::new(i.0)),
+            Value::Float(f) => BoltType::Float(BoltFloat::new(f.as_f64())),
+            Value::Bool(b) => BoltType::Boolean(BoltBoolean::new(b.0)),
+            Value::Text(t) => BoltType::String(BoltString::new(&t.0)),
+            Null => BoltType::Null(BoltNull),
+            _ => todo!()
+        }
     }
 }
 

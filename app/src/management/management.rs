@@ -11,6 +11,7 @@ use std::thread;
 use std::time::Duration;
 use tokio::task::JoinSet;
 use tracing::{error, info};
+use sink::kafka::Kafka;
 use value::Time;
 
 #[derive(Default)]
@@ -42,11 +43,7 @@ impl Manager {
 
         self.start_services();
 
-        for (name, engine) in Engine::start_all().await?.into_iter().enumerate() {
-            self.engines.insert(name, engine);
-        }
-
-        let kafka = sink::kafka::start().await?;
+        let kafka = self.start_engines().await?;
 
         tokio::select! {
                 _ = ctrl_c_signal => {
@@ -75,6 +72,15 @@ impl Manager {
         info!("✅  All services shut down. Exiting.");
 
         Ok(())
+    }
+
+    async fn start_engines(mut self) -> Result<Kafka, Box<dyn Error + Send + Sync>> {
+        for (name, engine) in Engine::start_all().await?.into_iter().enumerate() {
+            self.engines.insert(name, engine);
+        }
+
+        let kafka = sink::kafka::start().await?;
+        Ok(kafka)
     }
 
     fn start_services(&mut self) {
