@@ -1,41 +1,67 @@
-use crate::management::buffer::Buffer;
+use crate::management::catalog::Catalog;
 use engine::Engine;
 use std::error::Error;
+use std::time::Duration;
+use tokio::task::JoinSet;
+use tokio::time::sleep;
+use tracing::info;
+use util::queue::{Meta, RecordQueue};
 use value::Value;
 
 pub struct Persister {
     engines: Vec<Engine>,
-    buffer: Buffer,
+    pub queue: RecordQueue,
+    catalog: Catalog,
 }
 
 impl Persister {
-    pub fn new() -> Persister {
+    pub fn new(catalog: Catalog) -> Persister {
         Persister {
             engines: vec![],
-            buffer: Buffer::new(),
+            queue: RecordQueue::new(),
+            catalog,
         }
     }
 
-    pub async fn next(&self, value: Value) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub async fn next(&self, meta: Meta, value: Value) -> Result<(), Box<dyn Error + Send + Sync>> {
         let engine = self.select_engines(&value)?;
 
         let func = self.function()?;
 
         let value = func(value);
 
-        engine.store(value).await;
+        info!("store {} - {}", engine, value);
+        engine.store(value).await?;
 
         Ok(())
     }
 
-    fn select_engines(&self, value: &Value) -> Result<Engine, Box<dyn Error + Send + Sync>> {
-        self.engines
-            .iter()
-            .map(|e| (e.cost(value), e))
-            .min_by_key(|(k, v)| k)
+    pub(crate) async fn start(self, joins: &mut JoinSet<()>) {
+        joins.spawn(async move {
+            loop {
+                match self.queue.pop() {
+                    Some((meta, value)) => self.next(meta, value).await.unwrap(),
+                    None => sleep(Duration::from_millis(1)).await,
+                }
+            }
+        });
     }
 
-    fn function(&self) -> Result<Box<dyn Fn(Value) -> Value>, Box<dyn Error + Send + Sync>> {
-        todo!()
+    pub(crate) fn add_engine(&mut self, id: usize, engine: Engine) {
+        self.engines.push(engine);
+    }
+
+    fn select_engines(&self, value: &Value) -> Result<&Engine, Box<dyn Error + Send + Sync>> {
+        Ok(self
+            .engines
+            .iter()
+            .map(|e| (e.cost(value), e))
+            .min_by(|(a), (b)| a.0.total_cmp(&b.0))
+            .unwrap()
+            .1)
+    }
+
+    fn function(&self) -> Result<Box<dyn Fn(Value) -> Value + Send>, Box<dyn Error + Send + Sync>> {
+        Ok(Box::new(|value| value))
     }
 }

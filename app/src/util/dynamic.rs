@@ -1,4 +1,3 @@
-use crate::processing::Layout;
 use crate::util::StringBuilder;
 use std::fmt::{Display, Formatter};
 use value::Value;
@@ -127,34 +126,7 @@ impl DynamicQuery {
             replace_type,
         }
     }
-
-    pub fn derive_input_layout(&self) -> Layout {
-        match self.get_replacement_type() {
-            ReplaceType::Key => {
-                let mut keys = vec![];
-                for part in self.get_parts() {
-                    if let Segment::DynamicKey(key) = part {
-                        keys.push(key.clone());
-                    }
-                }
-                Layout::dict(keys)
-            }
-            ReplaceType::Index => {
-                let mut indexes = vec![];
-                for part in self.get_parts() {
-                    if let Segment::DynamicIndex(index) = part {
-                        indexes.push(index);
-                    }
-                }
-                indexes
-                    .iter()
-                    .max()
-                    .map(|i| Layout::array(Some(*i as i32)))
-                    .unwrap_or(Layout::array(None))
-            }
-            ReplaceType::Full => Layout::default(),
-        }
-    }
+    
 
     pub fn get_replacement_type(&self) -> &ReplaceType {
         &self.replace_type

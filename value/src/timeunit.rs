@@ -10,7 +10,7 @@ pub enum TimeUnit {
 }
 
 impl TimeUnit {
-    pub(crate) fn dump_full(&self, _quote: &str) -> String {
+    pub fn dump_full(&self, _quote: &str) -> String {
         match self {
             TimeUnit::Millis => "MILLISECONDS".to_string(),
             TimeUnit::Seconds => "SECONDS".to_string(),

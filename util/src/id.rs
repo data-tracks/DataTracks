@@ -8,7 +8,7 @@ pub fn new_id() -> usize {
 
 #[cfg(test)]
 mod tests {
-    use crate::util::new_id;
+    use crate::id::new_id;
 
     #[test]
     fn not_same() {

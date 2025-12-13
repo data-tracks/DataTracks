@@ -1,26 +1,12 @@
 extern crate core;
 
 use crate::management::Manager;
-use tokio::task::JoinSet;
 use tracing::Level;
 use tracing_subscriber::FmtSubscriber;
 
-mod algebra;
-mod analyse;
-mod http;
 mod language;
 mod management;
-mod mongo;
-mod mqtt;
-mod postgres;
-mod processing;
-mod sqlite;
-mod ui;
 mod util;
-
-mod optimize;
-mod tests;
-mod tpc;
 
 #[tokio::main]
 async fn main() {

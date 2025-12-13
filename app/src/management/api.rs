@@ -1,9 +1,6 @@
-use crate::management::Storage;
 use crate::management::api::Status::Error;
-use crate::management::permission::ApiPermission;
 use flatbuffers::FlatBufferBuilder;
 use std::sync::{Arc, Mutex};
-use tracing::field::debug;
 use tracing::{debug, info, warn};
 use track_rails::message_generated::protocol::{
     BindRequest, BindRequestArgs, Catalog, CatalogArgs, CreatePlanRequest, CreatePlanResponse,
@@ -19,19 +16,16 @@ use error::error::TrackError;
 pub struct Api {
     clients: Vec<isize>,
     count: isize,
-    permissions: Vec<ApiPermission>,
 }
 
 impl Api {
     pub(crate) fn admin() -> Api {
         Api {
-            permissions: vec![ApiPermission::Admin],
             ..Default::default()
         }
     }
 
     pub fn handle_message(
-        storage: Storage,
         api: Arc<Mutex<Api>>,
         msg: Message,
     ) -> Result<Vec<u8>, Vec<u8>> {

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["core", "app", "value", "cdc", "threading", "macro", "engine", "util", "sink"]
+members = ["core", "app", "value", "threading", "macro", "engine", "util", "sink"]
 
 
 [workspace.package]
@@ -27,13 +27,12 @@ redb = "3.1.0"
 rumqttc = "0.25.1"
 rumqttd = "0.20.0"
 tokio = { version = "1.48.0", features = ["full"] }
-mongodb = { version = "3.4.1"}
+mongodb = { version = "3.4.1" }
 crossbeam = "0.8.4"
-value = { path="./value" }
-cdc = { path="./cdc" }
+value = { path = "./value" }
 core = { path = "./core" }
 threading = { path = "./threading" }
-util = {path = "./util" }
+util = { path = "./util" }
 sink = { path = "./sink" }
 engine = { path = "engine" }
 error = { path = "./error" }

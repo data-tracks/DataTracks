@@ -7,16 +7,17 @@ use std::time::Duration;
 use tokio::spawn;
 use tokio::time::{sleep, timeout};
 use tokio_postgres::{Client, GenericClient, SimpleQueryMessage};
-use tracing::info;
+use tracing::{debug, info};
 use util::container;
 use util::container::{Manager, Mapping};
-use value::Value;
+use value::{Float, Value};
 
 #[derive(Clone)]
 pub struct Postgres {
     pub(crate) connector: PostgresConnection,
     pub(crate) client: Option<Arc<Client>>,
 }
+
 
 #[derive(Debug)]
 struct TxCounts {
@@ -57,19 +58,22 @@ impl Postgres {
         container::stop("engine-postgres").await
     }
 
+    pub(crate) fn cost(&self, value: &Value) -> f64 {
+        1.0
+    }
+
     pub(crate) async fn store(&self, value: Value) -> Result<(), Box<dyn Error + Send + Sync>> {
         match &self.client {
             None => return Err(Box::from("could not create postgres database")),
             Some(client) => {
-                let user_name = "Alice";
-                let user_age = 30;
+                let user_name = "test";
 
-                let insert_query = "INSERT INTO users (name, age) VALUES ($1, $2)";
+                let insert_query = "INSERT INTO data (key, value) VALUES ($1, $2)";
                 let rows_affected = client
-                    .execute(insert_query, &[&user_name, &user_age])
+                    .execute(insert_query, &[&user_name, &value])
                     .await?;
 
-                //info!("Inserted {} row(s) into 'users'.", rows_affected);
+                debug!("Inserted {} row(s) into 'users'.", rows_affected);
             }
         }
         Ok(())
@@ -119,6 +123,16 @@ impl Postgres {
                 )";
                 client.execute(create_table_query, &[]).await?;
                 info!("Table 'users' ensured to exist.");
+
+                let create_table_query = "
+                CREATE TABLE IF NOT EXISTS data (
+                    id SERIAL PRIMARY KEY,
+                    key TEXT NOT NULL,
+                    value TEXT
+                )";
+
+                client.execute(create_table_query, &[]).await?;
+                info!("Table 'data' ensured to exist.");
             }
         }
         Ok(())

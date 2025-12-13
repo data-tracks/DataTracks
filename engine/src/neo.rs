@@ -10,7 +10,7 @@ use tokio::time::{sleep, Instant};
 use tracing::info;
 use util::container;
 use util::container::Mapping;
-use value::Value;
+use value::{Float, Value};
 
 #[derive(Clone)]
 pub struct Neo4j {
@@ -24,8 +24,6 @@ pub struct Neo4j {
 
 #[derive(Debug, Deserialize)]
 struct TxMetrics {
-    // These paths depend on the specific Neo4j version and configuration
-    // Often, metrics are exposed as a JSON map or Prometheus text format
     #[serde(rename = "neo4j.transaction.commits")]
     commits: f64,
     #[serde(rename = "neo4j.transaction.rollbacks")]
@@ -85,6 +83,10 @@ impl Neo4j {
 
     pub(crate) async fn stop(&mut self) -> Result<(), Box<dyn Error + Send + Sync>> {
         container::stop("engine-neo4j").await
+    }
+
+    pub(crate) fn cost(&self, value: &Value) -> f64 {
+        0.0
     }
 
     pub(crate) async fn monitor(&self) -> Result<(), Box<dyn Error + Send + Sync>> {

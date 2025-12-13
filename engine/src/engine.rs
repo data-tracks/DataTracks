@@ -3,10 +3,11 @@ use crate::mongo::MongoDB;
 use crate::neo::Neo4j;
 use crate::postgres::Postgres;
 use std::error::Error;
+use std::fmt::{Display, Write};
 use std::time::Duration;
 use tokio::spawn;
 use tokio::time::sleep;
-use value::{Float, Value};
+use value::Value;
 
 #[derive(Clone)]
 pub enum Engine {
@@ -15,12 +16,22 @@ pub enum Engine {
     Neo4j(Neo4j),
 }
 
-impl Engine {
-    pub async fn store(&self, value: Value) {
+impl Display for Engine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Engine::Postgres(p) => p.store(value),
-            Engine::MongoDB(m) => m.store(value),
-            Engine::Neo4j(n) => n.store(value),
+            Engine::Postgres(_) => f.write_str("postgres"),
+            Engine::MongoDB(_) => f.write_str("mongodb"),
+            Engine::Neo4j(_) => f.write_str("neo4j"),
+        }
+    }
+}
+
+impl Engine {
+    pub async fn store(&self, value: Value) -> Result<(), Box<dyn Error + Send + Sync>> {
+        match self {
+            Engine::Postgres(p) => p.store(value).await,
+            Engine::MongoDB(m) => m.store(value).await,
+            Engine::Neo4j(n) => n.store(value).await,
         }
     }
 
@@ -58,7 +69,7 @@ impl Engine {
     }
 
     /// Mixture between current running tx, complexity of mapping (and user suggestion).
-    pub fn cost(&self, value: &Value) -> Float {
+    pub fn cost(&self, value: &Value) -> f64 {
         match self {
             Engine::Postgres(p) => p.cost(value),
             Engine::MongoDB(m) => m.cost(value),
@@ -71,9 +82,12 @@ impl Engine {
         todo!()
     }
 
-
     /// Merge partitions or direct access to dynamically built view
-    pub fn retrieve(&self, entity_name: String, query: String) -> Result<Value, Box<dyn Error + Send + Sync>> {
+    pub fn retrieve(
+        &self,
+        entity_name: String,
+        query: String,
+    ) -> Result<Value, Box<dyn Error + Send + Sync>> {
         todo!()
     }
 

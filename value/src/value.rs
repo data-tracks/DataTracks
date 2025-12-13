@@ -26,7 +26,7 @@ use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::ops::{Add, AddAssign, Div, Mul, Sub};
 use std::str;
-use neo4rs::{BoltBoolean, BoltFloat, BoltInteger, BoltLocalTime, BoltNull, BoltString, BoltType};
+use neo4rs::{BoltBoolean, BoltFloat, BoltInteger, BoltNull, BoltString, BoltType};
 use tracing::debug;
 use track_rails::message_generated::protocol::{
     Null as FlatNull, NullArgs, Value as FlatValue, ValueWrapper, ValueWrapperArgs,

@@ -14,55 +14,24 @@ license = false
 eula = false
 
 [dependencies]
-derivative = { workspace = true }
-parking_lot = { workspace = true }
 value = { workspace = true }
 error = { workspace = true }
 core = { workspace = true }
-threading = { workspace = true }
-axum = { version = "0.8.4", features = ["ws"] }
-ctrlc = "3.4.7"
-postgres = { workspace = true }
-cdc = { workspace = true }
 tokio = { workspace = true }
-tower-http = { version = "0.6.6", features = ["full"] }
 tracing = { workspace = true }
-tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
-chrono = {workspace = true}
-logos = "0.15.1"
-serde_json = { workspace = true }
-serde = { workspace = true }
-crossbeam = { workspace = true }
-rand = { workspace = true }
-include_dir = "0.7.4"
-mime_guess = "2.0.5"
-rumqttd = { workspace = true }
-rusqlite = { workspace = true }
+tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 flatbuffers = { workspace = true }
 reqwest = { version = "0.12.23", features = ["json", "blocking"] }
-regex = "1.11.1"
-criterion = { workspace = true }
-tracing-test = { workspace = true}
-rusty-tracks = "0.0.12"
-mongodb = "3.2.4"
-futures-util = "0.3.31"
-async-stream = { workspace = true }
-engine = { workspace = true}
+util = { workspace = true }
+engine = { workspace = true }
 sink = { workspace = true }
 
 
 [dev-dependencies]
-macro = { workspace = true }
 
 [dependencies.track-rails]
 git = "https://github.com/data-tracks/TrackRails.git"
 branch = "generated"
 
-[build-dependencies]
-fs_extra = "1.3.0" # Required for copying directories
-
-[[bench]]
-name = "train_overhead"
-harness = false
 
 

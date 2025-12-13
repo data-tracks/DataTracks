@@ -12,7 +12,7 @@ use tokio::time::{sleep, timeout};
 use tracing::info;
 use util::container;
 use util::container::Mapping;
-use value::Value;
+use value::{Float, Value};
 
 #[derive(Clone)]
 pub struct MongoDB {
@@ -59,6 +59,10 @@ impl MongoDB {
 
         self.measure_opcounters().await?;
         Ok(())
+    }
+
+    pub(crate) fn cost(&self, value: &Value) -> f64 {
+        1.0
     }
 
     pub(crate) async fn store(&self, value: Value) -> Result<(), Box<dyn Error + Send + Sync>> {

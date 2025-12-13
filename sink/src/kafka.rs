@@ -2,14 +2,14 @@ use rdkafka::admin::{AdminClient, AdminOptions, NewTopic, TopicReplication};
 use rdkafka::consumer::{Consumer, StreamConsumer};
 use rdkafka::producer::{FutureProducer, FutureRecord, Producer};
 use rdkafka::{ClientConfig, Message};
-use serde::Serialize;
-use serde_json::json;
 use std::error::Error;
-use std::fmt::format;
 use std::time::Duration;
-use tracing::{error, info};
-use util::container;
+use tokio::task::JoinSet;
+use tracing::{debug, error, info};
 use util::container::Mapping;
+use util::queue::RecordQueue;
+use util::{container, queue};
+use value::Value;
 
 const TOPIC: &str = "poly"; // The topic to consume from
 const GROUP_ID: &str = "rust-kafka-sink-group"; // Consumer group ID
@@ -19,7 +19,7 @@ struct KafkaSink {
 }
 
 impl KafkaSink {
-    pub async fn start(&mut self) -> Result<(), Box<dyn Error>> {
+    pub async fn start(&mut self, queue: RecordQueue) -> Result<(), Box<dyn Error>> {
         let consumer: StreamConsumer = ClientConfig::new()
             .set("group.id", GROUP_ID)
             .set("bootstrap.servers", self.broker.as_str())
@@ -50,38 +50,32 @@ impl KafkaSink {
                         }
                     };
 
-                    println!("Received message: {:?}", payload);
+                    debug!("Received message: {:?}", payload);
 
                     // --- Sink Logic: This is where you write to the external system ---
                     match serde_json::from_str::<SinkRecord>(payload) {
                         Ok(record) => {
-                            // In a real application, this would be a database write, an HTTP call, etc.
-                            println!(
-                                "-> SINKING record ID {} with value: {}",
-                                record.id, record.value
-                            );
-
-                            // ** Example of sinking to a hypothetical database function **
-                            // if let Err(e) = sink_to_database(&record).await {
-                            //     eprintln!("Failed to sink record: {:?}", e);
-                            //     // Decide whether to exit or retry/DLQ (Dead Letter Queue)
-                            // }
-
-                            // 4. Commit the offset manually after successful sinking
-                            // This ensures the message is only processed once (At-Least-Once semantics)
+                            match queue.push(
+                                queue::Meta {
+                                    name: Some(record.id),
+                                },
+                                Value::from(record.value),
+                            ) {
+                                Ok(_) => {}
+                                Err(err) => return Err(err.to_string().into()),
+                            };
                             consumer.commit_message(&msg, rdkafka::consumer::CommitMode::Async)?;
                         }
                         Err(e) => {
-                            eprintln!(
+                            error!(
                                 "Failed to deserialize JSON: {}. Raw payload: {}",
                                 e, payload
                             );
-                            // Log the error and move on, or send to a DLQ
                         }
                     }
                 }
                 Err(e) => {
-                    eprintln!("Kafka error: {}", e);
+                    error!("Kafka error: {}", e);
                 }
             }
         }
@@ -89,11 +83,18 @@ impl KafkaSink {
 }
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
-struct SinkRecord {
-    id: u32,
+pub struct SinkRecord {
+    id: String,
     value: String,
 }
 
+impl Into<Value> for SinkRecord {
+    fn into(self) -> Value {
+        self.value.into()
+    }
+}
+
+#[derive(Clone)]
 pub struct Kafka {
     host: String,
     port: u16,
@@ -131,6 +132,15 @@ impl Kafka {
         container::stop("kafka-mock").await
     }
 
+    pub async fn send_value(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
+        self.send(SinkRecord {
+            id: "test".to_string(),
+            value: "Success2".to_string(),
+        })
+        .await?;
+        Ok(())
+    }
+
     pub async fn send(&self, record: SinkRecord) -> Result<(), Box<dyn Error + Send + Sync>> {
         let producer: FutureProducer = ClientConfig::new()
             .set("bootstrap.servers", format!("{}:{}", self.host, self.port))
@@ -138,7 +148,7 @@ impl Kafka {
             .create()
             .expect("Producer creation failed");
 
-        info!("Attempting to send message to topic '{}'...", TOPIC);
+        debug!("Attempting to send message to topic '{}'...", TOPIC);
 
         let msg = serde_json::to_vec(&record)?;
         // 2. Define the message (FutureRecord)
@@ -152,7 +162,7 @@ impl Kafka {
         // 4. Handle the delivery result
         match result {
             Ok(delivery) => {
-                info!(
+                debug!(
                     "✅ Message successfully delivered to partition {} at offset {}",
                     delivery.partition, delivery.offset
                 );
@@ -237,31 +247,23 @@ impl Kafka {
     }
 }
 
-pub async fn start() -> Result<Kafka, Box<dyn Error + Send + Sync>> {
+pub async fn start(
+    joins: &mut JoinSet<()>,
+    value_queue: RecordQueue,
+) -> Result<Kafka, Box<dyn Error + Send + Sync>> {
     let kafka = Kafka::new("localhost", 9092).await;
     kafka.start().await?;
     kafka.create_topic().await?;
 
-    tokio::spawn(async {
+    joins.spawn(async move {
         let mut sink = KafkaSink {
             broker: "localhost:9092".to_string(),
         };
-        sink.start().await.map_err(|e| e.to_string())?;
-        Ok::<(), String>(())
+        sink.start(value_queue)
+            .await
+            .map_err(|e| e.to_string())
+            .unwrap();
     });
-
-    kafka
-        .send(SinkRecord {
-            id: 0,
-            value: "Success".to_string(),
-        })
-        .await?;
-    kafka
-        .send(SinkRecord {
-            id: 1,
-            value: "Success2".to_string(),
-        })
-        .await?;
 
     Ok(kafka)
 }

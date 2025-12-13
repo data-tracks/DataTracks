@@ -23,3 +23,4 @@ pub mod train;
 mod r#type;
 pub(crate) mod value;
 pub mod wagon;
+pub mod timeunit;

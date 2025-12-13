@@ -8,7 +8,7 @@ use bollard::query_parameters::{
     ListImagesOptionsBuilder, RemoveContainerOptions, RemoveContainerOptionsBuilder,
     StartContainerOptions, StopContainerOptions, StopContainerOptionsBuilder,
 };
-use bollard::{API_DEFAULT_VERSION, Docker};
+use bollard::{Docker};
 use futures_util::TryStreamExt;
 use std::collections::HashMap;
 use std::error::Error;

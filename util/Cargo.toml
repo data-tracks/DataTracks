@@ -13,3 +13,4 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 futures-util = "0.3.31"
 thiserror = "2.0.17"
+value = { workspace = true }
