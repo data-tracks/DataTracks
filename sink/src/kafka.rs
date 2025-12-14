@@ -3,7 +3,9 @@ use rdkafka::consumer::{Consumer, StreamConsumer};
 use rdkafka::producer::{FutureProducer, FutureRecord, Producer};
 use rdkafka::{ClientConfig, Message};
 use std::error::Error;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use rand::prelude::IndexedRandom;
 use tokio::task::JoinSet;
 use tracing::{debug, error, info};
 use util::container::Mapping;
@@ -132,12 +134,30 @@ impl Kafka {
         container::stop("kafka-mock").await
     }
 
-    pub async fn send_value(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub async fn send_value_doc(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
         self.send(SinkRecord {
-            id: "test".to_string(),
+            id: "doc".to_string(),
             value: "Success2".to_string(),
         })
         .await?;
+        Ok(())
+    }
+
+    pub async fn send_value_graph(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
+        self.send(SinkRecord {
+            id: "graph".to_string(),
+            value: "Success2".to_string(),
+        })
+            .await?;
+        Ok(())
+    }
+
+    pub async fn send_value_relational(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
+        self.send(SinkRecord {
+            id: "relational".to_string(),
+            value: "Success2".to_string(),
+        })
+            .await?;
         Ok(())
     }
 

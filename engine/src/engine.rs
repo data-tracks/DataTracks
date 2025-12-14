@@ -4,9 +4,11 @@ use crate::neo::Neo4j;
 use crate::postgres::Postgres;
 use std::error::Error;
 use std::fmt::{Display, Write};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::spawn;
 use tokio::time::sleep;
+use util::definition::{Definition, Model};
 use value::Value;
 
 #[derive(Clone)]
@@ -69,26 +71,21 @@ impl Engine {
     }
 
     /// Mixture between current running tx, complexity of mapping (and user suggestion).
-    pub fn cost(&self, value: &Value) -> f64 {
-        match self {
+    pub fn cost(&self, value: &Value, definition: &Definition) -> f64 {
+        let mut cost = match self {
             Engine::Postgres(p) => p.cost(value),
             Engine::MongoDB(m) => m.cost(value),
             Engine::Neo4j(n) => n.cost(value),
+        };
+
+        if definition.model != self.model() {
+            cost *= 2.0;
         }
-    }
 
-    /// Move pending operations on most efficient engine.
-    pub fn reshaping(&mut self) -> Result<(), Box<dyn Error + Send + Sync>> {
-        todo!()
-    }
+        cost *= self.current_load();
 
-    /// Merge partitions or direct access to dynamically built view
-    pub fn retrieve(
-        &self,
-        entity_name: String,
-        query: String,
-    ) -> Result<Value, Box<dyn Error + Send + Sync>> {
-        todo!()
+
+        cost
     }
 
     pub async fn start(&mut self) -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -125,6 +122,7 @@ impl Engine {
 
     pub fn postgres() -> Postgres {
         Postgres {
+            load: Arc::new(Mutex::new(Load::Low)),
             connector: PostgresConnection {
                 url: "localhost".to_string(),
                 port: 5432,
@@ -137,17 +135,51 @@ impl Engine {
     }
 
     fn mongo_db() -> MongoDB {
-        MongoDB { client: None }
+        MongoDB { load: Arc::new(Mutex::new(Load::Low)), client: None }
     }
 
     fn neo4j() -> Neo4j {
         Neo4j {
+            load: Arc::new(Mutex::new(Load::Low)),
             host: "localhost".to_string(),
             port: 7687,
             user: "neo4j".to_string(),
             password: "neoneoneo".to_string(),
             database: "neo4j".to_string(),
             graph: None,
+        }
+    }
+
+    fn model(&self) -> Model {
+        match self {
+            Engine::Postgres(_) => Model::Relational,
+            Engine::MongoDB(_) => Model::Document,
+            Engine::Neo4j(_) => Model::Graph
+        }
+    }
+
+    fn current_load(&self) -> f64 {
+        match self {
+            Engine::Postgres(p) => p.current_load(),
+            Engine::MongoDB(m) => m.current_load(),
+            Engine::Neo4j(n) => n.current_load()
+        }.to_f64()
+    }
+}
+
+#[derive(Clone)]
+pub enum Load{
+    Low,
+    Middle,
+    High
+}
+
+impl Load {
+    fn to_f64(&self) -> f64 {
+        match self {
+            Load::Low => 1.0,
+            Load::Middle => 2.0,
+            Load::High => 5.0
         }
     }
 }

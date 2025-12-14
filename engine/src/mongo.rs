@@ -1,3 +1,4 @@
+use crate::engine::Load;
 use crate::neo::Neo4j;
 use crate::{engine, Engine};
 use mongodb::bson::doc;
@@ -6,6 +7,7 @@ use mongodb::Client;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::error::Error;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::spawn;
 use tokio::time::{sleep, timeout};
@@ -16,6 +18,7 @@ use value::{Float, Value};
 
 #[derive(Clone)]
 pub struct MongoDB {
+    pub(crate) load: Arc<Mutex<Load>>,
     pub(crate) client: Option<Client>,
 }
 
@@ -61,7 +64,11 @@ impl MongoDB {
         Ok(())
     }
 
-    pub(crate) fn cost(&self, value: &Value) -> f64 {
+    pub(crate) fn current_load(&self) -> Load {
+        self.load.lock().unwrap().clone()
+    }
+
+    pub(crate) fn cost(&self, _: &Value) -> f64 {
         1.0
     }
 
@@ -168,14 +175,29 @@ impl MongoDB {
 
         let mut text = "✅ Metrics (Ops/Sec):".to_string();
 
+        let mut insert_ops = 1.0;
+
         // Calculate and print the rate for each counter
         for (op_type, end_count) in end_counts {
             if let Some(start_count) = start_counts.get(&op_type) {
                 let diff = end_count - start_count;
                 let rate = diff as f64 / interval_seconds;
                 text += &format!(", {}: {:.2}", op_type, rate);
+
+                if op_type == "insert" {
+                    insert_ops = rate;
+                }
             }
         }
+
+        let load = match insert_ops {
+            t if t < 5.0 => Load::Low,
+            t if t < 10.0 => Load::Middle,
+            _ => Load::High,
+        };
+
+        *self.load.lock().unwrap() = load;
+
         info!("{}", text);
 
         Ok(())

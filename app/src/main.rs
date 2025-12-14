@@ -8,6 +8,8 @@ mod language;
 mod management;
 mod util;
 
+mod phases;
+
 #[tokio::main]
 async fn main() {
     setup_logging();

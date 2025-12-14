@@ -1,5 +1,6 @@
 use std::error::Error;
 use std::sync::{Arc, Mutex};
+use tracing::error;
 use value::Value;
 
 pub struct RecordQueue {
@@ -20,6 +21,9 @@ impl RecordQueue {
 
     pub fn pop(&self) -> Option<(Meta, Value)> {
         let mut values = self.values.lock().ok()?;
+        if values.len() > 10_000 {
+            error!("too high queue {}", values.len());
+        }
         values.pop()
     }
 }

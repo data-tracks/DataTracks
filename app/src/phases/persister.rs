@@ -4,9 +4,10 @@ use std::error::Error;
 use std::time::Duration;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
-use tracing::info;
+use tracing::{debug, info};
 use util::queue::{Meta, RecordQueue};
 use value::Value;
+use util::definition::Definition;
 
 pub struct Persister {
     engines: Vec<Engine>,
@@ -24,19 +25,15 @@ impl Persister {
     }
 
     pub async fn next(&self, meta: Meta, value: Value) -> Result<(), Box<dyn Error + Send + Sync>> {
-        let engine = self.select_engines(&value)?;
+        let engine = self.select_engines(&value, meta).await?;
 
-        let func = self.function()?;
-
-        let value = func(value);
-
-        info!("store {} - {}", engine, value);
+        debug!("store {} - {}", engine, value);
         engine.store(value).await?;
 
         Ok(())
     }
 
-    pub(crate) async fn start(self, joins: &mut JoinSet<()>) {
+    pub async fn start(self, joins: &mut JoinSet<()>) {
         joins.spawn(async move {
             loop {
                 match self.queue.pop() {
@@ -47,21 +44,28 @@ impl Persister {
         });
     }
 
-    pub(crate) fn add_engine(&mut self, id: usize, engine: Engine) {
+    pub fn add_engine(&mut self, id: usize, engine: Engine) {
         self.engines.push(engine);
     }
 
-    fn select_engines(&self, value: &Value) -> Result<&Engine, Box<dyn Error + Send + Sync>> {
+    async fn select_engines(&self, value: &Value, meta: Meta) -> Result<&Engine, Box<dyn Error + Send + Sync>> {
+        let definitions = self.catalog.definitions().await;
+
+        let mut definition = Definition::empty();
+
+        for mut d in definitions {
+            if d.matches(value, &meta){
+                definition = d;
+            }
+        }
+
         Ok(self
             .engines
             .iter()
-            .map(|e| (e.cost(value), e))
+            .map(|e| (e.cost(value, &definition), e))
             .min_by(|(a), (b)| a.0.total_cmp(&b.0))
             .unwrap()
             .1)
     }
 
-    fn function(&self) -> Result<Box<dyn Fn(Value) -> Value + Send>, Box<dyn Error + Send + Sync>> {
-        Ok(Box::new(|value| value))
-    }
 }

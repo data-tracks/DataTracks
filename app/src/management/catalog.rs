@@ -1,4 +1,4 @@
-use crate::management::definition::Definition;
+use util::definition::Definition;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -12,6 +12,14 @@ impl Catalog {
         Catalog {
             definitions: Arc::new(Mutex::new(Vec::new())),
         }
+    }
+
+    pub async fn add_definition(&self, definition: Definition) {
+        self.definitions.lock().await.push(definition)
+    }
+
+    pub async fn definitions(&self) -> Vec<Definition> {
+        self.definitions.lock().await.clone()
     }
 }
 

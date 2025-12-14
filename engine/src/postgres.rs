@@ -1,8 +1,9 @@
 use crate::connection::PostgresConnection;
+use crate::engine::Load;
 use crate::neo::Neo4j;
 use crate::{engine, Engine};
 use std::error::Error;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::spawn;
 use tokio::time::{sleep, timeout};
@@ -14,10 +15,10 @@ use value::{Float, Value};
 
 #[derive(Clone)]
 pub struct Postgres {
+    pub(crate) load: Arc<Mutex<Load>>,
     pub(crate) connector: PostgresConnection,
     pub(crate) client: Option<Arc<Client>>,
 }
-
 
 #[derive(Debug)]
 struct TxCounts {
@@ -54,11 +55,15 @@ impl Postgres {
         Ok(())
     }
 
+    pub(crate) fn current_load(&self) -> Load {
+        self.load.lock().unwrap().clone()
+    }
+
     pub(crate) async fn stop(&mut self) -> Result<(), Box<dyn Error + Send + Sync>> {
         container::stop("engine-postgres").await
     }
 
-    pub(crate) fn cost(&self, value: &Value) -> f64 {
+    pub(crate) fn cost(&self, _: &Value) -> f64 {
         1.0
     }
 
@@ -69,9 +74,7 @@ impl Postgres {
                 let user_name = "test";
 
                 let insert_query = "INSERT INTO data (key, value) VALUES ($1, $2)";
-                let rows_affected = client
-                    .execute(insert_query, &[&user_name, &value])
-                    .await?;
+                let rows_affected = client.execute(insert_query, &[&user_name, &value]).await?;
 
                 debug!("Inserted {} row(s) into 'users'.", rows_affected);
             }
@@ -105,6 +108,14 @@ impl Postgres {
         let total_tx = (end_counts.commit - start_counts.commit)
             + (end_counts.rollback - start_counts.rollback);
         let tps = total_tx as f64 / interval_seconds as f64;
+
+        let load = match tps {
+            t if t < 5.0 => Load::Low,
+            t if t < 10.0 => Load::Middle,
+            _ => Load::High,
+        };
+
+        *self.load.lock().unwrap() = load;
 
         info!("✅ Throughput (TPS): {:.2}", tps);
 

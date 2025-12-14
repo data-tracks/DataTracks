@@ -3,6 +3,7 @@ use neo4rs::{query, BoltType, Graph};
 use reqwest::Client;
 use serde::Deserialize;
 use std::error::Error;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use serde::de::Unexpected::Str;
 use tokio::spawn;
@@ -11,9 +12,11 @@ use tracing::info;
 use util::container;
 use util::container::Mapping;
 use value::{Float, Value};
+use crate::engine::Load;
 
 #[derive(Clone)]
 pub struct Neo4j {
+    pub(crate) load: Arc<Mutex<Load>>,
     pub(crate) host: String,
     pub(crate) port: u16,
     pub(crate) user: String,
@@ -85,8 +88,12 @@ impl Neo4j {
         container::stop("engine-neo4j").await
     }
 
-    pub(crate) fn cost(&self, value: &Value) -> f64 {
-        0.0
+    pub(crate) fn current_load(&self) -> Load {
+        self.load.lock().unwrap().clone()
+    }
+
+    pub(crate) fn cost(&self, _: &Value) -> f64 {
+        1.0
     }
 
     pub(crate) async fn monitor(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -181,6 +188,14 @@ impl Neo4j {
         // Calculate TPS
         let total_tx = (end.commits - start.commits) + (end.rollbacks - start.rollbacks);
         let tps = total_tx / interval_seconds;
+
+        let load = match tps {
+            t if t < 5.0 => Load::Low,
+            t if t < 10.0 => Load::Middle,
+            _ => Load::High,
+        };
+
+        *self.load.lock().unwrap() = load;
 
         info!("✅ Throughput (TPS): {:.2}", tps);
 

@@ -1,6 +1,5 @@
 use crate::management::catalog::Catalog;
-use crate::management::definition::Definition;
-use crate::management::persister::Persister;
+use util::definition::{Definition, DefinitionFilter, Model};
 use engine::Engine;
 use reqwest::blocking::Client;
 use sink::kafka::Kafka;
@@ -12,6 +11,7 @@ use std::time::Duration;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
 use tracing::{error, info};
+use crate::phases::Persister;
 use util::queue::RecordQueue;
 use value::Time;
 
@@ -33,6 +33,30 @@ impl Manager {
         let ctrl_c_signal = tokio::signal::ctrl_c();
 
         let mut join_set: JoinSet<()> = JoinSet::new();
+
+        self.catalog
+            .add_definition(Definition::new(
+                DefinitionFilter::MetaName(String::from("doc")),
+                Model::Document,
+                String::from("doc"),
+            ))
+            .await;
+
+        self.catalog
+            .add_definition(Definition::new(
+                DefinitionFilter::MetaName(String::from("relational")),
+                Model::Relational,
+                String::from("relational"),
+            ))
+            .await;
+
+        self.catalog
+            .add_definition(Definition::new(
+                DefinitionFilter::MetaName(String::from("graph")),
+                Model::Graph,
+                String::from("graph"),
+            ))
+            .await;
 
         let kafka = self.start_engines().await?;
 
@@ -70,11 +94,27 @@ impl Manager {
         let kafka = sink::kafka::start(&mut self.joins, persister.queue.clone()).await?;
         persister.start(&mut self.joins).await;
 
-        let clone = kafka.clone();
+        let clone_rel = kafka.clone();
+        let clone_doc = kafka.clone();
+        let clone_graph = kafka.clone();
         self.joins.spawn(async move {
             loop {
-                clone.send_value().await.unwrap();
-                sleep(Duration::from_secs(1)).await;
+                clone_graph.send_value_graph().await.unwrap();
+                sleep(Duration::from_millis(100)).await;
+            }
+        });
+
+        self.joins.spawn(async move {
+            loop {
+                clone_rel.send_value_relational().await.unwrap();
+                sleep(Duration::from_millis(10)).await;
+            }
+        });
+
+        self.joins.spawn(async move {
+            loop {
+                clone_doc.send_value_doc().await.unwrap();
+                sleep(Duration::from_millis(1)).await;
             }
         });
 
