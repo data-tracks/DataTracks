@@ -18,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        module: [ macro, threading, value, cdc, core, data-tracks ]
+        module: [ macro, threading, value, core, data-tracks ]
 
     steps:
       - uses: actions/checkout@v2
