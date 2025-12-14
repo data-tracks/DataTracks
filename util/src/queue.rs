@@ -4,12 +4,14 @@ use tracing::error;
 use value::Value;
 
 pub struct RecordQueue {
+    last_len: usize,
     values: Arc<Mutex<Vec<(Meta, Value)>>>,
 }
 
 impl RecordQueue {
     pub fn new() -> Self {
         RecordQueue {
+            last_len: 0,
             values: Arc::new(Mutex::new(Vec::new())),
         }
     }
@@ -19,11 +21,13 @@ impl RecordQueue {
         Ok(())
     }
 
-    pub fn pop(&self) -> Option<(Meta, Value)> {
+    pub fn pop(&mut self) -> Option<(Meta, Value)> {
         let mut values = self.values.lock().ok()?;
-        if values.len() > 10_000 {
-            error!("too high queue {}", values.len());
+        let len = values.len();
+        if len - self.last_len > 10 {
+            error!("queue growing {}", len);
         }
+        self.last_len = len;
         values.pop()
     }
 }
@@ -31,6 +35,7 @@ impl RecordQueue {
 impl Clone for RecordQueue {
     fn clone(&self) -> Self {
         RecordQueue {
+            last_len: self.last_len,
             values: self.values.clone(),
         }
     }

@@ -33,7 +33,7 @@ impl Persister {
         Ok(())
     }
 
-    pub async fn start(self, joins: &mut JoinSet<()>) {
+    pub async fn start(mut self, joins: &mut JoinSet<()>) {
         joins.spawn(async move {
             loop {
                 match self.queue.pop() {
