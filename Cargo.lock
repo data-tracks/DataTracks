@@ -786,6 +786,7 @@ dependencies = [
  "engine",
  "error",
  "flatbuffers",
+ "futures",
  "reqwest",
  "sink",
  "tokio",

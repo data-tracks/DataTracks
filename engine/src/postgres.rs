@@ -6,15 +6,18 @@ use std::error::Error;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::spawn;
+use tokio::task::JoinSet;
 use tokio::time::{sleep, timeout};
 use tokio_postgres::{Client, GenericClient, SimpleQueryMessage};
 use tracing::{debug, info};
 use util::container;
 use util::container::{Manager, Mapping};
+use util::queue::{Meta, RecordQueue};
 use value::{Float, Value};
 
 #[derive(Clone)]
 pub struct Postgres {
+    pub(crate) queue: RecordQueue,
     pub(crate) load: Arc<Mutex<Load>>,
     pub(crate) connector: PostgresConnection,
     pub(crate) client: Option<Arc<Client>>,

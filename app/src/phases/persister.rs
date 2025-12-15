@@ -5,9 +5,9 @@ use std::time::Duration;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
 use tracing::{debug, info};
+use util::definition::Definition;
 use util::queue::{Meta, RecordQueue};
 use value::Value;
-use util::definition::Definition;
 
 pub struct Persister {
     engines: Vec<Engine>,
@@ -25,16 +25,18 @@ impl Persister {
     }
 
     pub async fn next(&self, meta: Meta, value: Value) -> Result<(), Box<dyn Error + Send + Sync>> {
-        let engine = self.select_engines(&value, meta).await?;
+        let engine = self.select_engines(&value, &meta).await?;
 
         debug!("store {} - {}", engine, value);
-        engine.store(value).await?;
+        engine.next(meta, value).await?;
 
         Ok(())
     }
 
     pub async fn start(mut self, joins: &mut JoinSet<()>) {
         joins.spawn(async move {
+            let mut engines = self.catalog.engines().await;
+            self.engines.append(&mut engines);
             loop {
                 match self.queue.pop() {
                     Some((meta, value)) => self.next(meta, value).await.unwrap(),
@@ -44,17 +46,17 @@ impl Persister {
         });
     }
 
-    pub fn add_engine(&mut self, id: usize, engine: Engine) {
-        self.engines.push(engine);
-    }
-
-    async fn select_engines(&self, value: &Value, meta: Meta) -> Result<&Engine, Box<dyn Error + Send + Sync>> {
+    async fn select_engines(
+        &self,
+        value: &Value,
+        meta: &Meta,
+    ) -> Result<&Engine, Box<dyn Error + Send + Sync>> {
         let definitions = self.catalog.definitions().await;
 
         let mut definition = Definition::empty();
 
         for mut d in definitions {
-            if d.matches(value, &meta){
+            if d.matches(value, &meta) {
                 definition = d;
             }
         }
@@ -67,5 +69,4 @@ impl Persister {
             .unwrap()
             .1)
     }
-
 }

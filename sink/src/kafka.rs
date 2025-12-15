@@ -62,7 +62,7 @@ impl KafkaSink {
                                     name: Some(record.id),
                                 },
                                 Value::from(record.value),
-                            ) {
+                            ).await {
                                 Ok(_) => {}
                                 Err(err) => return Err(err.to_string().into()),
                             };

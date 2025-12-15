@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::ops::Sub;
 use std::sync::{Arc, Mutex};
 use tracing::error;
 use value::Value;
@@ -16,7 +17,7 @@ impl RecordQueue {
         }
     }
 
-    pub fn push<V: Into<Value>>(&self, meta: Meta, value: V) -> Result<(), Box<dyn Error + '_>> {
+    pub async fn push<V: Into<Value>>(&self, meta: Meta, value: V) -> Result<(), Box<dyn Error + '_>> {
         self.values.lock()?.push((meta, value.into()));
         Ok(())
     }
@@ -24,7 +25,7 @@ impl RecordQueue {
     pub fn pop(&mut self) -> Option<(Meta, Value)> {
         let mut values = self.values.lock().ok()?;
         let len = values.len();
-        if len - self.last_len > 10 {
+        if len.saturating_sub(self.last_len) > 10 {
             error!("queue growing {}", len);
         }
         self.last_len = len;

@@ -11,11 +11,13 @@ use tokio::time::{sleep, Instant};
 use tracing::info;
 use util::container;
 use util::container::Mapping;
+use util::queue::RecordQueue;
 use value::{Float, Value};
 use crate::engine::Load;
 
 #[derive(Clone)]
 pub struct Neo4j {
+    pub(crate) queue: RecordQueue,
     pub(crate) load: Arc<Mutex<Load>>,
     pub(crate) host: String,
     pub(crate) port: u16,

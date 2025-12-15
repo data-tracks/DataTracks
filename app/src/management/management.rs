@@ -1,5 +1,5 @@
 use crate::management::catalog::Catalog;
-use util::definition::{Definition, DefinitionFilter, Model};
+use crate::phases::Persister;
 use engine::Engine;
 use reqwest::blocking::Client;
 use sink::kafka::Kafka;
@@ -11,7 +11,7 @@ use std::time::Duration;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
 use tracing::{error, info};
-use crate::phases::Persister;
+use util::definition::{Definition, DefinitionFilter, Model};
 use util::queue::RecordQueue;
 use value::Time;
 
@@ -74,6 +74,9 @@ impl Manager {
         info!("Stopping kafka...");
         kafka.stop().await?;
 
+        info!("Stopping engines...");
+        self.catalog.stop().await?;
+
         // Clean up all remaining running tasks
         info!("🧹 Aborting remaining tasks...");
         join_set.abort_all();
@@ -87,8 +90,8 @@ impl Manager {
     async fn start_engines(&mut self) -> Result<Kafka, Box<dyn Error + Send + Sync>> {
         let mut persister = Persister::new(self.catalog.clone());
 
-        for (name, engine) in Engine::start_all().await?.into_iter().enumerate() {
-            persister.add_engine(name, engine);
+        for (name, (_, engine)) in Engine::start_all(&mut self.joins).await?.into_iter().enumerate() {
+            self.catalog.add_engine(engine).await;
         }
 
         let kafka = sink::kafka::start(&mut self.joins, persister.queue.clone()).await?;

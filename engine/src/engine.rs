@@ -7,8 +7,10 @@ use std::fmt::{Display, Write};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::spawn;
+use tokio::task::JoinSet;
 use tokio::time::sleep;
 use util::definition::{Definition, Model};
+use util::queue::{Meta, RecordQueue};
 use value::Value;
 
 #[derive(Clone)]
@@ -37,10 +39,22 @@ impl Engine {
         }
     }
 
-    pub async fn start_all() -> Result<Vec<Engine>, Box<dyn Error + Send + Sync>> {
-        let mut engines: Vec<Engine> = vec![];
+    pub async fn next(&self, meta: Meta, value: Value) -> Result<(), Box<dyn Error + Send + Sync>> {
+        let res = match self {
+            Engine::Postgres(p) => p.queue.push(meta, value).await,
+            Engine::MongoDB(m) => m.queue.push(meta, value).await,
+            Engine::Neo4j(n) => n.queue.push(meta, value).await,
+        };
+        Ok(())
+    }
 
-        let mut pg = Engine::postgres();
+    pub async fn start_all(
+        set: &mut JoinSet<()>,
+    ) -> Result<Vec<(RecordQueue, Engine)>, Box<dyn Error + Send + Sync>> {
+        let mut engines: Vec<(RecordQueue, Engine)> = vec![];
+
+        let post_queue = RecordQueue::new();
+        let mut pg = Engine::postgres(post_queue.clone());
         pg.start().await?;
         pg.monitor().await?;
         pg.create_tables().await?;
@@ -48,7 +62,8 @@ impl Engine {
             pg.insert_data().await?;
         }
 
-        let mut mongodb = Engine::mongo_db();
+        let mongo_queue = RecordQueue::new();
+        let mut mongodb = Engine::mongo_db(mongo_queue.clone());
         mongodb.start().await?;
         mongodb.monitor().await?;
         mongodb.create_collection().await?;
@@ -56,16 +71,30 @@ impl Engine {
             mongodb.insert_data().await?;
         }
 
-        let mut neo4j = Engine::neo4j();
+        let neo_queue = RecordQueue::new();
+        let mut neo4j = Engine::neo4j(neo_queue.clone());
         neo4j.start().await?;
         neo4j.monitor().await?;
         for _ in 0..1_000 {
             neo4j.insert_data().await?;
         }
 
-        engines.push(pg.into());
-        engines.push(mongodb.into());
-        engines.push(neo4j.into());
+        engines.push((post_queue, pg.into()));
+        engines.push((mongo_queue, mongodb.into()));
+        engines.push((neo_queue, neo4j.into()));
+
+        for (queue, engine) in &engines {
+            let mut clone = engine.clone();
+            let mut queue = queue.clone();
+            set.spawn(async move {
+                loop {
+                    match queue.pop() {
+                        None => sleep(Duration::from_millis(1)).await,
+                        Some((_, v)) => clone.store(v).await.unwrap(),
+                    }
+                }
+            });
+        }
 
         Ok(engines)
     }
@@ -84,7 +113,6 @@ impl Engine {
 
         cost *= self.current_load();
 
-
         cost
     }
 
@@ -96,11 +124,11 @@ impl Engine {
         }
     }
 
-    pub async fn stop(&mut self) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub async fn stop(self) -> Result<(), Box<dyn Error + Send + Sync>> {
         match self {
-            Engine::Postgres(p) => p.stop().await,
-            Engine::MongoDB(m) => m.stop().await,
-            Engine::Neo4j(n) => n.stop().await,
+            Engine::Postgres(mut p) => p.stop().await,
+            Engine::MongoDB(mut m) => m.stop().await,
+            Engine::Neo4j(mut n) => n.stop().await,
         }
     }
 
@@ -120,8 +148,9 @@ impl Engine {
         Ok(())
     }
 
-    pub fn postgres() -> Postgres {
+    pub fn postgres(queue: RecordQueue) -> Postgres {
         Postgres {
+            queue,
             load: Arc::new(Mutex::new(Load::Low)),
             connector: PostgresConnection {
                 url: "localhost".to_string(),
@@ -134,12 +163,17 @@ impl Engine {
         }
     }
 
-    fn mongo_db() -> MongoDB {
-        MongoDB { load: Arc::new(Mutex::new(Load::Low)), client: None }
+    fn mongo_db(queue: RecordQueue) -> MongoDB {
+        MongoDB {
+            queue,
+            load: Arc::new(Mutex::new(Load::Low)),
+            client: None,
+        }
     }
 
-    fn neo4j() -> Neo4j {
+    fn neo4j(queue: RecordQueue) -> Neo4j {
         Neo4j {
+            queue,
             load: Arc::new(Mutex::new(Load::Low)),
             host: "localhost".to_string(),
             port: 7687,
@@ -154,7 +188,7 @@ impl Engine {
         match self {
             Engine::Postgres(_) => Model::Relational,
             Engine::MongoDB(_) => Model::Document,
-            Engine::Neo4j(_) => Model::Graph
+            Engine::Neo4j(_) => Model::Graph,
         }
     }
 
@@ -162,16 +196,17 @@ impl Engine {
         match self {
             Engine::Postgres(p) => p.current_load(),
             Engine::MongoDB(m) => m.current_load(),
-            Engine::Neo4j(n) => n.current_load()
-        }.to_f64()
+            Engine::Neo4j(n) => n.current_load(),
+        }
+        .to_f64()
     }
 }
 
 #[derive(Clone)]
-pub enum Load{
+pub enum Load {
     Low,
     Middle,
-    High
+    High,
 }
 
 impl Load {
@@ -179,7 +214,7 @@ impl Load {
         match self {
             Load::Low => 1.0,
             Load::Middle => 2.0,
-            Load::High => 5.0
+            Load::High => 5.0,
         }
     }
 }

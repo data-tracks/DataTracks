@@ -14,10 +14,12 @@ use tokio::time::{sleep, timeout};
 use tracing::info;
 use util::container;
 use util::container::Mapping;
+use util::queue::RecordQueue;
 use value::{Float, Value};
 
 #[derive(Clone)]
 pub struct MongoDB {
+    pub(crate) queue: RecordQueue,
     pub(crate) load: Arc<Mutex<Load>>,
     pub(crate) client: Option<Client>,
 }
