@@ -34,13 +34,15 @@ impl Manager {
 
         let mut join_set: JoinSet<()> = JoinSet::new();
 
+        let persister = self.start_engines().await?;
+
         self.catalog
             .add_definition(Definition::new(
                 DefinitionFilter::MetaName(String::from("doc")),
                 Model::Document,
                 String::from("doc"),
             ))
-            .await;
+            .await?;
 
         self.catalog
             .add_definition(Definition::new(
@@ -48,7 +50,7 @@ impl Manager {
                 Model::Relational,
                 String::from("relational"),
             ))
-            .await;
+            .await?;
 
         self.catalog
             .add_definition(Definition::new(
@@ -56,9 +58,11 @@ impl Manager {
                 Model::Graph,
                 String::from("graph"),
             ))
-            .await;
+            .await?;
 
-        let kafka = self.start_engines().await?;
+        self.start_distributor().await;
+
+        let kafka = self.start_kafka(persister).await?;
 
         tokio::select! {
                 _ = ctrl_c_signal => {
@@ -87,13 +91,42 @@ impl Manager {
         Ok(())
     }
 
-    async fn start_engines(&mut self) -> Result<Kafka, Box<dyn Error + Send + Sync>> {
-        let mut persister = Persister::new(self.catalog.clone());
+    async fn start_engines(&mut self) -> Result<Persister, Box<dyn Error + Send + Sync>> {
+        let persister = Persister::new(self.catalog.clone());
 
-        for (name, (_, engine)) in Engine::start_all(&mut self.joins).await?.into_iter().enumerate() {
-            self.catalog.add_engine(engine).await;
+        let mut engines = Engine::start_all().await?;
+        for (queue, engine) in engines.into_iter() {
+            self.catalog.add_engine(engine, queue).await;
         }
 
+        Ok(persister)
+    }
+
+    async fn start_distributor(&mut self) {
+        for (engine, queue) in self.catalog.engines().await {
+            let mut clone = engine.clone();
+            let mut queue = queue.clone();
+            self.joins.spawn(async move {
+                loop {
+                    match queue.pop() {
+                        None => sleep(Duration::from_millis(1)).await,
+                        Some((v, context)) => match clone.store(v.clone(), context.clone()).await {
+                            Ok(_) => {}
+                            Err(err) => {
+                                error!("Error during distribution to engines {}", err);
+                                queue.push(v.clone(), context).await.unwrap();
+                            }
+                        },
+                    }
+                }
+            });
+        }
+    }
+
+    async fn start_kafka(
+        &mut self,
+        mut persister: Persister,
+    ) -> Result<Kafka, Box<dyn Error + Send + Sync>> {
         let kafka = sink::kafka::start(&mut self.joins, persister.queue.clone()).await?;
         persister.start(&mut self.joins).await;
 

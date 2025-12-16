@@ -33,16 +33,6 @@ impl ValueReservoir {
         store
     }
 
-    pub fn add(&self, value: Value) -> Result<(), String> {
-        let mut inner = self.inner.lock();
-        inner.counter += 1;
-        let counter = inner.counter.into();
-        inner
-            .storage
-            .write_value(counter, value.wagonize(self.index));
-        Ok(())
-    }
-
     pub fn set_source(&mut self, source: usize) {
         self.index = source;
     }

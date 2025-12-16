@@ -1,4 +1,3 @@
-use crate::train::Train;
 use crate::value::Value;
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
@@ -31,25 +30,4 @@ impl PartialEq for Wagon {
     }
 }
 
-impl From<Vec<Wagon>> for Train {
-    fn from(value: Vec<Wagon>) -> Self {
-        Train::new_values(
-            value.into_iter().map(Value::Wagon).collect::<Vec<Value>>(),
-            0,
-            0,
-        )
-    }
-}
 
-impl From<Vec<Value>> for Train {
-    fn from(value: Vec<Value>) -> Self {
-        Train::new_values(
-            value
-                .into_iter()
-                .map(|v| Value::wagon(v, Value::null()))
-                .collect::<Vec<Value>>(),
-            0,
-            0,
-        )
-    }
-}

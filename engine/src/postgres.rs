@@ -31,7 +31,7 @@ struct TxCounts {
 
 impl Into<Engine> for Postgres {
     fn into(self) -> Engine {
-        Engine::Postgres(self)
+        Engine::Postgres(self, RecordQueue::new())
     }
 }
 
@@ -55,6 +55,8 @@ impl Postgres {
 
         self.check_throughput().await?;
 
+        self.create_table("_stream").await?;
+
         Ok(())
     }
 
@@ -70,14 +72,16 @@ impl Postgres {
         1.0
     }
 
-    pub(crate) async fn store(&self, value: Value) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub(crate) async fn store(
+        &self,
+        value: Value,
+        entity: String,
+    ) -> Result<(), Box<dyn Error + Send + Sync>> {
         match &self.client {
             None => return Err(Box::from("could not create postgres database")),
             Some(client) => {
-                let user_name = "test";
-
-                let insert_query = "INSERT INTO data (key, value) VALUES ($1, $2)";
-                let rows_affected = client.execute(insert_query, &[&user_name, &value]).await?;
+                let insert_query = format!("INSERT INTO {} (value) VALUES ($1)", entity);
+                let rows_affected = client.execute(&insert_query, &[&value]).await?;
 
                 debug!("Inserted {} row(s) into 'users'.", rows_affected);
             }
@@ -125,28 +129,19 @@ impl Postgres {
         Ok(())
     }
 
-    pub async fn create_tables(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub async fn create_table(&self, name: &str) -> Result<(), Box<dyn Error + Send + Sync>> {
         match &self.client {
             None => return Err(Box::from("could not create postgres database")),
             Some(client) => {
-                let create_table_query = "
-                CREATE TABLE IF NOT EXISTS users (
+                let create_table_query = format!(
+                    "CREATE TABLE IF NOT EXISTS {} (
                     id SERIAL PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    age INT
-                )";
-                client.execute(create_table_query, &[]).await?;
-                info!("Table 'users' ensured to exist.");
+                    value TEXT)",
+                    name
+                );
 
-                let create_table_query = "
-                CREATE TABLE IF NOT EXISTS data (
-                    id SERIAL PRIMARY KEY,
-                    key TEXT NOT NULL,
-                    value TEXT
-                )";
-
-                client.execute(create_table_query, &[]).await?;
-                info!("Table 'data' ensured to exist.");
+                client.execute(&create_table_query, &[]).await?;
+                info!("Table '{}' ensured to exist.", name);
             }
         }
         Ok(())

@@ -6,7 +6,7 @@ use value::Value;
 
 pub struct RecordQueue {
     last_len: usize,
-    values: Arc<Mutex<Vec<(Meta, Value)>>>,
+    values: Arc<Mutex<Vec<(Value, RecordContext)>>>,
 }
 
 impl RecordQueue {
@@ -17,12 +17,23 @@ impl RecordQueue {
         }
     }
 
-    pub async fn push<V: Into<Value>>(&self, meta: Meta, value: V) -> Result<(), Box<dyn Error + '_>> {
-        self.values.lock()?.push((meta, value.into()));
+    pub fn len(&self) -> usize {
+        self.values
+            .lock()
+            .map(|v| v.len())
+            .unwrap_or(10_000_000usize)
+    }
+
+    pub async fn push<V: Into<Value>>(
+        &self,
+        value: V,
+        context: RecordContext,
+    ) -> Result<(), Box<dyn Error + '_>> {
+        self.values.lock()?.push((value.into(), context));
         Ok(())
     }
 
-    pub fn pop(&mut self) -> Option<(Meta, Value)> {
+    pub fn pop(&mut self) -> Option<(Value, RecordContext)> {
         let mut values = self.values.lock().ok()?;
         let len = values.len();
         if len.saturating_sub(self.last_len) > 10 {
@@ -42,6 +53,13 @@ impl Clone for RecordQueue {
     }
 }
 
+#[derive(Clone)]
 pub struct Meta {
     pub name: Option<String>,
+}
+
+#[derive(Clone)]
+pub struct RecordContext {
+    pub meta: Meta,
+    pub entity: Option<String>,
 }

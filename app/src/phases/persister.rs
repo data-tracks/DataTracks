@@ -6,7 +6,7 @@ use tokio::task::JoinSet;
 use tokio::time::sleep;
 use tracing::{debug, info};
 use util::definition::Definition;
-use util::queue::{Meta, RecordQueue};
+use util::queue::{Meta, RecordContext, RecordQueue};
 use value::Value;
 
 pub struct Persister {
@@ -24,22 +24,32 @@ impl Persister {
         }
     }
 
-    pub async fn next(&self, meta: Meta, value: Value) -> Result<(), Box<dyn Error + Send + Sync>> {
-        let engine = self.select_engines(&value, &meta).await?;
+    pub async fn next(
+        &self,
+        value: Value,
+        context: RecordContext,
+    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+        let (engine, context) = self.select_engines(&value, context).await?;
 
         debug!("store {} - {}", engine, value);
-        engine.next(meta, value).await?;
+        engine.next(value, context).await?;
 
         Ok(())
     }
 
     pub async fn start(mut self, joins: &mut JoinSet<()>) {
         joins.spawn(async move {
-            let mut engines = self.catalog.engines().await;
+            let mut engines = self
+                .catalog
+                .engines()
+                .await
+                .into_iter()
+                .map(|(e, q)| e)
+                .collect::<Vec<_>>();
             self.engines.append(&mut engines);
             loop {
                 match self.queue.pop() {
-                    Some((meta, value)) => self.next(meta, value).await.unwrap(),
+                    Some((value, context)) => self.next(value, context).await.unwrap(),
                     None => sleep(Duration::from_millis(1)).await,
                 }
             }
@@ -49,24 +59,29 @@ impl Persister {
     async fn select_engines(
         &self,
         value: &Value,
-        meta: &Meta,
-    ) -> Result<&Engine, Box<dyn Error + Send + Sync>> {
+        context: RecordContext,
+    ) -> Result<(&Engine, RecordContext), Box<dyn Error + Send + Sync>> {
         let definitions = self.catalog.definitions().await;
 
         let mut definition = Definition::empty();
 
         for mut d in definitions {
-            if d.matches(value, &meta) {
+            if d.matches(value, &context.meta) {
                 definition = d;
             }
         }
 
-        Ok(self
-            .engines
-            .iter()
-            .map(|e| (e.cost(value, &definition), e))
-            .min_by(|(a), (b)| a.0.total_cmp(&b.0))
-            .unwrap()
-            .1)
+        Ok((
+            self.engines
+                .iter()
+                .map(|e| (e.cost(value, &definition), e))
+                .min_by(|(a), (b)| a.0.total_cmp(&b.0))
+                .unwrap()
+                .1,
+            RecordContext {
+                meta: context.meta,
+                entity: Some(definition.entity),
+            },
+        ))
     }
 }

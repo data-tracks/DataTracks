@@ -1,3 +1,4 @@
+use rand::prelude::IndexedRandom;
 use rdkafka::admin::{AdminClient, AdminOptions, NewTopic, TopicReplication};
 use rdkafka::consumer::{Consumer, StreamConsumer};
 use rdkafka::producer::{FutureProducer, FutureRecord, Producer};
@@ -5,11 +6,10 @@ use rdkafka::{ClientConfig, Message};
 use std::error::Error;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use rand::prelude::IndexedRandom;
 use tokio::task::JoinSet;
 use tracing::{debug, error, info};
 use util::container::Mapping;
-use util::queue::RecordQueue;
+use util::queue::{RecordContext, RecordQueue};
 use util::{container, queue};
 use value::Value;
 
@@ -57,12 +57,18 @@ impl KafkaSink {
                     // --- Sink Logic: This is where you write to the external system ---
                     match serde_json::from_str::<SinkRecord>(payload) {
                         Ok(record) => {
-                            match queue.push(
-                                queue::Meta {
-                                    name: Some(record.id),
-                                },
-                                Value::from(record.value),
-                            ).await {
+                            match queue
+                                .push(
+                                    Value::from(record.value),
+                                    RecordContext {
+                                        meta: queue::Meta {
+                                            name: Some(record.id),
+                                        },
+                                        entity: None,
+                                    },
+                                )
+                                .await
+                            {
                                 Ok(_) => {}
                                 Err(err) => return Err(err.to_string().into()),
                             };
@@ -148,7 +154,7 @@ impl Kafka {
             id: "graph".to_string(),
             value: "Success2".to_string(),
         })
-            .await?;
+        .await?;
         Ok(())
     }
 
@@ -157,7 +163,7 @@ impl Kafka {
             id: "relational".to_string(),
             value: "Success2".to_string(),
         })
-            .await?;
+        .await?;
         Ok(())
     }
 

@@ -3,6 +3,7 @@ use crate::queue::Meta;
 use value::Value;
 use value::Value::Dict;
 use crate::definition::DefinitionFilter::AllMatch;
+use crate::extractor::ValueExtractor;
 
 /// Defines into which final entity an incoming value(primitive to complex) is stored
 /// and provides "instructions" on identifying, which parts it is.
@@ -11,10 +12,11 @@ pub struct Definition {
     filter: DefinitionFilter,
     pub model: Model,
     /// final destination
-    entity: Option<String>,
+    pub entity: String,
     /// which "key|index" is used to identify a new value
     uniqueness: Vec<String>,
     query: Option<String>,
+    ordering: Option<ValueExtractor>
 }
 
 impl Definition {
@@ -22,9 +24,10 @@ impl Definition {
         Definition {
             filter,
             model,
-            entity: Some(entity),
+            entity,
             uniqueness: vec![],
             query: None,
+            ordering: None,
         }
     }
 
@@ -32,9 +35,10 @@ impl Definition {
         Definition {
             filter: AllMatch,
             model: Model::Document,
-            entity: None,
+            entity: String::from("_stream"),
             uniqueness: vec![],
             query: None,
+            ordering: None,
         }
     }
 
@@ -66,3 +70,4 @@ pub enum Model {
     Relational,
     Graph,
 }
+

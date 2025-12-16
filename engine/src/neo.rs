@@ -37,7 +37,7 @@ struct TxMetrics {
 
 impl Into<Engine> for Neo4j {
     fn into(self) -> Engine {
-        Engine::Neo4j(self)
+        Engine::Neo4j(self, RecordQueue::new())
     }
 }
 
@@ -134,11 +134,11 @@ impl Neo4j {
         }
     }
 
-    pub(crate) async fn store(&self, value: Value) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub(crate) async fn store(&self, value: Value, entity: String) -> Result<(), Box<dyn Error + Send + Sync>> {
         match &self.graph {
             None => Err(Box::from("No graph")),
             Some(g) => {
-                let cypher_query = self.query(&value);
+                let cypher_query = self.query(entity);
 
                 match g
                     .run(
@@ -204,8 +204,8 @@ impl Neo4j {
         Ok(())
     }
 
-    fn query(&self, value: &Value) -> String {
-        String::from("CREATE (p:Person {value: $value}) RETURN p")
+    fn query(&self, entity: String) -> String {
+        format!("CREATE (p:db_{} {{value: $value}}) RETURN p", entity)
     }
 }
 

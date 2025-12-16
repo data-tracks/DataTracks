@@ -1,4 +1,3 @@
-use crate::Value::Wagon;
 use crate::array::Array;
 use crate::date::Date;
 use crate::dict::Dict;
@@ -43,7 +42,6 @@ pub enum Value {
     Array(Array),
     Dict(Dict),
     Null,
-    Wagon(wagon::Wagon),
 }
 
 impl Value {
@@ -94,7 +92,6 @@ impl Value {
             Value::Array(i) => Some(i.flatternize(builder).as_union_value()),
             Value::Dict(i) => Some(i.flatternize(builder).as_union_value()),
             Null => Some(FlatNull::create(builder, &NullArgs {}).as_union_value()),
-            Wagon(i) => return i.value.flatternize(builder),
         };
 
         ValueWrapper::create(builder, &ValueWrapperArgs { data_type, data })
@@ -111,7 +108,6 @@ impl Value {
             Value::Array(_) => FlatValue::List,
             Value::Dict(_) => FlatValue::Document,
             Null => FlatValue::Null,
-            Wagon(w) => w.value.get_flat_type(),
         }
     }
 
@@ -134,9 +130,6 @@ impl Value {
         Value::Dict(Dict::new(map))
     }
 
-    pub fn wagon(value: Value, origin: Value) -> Value {
-        Wagon(wagon::Wagon::new(value, origin))
-    }
 
     pub fn dict_from_kv<S: AsRef<str>>(key: S, value: Value) -> Value {
         Self::dict_from_pairs(vec![(key.as_ref(), value)])
@@ -163,7 +156,6 @@ impl Value {
             Value::Array(_) => ValType::Array,
             Value::Dict(_) => ValType::Dict,
             Null => ValType::Null,
-            Wagon(w) => w.value.type_(),
             Value::Time(_) => ValType::Time,
             Value::Date(_) => ValType::Date,
         }
@@ -178,7 +170,6 @@ impl Value {
             Value::Array(_) => Err(String::from("Array cannot be converted")),
             Value::Dict(_) => Err(String::from("Dict cannot be converted")),
             Null => Err(String::from("Null cannot be converted")),
-            Wagon(w) => w.value.as_int(),
             Value::Time(t) => Ok(Int(t.ms)),
             Value::Date(d) => Ok(Int::new(d.as_epoch())),
         }
@@ -201,7 +192,6 @@ impl Value {
             Value::Array(_) => Err(String::from("Array cannot be converted")),
             Value::Dict(_) => Err(String::from("Dict cannot be converted")),
             Null => Err(String::from("Null cannot be converted")),
-            Wagon(w) => w.value.as_float(),
             Value::Time(t) => Ok(if t.ns != 0 {
                 Float::new(t.ms as f64 + t.ns as f64 / 1e6)
             } else {
@@ -226,7 +216,6 @@ impl Value {
             Value::Array(_) => Err(String::from("Array cannot be converted")),
             Value::Dict(_) => Err(String::from("Dict cannot be converted")),
             Null => Err(String::from("Null cannot be converted")),
-            Wagon(w) => w.value.as_time(),
             Value::Date(_) => Ok(Time::new(0, 0)),
         }
     }
@@ -242,7 +231,6 @@ impl Value {
             Value::Array(_) => Err(String::from("Array cannot be converted")),
             Value::Dict(_) => Err(String::from("Dict cannot be converted")),
             Null => Err(String::from("Null cannot be converted")),
-            Wagon(w) => w.value.as_date(),
         }
     }
 
@@ -257,7 +245,6 @@ impl Value {
             | Value::Date(_)
             | Null => Err(String::from("Dict cannot be converted")),
             Value::Dict(d) => Ok(d.clone()),
-            Wagon(w) => w.value.as_dict(),
         }
     }
 
@@ -272,7 +259,6 @@ impl Value {
             | Value::Dict(_)
             | Null => Err(String::from("Array cannot be converted")),
             Value::Array(a) => Ok(a.clone()),
-            Wagon(w) => w.value.as_array(),
         }
     }
     pub fn as_bool(&self) -> Result<Bool, String> {
@@ -292,7 +278,6 @@ impl Value {
             Value::Array(a) => Ok(Bool(!a.values.is_empty())),
             Value::Dict(d) => Ok(Bool(!d.is_empty())),
             Null => Ok(Bool(false)),
-            Wagon(w) => w.value.as_bool(),
             Value::Date(d) => Ok(Bool::new(d.days > 0)),
         }
     }
@@ -319,19 +304,8 @@ impl Value {
                     .join(",")
             ))),
             Null => Ok(Text("null".to_owned())),
-            Wagon(w) => w.value.as_text(),
             Value::Time(t) => Ok(Text(t.to_string())),
             Value::Date(d) => Ok(Text(d.to_string())),
-        }
-    }
-
-    pub fn wagonize(self, stop: usize) -> Value {
-        match self {
-            Wagon(mut w) => {
-                w.origin = Box::new(stop.into());
-                Wagon(w)
-            }
-            value => Value::wagon(value, stop.into()),
         }
     }
 }
@@ -445,7 +419,6 @@ impl PartialEq for Value {
 
         match (self, other) {
             (Null, Null) => true,
-            (Wagon(w), o) => *o == *w.value,
             (Null, _) | (_, Null) => false,
             (Value::Int(_), Value::Float(_)) => self
                 .as_float()
@@ -522,7 +495,6 @@ impl Hash for Value {
             Null => {
                 "null".hash(state);
             }
-            Wagon(w) => w.value.hash(state),
             Value::Time(t) => {
                 t.ms.hash(state);
                 t.ns.hash(state)
@@ -545,7 +517,6 @@ impl Display for Value {
             Value::Array(a) => a.fmt(f),
             Value::Dict(d) => d.fmt(f),
             Null => write!(f, "null"),
-            Wagon(w) => w.value.fmt(f),
             Value::Date(d) => d.fmt(f),
         }
     }
@@ -781,9 +752,6 @@ impl Add for &Value {
                 a.values.push(b.clone());
                 Value::Array(a)
             }
-            // Handle Wagon custom addition
-            (Wagon(w), rhs) => &*w.value.clone() + rhs,
-            (lhs, Wagon(w)) => lhs + &*w.value.clone(),
 
             // Panic on unsupported types
             (lhs, rhs) => panic!("Cannot add {lhs:?} with {rhs:?}."),
@@ -818,7 +786,6 @@ impl AddAssign for Value {
             Value::Array(a) => a.values.push(rhs),
             Value::Dict(d) => d.append(&mut rhs.as_dict().unwrap()),
             Null => {}
-            Wagon(w) => w.value.add_assign(rhs),
             Value::Time(t) => {
                 let time = rhs.as_time().unwrap();
                 t.ms += time.ms;
@@ -876,7 +843,6 @@ impl Div for &Value {
             (Value::Int(a), Value::Float(b)) => Value::float(a.0 as f64 / b.as_f64()),
             (Value::Float(a), Value::Int(b)) => Value::float(a.as_f64() / b.0 as f64),
             (Value::Float(a), Value::Float(b)) => Value::float(a.as_f64() / b.as_f64()),
-            (Wagon(w), b) => w.value.div(b),
             _ => panic!("Cannot divide {:?} with {:?}.", self, rhs),
         }
     }
@@ -1001,7 +967,6 @@ impl postgres::types::ToSql for Value {
             Value::Dict(_) => return Err("Dict not supported".into()),
             Null => return Ok(IsNull::Yes),
             Value::Time(t) => out.put_i128(t.ms as i128),
-            Wagon(w) => return w.clone().unwrap().to_sql(_ty, out),
             Value::Date(d) => out.put_i64(d.days),
         }
         Ok(IsNull::No)
@@ -1049,7 +1014,6 @@ impl rusqlite::types::ToSql for Value {
             Value::Array(_) => Err(rusqlite::Error::InvalidQuery),
             Value::Dict(_) => Err(rusqlite::Error::InvalidQuery),
             Null => Ok(ToSqlOutput::from(rusqlite::types::Null)),
-            Wagon(w) => w.value.to_sql(),
             Value::Date(d) => Ok(ToSqlOutput::from(d.days)),
         }
     }

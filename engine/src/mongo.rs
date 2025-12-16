@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::spawn;
 use tokio::time::{sleep, timeout};
-use tracing::info;
+use tracing::{error, info};
 use util::container;
 use util::container::Mapping;
 use util::queue::RecordQueue;
@@ -26,7 +26,7 @@ pub struct MongoDB {
 
 impl Into<Engine> for MongoDB {
     fn into(self) -> Engine {
-        Engine::MongoDB(self)
+        Engine::MongoDB(self, RecordQueue::new())
     }
 }
 
@@ -45,12 +45,12 @@ impl MongoDB {
 
         let uri = format!("mongodb://localhost:{}", 27017);
         let mut client_options = ClientOptions::parse(uri).await?;
-        // Set the server_api field of the client_options object to Stable API version 1
+
         let server_api = ServerApi::builder().version(ServerApiVersion::V1).build();
         client_options.server_api = Some(server_api);
-        // Create a new client and connect to the server
-        let client = mongodb::Client::with_options(client_options)?;
-        // Send a ping to confirm a successful connection
+
+        let client = Client::with_options(client_options)?;
+
         timeout(
             Duration::from_secs(5),
             client.database("admin").run_command(doc! { "ping": 1 }),
@@ -63,6 +63,9 @@ impl MongoDB {
         self.client = Some(client);
 
         self.measure_opcounters().await?;
+
+        self.create_collection("_stream").await?;
+
         Ok(())
     }
 
@@ -74,13 +77,17 @@ impl MongoDB {
         1.0
     }
 
-    pub(crate) async fn store(&self, value: Value) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub(crate) async fn store(
+        &self,
+        value: Value,
+        entity: String,
+    ) -> Result<(), Box<dyn Error + Send + Sync>> {
         match &self.client {
             None => Err(Box::from("No client")),
             Some(client) => {
                 client
                     .database("public")
-                    .collection("test")
+                    .collection(&entity)
                     .insert_one(value)
                     .await?;
 
@@ -119,18 +126,26 @@ impl MongoDB {
         let clone = self.clone();
         spawn(async move {
             loop {
-                clone.measure_opcounters().await.unwrap();
+                match clone.measure_opcounters().await {
+                    Ok(_) => {}
+                    Err(err) => {
+                        error!("error during measure of mongo: {}", err)
+                    }
+                };
                 sleep(Duration::from_secs(5)).await;
             }
         });
         Ok(())
     }
 
-    pub(crate) async fn create_collection(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub(crate) async fn create_collection(
+        &self,
+        name: &str,
+    ) -> Result<(), Box<dyn Error + Send + Sync>> {
         match &self.client {
             None => Err(Box::from("No client")),
             Some(client) => {
-                client.database("public").create_collection("test").await?;
+                client.database("public").create_collection(name).await?;
 
                 Ok(())
             }

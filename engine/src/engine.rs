@@ -4,97 +4,88 @@ use crate::neo::Neo4j;
 use crate::postgres::Postgres;
 use std::error::Error;
 use std::fmt::{Display, Write};
+use std::ops::{Add, Mul};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::spawn;
-use tokio::task::JoinSet;
 use tokio::time::sleep;
 use util::definition::{Definition, Model};
-use util::queue::{Meta, RecordQueue};
+use util::queue::{RecordContext, RecordQueue};
 use value::Value;
 
 #[derive(Clone)]
 pub enum Engine {
-    Postgres(Postgres),
-    MongoDB(MongoDB),
-    Neo4j(Neo4j),
+    Postgres(Postgres, RecordQueue),
+    MongoDB(MongoDB, RecordQueue),
+    Neo4j(Neo4j, RecordQueue),
 }
 
 impl Display for Engine {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Engine::Postgres(_) => f.write_str("postgres"),
-            Engine::MongoDB(_) => f.write_str("mongodb"),
-            Engine::Neo4j(_) => f.write_str("neo4j"),
+            Engine::Postgres(_, _) => f.write_str("postgres"),
+            Engine::MongoDB(_, _) => f.write_str("mongodb"),
+            Engine::Neo4j(_, _) => f.write_str("neo4j"),
         }
     }
 }
 
 impl Engine {
-    pub async fn store(&self, value: Value) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub async fn store(
+        &self,
+        value: Value,
+        context: RecordContext,
+    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+        let entity = context.entity.unwrap_or(String::from("_stream"));
         match self {
-            Engine::Postgres(p) => p.store(value).await,
-            Engine::MongoDB(m) => m.store(value).await,
-            Engine::Neo4j(n) => n.store(value).await,
+            Engine::Postgres(p, _) => p.store(value, entity).await,
+            Engine::MongoDB(m, _) => m.store(value, entity).await,
+            Engine::Neo4j(n, _) => n.store(value, entity).await,
         }
     }
 
-    pub async fn next(&self, meta: Meta, value: Value) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub async fn next(
+        &self,
+        value: Value,
+        context: RecordContext,
+    ) -> Result<(), Box<dyn Error + Send + Sync>> {
         let res = match self {
-            Engine::Postgres(p) => p.queue.push(meta, value).await,
-            Engine::MongoDB(m) => m.queue.push(meta, value).await,
-            Engine::Neo4j(n) => n.queue.push(meta, value).await,
+            Engine::Postgres(p, _) => p.queue.push(value, context).await,
+            Engine::MongoDB(m, _) => m.queue.push(value, context).await,
+            Engine::Neo4j(n, _) => n.queue.push(value, context).await,
         };
         Ok(())
     }
 
-    pub async fn start_all(
-        set: &mut JoinSet<()>,
-    ) -> Result<Vec<(RecordQueue, Engine)>, Box<dyn Error + Send + Sync>> {
+    pub async fn create_entity(&self, name: &String) -> Result<(), Box<dyn Error + Send + Sync>> {
+        Ok(match self {
+            Engine::Postgres(p, _) => p.create_table(name).await?,
+            Engine::MongoDB(m, _) => m.create_collection(name).await?,
+            Engine::Neo4j(_, _) => {}
+        })
+    }
+
+    pub async fn start_all() -> Result<Vec<(RecordQueue, Engine)>, Box<dyn Error + Send + Sync>> {
         let mut engines: Vec<(RecordQueue, Engine)> = vec![];
 
         let post_queue = RecordQueue::new();
         let mut pg = Engine::postgres(post_queue.clone());
         pg.start().await?;
         pg.monitor().await?;
-        pg.create_tables().await?;
-        for _ in 0..1_000 {
-            pg.insert_data().await?;
-        }
 
         let mongo_queue = RecordQueue::new();
         let mut mongodb = Engine::mongo_db(mongo_queue.clone());
         mongodb.start().await?;
         mongodb.monitor().await?;
-        mongodb.create_collection().await?;
-        for _ in 0..1_000 {
-            mongodb.insert_data().await?;
-        }
 
         let neo_queue = RecordQueue::new();
         let mut neo4j = Engine::neo4j(neo_queue.clone());
         neo4j.start().await?;
         neo4j.monitor().await?;
-        for _ in 0..1_000 {
-            neo4j.insert_data().await?;
-        }
 
         engines.push((post_queue, pg.into()));
         engines.push((mongo_queue, mongodb.into()));
         engines.push((neo_queue, neo4j.into()));
-
-        for (queue, engine) in &engines {
-            let mut clone = engine.clone();
-            let mut queue = queue.clone();
-            set.spawn(async move {
-                loop {
-                    match queue.pop() {
-                        None => sleep(Duration::from_millis(1)).await,
-                        Some((_, v)) => clone.store(v).await.unwrap(),
-                    }
-                }
-            });
-        }
 
         Ok(engines)
     }
@@ -102,9 +93,9 @@ impl Engine {
     /// Mixture between current running tx, complexity of mapping (and user suggestion).
     pub fn cost(&self, value: &Value, definition: &Definition) -> f64 {
         let mut cost = match self {
-            Engine::Postgres(p) => p.cost(value),
-            Engine::MongoDB(m) => m.cost(value),
-            Engine::Neo4j(n) => n.cost(value),
+            Engine::Postgres(p, queue) => p.cost(value).mul(0.01.mul(queue.len().add(1) as f64)),
+            Engine::MongoDB(m, queue) => m.cost(value).mul(0.01.mul(queue.len().add(1) as f64)),
+            Engine::Neo4j(n, queue) => n.cost(value).mul(0.01.mul(queue.len().add(1) as f64)),
         };
 
         if definition.model != self.model() {
@@ -118,17 +109,17 @@ impl Engine {
 
     pub async fn start(&mut self) -> Result<(), Box<dyn Error + Send + Sync>> {
         match self {
-            Engine::Postgres(p) => p.start().await,
-            Engine::MongoDB(m) => m.start().await,
-            Engine::Neo4j(n) => n.start().await,
+            Engine::Postgres(p, _) => p.start().await,
+            Engine::MongoDB(m, _) => m.start().await,
+            Engine::Neo4j(n, _) => n.start().await,
         }
     }
 
     pub async fn stop(self) -> Result<(), Box<dyn Error + Send + Sync>> {
         match self {
-            Engine::Postgres(mut p) => p.stop().await,
-            Engine::MongoDB(mut m) => m.stop().await,
-            Engine::Neo4j(mut n) => n.stop().await,
+            Engine::Postgres(mut p, _) => p.stop().await,
+            Engine::MongoDB(mut m, _) => m.stop().await,
+            Engine::Neo4j(mut n, _) => n.stop().await,
         }
     }
 
@@ -138,9 +129,9 @@ impl Engine {
         spawn(async move {
             loop {
                 match &engine {
-                    Engine::Postgres(p) => p.monitor().await.unwrap(),
-                    Engine::MongoDB(m) => m.monitor().await.unwrap(),
-                    Engine::Neo4j(n) => n.monitor().await.unwrap(),
+                    Engine::Postgres(p, _) => p.monitor().await.unwrap(),
+                    Engine::MongoDB(m, _) => m.monitor().await.unwrap(),
+                    Engine::Neo4j(n, _) => n.monitor().await.unwrap(),
                 }
                 sleep(Duration::from_secs(5)).await;
             }
@@ -186,17 +177,17 @@ impl Engine {
 
     fn model(&self) -> Model {
         match self {
-            Engine::Postgres(_) => Model::Relational,
-            Engine::MongoDB(_) => Model::Document,
-            Engine::Neo4j(_) => Model::Graph,
+            Engine::Postgres(_, _) => Model::Relational,
+            Engine::MongoDB(_, _) => Model::Document,
+            Engine::Neo4j(_, _) => Model::Graph,
         }
     }
 
     fn current_load(&self) -> f64 {
         match self {
-            Engine::Postgres(p) => p.current_load(),
-            Engine::MongoDB(m) => m.current_load(),
-            Engine::Neo4j(n) => n.current_load(),
+            Engine::Postgres(p, _) => p.current_load(),
+            Engine::MongoDB(m, _) => m.current_load(),
+            Engine::Neo4j(n, _) => n.current_load(),
         }
         .to_f64()
     }

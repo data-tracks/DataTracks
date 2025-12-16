@@ -122,16 +122,6 @@ impl Train {
         self.content.len()
     }
 
-    pub fn flag(mut self, stop: usize) -> Self {
-        match self.content {
-            TrainContent::Values(v) => {
-                self.content =
-                    TrainContent::Values(v.into_iter().map(|v| v.wagonize(stop)).collect());
-            }
-            TrainContent::Events(_) => {}
-        }
-        self
-    }
 
     pub fn merge(mut self, other: Self) -> Self {
         match (self.content, other.content) {

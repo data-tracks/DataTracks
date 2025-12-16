@@ -182,10 +182,7 @@ impl DynamicQuery {
             parts
                 .iter()
                 .map(|part| {
-                    let mut value = value.clone();
-                    while let Value::Wagon(w) = value {
-                        value = w.clone().unwrap();
-                    }
+                    let value = value.clone();
                     part(&value)
                 })
                 .collect()
