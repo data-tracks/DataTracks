@@ -1,23 +1,22 @@
-use crate::{engine, Engine};
-use neo4rs::{query, BoltType, Graph};
+use crate::engine::Load;
+use crate::{EngineKind, engine};
+use neo4rs::{BoltType, Graph, query};
 use reqwest::Client;
 use serde::Deserialize;
+use serde::de::Unexpected::Str;
 use std::error::Error;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use serde::de::Unexpected::Str;
 use tokio::spawn;
-use tokio::time::{sleep, Instant};
+use tokio::time::{Instant, sleep};
 use tracing::info;
 use util::container;
 use util::container::Mapping;
 use util::queue::RecordQueue;
 use value::{Float, Value};
-use crate::engine::Load;
 
 #[derive(Clone)]
 pub struct Neo4j {
-    pub(crate) queue: RecordQueue,
     pub(crate) load: Arc<Mutex<Load>>,
     pub(crate) host: String,
     pub(crate) port: u16,
@@ -35,9 +34,9 @@ struct TxMetrics {
     rollbacks: f64,
 }
 
-impl Into<Engine> for Neo4j {
-    fn into(self) -> Engine {
-        Engine::Neo4j(self, RecordQueue::new())
+impl Into<EngineKind> for Neo4j {
+    fn into(self) -> EngineKind {
+        EngineKind::Neo4j(self)
     }
 }
 
@@ -86,7 +85,7 @@ impl Neo4j {
         Ok(())
     }
 
-    pub(crate) async fn stop(&mut self) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub(crate) async fn stop(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
         container::stop("engine-neo4j").await
     }
 
@@ -134,19 +133,17 @@ impl Neo4j {
         }
     }
 
-    pub(crate) async fn store(&self, value: Value, entity: String) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub(crate) async fn store(
+        &self,
+        value: Value,
+        entity: String,
+    ) -> Result<(), Box<dyn Error + Send + Sync>> {
         match &self.graph {
             None => Err(Box::from("No graph")),
             Some(g) => {
                 let cypher_query = self.query(entity);
 
-                match g
-                    .run(
-                        query(&cypher_query)
-                            .param("value", value),
-                    )
-                    .await
-                {
+                match g.run(query(&cypher_query).param("value", value)).await {
                     Ok(_) => Ok(()),
                     Err(e) => Err(Box::new(e)),
                 }
@@ -208,4 +205,3 @@ impl Neo4j {
         format!("CREATE (p:db_{} {{value: $value}}) RETURN p", entity)
     }
 }
-

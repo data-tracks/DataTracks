@@ -1,7 +1,7 @@
 use crate::connection::PostgresConnection;
 use crate::engine::Load;
 use crate::neo::Neo4j;
-use crate::{engine, Engine};
+use crate::{EngineKind, engine};
 use std::error::Error;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -17,7 +17,6 @@ use value::{Float, Value};
 
 #[derive(Clone)]
 pub struct Postgres {
-    pub(crate) queue: RecordQueue,
     pub(crate) load: Arc<Mutex<Load>>,
     pub(crate) connector: PostgresConnection,
     pub(crate) client: Option<Arc<Client>>,
@@ -29,9 +28,9 @@ struct TxCounts {
     rollback: i64,
 }
 
-impl Into<Engine> for Postgres {
-    fn into(self) -> Engine {
-        Engine::Postgres(self, RecordQueue::new())
+impl Into<EngineKind> for Postgres {
+    fn into(self) -> EngineKind {
+        EngineKind::Postgres(self)
     }
 }
 
@@ -64,7 +63,7 @@ impl Postgres {
         self.load.lock().unwrap().clone()
     }
 
-    pub(crate) async fn stop(&mut self) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub(crate) async fn stop(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
         container::stop("engine-postgres").await
     }
 

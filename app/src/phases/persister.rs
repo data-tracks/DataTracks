@@ -1,5 +1,7 @@
 use crate::management::catalog::Catalog;
-use engine::Engine;
+use engine::EngineKind;
+use engine::engine::Engine;
+use futures::StreamExt;
 use std::error::Error;
 use std::time::Duration;
 use tokio::task::JoinSet;
@@ -39,13 +41,8 @@ impl Persister {
 
     pub async fn start(mut self, joins: &mut JoinSet<()>) {
         joins.spawn(async move {
-            let mut engines = self
-                .catalog
-                .engines()
-                .await
-                .into_iter()
-                .map(|(e, q)| e)
-                .collect::<Vec<_>>();
+            let mut engines = self.catalog.engines().await;
+
             self.engines.append(&mut engines);
             loop {
                 match self.queue.pop() {

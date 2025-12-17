@@ -1,4 +1,4 @@
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use speedy::{Readable, Writable};
 use value::Value;
 
@@ -13,7 +13,6 @@ fn get_values() -> Vec<Value> {
         Value::date(305),
         Value::array(vec![3.into(), 7.into()]),
         Value::dict_from_pairs(vec![("test", 7.into()), ("hi", 5.into())]),
-        Value::wagon(Value::int(3), "test".into()),
     ]
 }
 

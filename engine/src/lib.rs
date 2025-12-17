@@ -1,9 +1,8 @@
-pub mod engine;
 mod connection;
-mod neo;
+pub mod engine;
 mod mongo;
-mod postgres;
 mod monitoring;
+mod neo;
+mod postgres;
 
-pub use engine::Engine;
-
+pub use engine::EngineKind;

@@ -1,9 +1,9 @@
 use crate::engine::Load;
 use crate::neo::Neo4j;
-use crate::{engine, Engine};
+use crate::{EngineKind, engine};
+use mongodb::Client;
 use mongodb::bson::doc;
 use mongodb::options::{ClientOptions, ServerApi, ServerApiVersion};
-use mongodb::Client;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::error::Error;
@@ -19,14 +19,13 @@ use value::{Float, Value};
 
 #[derive(Clone)]
 pub struct MongoDB {
-    pub(crate) queue: RecordQueue,
     pub(crate) load: Arc<Mutex<Load>>,
     pub(crate) client: Option<Client>,
 }
 
-impl Into<Engine> for MongoDB {
-    fn into(self) -> Engine {
-        Engine::MongoDB(self, RecordQueue::new())
+impl Into<EngineKind> for MongoDB {
+    fn into(self) -> EngineKind {
+        EngineKind::MongoDB(self)
     }
 }
 
@@ -152,7 +151,7 @@ impl MongoDB {
         }
     }
 
-    pub(crate) async fn stop(&mut self) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub(crate) async fn stop(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
         container::stop("engine-mongodb").await
     }
 

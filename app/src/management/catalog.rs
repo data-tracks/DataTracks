@@ -1,4 +1,5 @@
-use engine::Engine;
+use engine::EngineKind;
+use engine::engine::Engine;
 use futures::future::join_all;
 use std::error::Error;
 use std::sync::Arc;
@@ -14,7 +15,7 @@ pub struct Catalog {
 #[derive(Default)]
 pub struct State {
     definitions: Vec<Definition>,
-    engines: Vec<(Engine, RecordQueue)>,
+    engines: Vec<Engine>,
 }
 
 impl Catalog {
@@ -29,8 +30,8 @@ impl Catalog {
         definition: Definition,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
         let mut state = self.state.lock().await;
-        for (engine, _) in &state.engines {
-            engine.create_entity(&definition.entity).await?;
+        for engine in &state.engines {
+            engine.engine_kind.create_entity(&definition.entity).await?;
         }
 
         state.definitions.push(definition);
@@ -41,12 +42,13 @@ impl Catalog {
         self.state.lock().await.definitions.clone()
     }
 
-    pub async fn engines(&self) -> Vec<(Engine, RecordQueue)> {
+    pub async fn engines(&self) -> Vec<Engine> {
         self.state.lock().await.engines.clone()
     }
 
-    pub async fn add_engine(&mut self, engine: Engine, queue: RecordQueue) {
-        self.state.lock().await.engines.push((engine, queue))
+    pub async fn add_engine(&mut self, engine: EngineKind) {
+        let queue = RecordQueue::new();
+        self.state.lock().await.engines.push(Engine::new(engine))
     }
 
     pub async fn stop(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -57,7 +59,7 @@ impl Catalog {
             .engines
             .clone()
             .into_iter()
-            .map(|(mut engine, _)| engine.stop())
+            .map(|engine| engine.stop())
             .collect();
         join_all(futures).await.into_iter().collect()
     }

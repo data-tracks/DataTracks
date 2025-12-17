@@ -1,6 +1,6 @@
 use crate::management::catalog::Catalog;
 use crate::phases::Persister;
-use engine::Engine;
+use engine::EngineKind;
 use reqwest::blocking::Client;
 use sink::kafka::Kafka;
 use std::collections::HashMap;
@@ -8,11 +8,11 @@ use std::error::Error;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
+use tokio::runtime::Handle;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
 use tracing::{error, info};
 use util::definition::{Definition, DefinitionFilter, Model};
-use util::queue::RecordQueue;
 use value::Time;
 
 #[derive(Default)]
@@ -64,6 +64,21 @@ impl Manager {
 
         let kafka = self.start_kafka(persister).await?;
 
+        join_set.spawn(async {
+            let metrics = Handle::current().metrics();
+
+            loop {
+                info!("Active tasks: {}", metrics.num_alive_tasks());
+                info!("Worker threads: {}", metrics.num_workers());
+                info!("Blocking threads: {}", metrics.num_blocking_threads());
+                info!(
+                    "Budget forced yields: {}",
+                    metrics.budget_forced_yield_count()
+                );
+                sleep(Duration::from_secs(5)).await;
+            }
+        });
+
         tokio::select! {
                 _ = ctrl_c_signal => {
                     info!("#️⃣ Ctrl-C received!");
@@ -94,18 +109,18 @@ impl Manager {
     async fn start_engines(&mut self) -> Result<Persister, Box<dyn Error + Send + Sync>> {
         let persister = Persister::new(self.catalog.clone());
 
-        let mut engines = Engine::start_all().await?;
-        for (queue, engine) in engines.into_iter() {
-            self.catalog.add_engine(engine, queue).await;
+        let mut engines = EngineKind::start_all().await?;
+        for engine in engines.into_iter() {
+            self.catalog.add_engine(engine).await;
         }
 
         Ok(persister)
     }
 
     async fn start_distributor(&mut self) {
-        for (engine, queue) in self.catalog.engines().await {
-            let mut clone = engine.clone();
-            let mut queue = queue.clone();
+        for engine in self.catalog.engines().await {
+            let clone = engine.clone();
+            let mut queue = engine.queue.clone();
             self.joins.spawn(async move {
                 loop {
                     match queue.pop() {

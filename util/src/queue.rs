@@ -1,6 +1,6 @@
 use std::error::Error;
 use std::ops::Sub;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, LockResult, Mutex};
 use tracing::error;
 use value::Value;
 
@@ -28,9 +28,14 @@ impl RecordQueue {
         &self,
         value: V,
         context: RecordContext,
-    ) -> Result<(), Box<dyn Error + '_>> {
-        self.values.lock()?.push((value.into(), context));
-        Ok(())
+    ) -> Result<(), Box<dyn Error + Sync + Send>> {
+        match self.values.lock() {
+            Ok(mut v) => {
+                v.push((value.into(), context));
+                Ok(())
+            }
+            Err(err) => Err(Box::from(format!("Error on inserting value {}", err))),
+        }
     }
 
     pub fn pop(&mut self) -> Option<(Value, RecordContext)> {
