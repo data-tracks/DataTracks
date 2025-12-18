@@ -3,10 +3,12 @@ use crate::array::Array;
 use crate::date::Date;
 use crate::dict::{Dict, Edge, Node};
 use crate::r#type::ValType;
+use crate::edge::Edge;
+use crate::node::Node;
 use crate::text::Text;
 use crate::time::Time;
 use crate::value::Value::Null;
-use crate::{bool, Bool, Float, Int};
+use crate::{Bool, Float, Int, bool};
 use bytes::{BufMut, BytesMut};
 use flatbuffers::{FlatBufferBuilder, ForwardsUOffset, Vector, WIPOffset};
 use json::JsonValue;
@@ -167,7 +169,7 @@ impl Value {
             Value::Time(_) => ValType::Time,
             Value::Date(_) => ValType::Date,
             Value::Node(_) => ValType::Node,
-            Value::Edge(_) => ValType::Edge
+            Value::Edge(_) => ValType::Edge,
         }
     }
 
@@ -212,6 +214,20 @@ impl Value {
             Value::Date(d) => Ok(Float::new(d.as_epoch() as f64)),
             Value::Node(_) => Err(String::from("Node cannot be converted")),
             Value::Edge(_) => Err(String::from("Edge cannot be converted")),
+        }
+    }
+
+    pub(crate) fn as_node(&self) -> Result<Node, String> {
+        match self {
+            Value::Node(n) => Ok(n.clone()),
+            _ => Err(String::from("Cannot convert to Node")),
+        }
+    }
+
+    pub(crate) fn as_edge(&self) -> Result<Edge, String> {
+        match self {
+            Value::Edge(e) => Ok(e.clone()),
+            _ => Err(String::from("Cannot convert to Edge")),
         }
     }
 
@@ -265,7 +281,8 @@ impl Value {
             | Value::Edge(_)
             | Null => Err(String::from("Dict cannot be converted")),
             Value::Dict(d) => Ok(d.clone()),
-
+            Value::Node(_) => Err(String::from("Node cannot be converted")),
+            Value::Edge(_) => Err(String::from("Edge cannot be converted")),
         }
     }
 
@@ -282,6 +299,8 @@ impl Value {
             | Value::Edge(_)
             | Null => Err(String::from("Array cannot be converted")),
             Value::Array(a) => Ok(a.clone()),
+            Value::Node(_) => Err(String::from("Node cannot be converted")),
+            Value::Edge(_) => Err(String::from("Edge cannot be converted")),
         }
     }
     pub fn as_bool(&self) -> Result<Bool, String> {
@@ -488,6 +507,10 @@ impl PartialEq for Value {
             (Value::Time(t), _) => t == &other.as_time().unwrap(),
             (Value::Date(d1), Value::Date(d2)) => d1 == d2,
             (Value::Date(d), _) => d == &other.as_date().unwrap(),
+            (Value::Node(n1), Value::Node(n2)) => n1 == n2,
+            (Value::Edge(n1), Value::Edge(n2)) => n1 == n2,
+            (Value::Node(n), o) => n == &o.as_node().unwrap(),
+            (Value::Edge(e), o) => e == &o.as_edge().unwrap(),
         }
     }
 }
@@ -530,10 +553,14 @@ impl Hash for Value {
                 d.days.hash(state);
             }
             Value::Node(n) => {
-                n.hash(state);
+                n.labels.hash(state);
+                n.properties.hash(state)
             }
             Value::Edge(e) => {
-                e.hash(state);
+                e.label.hash(state);
+                e.properties.hash(state);
+                e.start.hash(state);
+                e.end.hash(state);
             }
         }
     }

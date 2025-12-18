@@ -9,6 +9,8 @@ pub enum ValType {
     Array,
     Dict,
     Null,
+    Node,
+    Edge,
     Any,
     Tuple,
     Node,

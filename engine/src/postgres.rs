@@ -1,19 +1,16 @@
 use crate::connection::PostgresConnection;
 use crate::engine::Load;
-use crate::neo::Neo4j;
-use crate::{EngineKind, engine};
+use crate::{EngineKind};
 use std::error::Error;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::spawn;
-use tokio::task::JoinSet;
 use tokio::time::{sleep, timeout};
-use tokio_postgres::{Client, GenericClient, SimpleQueryMessage};
+use tokio_postgres::{Client};
 use tracing::{debug, info};
 use util::container;
-use util::container::{Manager, Mapping};
-use util::queue::{Meta, RecordQueue};
-use value::{Float, Value};
+use util::container::{Mapping};
+use value::{Value};
 
 #[derive(Clone)]
 pub struct Postgres {

@@ -1,10 +1,8 @@
+use crate::EngineKind;
 use crate::engine::Load;
-use crate::neo::Neo4j;
-use crate::{EngineKind, engine};
 use mongodb::Client;
 use mongodb::bson::doc;
 use mongodb::options::{ClientOptions, ServerApi, ServerApiVersion};
-use serde::Serialize;
 use std::collections::HashMap;
 use std::error::Error;
 use std::sync::{Arc, Mutex};
@@ -14,8 +12,7 @@ use tokio::time::{sleep, timeout};
 use tracing::{error, info};
 use util::container;
 use util::container::Mapping;
-use util::queue::RecordQueue;
-use value::{Float, Value};
+use value::Value;
 
 #[derive(Clone)]
 pub struct MongoDB {
@@ -54,8 +51,7 @@ impl MongoDB {
             Duration::from_secs(5),
             client.database("admin").run_command(doc! { "ping": 1 }),
         )
-        .await
-        .map(|res| ())
+        .await?
         .map_err(|err| format!("timeout after {}", err))?;
         info!("☑️ Connected to mongoDB database");
 

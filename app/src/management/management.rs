@@ -1,19 +1,14 @@
 use crate::management::catalog::Catalog;
 use crate::phases::Persister;
 use engine::EngineKind;
-use reqwest::blocking::Client;
 use sink::kafka::Kafka;
-use std::collections::HashMap;
 use std::error::Error;
-use std::sync::{Arc, Mutex};
-use std::thread;
 use std::time::Duration;
 use tokio::runtime::Handle;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
 use tracing::{error, info};
 use util::definition::{Definition, DefinitionFilter, Model};
-use value::Time;
 
 #[derive(Default)]
 pub struct Manager {

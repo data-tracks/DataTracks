@@ -1,9 +1,8 @@
 use crate::engine::Load;
-use crate::{EngineKind, engine};
-use neo4rs::{BoltType, Graph, query};
+use crate::{EngineKind};
+use neo4rs::{Graph, query};
 use reqwest::Client;
 use serde::Deserialize;
-use serde::de::Unexpected::Str;
 use std::error::Error;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -12,8 +11,7 @@ use tokio::time::{Instant, sleep};
 use tracing::info;
 use util::container;
 use util::container::Mapping;
-use util::queue::RecordQueue;
-use value::{Float, Value};
+use value::{Value};
 
 #[derive(Clone)]
 pub struct Neo4j {
