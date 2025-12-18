@@ -1,6 +1,6 @@
 use crate::management::catalog::Catalog;
-use engine::EngineKind;
 use engine::engine::Engine;
+use engine::EngineKind;
 use futures::StreamExt;
 use std::error::Error;
 use std::time::Duration;
@@ -72,7 +72,7 @@ impl Persister {
             self.engines
                 .iter()
                 .map(|e| (e.cost(value, &definition), e))
-                .min_by(|(a), (b)| a.0.total_cmp(&b.0))
+                .min_by(|a, b| a.0.total_cmp(&b.0))
                 .unwrap()
                 .1,
             RecordContext {

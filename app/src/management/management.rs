@@ -145,29 +145,36 @@ impl Manager {
         let kafka = sink::kafka::start(&mut self.joins, persister.queue.clone()).await?;
         persister.start(&mut self.joins).await;
 
-        let clone_rel = kafka.clone();
-        let clone_doc = kafka.clone();
-        let clone_graph = kafka.clone();
-        self.joins.spawn(async move {
-            loop {
-                clone_graph.send_value_graph().await.unwrap();
-                sleep(Duration::from_millis(100)).await;
-            }
-        });
+        for _ in 0..3 {
+            let clone_graph = kafka.clone();
+            self.joins.spawn(async move {
+                loop {
+                    clone_graph.send_value_graph().await.unwrap();
+                    sleep(Duration::from_millis(100)).await;
+                }
+            });
+        }
 
-        self.joins.spawn(async move {
-            loop {
-                clone_rel.send_value_relational().await.unwrap();
-                sleep(Duration::from_millis(10)).await;
-            }
-        });
+        for _ in 0..3 {
+            let clone_rel = kafka.clone();
+            self.joins.spawn(async move {
+                loop {
+                    clone_rel.send_value_relational().await.unwrap();
+                    sleep(Duration::from_millis(10)).await;
+                }
+            });
+        }
 
-        self.joins.spawn(async move {
-            loop {
-                clone_doc.send_value_doc().await.unwrap();
-                sleep(Duration::from_millis(1)).await;
-            }
-        });
+        for _ in 0..3 {
+            let clone_doc = kafka.clone();
+            self.joins.spawn(async move {
+                loop {
+                    clone_doc.send_value_doc().await.unwrap();
+                    sleep(Duration::from_millis(1)).await;
+                }
+            });
+        }
+
 
         Ok(kafka)
     }

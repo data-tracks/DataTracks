@@ -1,4 +1,5 @@
 extern crate alloc;
+extern crate core;
 
 pub use array::Array;
 pub use bool::Bool;
@@ -24,3 +25,5 @@ mod r#type;
 pub(crate) mod value;
 pub mod wagon;
 pub mod timeunit;
+mod node;
+mod edge;

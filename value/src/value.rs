@@ -1,35 +1,38 @@
+use core::fmt::Pointer;
 use crate::array::Array;
 use crate::date::Date;
-use crate::dict::Dict;
+use crate::dict::{Dict, Edge, Node};
+use crate::r#type::ValType;
 use crate::text::Text;
 use crate::time::Time;
-use crate::r#type::ValType;
 use crate::value::Value::Null;
-use crate::{Bool, Float, Int, bool, wagon};
+use crate::{bool, Bool, Float, Int};
 use bytes::{BufMut, BytesMut};
 use flatbuffers::{FlatBufferBuilder, ForwardsUOffset, Vector, WIPOffset};
 use json::JsonValue;
 use mongodb::bson::{Bson, Document};
+use neo4rs::{BoltBoolean, BoltFloat, BoltInteger, BoltNull, BoltString, BoltType};
 use postgres::types::{IsNull, Type};
 use redb::{Key, TypeName};
 use rumqttc::{Event, Incoming};
-use rumqttd::Notification;
 use rumqttd::protocol::Publish;
+use rumqttd::Notification;
 use rusqlite::types::{FromSqlResult, ToSqlOutput, ValueRef};
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 use std::cmp::{Ordering, PartialEq};
-use std::collections::{BTreeMap};
+use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::ops::{Add, AddAssign, Div, Mul, Sub};
 use std::str;
-use neo4rs::{BoltBoolean, BoltFloat, BoltInteger, BoltNull, BoltString, BoltType};
 use tracing::debug;
 use track_rails::message_generated::protocol::{
     Null as FlatNull, NullArgs, Value as FlatValue, ValueWrapper, ValueWrapperArgs,
 };
+use crate::edge::Edge;
+use crate::node::Node;
 
 #[derive(Clone, Debug, Serialize, Deserialize, Ord, PartialOrd, Readable, Writable)]
 pub enum Value {
@@ -41,6 +44,8 @@ pub enum Value {
     Date(Date),
     Array(Array),
     Dict(Dict),
+    Node(Box<Node>),
+    Edge(Box<Edge>),
     Null,
 }
 
@@ -92,6 +97,8 @@ impl Value {
             Value::Array(i) => Some(i.flatternize(builder).as_union_value()),
             Value::Dict(i) => Some(i.flatternize(builder).as_union_value()),
             Null => Some(FlatNull::create(builder, &NullArgs {}).as_union_value()),
+            Value::Node(_) => todo!(),
+            Value::Edge(_) => todo!()
         };
 
         ValueWrapper::create(builder, &ValueWrapperArgs { data_type, data })
@@ -108,6 +115,8 @@ impl Value {
             Value::Array(_) => FlatValue::List,
             Value::Dict(_) => FlatValue::Document,
             Null => FlatValue::Null,
+            Value::Node(_) => todo!(),
+            Value::Edge(_) => todo!()
         }
     }
 
@@ -129,7 +138,6 @@ impl Value {
 
         Value::Dict(Dict::new(map))
     }
-
 
     pub fn dict_from_kv<S: AsRef<str>>(key: S, value: Value) -> Value {
         Self::dict_from_pairs(vec![(key.as_ref(), value)])
@@ -158,6 +166,8 @@ impl Value {
             Null => ValType::Null,
             Value::Time(_) => ValType::Time,
             Value::Date(_) => ValType::Date,
+            Value::Node(_) => ValType::Node,
+            Value::Edge(_) => ValType::Edge
         }
     }
 
@@ -172,6 +182,8 @@ impl Value {
             Null => Err(String::from("Null cannot be converted")),
             Value::Time(t) => Ok(Int(t.ms)),
             Value::Date(d) => Ok(Int::new(d.as_epoch())),
+            Value::Node(_) => Err(String::from("Node cannot be converted")),
+            Value::Edge(_) => Err(String::from("Edge cannot be converted")),
         }
     }
 
@@ -198,6 +210,8 @@ impl Value {
                 Float::new(t.ms as f64)
             }),
             Value::Date(d) => Ok(Float::new(d.as_epoch() as f64)),
+            Value::Node(_) => Err(String::from("Node cannot be converted")),
+            Value::Edge(_) => Err(String::from("Edge cannot be converted")),
         }
     }
 
@@ -217,6 +231,8 @@ impl Value {
             Value::Dict(_) => Err(String::from("Dict cannot be converted")),
             Null => Err(String::from("Null cannot be converted")),
             Value::Date(_) => Ok(Time::new(0, 0)),
+            Value::Node(_) => Err(String::from("Node cannot be converted")),
+            Value::Edge(_) => Err(String::from("Edge cannot be converted")),
         }
     }
 
@@ -231,6 +247,8 @@ impl Value {
             Value::Array(_) => Err(String::from("Array cannot be converted")),
             Value::Dict(_) => Err(String::from("Dict cannot be converted")),
             Null => Err(String::from("Null cannot be converted")),
+            Value::Node(_) => Err(String::from("Node cannot be converted")),
+            Value::Edge(_) => Err(String::from("Edge cannot be converted")),
         }
     }
 
@@ -243,8 +261,11 @@ impl Value {
             | Value::Text(_)
             | Value::Array(_)
             | Value::Date(_)
+            | Value::Node(_)
+            | Value::Edge(_)
             | Null => Err(String::from("Dict cannot be converted")),
             Value::Dict(d) => Ok(d.clone()),
+
         }
     }
 
@@ -257,6 +278,8 @@ impl Value {
             | Value::Text(_)
             | Value::Date(_)
             | Value::Dict(_)
+            | Value::Node(_)
+            | Value::Edge(_)
             | Null => Err(String::from("Array cannot be converted")),
             Value::Array(a) => Ok(a.clone()),
         }
@@ -279,6 +302,8 @@ impl Value {
             Value::Dict(d) => Ok(Bool(!d.is_empty())),
             Null => Ok(Bool(false)),
             Value::Date(d) => Ok(Bool::new(d.days > 0)),
+            Value::Node(_) => Err(String::from("Node cannot be converted")),
+            Value::Edge(_) => Err(String::from("Edge cannot be converted")),
         }
     }
 
@@ -306,6 +331,8 @@ impl Value {
             Null => Ok(Text("null".to_owned())),
             Value::Time(t) => Ok(Text(t.to_string())),
             Value::Date(d) => Ok(Text(d.to_string())),
+            Value::Node(_) => Err(String::from("Node cannot be converted")),
+            Value::Edge(_) => Err(String::from("Edge cannot be converted")),
         }
     }
 }
@@ -328,7 +355,7 @@ impl From<Value> for BoltType {
             Value::Bool(b) => BoltType::Boolean(BoltBoolean::new(b.0)),
             Value::Text(t) => BoltType::String(BoltString::new(&t.0)),
             Null => BoltType::Null(BoltNull),
-            _ => todo!()
+            _ => todo!(),
         }
     }
 }
@@ -502,6 +529,12 @@ impl Hash for Value {
             Value::Date(d) => {
                 d.days.hash(state);
             }
+            Value::Node(n) => {
+                n.hash(state);
+            }
+            Value::Edge(e) => {
+                e.hash(state);
+            }
         }
     }
 }
@@ -518,6 +551,8 @@ impl Display for Value {
             Value::Dict(d) => d.fmt(f),
             Null => write!(f, "null"),
             Value::Date(d) => d.fmt(f),
+            Value::Node(n) => n.fmt(f),
+            Value::Edge(e) => e.fmt(f)
         }
     }
 }
@@ -587,7 +622,6 @@ impl From<serde_json::Value> for Value {
         (&value).into()
     }
 }
-
 
 impl From<&serde_json::Value> for Value {
     fn from(value: &serde_json::Value) -> Self {
@@ -1022,8 +1056,8 @@ impl rusqlite::types::ToSql for Value {
 #[cfg(test)]
 mod tests {
     use crate::value::Value;
-    use std::collections::HashMap;
     use std::collections::hash_map::DefaultHasher;
+    use std::collections::HashMap;
     use std::hash::{Hash, Hasher};
     use std::vec;
 
