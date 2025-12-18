@@ -47,7 +47,6 @@ impl Catalog {
     }
 
     pub async fn add_engine(&mut self, engine: EngineKind) {
-        let queue = RecordQueue::new();
         self.state.lock().await.engines.push(Engine::new(engine))
     }
 

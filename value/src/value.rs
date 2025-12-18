@@ -5,7 +5,7 @@ use crate::text::Text;
 use crate::time::Time;
 use crate::r#type::ValType;
 use crate::value::Value::Null;
-use crate::{Bool, Float, Int, bool, wagon};
+use crate::{Bool, Float, Int, bool};
 use bytes::{BufMut, BytesMut};
 use flatbuffers::{FlatBufferBuilder, ForwardsUOffset, Vector, WIPOffset};
 use json::JsonValue;

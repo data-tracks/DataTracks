@@ -1,18 +1,25 @@
 use std::error::Error;
-use std::ops::Sub;
-use std::sync::{Arc, LockResult, Mutex};
+use std::sync::{Arc, Mutex};
 use tracing::error;
 use value::Value;
 
 pub struct RecordQueue {
     last_len: usize,
+    alerting: bool,
     values: Arc<Mutex<Vec<(Value, RecordContext)>>>,
+}
+
+impl Default for RecordQueue {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl RecordQueue {
     pub fn new() -> Self {
         RecordQueue {
             last_len: 0,
+            alerting: true,
             values: Arc::new(Mutex::new(Vec::new())),
         }
     }
@@ -41,7 +48,7 @@ impl RecordQueue {
     pub fn pop(&mut self) -> Option<(Value, RecordContext)> {
         let mut values = self.values.lock().ok()?;
         let len = values.len();
-        if len.saturating_sub(self.last_len) > 10 {
+        if len.saturating_sub(self.last_len) > 10 || self.last_len > 100_000 {
             error!("queue growing {}", len);
         }
         self.last_len = len;
@@ -53,6 +60,7 @@ impl Clone for RecordQueue {
     fn clone(&self) -> Self {
         RecordQueue {
             last_len: self.last_len,
+            alerting: self.alerting,
             values: self.values.clone(),
         }
     }
