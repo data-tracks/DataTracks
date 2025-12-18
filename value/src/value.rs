@@ -1,7 +1,7 @@
 use core::fmt::Pointer;
 use crate::array::Array;
 use crate::date::Date;
-use crate::dict::{Dict, Edge, Node};
+use crate::dict::{Dict};
 use crate::r#type::ValType;
 use crate::edge::Edge;
 use crate::node::Node;
@@ -29,12 +29,10 @@ use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::ops::{Add, AddAssign, Div, Mul, Sub};
 use std::str;
-use tracing::debug;
+use tracing::{debug, error};
 use track_rails::message_generated::protocol::{
     Null as FlatNull, NullArgs, Value as FlatValue, ValueWrapper, ValueWrapperArgs,
 };
-use crate::edge::Edge;
-use crate::node::Node;
 
 #[derive(Clone, Debug, Serialize, Deserialize, Ord, PartialOrd, Readable, Writable)]
 pub enum Value {
@@ -217,16 +215,16 @@ impl Value {
         }
     }
 
-    pub(crate) fn as_node(&self) -> Result<Node, String> {
+    pub(crate) fn as_node(&self) -> Result<&Box<Node>, String> {
         match self {
-            Value::Node(n) => Ok(n.clone()),
+            Value::Node(n) => Ok(n),
             _ => Err(String::from("Cannot convert to Node")),
         }
     }
 
-    pub(crate) fn as_edge(&self) -> Result<Edge, String> {
+    pub(crate) fn as_edge(&self) -> Result<&Box<Edge>, String> {
         match self {
-            Value::Edge(e) => Ok(e.clone()),
+            Value::Edge(e) => Ok(e),
             _ => Err(String::from("Cannot convert to Edge")),
         }
     }
@@ -281,8 +279,6 @@ impl Value {
             | Value::Edge(_)
             | Null => Err(String::from("Dict cannot be converted")),
             Value::Dict(d) => Ok(d.clone()),
-            Value::Node(_) => Err(String::from("Node cannot be converted")),
-            Value::Edge(_) => Err(String::from("Edge cannot be converted")),
         }
     }
 
@@ -299,8 +295,6 @@ impl Value {
             | Value::Edge(_)
             | Null => Err(String::from("Array cannot be converted")),
             Value::Array(a) => Ok(a.clone()),
-            Value::Node(_) => Err(String::from("Node cannot be converted")),
-            Value::Edge(_) => Err(String::from("Edge cannot be converted")),
         }
     }
     pub fn as_bool(&self) -> Result<Bool, String> {
@@ -509,8 +503,8 @@ impl PartialEq for Value {
             (Value::Date(d), _) => d == &other.as_date().unwrap(),
             (Value::Node(n1), Value::Node(n2)) => n1 == n2,
             (Value::Edge(n1), Value::Edge(n2)) => n1 == n2,
-            (Value::Node(n), o) => n == &o.as_node().unwrap(),
-            (Value::Edge(e), o) => e == &o.as_edge().unwrap(),
+            (Value::Node(n), o) => n == o.as_node().unwrap(),
+            (Value::Edge(e), o) => e == o.as_edge().unwrap(),
         }
     }
 }
@@ -855,6 +849,12 @@ impl AddAssign for Value {
             Value::Date(d) => {
                 d.days += rhs.as_date().unwrap().days;
             }
+            Value::Node(_) => {
+                error!("Cannot add Node");
+            }
+            Value::Edge(_) => {
+                error!("Cannot add Edge");
+            }
         }
     }
 }
@@ -1029,6 +1029,8 @@ impl postgres::types::ToSql for Value {
             Null => return Ok(IsNull::Yes),
             Value::Time(t) => out.put_i128(t.ms as i128),
             Value::Date(d) => out.put_i64(d.days),
+            Value::Node(n) => out.extend_from_slice(n.write_to_vec()?.as_slice()),
+            Value::Edge(e) => out.extend_from_slice(e.write_to_vec()?.as_slice()),
         }
         Ok(IsNull::No)
     }
@@ -1076,6 +1078,8 @@ impl rusqlite::types::ToSql for Value {
             Value::Dict(_) => Err(rusqlite::Error::InvalidQuery),
             Null => Ok(ToSqlOutput::from(rusqlite::types::Null)),
             Value::Date(d) => Ok(ToSqlOutput::from(d.days)),
+            Value::Node(n) => Ok(ToSqlOutput::from(n.write_to_vec().unwrap())),
+            Value::Edge(e) => Ok(ToSqlOutput::from(e.write_to_vec().unwrap()))
         }
     }
 }

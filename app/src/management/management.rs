@@ -1,6 +1,7 @@
 use crate::management::catalog::Catalog;
 use crate::phases::Persister;
 use engine::EngineKind;
+use sink::dummy::DummySink;
 use sink::kafka::Kafka;
 use std::error::Error;
 use std::time::Duration;
@@ -9,6 +10,7 @@ use tokio::task::JoinSet;
 use tokio::time::sleep;
 use tracing::{error, info};
 use util::definition::{Definition, DefinitionFilter, Model};
+use value::Value;
 
 #[derive(Default)]
 pub struct Manager {
@@ -137,39 +139,65 @@ impl Manager {
         &mut self,
         mut persister: Persister,
     ) -> Result<Kafka, Box<dyn Error + Send + Sync>> {
+        let queue = persister.queue.clone();
         let kafka = sink::kafka::start(&mut self.joins, persister.queue.clone()).await?;
+
         persister.start(&mut self.joins).await;
 
-        for _ in 0..3 {
-            let clone_graph = kafka.clone();
-            self.joins.spawn(async move {
-                loop {
-                    clone_graph.send_value_graph().await.unwrap();
-                    sleep(Duration::from_millis(100)).await;
-                }
+        let amount = 20;
+
+
+        let clone_graph = kafka.clone();
+        self.joins.spawn(async move {
+            loop {
+                clone_graph.send_value_graph().await.unwrap();
+                sleep(Duration::from_millis(100)).await;
+            }
+        });
+
+        for _ in 0..amount {
+            let queue = queue.clone();
+            self.joins.spawn(async {
+                let mut dummy = DummySink::new(Value::text("test"), Duration::from_millis(100));
+                dummy.start(String::from("relational"), queue).await;
             });
         }
 
-        for _ in 0..3 {
-            let clone_rel = kafka.clone();
-            self.joins.spawn(async move {
-                loop {
-                    clone_rel.send_value_relational().await.unwrap();
-                    sleep(Duration::from_millis(10)).await;
-                }
+
+        let clone_rel = kafka.clone();
+        self.joins.spawn(async move {
+            loop {
+                clone_rel.send_value_relational().await.unwrap();
+                sleep(Duration::from_millis(10)).await;
+            }
+        });
+
+
+        for _ in 0..amount {
+            let queue = queue.clone();
+            self.joins.spawn(async {
+                let mut dummy = DummySink::new(Value::text("test"), Duration::from_millis(1));
+                dummy.start(String::from("doc"), queue).await;
             });
         }
 
-        for _ in 0..3 {
-            let clone_doc = kafka.clone();
-            self.joins.spawn(async move {
-                loop {
-                    clone_doc.send_value_doc().await.unwrap();
-                    sleep(Duration::from_millis(1)).await;
-                }
+
+        let clone_doc = kafka.clone();
+        self.joins.spawn(async move {
+            loop {
+                clone_doc.send_value_doc().await.unwrap();
+                sleep(Duration::from_millis(1)).await;
+            }
+        });
+
+
+        for _ in 0..amount {
+            let queue = queue.clone();
+            self.joins.spawn(async {
+                let mut dummy = DummySink::new(Value::text("test"), Duration::from_millis(10));
+                dummy.start(String::from("graph"), queue).await;
             });
         }
-
 
         Ok(kafka)
     }
