@@ -9,6 +9,8 @@ pub enum ValType {
     Array,
     Dict,
     Null,
+    Node,
+    Edge,
     Any,
     Tuple,
 }
@@ -27,6 +29,8 @@ impl ValType {
             ValType::Null => "null".to_string(),
             ValType::Any => "any".to_string(),
             ValType::Tuple => "tuple".to_string(),
+            ValType::Node => "node".to_string(),
+            ValType::Edge => "edge".to_string(),
         }
         .to_uppercase()
     }
