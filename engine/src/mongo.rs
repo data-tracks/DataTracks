@@ -20,12 +20,6 @@ pub struct MongoDB {
     pub(crate) client: Option<Client>,
 }
 
-impl Into<EngineKind> for MongoDB {
-    fn into(self) -> EngineKind {
-        EngineKind::MongoDB(self)
-    }
-}
-
 impl MongoDB {
     pub(crate) async fn start(&mut self) -> Result<(), Box<dyn Error + Send + Sync>> {
         container::start_container(
@@ -74,8 +68,8 @@ impl MongoDB {
 
     pub(crate) async fn store(
         &self,
-        value: Value,
         entity: String,
+        values: Vec<Value>,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
         match &self.client {
             None => Err(Box::from("No client")),
@@ -83,7 +77,7 @@ impl MongoDB {
                 client
                     .database("public")
                     .collection(&entity)
-                    .insert_one(value)
+                    .insert_many(values)
                     .await?;
 
                 Ok(())
@@ -118,19 +112,15 @@ impl MongoDB {
     }
 
     pub(crate) async fn monitor(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
-        let clone = self.clone();
-        spawn(async move {
-            loop {
-                match clone.measure_opcounters().await {
-                    Ok(_) => {}
-                    Err(err) => {
-                        error!("error during measure of mongo: {}", err)
-                    }
-                };
-                sleep(Duration::from_secs(5)).await;
-            }
-        });
-        Ok(())
+        loop {
+            match self.measure_opcounters().await {
+                Ok(_) => {}
+                Err(err) => {
+                    error!("error during measure of mongo: {}", err)
+                }
+            };
+            sleep(Duration::from_secs(5)).await;
+        }
     }
 
     pub(crate) async fn create_collection(

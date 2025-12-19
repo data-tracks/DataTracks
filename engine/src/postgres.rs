@@ -1,16 +1,18 @@
+use crate::EngineKind;
 use crate::connection::PostgresConnection;
 use crate::engine::Load;
-use crate::{EngineKind};
 use std::error::Error;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::spawn;
-use tokio::time::{sleep, timeout};
-use tokio_postgres::{Client};
+use tokio::task::JoinSet;
+use tokio::time::{Instant, sleep, timeout};
+use tokio_postgres::Client;
 use tracing::{debug, info};
 use util::container;
-use util::container::{Mapping};
-use value::{Value};
+use util::container::Mapping;
+use util::queue::RecordContext;
+use value::Value;
 
 #[derive(Clone)]
 pub struct Postgres {
@@ -25,14 +27,11 @@ struct TxCounts {
     rollback: i64,
 }
 
-impl Into<EngineKind> for Postgres {
-    fn into(self) -> EngineKind {
-        EngineKind::Postgres(self)
-    }
-}
-
 impl Postgres {
-    pub(crate) async fn start(&mut self) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub(crate) async fn start(
+        &mut self,
+        join: &mut JoinSet<()>,
+    ) -> Result<(), Box<dyn Error + Send + Sync>> {
         container::start_container(
             "engine-postgres",
             "postgres:latest",
@@ -44,7 +43,7 @@ impl Postgres {
         )
         .await?;
 
-        let client = self.connector.connect().await?;
+        let client = self.connector.connect(join).await?;
         info!("☑️ Connected to postgres database");
         timeout(Duration::from_secs(5), client.check_connection()).await??;
         self.client = Some(Arc::new(client));
@@ -70,14 +69,18 @@ impl Postgres {
 
     pub(crate) async fn store(
         &self,
-        value: Value,
         entity: String,
+        values: Vec<Value>,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
         match &self.client {
-            None => return Err(Box::from("could not create postgres database")),
+            None => return Err(Box::from("Could not create postgres database")),
             Some(client) => {
                 let insert_query = format!("INSERT INTO {} (value) VALUES ($1)", entity);
-                let rows_affected = client.execute(&insert_query, &[&value]).await?;
+                let statement = client.prepare(&insert_query).await?;
+                let mut rows_affected = 0;
+                for v in values {
+                    rows_affected += client.execute(&statement, &[&v]).await?;
+                }
 
                 debug!("Inserted {} row(s) into 'users'.", rows_affected);
             }
@@ -86,14 +89,10 @@ impl Postgres {
     }
 
     pub(crate) async fn monitor(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
-        let clone = self.clone();
-        spawn(async move {
-            loop {
-                clone.check_throughput().await.unwrap();
-                sleep(Duration::from_secs(5)).await;
-            }
-        });
-        Ok(())
+        loop {
+            self.check_throughput().await?;
+            sleep(Duration::from_secs(5)).await;
+        }
     }
 
     async fn check_throughput(&self) -> Result<(), Box<dyn Error + Send + Sync>> {

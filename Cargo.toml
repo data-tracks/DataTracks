@@ -46,7 +46,7 @@ thiserror = "2.0.17"
 async-stream = "0.3.6"
 neo4rs = "0.9.0-rc.9"
 futures = "0.3.31"
-
+derive_more = "2.1.0"
 
 # The profile that 'cargo dist' will build with
 [profile.dist]

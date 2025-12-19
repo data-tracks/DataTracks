@@ -989,6 +989,7 @@ name = "engine"
 version = "0.5.1"
 dependencies = [
  "bollard",
+ "derive_more",
  "futures-util",
  "mongodb",
  "neo4rs",

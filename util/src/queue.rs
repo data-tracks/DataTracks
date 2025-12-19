@@ -48,7 +48,7 @@ impl RecordQueue {
     pub fn pop(&mut self) -> Option<(Value, RecordContext)> {
         let mut values = self.values.lock().ok()?;
         let len = values.len();
-        if len.saturating_sub(self.last_len) > 100 || self.last_len > 100_000 {
+        if len.saturating_sub(self.last_len) > 1_000 || self.last_len > 100_000 {
             error!("queue growing {}", len);
         }
         self.last_len = len;
@@ -66,26 +66,26 @@ impl Clone for RecordQueue {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Meta {
     pub name: Option<String>,
 }
 
 impl Meta {
     pub fn new(name: Option<String>) -> Self {
-        Meta{ name }
+        Meta { name }
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RecordContext {
     pub meta: Meta,
     pub entity: Option<String>,
 }
 
 impl RecordContext {
-    pub fn new(meta: Meta, entity: String) -> Self{
-        RecordContext{
+    pub fn new(meta: Meta, entity: String) -> Self {
+        RecordContext {
             meta,
             entity: Some(entity),
         }

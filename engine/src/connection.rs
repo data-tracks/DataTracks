@@ -1,5 +1,6 @@
 use std::error::Error;
 use std::time::Duration;
+use tokio::task::JoinSet;
 use tokio::time::sleep;
 use tokio_postgres::{Client, NoTls};
 
@@ -29,7 +30,10 @@ impl PostgresConnection {
         }
     }
 
-    pub async fn connect(&self) -> Result<Client, Box<dyn Error + Send + Sync>> {
+    pub async fn connect(
+        &self,
+        join: &mut JoinSet<()>,
+    ) -> Result<Client, Box<dyn Error + Send + Sync>> {
         let connection_string = format!(
             "dbname={db} host={host} port={port} user={user} password={password}",
             db = self.db,
@@ -44,7 +48,7 @@ impl PostgresConnection {
 
             match res {
                 Ok((client, connection)) => {
-                    tokio::spawn(async move {
+                    join.spawn(async move {
                         if let Err(e) = connection.await {
                             eprintln!("connection error: {}", e);
                         }

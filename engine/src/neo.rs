@@ -1,17 +1,20 @@
+use crate::EngineKind;
 use crate::engine::Load;
-use crate::{EngineKind};
-use neo4rs::{Graph, query};
+use futures_util::future::join_all;
+use neo4rs::{Graph, RunResult, query};
 use reqwest::Client;
 use serde::Deserialize;
 use std::error::Error;
+use std::f32::consts::E;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::spawn;
+use tokio::task::JoinSet;
 use tokio::time::{Instant, sleep};
-use tracing::info;
+use tracing::{error, info};
 use util::container;
 use util::container::Mapping;
-use value::{Value};
+use value::Value;
 
 #[derive(Clone)]
 pub struct Neo4j {
@@ -30,12 +33,6 @@ struct TxMetrics {
     commits: f64,
     #[serde(rename = "neo4j.transaction.rollbacks")]
     rollbacks: f64,
-}
-
-impl Into<EngineKind> for Neo4j {
-    fn into(self) -> EngineKind {
-        EngineKind::Neo4j(self)
-    }
 }
 
 impl Neo4j {
@@ -97,13 +94,11 @@ impl Neo4j {
 
     pub(crate) async fn monitor(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
         let clone = self.clone();
-        spawn(async move {
-            loop {
-                clone.check_throughput().await.unwrap();
-                sleep(Duration::from_secs(5)).await;
-            }
-        });
-        Ok(())
+
+        loop {
+            clone.check_throughput().await?;
+            sleep(Duration::from_secs(5)).await;
+        }
     }
 
     pub(crate) async fn insert_data(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -133,17 +128,34 @@ impl Neo4j {
 
     pub(crate) async fn store(
         &self,
-        value: Value,
         entity: String,
+        values: Vec<Value>,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
         match &self.graph {
             None => Err(Box::from("No graph")),
             Some(g) => {
                 let cypher_query = self.query(entity);
 
-                match g.run(query(&cypher_query).param("value", value)).await {
-                    Ok(_) => Ok(()),
-                    Err(e) => Err(Box::new(e)),
+                let tx = g.start_txn().await?;
+                let mut waits = vec![];
+                for v in values {
+                    waits.push(g.run(query(&cypher_query).param("value", v)));
+                }
+
+                let errors: Vec<String> = join_all(waits)
+                    .await
+                    .into_iter()
+                    .filter_map(|r| match r {
+                        Ok(_) => None,
+                        Err(err) => Some(err.to_string()),
+                    })
+                    .collect();
+
+                if errors.is_empty() {
+                    tx.commit().await?;
+                    Ok(())
+                } else {
+                    Err(Box::from(errors.first().unwrap().to_string()))
                 }
             }
         }

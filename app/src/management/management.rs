@@ -1,15 +1,18 @@
 use crate::management::catalog::Catalog;
 use crate::phases::Persister;
 use engine::EngineKind;
+use futures::future::join_all;
 use sink::dummy::DummySink;
 use sink::kafka::Kafka;
+use std::collections::HashMap;
 use std::error::Error;
 use std::time::Duration;
 use tokio::runtime::Handle;
 use tokio::task::JoinSet;
-use tokio::time::sleep;
+use tokio::time::{Instant, sleep};
 use tracing::{error, info};
 use util::definition::{Definition, DefinitionFilter, Model};
+use util::queue::{Meta, RecordContext};
 use value::Value;
 
 #[derive(Default)]
@@ -29,7 +32,7 @@ impl Manager {
     pub async fn start(&mut self) -> Result<(), Box<dyn Error + Send + Sync>> {
         let ctrl_c_signal = tokio::signal::ctrl_c();
 
-        let mut join_set: JoinSet<()> = JoinSet::new();
+        let mut joins: JoinSet<()> = JoinSet::new();
 
         let persister = self.start_engines().await?;
 
@@ -61,7 +64,7 @@ impl Manager {
 
         let kafka = self.start_kafka(persister).await?;
 
-        join_set.spawn(async {
+        joins.spawn(async {
             let metrics = Handle::current().metrics();
 
             loop {
@@ -80,7 +83,7 @@ impl Manager {
                 _ = ctrl_c_signal => {
                     info!("#️⃣ Ctrl-C received!");
                 }
-                Some(res) = join_set.join_next() => {
+                Some(res) = joins.join_next() => {
                     if let Err(e) = res {
                         error!("\nFatal Error: A core task crashed: {:?}", e);
                     }
@@ -95,10 +98,10 @@ impl Manager {
 
         // Clean up all remaining running tasks
         info!("🧹 Aborting remaining tasks...");
-        join_set.abort_all();
-        while join_set.join_next().await.is_some() {}
+        joins.abort_all();
+        while joins.join_next().await.is_some() {}
 
-        info!("✅  All services shut down. Exiting.");
+        info!("✅ All services shut down. Exiting.");
 
         Ok(())
     }
@@ -106,7 +109,7 @@ impl Manager {
     async fn start_engines(&mut self) -> Result<Persister, Box<dyn Error + Send + Sync>> {
         let persister = Persister::new(self.catalog.clone());
 
-        let mut engines = EngineKind::start_all().await?;
+        let engines = EngineKind::start_all(&mut self.joins).await?;
         for engine in engines.into_iter() {
             self.catalog.add_engine(engine).await;
         }
@@ -118,17 +121,67 @@ impl Manager {
         for engine in self.catalog.engines().await {
             let clone = engine.clone();
             let mut queue = engine.queue.clone();
+
             self.joins.spawn(async move {
+                let mut error_count = 0;
+                let mut largest = 0;
+                let mut first_ts = Instant::now();
+                let mut buckets: HashMap<String, Vec<Value>> = HashMap::new();
                 loop {
-                    match queue.pop() {
-                        None => sleep(Duration::from_millis(1)).await,
-                        Some((v, context)) => match clone.store(v.clone(), context.clone()).await {
-                            Ok(_) => {}
-                            Err(err) => {
-                                error!("Error during distribution to engines {}", err);
-                                queue.push(v.clone(), context).await.unwrap();
+                    if first_ts.elapsed().as_millis() > 10 || largest > 10_000 {
+                        // try to drain the "buffer"
+
+                        for (entity, values) in buckets.drain() {
+                            match clone.store(entity.clone(), values.clone()).await {
+                                Ok(_) => {
+                                    error_count = 0;
+                                }
+                                Err(err) => {
+                                    error_count += 1;
+                                    error!("Error during distribution to engines {}", err);
+                                    let futures = values.into_iter().map(|v| {
+                                        queue.push(
+                                            v,
+                                            RecordContext::new(
+                                                Meta::new(Some(entity.clone())),
+                                                entity.clone(),
+                                            ),
+                                        )
+                                    });
+
+                                    let errors: Vec<_> = join_all(futures)
+                                        .await
+                                        .into_iter()
+                                        .filter_map(|res| match res {
+                                            Ok(_) => None,
+                                            Err(err) => Some(err.to_string()),
+                                        })
+                                        .collect();
+
+                                    if !errors.is_empty() {
+                                        error!("{}", errors.first().unwrap())
+                                    }
+
+                                    if error_count > 1_000 {
+                                        sleep(Duration::from_secs(1)).await;
+                                    } else if error_count > 1_000_000 {
+                                        panic!("Over 1 Mio retries")
+                                    }
+                                }
                             }
-                        },
+                        }
+                    }
+
+                    match queue.pop() {
+                        None => sleep(Duration::from_millis(1)).await, // max shift after max timeout for sending finished chunk out
+                        Some((v, context)) => {
+                            let entity = context.entity.unwrap_or("_stream".to_string());
+
+                            if buckets.is_empty() {
+                                first_ts = Instant::now();
+                            }
+                            buckets.entry(entity).or_default().push(v);
+                        }
                     }
                 }
             });
@@ -137,15 +190,14 @@ impl Manager {
 
     async fn start_kafka(
         &mut self,
-        mut persister: Persister,
+        persister: Persister,
     ) -> Result<Kafka, Box<dyn Error + Send + Sync>> {
         let queue = persister.queue.clone();
         let kafka = sink::kafka::start(&mut self.joins, persister.queue.clone()).await?;
 
         persister.start(&mut self.joins).await;
 
-        let amount = 20;
-
+        let amount = 200;
 
         let clone_graph = kafka.clone();
         self.joins.spawn(async move {
@@ -163,7 +215,6 @@ impl Manager {
             });
         }
 
-
         let clone_rel = kafka.clone();
         self.joins.spawn(async move {
             loop {
@@ -171,7 +222,6 @@ impl Manager {
                 sleep(Duration::from_millis(10)).await;
             }
         });
-
 
         for _ in 0..amount {
             let queue = queue.clone();
@@ -181,7 +231,6 @@ impl Manager {
             });
         }
 
-
         let clone_doc = kafka.clone();
         self.joins.spawn(async move {
             loop {
@@ -189,7 +238,6 @@ impl Manager {
                 sleep(Duration::from_millis(1)).await;
             }
         });
-
 
         for _ in 0..amount {
             let queue = queue.clone();

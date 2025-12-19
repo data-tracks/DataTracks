@@ -2,12 +2,13 @@ use crate::connection::PostgresConnection;
 use crate::mongo::MongoDB;
 use crate::neo::Neo4j;
 use crate::postgres::Postgres;
+use derive_more::From;
 use std::error::Error;
-use std::fmt::{Display, Formatter, Write};
+use std::fmt::{Display, Formatter};
 use std::ops::{Add, Mul};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tokio::spawn;
+use tokio::task::JoinSet;
 use tokio::time::sleep;
 use util::definition::{Definition, Model};
 use util::queue::{RecordContext, RecordQueue};
@@ -93,19 +94,18 @@ impl Engine {
 
     pub async fn store(
         &self,
-        value: Value,
-        context: RecordContext,
+        entity: String,
+        values: Vec<Value>,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
-        let entity = context.entity.unwrap_or(String::from("_stream"));
         match &self.engine_kind {
-            EngineKind::Postgres(p) => p.store(value, entity).await,
-            EngineKind::MongoDB(m) => m.store(value, entity).await,
-            EngineKind::Neo4j(n) => n.store(value, entity).await,
+            EngineKind::Postgres(p) => p.store(entity, values).await,
+            EngineKind::MongoDB(m) => m.store(entity, values).await,
+            EngineKind::Neo4j(n) => n.store(entity, values).await,
         }
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, From)]
 pub enum EngineKind {
     Postgres(Postgres),
     MongoDB(MongoDB),
@@ -131,34 +131,31 @@ impl EngineKind {
         })
     }
 
-    pub async fn start_all() -> Result<Vec<EngineKind>, Box<dyn Error + Send + Sync>> {
+    pub async fn start_all(
+        join: &mut JoinSet<()>,
+    ) -> Result<Vec<EngineKind>, Box<dyn Error + Send + Sync>> {
         let mut engines = vec![];
 
         let mut pg = EngineKind::postgres();
-        pg.start().await?;
-        pg.monitor().await?;
+        pg.start(join).await?;
+        let mut pg = EngineKind::from(pg);
+        EngineKind::monitor(&mut pg, join).await?;
 
         let mut mongodb = EngineKind::mongo_db();
         mongodb.start().await?;
-        mongodb.monitor().await?;
+        let mut mongodb = EngineKind::from(mongodb);
+        EngineKind::monitor(&mut mongodb, join).await?;
 
         let mut neo4j = EngineKind::neo4j();
         neo4j.start().await?;
-        neo4j.monitor().await?;
+        let mut neo4j = EngineKind::from(neo4j);
+        EngineKind::monitor(&mut neo4j, join).await?;
 
-        engines.push(pg.into());
-        engines.push(mongodb.into());
-        engines.push(neo4j.into());
+        engines.push(pg);
+        engines.push(mongodb);
+        engines.push(neo4j);
 
         Ok(engines)
-    }
-
-    pub async fn start(&mut self) -> Result<(), Box<dyn Error + Send + Sync>> {
-        match self {
-            EngineKind::Postgres(p) => p.start().await,
-            EngineKind::MongoDB(m) => m.start().await,
-            EngineKind::Neo4j(n) => n.start().await,
-        }
     }
 
     pub async fn stop(self) -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -169,10 +166,13 @@ impl EngineKind {
         }
     }
 
-    pub async fn monitor(&mut self) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub async fn monitor(
+        &mut self,
+        join: &mut JoinSet<()>,
+    ) -> Result<(), Box<dyn Error + Send + Sync>> {
         let engine = self.clone();
 
-        spawn(async move {
+        join.spawn(async move {
             loop {
                 match &engine {
                     EngineKind::Postgres(p) => p.monitor().await.unwrap(),
