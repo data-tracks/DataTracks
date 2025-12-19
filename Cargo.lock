@@ -814,6 +814,7 @@ name = "data-tracks"
 version = "0.5.1"
 dependencies = [
  "core",
+ "crossbeam",
  "engine",
  "error",
  "flatbuffers",
@@ -989,6 +990,7 @@ name = "engine"
 version = "0.5.1"
 dependencies = [
  "bollard",
+ "crossbeam",
  "derive_more",
  "futures-util",
  "mongodb",
@@ -3487,6 +3489,7 @@ dependencies = [
 name = "sink"
 version = "0.5.1"
 dependencies = [
+ "crossbeam",
  "rand 0.9.2",
  "rdkafka",
  "serde",
@@ -4278,6 +4281,7 @@ name = "util"
 version = "0.5.1"
 dependencies = [
  "bollard",
+ "crossbeam",
  "futures-util",
  "thiserror 2.0.17",
  "tokio",
@@ -4311,6 +4315,7 @@ dependencies = [
  "bytes",
  "chrono",
  "criterion",
+ "crossbeam",
  "flatbuffers",
  "json",
  "mongodb",

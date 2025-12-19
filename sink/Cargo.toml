@@ -16,3 +16,4 @@ tracing = { workspace = true }
 tokio = { workspace = true }
 value = { workspace = true }
 rand = { workspace = true }
+crossbeam = { workspace = true }

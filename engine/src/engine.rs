@@ -8,15 +8,18 @@ use std::fmt::{Display, Formatter};
 use std::ops::{Add, Mul};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use crossbeam::channel::{unbounded, Receiver, Sender};
+use tokio::sync::mpsc::unbounded_channel;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
 use util::definition::{Definition, Model};
-use util::queue::{RecordContext, RecordQueue};
+use util::queue::RecordContext;
 use value::Value;
 
 #[derive(Clone)]
 pub struct Engine {
-    pub queue: RecordQueue,
+    pub tx: Sender<(Value, RecordContext)>,
+    pub rx: Receiver<(Value, RecordContext)>,
     pub engine_kind: EngineKind,
 }
 
@@ -34,8 +37,10 @@ impl Display for Engine {
 
 impl Engine {
     pub fn new(engine_kind: EngineKind) -> Self {
+        let (tx, rx) = unbounded::<(Value, RecordContext)>();
         Engine {
-            queue: RecordQueue::new(),
+            tx,
+            rx,
             engine_kind,
         }
     }
@@ -48,14 +53,6 @@ impl Engine {
         }
     }
 
-    pub async fn next(
-        &self,
-        value: Value,
-        context: RecordContext,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
-        self.queue.push(value, context).await
-    }
-
     /// Mixture between current running tx, complexity of mapping (and user suggestion).
     pub fn cost(&self, value: &Value, definition: &Definition) -> f64 {
         let cost = match &self.engine_kind {
@@ -64,7 +61,7 @@ impl Engine {
             EngineKind::Neo4j(n) => n.cost(value),
         };
 
-        let mut cost = cost.mul(0.01.mul(self.queue.len().add(1) as f64));
+        let mut cost = cost.mul(0.01.mul(self.rx.len().add(1) as f64));
 
         if definition.model != self.model() {
             cost *= 2.0;

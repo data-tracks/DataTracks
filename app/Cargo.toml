@@ -26,6 +26,7 @@ util = { workspace = true }
 engine = { workspace = true }
 sink = { workspace = true }
 futures = { workspace = true }
+crossbeam = { workspace = true }
 
 
 [dev-dependencies]

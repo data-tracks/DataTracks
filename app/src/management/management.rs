@@ -1,5 +1,6 @@
 use crate::management::catalog::Catalog;
 use crate::phases::Persister;
+use crossbeam::channel::{unbounded, Receiver, RecvError};
 use engine::EngineKind;
 use futures::future::join_all;
 use sink::dummy::DummySink;
@@ -7,9 +8,11 @@ use sink::kafka::Kafka;
 use std::collections::HashMap;
 use std::error::Error;
 use std::time::Duration;
+use futures::channel;
 use tokio::runtime::Handle;
+use tokio::sync::mpsc::unbounded_channel;
 use tokio::task::JoinSet;
-use tokio::time::{Instant, sleep};
+use tokio::time::{sleep, Instant};
 use tracing::{error, info};
 use util::definition::{Definition, DefinitionFilter, Model};
 use util::queue::{Meta, RecordContext};
@@ -62,7 +65,7 @@ impl Manager {
 
         self.start_distributor().await;
 
-        let kafka = self.start_kafka(persister).await?;
+        let kafka = self.start_sinks(persister).await?;
 
         joins.spawn(async {
             let metrics = Handle::current().metrics();
@@ -118,43 +121,45 @@ impl Manager {
     }
 
     async fn start_distributor(&mut self) {
-        for engine in self.catalog.engines().await {
+        for mut engine in self.catalog.engines().await {
             let clone = engine.clone();
-            let mut queue = engine.queue.clone();
 
             self.joins.spawn(async move {
                 let mut error_count = 0;
-                let mut largest = 0;
+                let mut count = 0;
                 let mut first_ts = Instant::now();
                 let mut buckets: HashMap<String, Vec<Value>> = HashMap::new();
+
                 loop {
-                    if first_ts.elapsed().as_millis() > 10 || largest > 10_000 {
+                    if first_ts.elapsed().as_millis() > 10 || count > 1_000_000 {
                         // try to drain the "buffer"
 
                         for (entity, values) in buckets.drain() {
                             match clone.store(entity.clone(), values.clone()).await {
                                 Ok(_) => {
                                     error_count = 0;
+                                    count = 0;
                                 }
                                 Err(err) => {
                                     error_count += 1;
                                     error!("Error during distribution to engines {}", err);
-                                    let futures = values.into_iter().map(|v| {
-                                        queue.push(
-                                            v,
-                                            RecordContext::new(
-                                                Meta::new(Some(entity.clone())),
-                                                entity.clone(),
-                                            ),
-                                        )
-                                    });
-
-                                    let errors: Vec<_> = join_all(futures)
-                                        .await
+                                    let errors: Vec<_> = values
                                         .into_iter()
-                                        .filter_map(|res| match res {
-                                            Ok(_) => None,
-                                            Err(err) => Some(err.to_string()),
+                                        .filter_map(|v| {
+                                            let res = engine
+                                                .tx
+                                                .send((
+                                                    v,
+                                                    RecordContext::new(
+                                                        Meta::new(Some(entity.clone())),
+                                                        entity.clone(),
+                                                    ),
+                                                ))
+                                                .map_err(|err| format!("{:?}", err));
+                                            match res {
+                                                Ok(_) => None,
+                                                Err(err) => Some(err)
+                                            }
                                         })
                                         .collect();
 
@@ -172,15 +177,17 @@ impl Manager {
                         }
                     }
 
-                    match queue.pop() {
-                        None => sleep(Duration::from_millis(1)).await, // max shift after max timeout for sending finished chunk out
-                        Some((v, context)) => {
+
+                    match engine.rx.try_recv() {
+                        Err(_) => sleep(Duration::from_millis(1)).await, // max shift after max timeout for sending finished chunk out
+                        Ok((v, context)) => {
                             let entity = context.entity.unwrap_or("_stream".to_string());
 
                             if buckets.is_empty() {
                                 first_ts = Instant::now();
                             }
                             buckets.entry(entity).or_default().push(v);
+                            count += 1;
                         }
                     }
                 }
@@ -188,16 +195,19 @@ impl Manager {
         }
     }
 
-    async fn start_kafka(
+    async fn start_sinks(
         &mut self,
         persister: Persister,
     ) -> Result<Kafka, Box<dyn Error + Send + Sync>> {
-        let queue = persister.queue.clone();
-        let kafka = sink::kafka::start(&mut self.joins, persister.queue.clone()).await?;
+        //let (tx, rx) = unbounded::<(Value, RecordContext)>();
 
-        persister.start(&mut self.joins).await;
+        let (tx, rx) = unbounded_channel();
 
-        let amount = 200;
+        let kafka = sink::kafka::start(&mut self.joins, tx.clone()).await?;
+
+        persister.start(&mut self.joins, rx).await;
+
+        let amount = 2000;
 
         let clone_graph = kafka.clone();
         self.joins.spawn(async move {
@@ -208,10 +218,10 @@ impl Manager {
         });
 
         for _ in 0..amount {
-            let queue = queue.clone();
+            let tx = tx.clone();
             self.joins.spawn(async {
                 let mut dummy = DummySink::new(Value::text("test"), Duration::from_millis(100));
-                dummy.start(String::from("relational"), queue).await;
+                dummy.start(String::from("relational"), tx).await;
             });
         }
 
@@ -224,10 +234,10 @@ impl Manager {
         });
 
         for _ in 0..amount {
-            let queue = queue.clone();
+            let tx = tx.clone();
             self.joins.spawn(async {
                 let mut dummy = DummySink::new(Value::text("test"), Duration::from_millis(1));
-                dummy.start(String::from("doc"), queue).await;
+                dummy.start(String::from("doc"), tx).await;
             });
         }
 
@@ -240,10 +250,10 @@ impl Manager {
         });
 
         for _ in 0..amount {
-            let queue = queue.clone();
+            let tx = tx.clone();
             self.joins.spawn(async {
                 let mut dummy = DummySink::new(Value::text("test"), Duration::from_millis(10));
-                dummy.start(String::from("graph"), queue).await;
+                dummy.start(String::from("graph"), tx).await;
             });
         }
 

@@ -1,34 +1,28 @@
 use std::error::Error;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc};
+use crossbeam::queue::SegQueue;
 use tracing::error;
 use value::Value;
 
 pub struct RecordQueue {
     last_len: usize,
     alerting: bool,
-    values: Arc<Mutex<Vec<(Value, RecordContext)>>>,
-}
-
-impl Default for RecordQueue {
-    fn default() -> Self {
-        Self::new()
-    }
+    name: String,
+    values: Arc<SegQueue<(Value, RecordContext)>>,
 }
 
 impl RecordQueue {
-    pub fn new() -> Self {
+    pub fn new(name: String) -> Self {
         RecordQueue {
             last_len: 0,
             alerting: true,
-            values: Arc::new(Mutex::new(Vec::new())),
+            name,
+            values: Arc::new(SegQueue::new()),
         }
     }
 
     pub fn len(&self) -> usize {
-        self.values
-            .lock()
-            .map(|v| v.len())
-            .unwrap_or(10_000_000usize)
+        self.values.len()
     }
 
     pub async fn push<V: Into<Value>>(
@@ -36,24 +30,21 @@ impl RecordQueue {
         value: V,
         context: RecordContext,
     ) -> Result<(), Box<dyn Error + Sync + Send>> {
-        match self.values.lock() {
-            Ok(mut v) => {
-                v.push((value.into(), context));
-                Ok(())
-            }
-            Err(err) => Err(Box::from(format!("Error on inserting value {}", err))),
-        }
+
+        self.values.push((value.into(), context));
+        Ok(())
+
     }
 
     pub fn pop(&mut self) -> Option<(Value, RecordContext)> {
-        let mut values = self.values.lock().ok()?;
-        let len = values.len();
-        if len.saturating_sub(self.last_len) > 1_000 || self.last_len > 100_000 {
-            error!("queue growing {}", len);
+        let len = self.values.len();
+        if self.alerting && (len.saturating_sub(self.last_len) > 1_000 || self.last_len > 100_000) {
+            error!("{} queue growing {}", self.name, len);
         }
         self.last_len = len;
-        values.pop()
+        self.values.pop()
     }
+
 }
 
 impl Clone for RecordQueue {
@@ -61,6 +52,7 @@ impl Clone for RecordQueue {
         RecordQueue {
             last_len: self.last_len,
             alerting: self.alerting,
+            name: self.name.clone(),
             values: self.values.clone(),
         }
     }

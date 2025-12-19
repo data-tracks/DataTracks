@@ -28,6 +28,7 @@ redb = { workspace = true }
 criterion = { workspace = true }
 mongodb = { workspace = true }
 neo4rs = { workspace = true }
+crossbeam = { workspace = true }
 
 [[bench]]
 name = "value_bench"

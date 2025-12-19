@@ -1,3 +1,4 @@
+use crossbeam::channel::Sender;
 use rand::prelude::IndexedRandom;
 use rdkafka::admin::{AdminClient, AdminOptions, NewTopic, TopicReplication};
 use rdkafka::consumer::{Consumer, StreamConsumer};
@@ -6,6 +7,7 @@ use rdkafka::{ClientConfig, Message};
 use std::error::Error;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use tokio::sync::mpsc::UnboundedSender;
 use tokio::task::JoinSet;
 use tracing::{debug, error, info};
 use util::container::Mapping;
@@ -21,7 +23,10 @@ struct KafkaSink {
 }
 
 impl KafkaSink {
-    pub async fn start(&mut self, queue: RecordQueue) -> Result<(), Box<dyn Error>> {
+    pub async fn start(
+        &mut self,
+        sender: UnboundedSender<(Value, RecordContext)>,
+    ) -> Result<(), Box<dyn Error>> {
         let consumer: StreamConsumer = ClientConfig::new()
             .set("group.id", GROUP_ID)
             .set("bootstrap.servers", self.broker.as_str())
@@ -57,8 +62,8 @@ impl KafkaSink {
                     // --- Sink Logic: This is where you write to the external system ---
                     match serde_json::from_str::<SinkRecord>(payload) {
                         Ok(record) => {
-                            match queue
-                                .push(
+                            match sender
+                                .send((
                                     Value::from(record.value),
                                     RecordContext {
                                         meta: queue::Meta {
@@ -66,8 +71,7 @@ impl KafkaSink {
                                         },
                                         entity: None,
                                     },
-                                )
-                                .await
+                                ))
                             {
                                 Ok(_) => {}
                                 Err(err) => return Err(err.to_string().into()),
@@ -275,7 +279,7 @@ impl Kafka {
 
 pub async fn start(
     joins: &mut JoinSet<()>,
-    value_queue: RecordQueue,
+    sender: UnboundedSender<(Value, RecordContext)>,
 ) -> Result<Kafka, Box<dyn Error + Send + Sync>> {
     let kafka = Kafka::new("localhost", 9092).await;
     kafka.start().await?;
@@ -285,10 +289,7 @@ pub async fn start(
         let mut sink = KafkaSink {
             broker: "localhost:9092".to_string(),
         };
-        sink.start(value_queue)
-            .await
-            .map_err(|e| e.to_string())
-            .unwrap();
+        sink.start(sender).await.map_err(|e| e.to_string()).unwrap();
     });
 
     Ok(kafka)
