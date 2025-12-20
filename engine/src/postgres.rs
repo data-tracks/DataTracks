@@ -1,6 +1,8 @@
 use crate::connection::PostgresConnection;
 use crate::engine::Load;
 use crate::EngineKind;
+use flume::Sender;
+use statistics::Event;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::format;
@@ -9,8 +11,10 @@ use std::time::Duration;
 use tokio::spawn;
 use tokio::task::JoinSet;
 use tokio::time::{sleep, timeout, Instant};
+use tokio_postgres::types::ToSql;
 use tokio_postgres::{Client, Connection, Statement};
 use tracing::{debug, info};
+use bytes::BytesMut;
 use util::container;
 use util::container::Mapping;
 use util::queue::RecordContext;
@@ -78,15 +82,11 @@ impl Postgres {
         match &self.client {
             None => return Err(Box::from("Could not create postgres database")),
             Some(client) => {
-                let statement = self
-                    .prepared_statements
-                    .get(entity.as_str())
-                    .ok_or(format!("No prepared statement for {} on postgres", entity))?;
 
-                let mut rows_affected = 0;
-                for v in values {
-                    rows_affected += client.execute(statement, &[&v]).await?;
-                }
+
+                // self.copy_in(client, entity, values);
+                let rows_affected = self.load_insert(client, entity, values).await?;
+
 
                 debug!("Inserted {} row(s) into 'users'.", rows_affected);
             }
@@ -185,5 +185,59 @@ impl Postgres {
         }
 
         Err(Box::from("client not found"))
+    }
+
+    async fn copy_in(&self, client: Arc<Client>, entity: String, values: Vec<Value>) -> Result<usize, Box<dyn Error + Send + Sync>> {
+        let rows = values.len();
+
+        let sink = client
+            .copy_in(&format!("COPY {} (value) FROM STDIN BINARY", entity))
+            .await?;
+
+        let mut buf = BytesMut::new();
+        buf.extend_from_slice(b"PGBULK\n\xff\r\n\0"); // Magic header
+        buf.extend_from_slice(&[0; 4]);              // Flags field
+        buf.extend_from_slice(&[0; 4]);              // Header extension length
+
+        // 3. Encode each row
+        for value in values {
+            // Number of columns in this row (1 in our case)
+            buf.extend_from_slice(&1i16.to_be_bytes());
+
+            // Encode the Enum using its ToSql implementation
+            let start = buf.len();
+            buf.extend_from_slice(&[0; 4]); // Placeholder for length
+
+            // Write the actual value
+            value.to_sql(&tokio_postgres::types::Type::VARCHAR, &mut buf)?;
+
+            // Go back and fill in the length of the value
+            let size = (buf.len() - start - 4) as i32;
+            buf[start..start + 4].copy_from_slice(&size.to_be_bytes());
+        }
+
+        // 4. Add the Trailer (Required to end binary stream)
+        buf.extend_from_slice(&(-1i16).to_be_bytes());
+
+        // 5. Send the whole buffer to the DB
+        pin_utils::pin_mut!(sink);
+        use futures_util::SinkExt;
+        sink.send(buf.freeze()).await?;
+        sink.close().await?;
+
+        Ok(rows)
+    }
+
+    async fn load_insert(&self, client: &Arc<Client>, entity: String, values: Vec<Value>) -> Result<usize, Box<dyn Error + Send + Sync>> {
+        let statement = self
+            .prepared_statements
+            .get(entity.as_str())
+            .ok_or(format!("No prepared statement for {} on postgres", entity))?;
+        let mut affected_rows = 0;
+
+        for value in values {
+            affected_rows += client.execute(statement, &[&value]).await?
+        }
+        Ok(affected_rows as usize)
     }
 }

@@ -3,7 +3,9 @@ use engine::engine::Engine;
 use futures::future::join_all;
 use std::error::Error;
 use std::sync::Arc;
+use flume::Sender;
 use tokio::sync::Mutex;
+use statistics::Event;
 use util::definition::Definition;
 use util::queue::RecordQueue;
 
@@ -46,8 +48,8 @@ impl Catalog {
         self.state.lock().await.engines.clone()
     }
 
-    pub async fn add_engine(&mut self, engine: EngineKind) {
-        self.state.lock().await.engines.push(Engine::new(engine))
+    pub async fn add_engine(&mut self, engine: EngineKind, sender: Sender<Event>) {
+        self.state.lock().await.engines.push(Engine::new(engine, sender))
     }
 
     pub async fn stop(&self) -> Result<(), Box<dyn Error + Send + Sync>> {

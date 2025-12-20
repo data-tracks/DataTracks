@@ -21,13 +21,13 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 flatbuffers = { workspace = true }
-reqwest = { version = "0.12.23", features = ["json", "blocking"] }
 util = { workspace = true }
 engine = { workspace = true }
 sink = { workspace = true }
 futures = { workspace = true }
-crossbeam = { workspace = true }
 num-format = { workspace = true }
+statistics = { workspace = true }
+flume = {workspace = true}
 
 
 [dev-dependencies]

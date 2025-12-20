@@ -3,15 +3,15 @@ use crate::mongo::MongoDB;
 use crate::neo::Neo4j;
 use crate::postgres::Postgres;
 use derive_more::From;
+use flume::{unbounded, Receiver, Sender};
 use std::error::Error;
 use std::fmt::{Display, Formatter};
-use std::ops::{Add, Mul};
+use std::ops::Mul;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use flume::{unbounded, Receiver, Sender};
 use tokio::task::JoinSet;
 use tokio::time::sleep;
-use tracing::info;
+use statistics::Event;
 use util::definition::{Definition, Model};
 use util::queue::RecordContext;
 use value::Value;
@@ -20,6 +20,7 @@ use value::Value;
 pub struct Engine {
     pub tx: Sender<(Value, RecordContext)>,
     pub rx: Receiver<(Value, RecordContext)>,
+    pub statistic_sender: Sender<Event>,
     pub engine_kind: EngineKind,
 }
 
@@ -36,11 +37,12 @@ impl Display for Engine {
 }
 
 impl Engine {
-    pub fn new(engine_kind: EngineKind) -> Self {
+    pub fn new(engine_kind: EngineKind, sender: Sender<Event>) -> Self {
         let (tx, rx) = unbounded::<(Value, RecordContext)>();
         Engine {
             tx,
             rx,
+            statistic_sender: sender,
             engine_kind,
         }
     }

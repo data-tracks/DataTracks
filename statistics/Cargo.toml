@@ -1,0 +1,17 @@
+[package]
+name = "statistics"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description.workspace = true
+
+[dependencies]
+util = { workspace = true }
+value = { workspace = true }
+flume = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+comfy-table = { workspace = true }
+num-format = { workspace = true }

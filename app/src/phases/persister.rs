@@ -1,12 +1,12 @@
 use crate::management::catalog::Catalog;
-use crossbeam::channel::{unbounded, Receiver, Sender};
 use engine::engine::Engine;
 use engine::EngineKind;
 use futures::StreamExt;
+use num_format::{CustomFormat, Grouping, ToFormattedString};
+use statistics::Event;
 use std::collections::HashMap;
 use std::error::Error;
 use std::time::Duration;
-use num_format::{CustomFormat, Grouping, ToFormattedString};
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::task::JoinSet;
 use tokio::time::{sleep, Instant};
@@ -37,10 +37,12 @@ impl Persister {
 
         debug!("store {} - {}", engine, value);
         if engine.tx.len() > 10_000 {
-            let format = CustomFormat::builder()
-                .separator("'")
-                .build()?;
-            error!("engines {} too long: {}", engine, engine.tx.len().to_formatted_string(&format));
+            let format = CustomFormat::builder().separator("'").build()?;
+            error!(
+                "Engines {} too long: {}",
+                engine,
+                engine.tx.len().to_formatted_string(&format)
+            );
         }
         engine.tx.send((value, context))?;
 
@@ -81,10 +83,18 @@ impl Persister {
             }
         }
 
-        let costs: Vec<_> = self.engines.iter().map(|e| (e.cost(value, &definition), e)).collect();
+        let costs: Vec<_> = self
+            .engines
+            .iter()
+            .map(|e| (e.cost(value, &definition), e))
+            .collect();
 
         Ok((
-            costs.into_iter().min_by(|a, b| a.0.total_cmp(&b.0)).unwrap().1,
+            costs
+                .into_iter()
+                .min_by(|a, b| a.0.total_cmp(&b.0))
+                .unwrap()
+                .1,
             RecordContext {
                 meta: context.meta,
                 entity: Some(definition.entity),
@@ -102,13 +112,17 @@ impl Persister {
                 let mut first_ts = Instant::now();
                 let mut buckets: HashMap<String, Vec<Value>> = HashMap::new();
 
+                let name = engine.to_string();
+
                 loop {
-                    if first_ts.elapsed().as_millis() > 10 || count > 1_000_000 {
+                    if first_ts.elapsed().as_millis() > 200 || count > 1_000_000 {
                         // try to drain the "buffer"
 
                         for (entity, values) in buckets.drain() {
+                            let length = values.len();
                             match clone.store(entity.clone(), values.clone()).await {
                                 Ok(_) => {
+                                    engine.statistic_sender.send(Event::Insert(entity, length, name.to_string())).unwrap();
                                     error_count = 0;
                                     count = 0;
                                 }

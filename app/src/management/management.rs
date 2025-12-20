@@ -1,6 +1,5 @@
 use crate::management::catalog::Catalog;
 use crate::phases::Persister;
-use crossbeam::channel::{unbounded, Receiver, RecvError};
 use engine::EngineKind;
 use futures::future::join_all;
 use sink::dummy::DummySink;
@@ -8,12 +7,14 @@ use sink::kafka::Kafka;
 use std::collections::HashMap;
 use std::error::Error;
 use std::time::Duration;
+use flume::Sender;
 use futures::channel;
 use tokio::runtime::Handle;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::task::JoinSet;
 use tokio::time::{sleep, Instant};
 use tracing::{error, info};
+use statistics::Event;
 use util::definition::{Definition, DefinitionFilter, Model};
 use util::queue::{Meta, RecordContext};
 use value::Value;
@@ -37,7 +38,9 @@ impl Manager {
 
         let mut joins: JoinSet<()> = JoinSet::new();
 
-        let mut persister = self.init_engines().await?;
+        let statistic_tx = statistics::start(&mut self.joins).await;
+
+        let mut persister = self.init_engines(statistic_tx).await?;
 
         self.catalog
             .add_definition(Definition::new(
@@ -109,12 +112,12 @@ impl Manager {
         Ok(())
     }
 
-    async fn init_engines(&mut self) -> Result<Persister, Box<dyn Error + Send + Sync>> {
+    async fn init_engines(&mut self, statistic_tx: Sender<Event>) -> Result<Persister, Box<dyn Error + Send + Sync>> {
         let persister = Persister::new(self.catalog.clone());
 
         let engines = EngineKind::start_all(&mut self.joins).await?;
         for engine in engines.into_iter() {
-            self.catalog.add_engine(engine).await;
+            self.catalog.add_engine(engine, statistic_tx.clone()).await;
         }
 
         Ok(persister)
