@@ -1,16 +1,17 @@
-use crate::EngineKind;
 use crate::engine::Load;
+use crate::EngineKind;
 use futures_util::future::join_all;
-use neo4rs::{Graph, RunResult, query};
+use neo4rs::{query, Graph, RunResult};
 use reqwest::Client;
 use serde::Deserialize;
+use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::f32::consts::E;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::spawn;
 use tokio::task::JoinSet;
-use tokio::time::{Instant, sleep};
+use tokio::time::{sleep, Instant};
 use tracing::{error, info};
 use util::container;
 use util::container::Mapping;
@@ -25,6 +26,7 @@ pub struct Neo4j {
     pub(crate) password: String,
     pub(crate) database: String,
     pub(crate) graph: Option<Graph>,
+    pub(crate) prepared_queries: HashMap<String, String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -78,6 +80,12 @@ impl Neo4j {
 
         self.check_throughput().await?;
         Ok(())
+    }
+
+    pub(crate) async fn create_entity(&mut self, name: &str) {
+        let cypher_query = self.query(String::from(name));
+        self.prepared_queries
+            .insert(String::from(name), cypher_query);
     }
 
     pub(crate) async fn stop(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -134,12 +142,15 @@ impl Neo4j {
         match &self.graph {
             None => Err(Box::from("No graph")),
             Some(g) => {
-                let cypher_query = self.query(entity);
+                let cypher_query = self
+                    .prepared_queries
+                    .get(&entity)
+                    .ok_or(format!("No prepared query in neo4j for {}", entity))?;
 
                 let tx = g.start_txn().await?;
                 let mut waits = vec![];
                 for v in values {
-                    waits.push(g.run(query(&cypher_query).param("value", v)));
+                    waits.push(g.run(query(cypher_query).param("value", v)));
                 }
 
                 let errors: Vec<String> = join_all(waits)

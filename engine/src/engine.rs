@@ -8,10 +8,10 @@ use std::fmt::{Display, Formatter};
 use std::ops::{Add, Mul};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use crossbeam::channel::{unbounded, Receiver, Sender};
-use tokio::sync::mpsc::unbounded_channel;
+use flume::{unbounded, Receiver, Sender};
 use tokio::task::JoinSet;
 use tokio::time::sleep;
+use tracing::info;
 use util::definition::{Definition, Model};
 use util::queue::RecordContext;
 use value::Value;
@@ -61,13 +61,14 @@ impl Engine {
             EngineKind::Neo4j(n) => n.cost(value),
         };
 
-        let mut cost = cost.mul(0.01.mul(self.rx.len().add(1) as f64));
+        let pressure = self.rx.len() + 1;
+        let mut cost = cost.mul(pressure as f64);
 
         if definition.model != self.model() {
             cost *= 2.0;
         }
 
-        cost *= self.current_load();
+        //cost *= self.current_load();
 
         cost
     }
@@ -120,11 +121,11 @@ impl Display for EngineKind {
 }
 
 impl EngineKind {
-    pub async fn create_entity(&self, name: &String) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub async fn create_entity(&mut self, name: &String) -> Result<(), Box<dyn Error + Send + Sync>> {
         Ok(match self {
             EngineKind::Postgres(p) => p.create_table(name).await?,
             EngineKind::MongoDB(m) => m.create_collection(name).await?,
-            EngineKind::Neo4j(_) => {}
+            EngineKind::Neo4j(n) => n.create_entity(name).await,
         })
     }
 
@@ -193,6 +194,7 @@ impl EngineKind {
                 password: "postgres".to_string(),
             },
             client: None,
+            prepared_statements: Default::default(),
         }
     }
 
@@ -212,6 +214,7 @@ impl EngineKind {
             password: "neoneoneo".to_string(),
             database: "neo4j".to_string(),
             graph: None,
+            prepared_queries: Default::default(),
         }
     }
 }
@@ -227,8 +230,8 @@ impl Load {
     fn to_f64(&self) -> f64 {
         match self {
             Load::Low => 1.0,
-            Load::Middle => 2.0,
-            Load::High => 5.0,
+            Load::Middle => 100.0,
+            Load::High => 1000.0,
         }
     }
 }

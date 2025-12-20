@@ -30,7 +30,7 @@ impl Catalog {
         definition: Definition,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
         let mut state = self.state.lock().await;
-        for engine in &state.engines {
+        for engine in &mut state.engines {
             engine.engine_kind.create_entity(&definition.entity).await?;
         }
 

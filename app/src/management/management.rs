@@ -37,7 +37,7 @@ impl Manager {
 
         let mut joins: JoinSet<()> = JoinSet::new();
 
-        let persister = self.start_engines().await?;
+        let mut persister = self.init_engines().await?;
 
         self.catalog
             .add_definition(Definition::new(
@@ -63,7 +63,7 @@ impl Manager {
             ))
             .await?;
 
-        self.start_distributor().await;
+        persister.start_distributor(&mut self.joins).await;
 
         let kafka = self.start_sinks(persister).await?;
 
@@ -109,7 +109,7 @@ impl Manager {
         Ok(())
     }
 
-    async fn start_engines(&mut self) -> Result<Persister, Box<dyn Error + Send + Sync>> {
+    async fn init_engines(&mut self) -> Result<Persister, Box<dyn Error + Send + Sync>> {
         let persister = Persister::new(self.catalog.clone());
 
         let engines = EngineKind::start_all(&mut self.joins).await?;
@@ -120,87 +120,12 @@ impl Manager {
         Ok(persister)
     }
 
-    async fn start_distributor(&mut self) {
-        for mut engine in self.catalog.engines().await {
-            let clone = engine.clone();
 
-            self.joins.spawn(async move {
-                let mut error_count = 0;
-                let mut count = 0;
-                let mut first_ts = Instant::now();
-                let mut buckets: HashMap<String, Vec<Value>> = HashMap::new();
-
-                loop {
-                    if first_ts.elapsed().as_millis() > 10 || count > 1_000_000 {
-                        // try to drain the "buffer"
-
-                        for (entity, values) in buckets.drain() {
-                            match clone.store(entity.clone(), values.clone()).await {
-                                Ok(_) => {
-                                    error_count = 0;
-                                    count = 0;
-                                }
-                                Err(err) => {
-                                    error_count += 1;
-                                    error!("Error during distribution to engines {}", err);
-                                    let errors: Vec<_> = values
-                                        .into_iter()
-                                        .filter_map(|v| {
-                                            let res = engine
-                                                .tx
-                                                .send((
-                                                    v,
-                                                    RecordContext::new(
-                                                        Meta::new(Some(entity.clone())),
-                                                        entity.clone(),
-                                                    ),
-                                                ))
-                                                .map_err(|err| format!("{:?}", err));
-                                            match res {
-                                                Ok(_) => None,
-                                                Err(err) => Some(err)
-                                            }
-                                        })
-                                        .collect();
-
-                                    if !errors.is_empty() {
-                                        error!("{}", errors.first().unwrap())
-                                    }
-
-                                    if error_count > 1_000 {
-                                        sleep(Duration::from_secs(1)).await;
-                                    } else if error_count > 1_000_000 {
-                                        panic!("Over 1 Mio retries")
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-
-                    match engine.rx.try_recv() {
-                        Err(_) => sleep(Duration::from_millis(1)).await, // max shift after max timeout for sending finished chunk out
-                        Ok((v, context)) => {
-                            let entity = context.entity.unwrap_or("_stream".to_string());
-
-                            if buckets.is_empty() {
-                                first_ts = Instant::now();
-                            }
-                            buckets.entry(entity).or_default().push(v);
-                            count += 1;
-                        }
-                    }
-                }
-            });
-        }
-    }
 
     async fn start_sinks(
         &mut self,
         persister: Persister,
     ) -> Result<Kafka, Box<dyn Error + Send + Sync>> {
-        //let (tx, rx) = unbounded::<(Value, RecordContext)>();
-
         let (tx, rx) = unbounded_channel();
 
         let kafka = sink::kafka::start(&mut self.joins, tx.clone()).await?;

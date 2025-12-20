@@ -1,13 +1,15 @@
-use crate::EngineKind;
 use crate::connection::PostgresConnection;
 use crate::engine::Load;
+use crate::EngineKind;
+use std::collections::HashMap;
 use std::error::Error;
+use std::fmt::format;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::spawn;
 use tokio::task::JoinSet;
-use tokio::time::{Instant, sleep, timeout};
-use tokio_postgres::Client;
+use tokio::time::{sleep, timeout, Instant};
+use tokio_postgres::{Client, Connection, Statement};
 use tracing::{debug, info};
 use util::container;
 use util::container::Mapping;
@@ -19,6 +21,7 @@ pub struct Postgres {
     pub(crate) load: Arc<Mutex<Load>>,
     pub(crate) connector: PostgresConnection,
     pub(crate) client: Option<Arc<Client>>,
+    pub(crate) prepared_statements: HashMap<String, Statement>,
 }
 
 #[derive(Debug)]
@@ -75,11 +78,14 @@ impl Postgres {
         match &self.client {
             None => return Err(Box::from("Could not create postgres database")),
             Some(client) => {
-                let insert_query = format!("INSERT INTO {} (value) VALUES ($1)", entity);
-                let statement = client.prepare(&insert_query).await?;
+                let statement = self
+                    .prepared_statements
+                    .get(entity.as_str())
+                    .ok_or(format!("No prepared statement for {} on postgres", entity))?;
+
                 let mut rows_affected = 0;
                 for v in values {
-                    rows_affected += client.execute(&statement, &[&v]).await?;
+                    rows_affected += client.execute(statement, &[&v]).await?;
                 }
 
                 debug!("Inserted {} row(s) into 'users'.", rows_affected);
@@ -97,7 +103,6 @@ impl Postgres {
 
     async fn check_throughput(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
         let interval_seconds = 5;
-        //info!("--- Monitoring TPS over {} seconds ---", interval_seconds);
 
         // Initial read
         let start_counts = self.get_tx_counts().await?;
@@ -124,7 +129,7 @@ impl Postgres {
         Ok(())
     }
 
-    pub async fn create_table(&self, name: &str) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub async fn create_table(&mut self, name: &str) -> Result<(), Box<dyn Error + Send + Sync>> {
         match &self.client {
             None => return Err(Box::from("could not create postgres database")),
             Some(client) => {
@@ -137,6 +142,9 @@ impl Postgres {
 
                 client.execute(&create_table_query, &[]).await?;
                 info!("Table '{}' ensured to exist.", name);
+                let insert_query = format!("INSERT INTO {} (value) VALUES ($1)", name);
+                let statement = client.prepare(&insert_query).await?;
+                self.prepared_statements.insert(name.to_string(), statement);
             }
         }
         Ok(())
