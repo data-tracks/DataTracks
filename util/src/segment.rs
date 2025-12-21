@@ -1,0 +1,72 @@
+use std::error::Error;
+use std::path::{Path, PathBuf};
+use memmap2::MmapMut;
+use tokio::fs;
+use tokio::fs::OpenOptions;
+
+pub struct SegmentedLog {
+    base_path: PathBuf,
+    segment_size: u64,
+    current_segment_id: usize,
+    mmap: MmapMut,
+    cursor: usize,
+}
+
+
+impl SegmentedLog {
+
+    pub async fn async_default() -> Result<Self, Box<dyn Error + Send + Sync>> {
+        Self::new("wal_segments", 10 * 1024 * 1024).await // 10 MB segments
+    }
+
+    pub async fn new(base_path: &str, segment_size: u64) -> Result<Self, Box<dyn Error + Send + Sync>> {
+        let base = PathBuf::from(base_path);
+        fs::create_dir_all(&base).await?;
+
+        let first_segment_id = 0;
+        let mmap = Self::map_segment(&base, first_segment_id, segment_size).await;
+
+        Ok(Self {
+            base_path: base,
+            segment_size,
+            current_segment_id: first_segment_id,
+            mmap,
+            cursor: 0,
+        })
+    }
+
+    async fn map_segment(base: &Path, id: usize, size: u64) -> MmapMut {
+        let path = base.join(format!("segment_{:06}.log", id));
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(path)
+            .await
+            .expect("Failed to open segment");
+
+        file.set_len(size).await.expect("Failed to set file size");
+        // theoretically other processes could change the file, while we are writing
+        unsafe { MmapMut::map_mut(&file).expect("Failed to mmap") }
+    }
+
+    async fn rotate(&mut self) {
+        // Ensure data is synced before switching
+        self.mmap.flush().unwrap();
+
+        self.current_segment_id += 1;
+        self.cursor = 0;
+        self.mmap = Self::map_segment(&self.base_path, self.current_segment_id, self.segment_size).await;
+        println!("Rotated to segment {}", self.current_segment_id);
+    }
+
+    pub async fn write(&mut self, data: &[u8]) {
+        if self.cursor + data.len() > self.segment_size as usize {
+            self.rotate().await;
+        }
+
+        // Copy data to the memory-mapped region
+        self.mmap[self.cursor..self.cursor + data.len()].copy_from_slice(data);
+        self.cursor += data.len();
+    }
+}

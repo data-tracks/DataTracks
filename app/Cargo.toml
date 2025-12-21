@@ -27,7 +27,9 @@ sink = { workspace = true }
 futures = { workspace = true }
 num-format = { workspace = true }
 statistics = { workspace = true }
-flume = {workspace = true}
+flume = { workspace = true }
+speedy = { workspace = true }
+chrono = { workspace = true }
 
 
 [dev-dependencies]

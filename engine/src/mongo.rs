@@ -14,7 +14,7 @@ use util::container;
 use util::container::Mapping;
 use value::Value;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct MongoDB {
     pub(crate) load: Arc<Mutex<Load>>,
     pub(crate) client: Option<Client>,

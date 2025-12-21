@@ -16,7 +16,7 @@ use util::definition::{Definition, Model};
 use util::queue::RecordContext;
 use value::Value;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Engine {
     pub tx: Sender<(Value, RecordContext)>,
     pub rx: Receiver<(Value, RecordContext)>,
@@ -105,7 +105,7 @@ impl Engine {
     }
 }
 
-#[derive(Clone, From)]
+#[derive(Clone, From, Debug)]
 pub enum EngineKind {
     Postgres(Postgres),
     MongoDB(MongoDB),
@@ -221,7 +221,7 @@ impl EngineKind {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Load {
     Low,
     Middle,

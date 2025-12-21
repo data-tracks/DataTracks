@@ -7,7 +7,7 @@ use sink::kafka::Kafka;
 use std::collections::HashMap;
 use std::error::Error;
 use std::time::Duration;
-use flume::Sender;
+use flume::{unbounded, Sender};
 use futures::channel;
 use tokio::runtime::Handle;
 use tokio::sync::mpsc::unbounded_channel;
@@ -113,7 +113,7 @@ impl Manager {
     }
 
     async fn init_engines(&mut self, statistic_tx: Sender<Event>) -> Result<Persister, Box<dyn Error + Send + Sync>> {
-        let persister = Persister::new(self.catalog.clone());
+        let persister = Persister::new(self.catalog.clone()).await?;
 
         let engines = EngineKind::start_all(&mut self.joins).await?;
         for engine in engines.into_iter() {
@@ -129,19 +129,19 @@ impl Manager {
         &mut self,
         persister: Persister,
     ) -> Result<Kafka, Box<dyn Error + Send + Sync>> {
-        let (tx, rx) = unbounded_channel();
+        let (tx, rx) = unbounded();
 
         let kafka = sink::kafka::start(&mut self.joins, tx.clone()).await?;
 
         persister.start(&mut self.joins, rx).await;
 
-        let amount = 2000;
+        let amount = 20_000;
 
         let clone_graph = kafka.clone();
         self.joins.spawn(async move {
             loop {
                 clone_graph.send_value_graph().await.unwrap();
-                sleep(Duration::from_millis(100)).await;
+                sleep(Duration::from_nanos(100)).await;
             }
         });
 
@@ -157,7 +157,7 @@ impl Manager {
         self.joins.spawn(async move {
             loop {
                 clone_rel.send_value_relational().await.unwrap();
-                sleep(Duration::from_millis(10)).await;
+                sleep(Duration::from_nanos(10)).await;
             }
         });
 

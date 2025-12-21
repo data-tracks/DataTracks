@@ -1,6 +1,5 @@
-use crossbeam::channel::Sender;
 use std::time::Duration;
-use tokio::sync::mpsc::UnboundedSender;
+use flume::Sender;
 use util::queue::{Meta, RecordContext};
 use value::Value;
 
@@ -14,7 +13,7 @@ impl DummySink {
         DummySink { value, interval }
     }
 
-    pub async fn start(&mut self, name: String, sender: UnboundedSender<(Value, RecordContext)>) {
+    pub async fn start(&mut self, name: String, sender: Sender<(Value, RecordContext)>) {
         let duration = self.interval.clone();
         let value = self.value.clone();
         loop {

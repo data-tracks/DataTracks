@@ -1,4 +1,3 @@
-use crossbeam::channel::Sender;
 use rand::prelude::IndexedRandom;
 use rdkafka::admin::{AdminClient, AdminOptions, NewTopic, TopicReplication};
 use rdkafka::consumer::{Consumer, StreamConsumer};
@@ -7,6 +6,7 @@ use rdkafka::{ClientConfig, Message};
 use std::error::Error;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use flume::Sender;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::task::JoinSet;
 use tracing::{debug, error, info};
@@ -25,7 +25,7 @@ struct KafkaSink {
 impl KafkaSink {
     pub async fn start(
         &mut self,
-        sender: UnboundedSender<(Value, RecordContext)>,
+        sender: Sender<(Value, RecordContext)>,
     ) -> Result<(), Box<dyn Error>> {
         let consumer: StreamConsumer = ClientConfig::new()
             .set("group.id", GROUP_ID)
@@ -279,7 +279,7 @@ impl Kafka {
 
 pub async fn start(
     joins: &mut JoinSet<()>,
-    sender: UnboundedSender<(Value, RecordContext)>,
+    sender: Sender<(Value, RecordContext)>,
 ) -> Result<Kafka, Box<dyn Error + Send + Sync>> {
     let kafka = Kafka::new("localhost", 9092).await;
     kafka.start().await?;

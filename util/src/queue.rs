@@ -1,6 +1,8 @@
 use std::error::Error;
 use std::sync::{Arc};
+use chrono::Utc;
 use crossbeam::queue::SegQueue;
+use speedy::{Readable, Writable};
 use tracing::error;
 use value::Value;
 
@@ -58,7 +60,7 @@ impl Clone for RecordQueue {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Writable, Readable, PartialEq)]
 pub struct Meta {
     pub name: Option<String>,
 }
@@ -69,7 +71,7 @@ impl Meta {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Writable, Readable)]
 pub struct RecordContext {
     pub meta: Meta,
     pub entity: Option<String>,

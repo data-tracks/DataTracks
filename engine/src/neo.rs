@@ -7,6 +7,7 @@ use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::f32::consts::E;
+use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::spawn;
@@ -27,6 +28,12 @@ pub struct Neo4j {
     pub(crate) database: String,
     pub(crate) graph: Option<Graph>,
     pub(crate) prepared_queries: HashMap<String, String>,
+}
+
+impl Debug for Neo4j {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Neo4j")
+    }
 }
 
 #[derive(Debug, Deserialize)]
