@@ -1,26 +1,18 @@
 use crate::connection::PostgresConnection;
 use crate::engine::Load;
-use crate::EngineKind;
-use bytes::BytesMut;
-use flume::Sender;
-use futures_util::SinkExt;
 use pin_utils::pin_mut;
-use statistics::Event;
 use std::collections::HashMap;
 use std::error::Error;
-use std::fmt::format;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tokio::spawn;
 use tokio::task::JoinSet;
-use tokio::time::{sleep, timeout, Instant};
+use tokio::time::{sleep, timeout};
 use tokio_postgres::binary_copy::BinaryCopyInWriter;
-use tokio_postgres::types::{ToSql, Type};
-use tokio_postgres::{Client, Connection, Statement};
+use tokio_postgres::types::Type;
+use tokio_postgres::{Client, Statement};
 use tracing::{debug, info};
 use util::container;
 use util::container::Mapping;
-use util::queue::RecordContext;
 use value::Value;
 
 #[derive(Clone, Debug)]

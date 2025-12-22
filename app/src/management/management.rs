@@ -1,22 +1,17 @@
 use crate::management::catalog::Catalog;
 use crate::phases::Persister;
 use engine::EngineKind;
-use futures::future::join_all;
+use flume::{Sender, unbounded};
 use sink::dummy::DummySink;
 use sink::kafka::Kafka;
-use std::collections::HashMap;
+use statistics::Event;
 use std::error::Error;
 use std::time::Duration;
-use flume::{unbounded, Sender};
-use futures::channel;
 use tokio::runtime::Handle;
-use tokio::sync::mpsc::unbounded_channel;
 use tokio::task::JoinSet;
-use tokio::time::{sleep, Instant};
+use tokio::time::sleep;
 use tracing::{error, info};
-use statistics::Event;
 use util::definition::{Definition, DefinitionFilter, Model};
-use util::queue::{Meta, RecordContext};
 use value::Value;
 
 #[derive(Default)]
@@ -112,7 +107,10 @@ impl Manager {
         Ok(())
     }
 
-    async fn init_engines(&mut self, statistic_tx: Sender<Event>) -> Result<Persister, Box<dyn Error + Send + Sync>> {
+    async fn init_engines(
+        &mut self,
+        statistic_tx: Sender<Event>,
+    ) -> Result<Persister, Box<dyn Error + Send + Sync>> {
         let persister = Persister::new(self.catalog.clone()).await?;
 
         let engines = EngineKind::start_all(&mut self.joins).await?;
@@ -122,8 +120,6 @@ impl Manager {
 
         Ok(persister)
     }
-
-
 
     async fn start_sinks(
         &mut self,

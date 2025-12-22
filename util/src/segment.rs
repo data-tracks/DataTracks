@@ -1,8 +1,9 @@
+use memmap2::MmapMut;
 use std::error::Error;
 use std::path::{Path, PathBuf};
-use memmap2::MmapMut;
 use tokio::fs;
 use tokio::fs::OpenOptions;
+use tracing::debug;
 
 pub struct SegmentedLog {
     base_path: PathBuf,
@@ -12,15 +13,20 @@ pub struct SegmentedLog {
     cursor: usize,
 }
 
-
 impl SegmentedLog {
-
     pub async fn async_default() -> Result<Self, Box<dyn Error + Send + Sync>> {
         Self::new("wal_segments", 10 * 1024 * 1024).await // 10 MB segments
     }
 
-    pub async fn new(base_path: &str, segment_size: u64) -> Result<Self, Box<dyn Error + Send + Sync>> {
+    pub async fn new(
+        base_path: &str,
+        segment_size: u64,
+    ) -> Result<Self, Box<dyn Error + Send + Sync>> {
         let base = PathBuf::from(base_path);
+        if base.exists() {
+            fs::remove_dir_all(base.as_path()).await?
+        }
+
         fs::create_dir_all(&base).await?;
 
         let first_segment_id = 0;
@@ -56,8 +62,9 @@ impl SegmentedLog {
 
         self.current_segment_id += 1;
         self.cursor = 0;
-        self.mmap = Self::map_segment(&self.base_path, self.current_segment_id, self.segment_size).await;
-        println!("Rotated to segment {}", self.current_segment_id);
+        self.mmap =
+            Self::map_segment(&self.base_path, self.current_segment_id, self.segment_size).await;
+        debug!("Rotated to segment {}", self.current_segment_id);
     }
 
     pub async fn write(&mut self, data: &[u8]) {

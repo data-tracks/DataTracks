@@ -1,18 +1,16 @@
 use crate::engine::Load;
-use crate::EngineKind;
-use futures_util::future::join_all;
-use neo4rs::{query, Graph, RunResult};
+use futures_util::future::{err, join_all};
+use log::debug;
+use neo4rs::{Graph, query};
 use reqwest::Client;
 use serde::Deserialize;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::error::Error;
-use std::f32::consts::E;
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tokio::spawn;
-use tokio::task::JoinSet;
-use tokio::time::{sleep, Instant};
+use tokio::io::join;
+use tokio::time::{Instant, sleep};
 use tracing::{error, info};
 use util::container;
 use util::container::Mapping;
@@ -149,32 +147,17 @@ impl Neo4j {
         match &self.graph {
             None => Err(Box::from("No graph")),
             Some(g) => {
+                let len = values.len();
+
                 let cypher_query = self
                     .prepared_queries
                     .get(&entity)
                     .ok_or(format!("No prepared query in neo4j for {}", entity))?;
 
-                let tx = g.start_txn().await?;
-                let mut waits = vec![];
-                for v in values {
-                    waits.push(g.run(query(cypher_query).param("value", v)));
-                }
+                g.run(query(cypher_query).param("values", values)).await?;
 
-                let errors: Vec<String> = join_all(waits)
-                    .await
-                    .into_iter()
-                    .filter_map(|r| match r {
-                        Ok(_) => None,
-                        Err(err) => Some(err.to_string()),
-                    })
-                    .collect();
-
-                if errors.is_empty() {
-                    tx.commit().await?;
-                    Ok(())
-                } else {
-                    Err(Box::from(errors.first().unwrap().to_string()))
-                }
+                debug!("neo4j values {}", len);
+                Ok(())
             }
         }
     }
@@ -230,6 +213,32 @@ impl Neo4j {
     }
 
     fn query(&self, entity: String) -> String {
-        format!("CREATE (p:db_{} {{value: $value}}) RETURN p", entity)
+        format!(
+            "UNWIND $values as row CREATE (p:db_{} {{value: row}})",
+            entity
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::EngineKind;
+    use value::Value;
+
+    #[tokio::test]
+    async fn test_insert() {
+        let mut neo = EngineKind::neo4j();
+
+        neo.start().await.unwrap();
+
+        neo.create_entity("users").await;
+
+        neo.store(String::from("users"), vec![Value::text("test")])
+            .await
+            .unwrap();
+
+        neo.store(String::from("users"), vec![Value::text("test")])
+            .await
+            .unwrap();
     }
 }

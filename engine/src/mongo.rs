@@ -1,4 +1,3 @@
-use crate::EngineKind;
 use crate::engine::Load;
 use mongodb::Client;
 use mongodb::bson::doc;
@@ -7,7 +6,6 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tokio::spawn;
 use tokio::time::{sleep, timeout};
 use tracing::{error, info};
 use util::container;
@@ -78,6 +76,7 @@ impl MongoDB {
                     .database("public")
                     .collection(&entity)
                     .insert_many(values)
+                    .bypass_document_validation(true)
                     .await?;
 
                 Ok(())

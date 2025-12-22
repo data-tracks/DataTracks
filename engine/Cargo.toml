@@ -26,3 +26,4 @@ flume = { workspace = true }
 statistics = {workspace = true}
 bytes = "1.11.0"
 pin-utils = "0.1.0"
+log = "0.4.28"

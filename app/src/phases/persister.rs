@@ -1,7 +1,8 @@
 use crate::management::catalog::Catalog;
-use engine::engine::Engine;
+use chrono::Utc;
 use engine::EngineKind;
-use flume::{unbounded, Receiver};
+use engine::engine::Engine;
+use flume::{Receiver, unbounded};
 use futures::StreamExt;
 use num_format::{CustomFormat, Grouping, ToFormattedString};
 use speedy::{Readable, Writable};
@@ -9,15 +10,14 @@ use statistics::Event;
 use std::collections::HashMap;
 use std::error::Error;
 use std::time::Duration;
-use chrono::Utc;
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
+use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 use tokio::sync::{Mutex, RwLock};
 use tokio::task::JoinSet;
-use tokio::time::{sleep, Instant};
+use tokio::time::{Instant, sleep};
 use tracing::{debug, error, info};
+use util::SegmentedLog;
 use util::definition::Definition;
 use util::queue::{Meta, RecordContext, RecordQueue};
-use util::SegmentedLog;
 use value::Value;
 
 pub struct Persister {
@@ -65,38 +65,44 @@ impl Persister {
     pub async fn start(
         mut self,
         joins: &mut JoinSet<()>,
-        mut incoming: Receiver<(Value, RecordContext)>,
+        incoming: Receiver<(Value, RecordContext)>,
     ) {
         let (sender, receiver) = unbounded();
         // timer
-        joins.spawn(async move {
-            let mut count = 0;
-            loop {
-                if count % 1_000 == 0 && incoming.len() > 100_0000 {
-                    error!("Timer is overwhelmed! {}", incoming.len());
-                }
-                match incoming.recv_async().await {
-                    Err(_) => {}
-                    Ok((value, context)) => {
-                        let record = WritableRecord::from((context,value));
-                        sender.send(record).unwrap();
-                    }
-                }
-                count += 1;
-            }
-        });
 
+        for i in 0..10 {
+            let incoming = incoming.clone();
+            let sender = sender.clone();
+            joins.spawn(async move {
+                let mut count = 0;
+                loop {
+                    if count % 1_000 == 0 && incoming.len() > 100_0000 {
+                        error!("Timer is overwhelmed! {}", incoming.len());
+                    }
+                    match incoming.recv_async().await {
+                        Err(_) => {}
+                        Ok((value, context)) => {
+                            let record = WritableRecord::from((context, value));
+                            sender.send(record).unwrap();
+                        }
+                    }
+                    count += 1;
+                }
+            });
+        }
 
         let (tx, rx) = unbounded();
         // wal logger
-        for i in 0..5 {
+        for i in 0..10 {
             let rx = receiver.clone();
             let tx = tx.clone();
             joins.spawn(async move {
-                let mut log = SegmentedLog::new(&format!("wals/wal_segments_{}", i), 10 * 2048 * 2048).await.unwrap();
+                let mut log =
+                    SegmentedLog::new(&format!("wals/wal_segments_{}", i), 10 * 2048 * 2048)
+                        .await
+                        .unwrap();
+                let mut count = 0;
                 loop {
-                    let mut count = 0;
-
                     if count % 1_000 == 0 && rx.len() > 100_0000 {
                         error!("WAL is overwhelmed! {}", rx.len());
                     }
@@ -112,8 +118,6 @@ impl Persister {
             });
         }
 
-
-
         // storer
         joins.spawn(async move {
             let mut engines = self.catalog.engines().await;
@@ -123,9 +127,10 @@ impl Persister {
             loop {
                 match rx.recv_async().await {
                     Err(_) => {}
-                    Ok(record) => {
-                        self.move_to_engines(record.value, record.context).await.unwrap()
-                    }
+                    Ok(record) => self
+                        .move_to_engines(record.value, record.context)
+                        .await
+                        .unwrap(),
                 }
             }
         });
@@ -158,7 +163,10 @@ impl Persister {
             .map(|e| (e.cost(value, &definition), e))
             .collect();
 
-        debug!("costs:{:?}", costs.iter().map(|(k, v)| k).collect::<Vec<_>>());
+        debug!(
+            "costs:{:?}",
+            costs.iter().map(|(k, v)| k).collect::<Vec<_>>()
+        );
 
         let cost = costs
             .into_iter()
@@ -177,7 +185,7 @@ impl Persister {
     }
 
     pub async fn start_distributor(&mut self, joins: &mut JoinSet<()>) {
-        for mut engine in self.catalog.engines().await {
+        for engine in self.catalog.engines().await {
             let clone = engine.clone();
 
             joins.spawn(async move {
@@ -217,10 +225,7 @@ impl Persister {
                                                     ),
                                                 ))
                                                 .map_err(|err| format!("{:?}", err));
-                                            match res {
-                                                Ok(_) => None,
-                                                Err(err) => Some(err)
-                                            }
+                                            res.err()
                                         })
                                         .collect();
 
@@ -267,10 +272,9 @@ pub struct WritableRecord {
     pub context: RecordContext,
 }
 
-
 impl From<(RecordContext, Value)> for WritableRecord {
     fn from(value: (RecordContext, Value)) -> Self {
-        WritableRecord{
+        WritableRecord {
             value: value.1,
             timestamp: Utc::now().timestamp_millis(),
             context: value.0,

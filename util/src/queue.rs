@@ -1,8 +1,7 @@
-use std::error::Error;
-use std::sync::{Arc};
-use chrono::Utc;
 use crossbeam::queue::SegQueue;
 use speedy::{Readable, Writable};
+use std::error::Error;
+use std::sync::Arc;
 use tracing::error;
 use value::Value;
 
@@ -32,10 +31,8 @@ impl RecordQueue {
         value: V,
         context: RecordContext,
     ) -> Result<(), Box<dyn Error + Sync + Send>> {
-
         self.values.push((value.into(), context));
         Ok(())
-
     }
 
     pub fn pop(&mut self) -> Option<(Value, RecordContext)> {
@@ -46,7 +43,6 @@ impl RecordQueue {
         self.last_len = len;
         self.values.pop()
     }
-
 }
 
 impl Clone for RecordQueue {

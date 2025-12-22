@@ -3,7 +3,8 @@ use crate::mongo::MongoDB;
 use crate::neo::Neo4j;
 use crate::postgres::Postgres;
 use derive_more::From;
-use flume::{unbounded, Receiver, Sender};
+use flume::{Receiver, Sender, unbounded};
+use statistics::Event;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::ops::Mul;
@@ -11,7 +12,6 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
-use statistics::Event;
 use util::definition::{Definition, Model};
 use util::queue::RecordContext;
 use value::Value;
@@ -64,13 +64,12 @@ impl Engine {
         };
 
         let pressure = self.rx.len() + 1;
+
         let mut cost = cost.mul(pressure as f64);
 
         if definition.model != self.model() {
             cost *= 2.0;
         }
-
-        //cost *= self.current_load();
 
         cost
     }
@@ -123,12 +122,13 @@ impl Display for EngineKind {
 }
 
 impl EngineKind {
-    pub async fn create_entity(&mut self, name: &String) -> Result<(), Box<dyn Error + Send + Sync>> {
-        Ok(match self {
+    pub async fn create_entity(&mut self, name: &str) -> Result<(), Box<dyn Error + Send + Sync>> {
+        let _: () = match self {
             EngineKind::Postgres(p) => p.create_table(name).await?,
             EngineKind::MongoDB(m) => m.create_collection(name).await?,
             EngineKind::Neo4j(n) => n.create_entity(name).await,
-        })
+        };
+        Ok(())
     }
 
     pub async fn start_all(
@@ -207,7 +207,7 @@ impl EngineKind {
         }
     }
 
-    fn neo4j() -> Neo4j {
+    pub(crate) fn neo4j() -> Neo4j {
         Neo4j {
             load: Arc::new(Mutex::new(Load::Low)),
             host: "localhost".to_string(),
