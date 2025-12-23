@@ -9,9 +9,12 @@ use std::error::Error;
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use flume::Sender;
 use tokio::io::join;
 use tokio::time::{Instant, sleep};
 use tracing::{error, info};
+use statistics::Event;
+use statistics::Event::Engine;
 use util::container;
 use util::container::Mapping;
 use value::Value;
@@ -83,7 +86,6 @@ impl Neo4j {
         info!("️️☑️ Connected to neo4j");
         self.graph = Some(graph);
 
-        self.check_throughput().await?;
         Ok(())
     }
 
@@ -105,11 +107,11 @@ impl Neo4j {
         1.0
     }
 
-    pub(crate) async fn monitor(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub(crate) async fn monitor(&self, statistic_tx: &Sender<Event>) -> Result<(), Box<dyn Error + Send + Sync>> {
         let clone = self.clone();
 
         loop {
-            clone.check_throughput().await?;
+            clone.check_throughput(statistic_tx).await?;
             sleep(Duration::from_secs(5)).await;
         }
     }
@@ -162,7 +164,7 @@ impl Neo4j {
         }
     }
 
-    async fn check_throughput(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
+    async fn check_throughput(&self, statistic_tx: &Sender<Event>) -> Result<(), Box<dyn Error + Send + Sync>> {
         let http_client = Client::new();
         let management_uri = "http://localhost:7474";
 
@@ -207,7 +209,7 @@ impl Neo4j {
 
         *self.load.lock().unwrap() = load;
 
-        info!("✅ Throughput (TPS): {:.2}", tps);
+        statistic_tx.send_async(Engine(format!("✅ Throughput (TPS): {:.2}", tps))).await?;
 
         Ok(())
     }

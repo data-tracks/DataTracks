@@ -2,6 +2,7 @@ use comfy_table::presets::UTF8_FULL;
 use comfy_table::Table;
 use flume::{unbounded, Sender};
 use num_format::{CustomFormat, ToFormattedString};
+use serde::Serialize;
 use std::collections::HashMap;
 use std::error::Error;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -29,6 +30,7 @@ impl Statistics {
                     .or_default()
                     .handle_insert(amount, entity);
             }
+            _ => {}
         }
     }
 }
@@ -58,6 +60,7 @@ pub async fn start(joins: &mut JoinSet<()>) -> Sender<Event> {
             }
         }
     });
+
     tx
 }
 
@@ -104,6 +107,7 @@ impl Statistics {
     }
 }
 
+
 #[derive(Default)]
 pub struct EngineStatistic {
     handled_entities: HashMap<String, AtomicUsize>,
@@ -118,6 +122,18 @@ impl EngineStatistic {
     }
 }
 
+#[derive(Serialize, Clone)]
 pub enum Event {
     Insert(String, usize, String),
+    Runtime(RuntimeEvent),
+    Engine(String),
+}
+
+
+#[derive(Serialize, Clone)]
+pub struct RuntimeEvent {
+    pub active_tasks: usize,
+    pub worker_threads: usize,
+    pub blocking_threads: usize,
+    pub budget_forces_yield: usize,
 }

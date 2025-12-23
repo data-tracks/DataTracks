@@ -6,8 +6,11 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use flume::Sender;
 use tokio::time::{sleep, timeout};
 use tracing::{error, info};
+use statistics::Event;
+use statistics::Event::Engine;
 use util::container;
 use util::container::Mapping;
 use value::Value;
@@ -48,8 +51,6 @@ impl MongoDB {
         info!("☑️ Connected to mongoDB database");
 
         self.client = Some(client);
-
-        self.measure_opcounters().await?;
 
         self.create_collection("_stream").await?;
 
@@ -110,9 +111,9 @@ impl MongoDB {
         }
     }
 
-    pub(crate) async fn monitor(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub(crate) async fn monitor(&self, statistic_tx: &Sender<Event>) -> Result<(), Box<dyn Error + Send + Sync>> {
         loop {
-            match self.measure_opcounters().await {
+            match self.measure_opcounters(statistic_tx).await {
                 Ok(_) => {}
                 Err(err) => {
                     error!("error during measure of mongo: {}", err)
@@ -166,7 +167,7 @@ impl MongoDB {
         }
     }
 
-    async fn measure_opcounters(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
+    async fn measure_opcounters(&self, statistic_tx: &Sender<Event>) -> Result<(), Box<dyn Error + Send + Sync>> {
         let interval_seconds = 5.0;
         let start_counts = self.get_opcounters().await?;
         sleep(Duration::from_secs_f64(interval_seconds)).await;
@@ -199,7 +200,7 @@ impl MongoDB {
 
         *self.load.lock().unwrap() = load;
 
-        info!("{}", text);
+        statistic_tx.send_async(Engine(text)).await?;
 
         Ok(())
     }

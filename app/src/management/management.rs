@@ -4,13 +4,14 @@ use engine::EngineKind;
 use flume::{Sender, unbounded};
 use sink::dummy::DummySink;
 use sink::kafka::Kafka;
-use statistics::Event;
+use statistics::{Event, RuntimeEvent};
 use std::error::Error;
 use std::time::Duration;
 use tokio::runtime::Handle;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
 use tracing::{error, info};
+use statistics::Event::Runtime;
 use util::definition::{Definition, DefinitionFilter, Model};
 use value::Value;
 
@@ -35,7 +36,7 @@ impl Manager {
 
         let statistic_tx = statistics::start(&mut self.joins).await;
 
-        let mut persister = self.init_engines(statistic_tx).await?;
+        let mut persister = self.init_engines(statistic_tx.clone()).await?;
 
         self.catalog
             .add_definition(Definition::new(
@@ -65,17 +66,16 @@ impl Manager {
 
         let kafka = self.start_sinks(persister).await?;
 
-        joins.spawn(async {
+        joins.spawn(async move {
             let metrics = Handle::current().metrics();
 
             loop {
-                info!("Active tasks: {}", metrics.num_alive_tasks());
-                info!("Worker threads: {}", metrics.num_workers());
-                info!("Blocking threads: {}", metrics.num_blocking_threads());
-                info!(
-                    "Budget forced yields: {}",
-                    metrics.budget_forced_yield_count()
-                );
+                statistic_tx.send_async(Runtime(RuntimeEvent{
+                    active_tasks: metrics.num_alive_tasks(),
+                    worker_threads: metrics.num_workers(),
+                    blocking_threads: metrics.num_blocking_threads(),
+                    budget_forces_yield: metrics.budget_forced_yield_count() as usize,
+                })).await.unwrap();
                 sleep(Duration::from_secs(5)).await;
             }
         });
@@ -113,7 +113,7 @@ impl Manager {
     ) -> Result<Persister, Box<dyn Error + Send + Sync>> {
         let persister = Persister::new(self.catalog.clone()).await?;
 
-        let engines = EngineKind::start_all(&mut self.joins).await?;
+        let engines = EngineKind::start_all(&mut self.joins, statistic_tx.clone()).await?;
         for engine in engines.into_iter() {
             self.catalog.add_engine(engine, statistic_tx.clone()).await;
         }

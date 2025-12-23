@@ -133,23 +133,24 @@ impl EngineKind {
 
     pub async fn start_all(
         join: &mut JoinSet<()>,
+        statistic_tx: Sender<Event>,
     ) -> Result<Vec<EngineKind>, Box<dyn Error + Send + Sync>> {
         let mut engines = vec![];
 
         let mut pg = EngineKind::postgres();
         pg.start(join).await?;
         let mut pg = EngineKind::from(pg);
-        EngineKind::monitor(&mut pg, join).await?;
+        EngineKind::monitor(&mut pg, join, statistic_tx.clone()).await?;
 
         let mut mongodb = EngineKind::mongo_db();
         mongodb.start().await?;
         let mut mongodb = EngineKind::from(mongodb);
-        EngineKind::monitor(&mut mongodb, join).await?;
+        EngineKind::monitor(&mut mongodb, join, statistic_tx.clone()).await?;
 
         let mut neo4j = EngineKind::neo4j();
         neo4j.start().await?;
         let mut neo4j = EngineKind::from(neo4j);
-        EngineKind::monitor(&mut neo4j, join).await?;
+        EngineKind::monitor(&mut neo4j, join, statistic_tx).await?;
 
         engines.push(pg);
         engines.push(mongodb);
@@ -169,15 +170,16 @@ impl EngineKind {
     pub async fn monitor(
         &mut self,
         join: &mut JoinSet<()>,
+        statistic_tx: Sender<Event>,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
         let engine = self.clone();
 
         join.spawn(async move {
             loop {
                 match &engine {
-                    EngineKind::Postgres(p) => p.monitor().await.unwrap(),
-                    EngineKind::MongoDB(m) => m.monitor().await.unwrap(),
-                    EngineKind::Neo4j(n) => n.monitor().await.unwrap(),
+                    EngineKind::Postgres(p) => p.monitor(&statistic_tx).await.unwrap(),
+                    EngineKind::MongoDB(m) => m.monitor(&statistic_tx).await.unwrap(),
+                    EngineKind::Neo4j(n) => n.monitor(&statistic_tx).await.unwrap(),
                 }
                 sleep(Duration::from_secs(5)).await;
             }

@@ -5,12 +5,14 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use flume::Sender;
 use tokio::task::JoinSet;
 use tokio::time::{sleep, timeout};
 use tokio_postgres::binary_copy::BinaryCopyInWriter;
 use tokio_postgres::types::Type;
 use tokio_postgres::{Client, Statement};
 use tracing::{debug, info};
+use statistics::Event;
 use util::container;
 use util::container::Mapping;
 use value::Value;
@@ -50,8 +52,6 @@ impl Postgres {
         timeout(Duration::from_secs(5), client.check_connection()).await??;
         self.client = Some(Arc::new(client));
 
-        self.check_throughput().await?;
-
         self.create_table("_stream").await?;
 
         Ok(())
@@ -86,14 +86,14 @@ impl Postgres {
         Ok(())
     }
 
-    pub(crate) async fn monitor(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub(crate) async fn monitor(&self, statistic_tx: &Sender<Event>) -> Result<(), Box<dyn Error + Send + Sync>> {
         loop {
-            self.check_throughput().await?;
+            self.check_throughput(statistic_tx).await?;
             sleep(Duration::from_secs(5)).await;
         }
     }
 
-    async fn check_throughput(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
+    async fn check_throughput(&self, statistic_tx: &Sender<Event>) -> Result<(), Box<dyn Error + Send + Sync>> {
         let interval_seconds = 5;
 
         // Initial read
@@ -116,7 +116,7 @@ impl Postgres {
 
         *self.load.lock().unwrap() = load;
 
-        info!("✅ Throughput (TPS): {:.2}", tps);
+        statistic_tx.send_async(Event::Engine(format!("✅ Throughput (TPS): {:.2}", tps))).await?;
 
         Ok(())
     }

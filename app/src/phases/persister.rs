@@ -1,29 +1,32 @@
 use crate::management::catalog::Catalog;
 use chrono::Utc;
-use engine::EngineKind;
 use engine::engine::Engine;
-use flume::{Receiver, unbounded};
+use engine::EngineKind;
+use flume::{unbounded, Receiver, RecvError};
 use futures::StreamExt;
 use num_format::{CustomFormat, Grouping, ToFormattedString};
 use speedy::{Readable, Writable};
 use statistics::Event;
 use std::collections::HashMap;
 use std::error::Error;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
-use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
+use num_format::Locale::sl;
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 use tokio::sync::{Mutex, RwLock};
 use tokio::task::JoinSet;
-use tokio::time::{Instant, sleep};
+use tokio::time::{sleep, Instant};
 use tracing::{debug, error, info};
-use util::SegmentedLog;
 use util::definition::Definition;
 use util::queue::{Meta, RecordContext, RecordQueue};
+use util::SegmentedLog;
 use value::Value;
 
 pub struct Persister {
     engines: Vec<Engine>,
     catalog: Catalog,
     last_log: RwLock<Instant>,
+    overwhelmed: AtomicBool,
 }
 
 impl Persister {
@@ -32,6 +35,7 @@ impl Persister {
             engines: vec![],
             catalog,
             last_log: RwLock::new(Instant::now()),
+            overwhelmed: AtomicBool::new(false),
         })
     }
 
@@ -49,13 +53,22 @@ impl Persister {
             let do_log = self.last_log.read().await.elapsed() > Duration::from_secs(10);
             if do_log {
                 error!(
-                    "Engines {} too long: {}",
+                    "Engine queue {} too big: {}",
                     engine,
                     engine.tx.len().to_formatted_string(&format)
                 );
                 let mut log = self.last_log.write().await;
                 *log = Instant::now();
+                self.overwhelmed.store(true, Ordering::Relaxed);
             }
+        }else if self.overwhelmed.load(Ordering::Relaxed) {
+            let format = CustomFormat::builder().separator("'").build()?;
+                info!(
+                    "Engine queue {} relaxed: {}",
+                    engine,
+                    engine.tx.len().to_formatted_string(&format)
+                );
+            self.overwhelmed.store(false, Ordering::Relaxed);
         }
         engine.tx.send((value, context))?;
 
@@ -67,22 +80,45 @@ impl Persister {
         joins: &mut JoinSet<()>,
         incoming: Receiver<(Value, RecordContext)>,
     ) {
+        let workers = 10;
+
+        let id_queue = self.start_id_generator(joins, workers); // work stealing
+
         let (sender, receiver) = unbounded();
         // timer
-
-        for i in 0..10 {
+        for i in 0..workers {
             let incoming = incoming.clone();
             let sender = sender.clone();
+            let id_queue = id_queue.clone();
             joins.spawn(async move {
                 let mut count = 0;
+
+                let mut available_ids= vec![];
                 loop {
                     if count % 1_000 == 0 && incoming.len() > 100_0000 {
                         error!("Timer is overwhelmed! {}", incoming.len());
                     }
+                    if available_ids.is_empty() {
+                        match id_queue.recv_async().await {
+                            Ok(ids) => available_ids.extend(ids),
+                            Err(_) => {
+                                error!("No available ids in worker {}", i);
+                                sleep(Duration::from_millis(50)).await;
+                                continue;
+                            }
+                        }
+                    }
+                    if available_ids.is_empty() {
+                        error!("No available ids in worker {}", i);
+                        sleep(Duration::from_millis(50)).await;
+                        continue
+                    }
+
                     match incoming.recv_async().await {
                         Err(_) => {}
                         Ok((value, context)) => {
-                            let record = WritableRecord::from((context, value));
+                            let id = available_ids.pop().unwrap(); // can unwrap, check above
+                            let record = WritableRecord::from((id, context, value));
                             sender.send(record).unwrap();
                         }
                     }
@@ -93,7 +129,7 @@ impl Persister {
 
         let (tx, rx) = unbounded();
         // wal logger
-        for i in 0..10 {
+        for i in 0..workers {
             let rx = receiver.clone();
             let tx = tx.clone();
             joins.spawn(async move {
@@ -263,21 +299,47 @@ impl Persister {
             });
         }
     }
+
+    fn start_id_generator(&self, join_set: &mut JoinSet<()>, workers: i32) -> Receiver<Vec<usize>> {
+        let (tx, rx) = unbounded();
+
+        let prepared_ids = (workers * 2) as usize;
+        const ID_PACKETS_SIZE: usize = 100_000;
+        join_set.spawn(async move {
+            // we prepare as much "id packets" as we have workers plus some more
+            let mut count = 0usize;
+            loop {
+                if tx.len() > prepared_ids {
+                    sleep(Duration::from_millis(50)).await;
+                } else {
+                    let mut ids: Vec<usize> = vec![ID_PACKETS_SIZE];
+                    for _ in 0..ID_PACKETS_SIZE {
+                        ids.push(count);
+                        count += 1;
+                    }
+                    tx.send(ids).unwrap();
+                }
+            }
+        });
+        rx
+    }
 }
 
 #[derive(Debug, Clone, Writable, Readable)]
 pub struct WritableRecord {
+    pub id: usize,
     pub value: Value,
     pub timestamp: i64,
     pub context: RecordContext,
 }
 
-impl From<(RecordContext, Value)> for WritableRecord {
-    fn from(value: (RecordContext, Value)) -> Self {
+impl From<(usize, RecordContext, Value)> for WritableRecord {
+    fn from(value: (usize, RecordContext, Value)) -> Self {
         WritableRecord {
-            value: value.1,
+            id: value.0,
+            value: value.2,
             timestamp: Utc::now().timestamp_millis(),
-            context: value.0,
+            context: value.1,
         }
     }
 }
