@@ -1,9 +1,8 @@
-
-use crate::queue::Meta;
+use speedy::{Readable, Writable};
 use value::Value;
 use value::Value::Dict;
 use crate::definition::DefinitionFilter::AllMatch;
-use crate::extractor::ValueExtractor;
+use crate::{InitialMeta, TimedMeta};
 
 /// Defines into which final entity an incoming value(primitive to complex) is stored
 /// and provides "instructions" on identifying, which parts it is.
@@ -12,11 +11,11 @@ pub struct Definition {
     filter: DefinitionFilter,
     pub model: Model,
     /// final destination
-    pub entity: String,
-    /// which "key|index" is used to identify a new value
-    uniqueness: Vec<String>,
-    query: Option<String>,
-    ordering: Option<ValueExtractor>
+    pub entity: Entity,
+    // which "key|index" is used to identify a new value
+    //uniqueness: Vec<String>,
+    //query: Option<String>,
+    //ordering: Option<ValueExtractor>
 }
 
 impl Definition {
@@ -24,10 +23,10 @@ impl Definition {
         Definition {
             filter,
             model,
-            entity,
-            uniqueness: vec![],
-            query: None,
-            ordering: None,
+            entity: Entity::new(entity),
+            //uniqueness: vec![],
+            //query: None,
+            //ordering: None,
         }
     }
 
@@ -35,15 +34,15 @@ impl Definition {
         Definition {
             filter: AllMatch,
             model: Model::Document,
-            entity: String::from("_stream"),
-            uniqueness: vec![],
-            query: None,
-            ordering: None,
+            entity: Entity::new("_stream"),
+            //uniqueness: vec![],
+            //query: None,
+            //ordering: None,
         }
     }
 
     /// does our event match the defined definition
-    pub fn matches(&mut self, value: &Value, meta: &Meta) -> bool {
+    pub fn matches(&mut self, value: &Value, meta: &TimedMeta) -> bool {
         match &self.filter {
             AllMatch => true,
             DefinitionFilter::MetaName(n) => meta.name == Some(n.clone()),
@@ -69,5 +68,22 @@ pub enum Model {
     Document,
     Relational,
     Graph,
+}
+
+#[derive(Clone, Debug, Writable, Readable)]
+pub struct Entity {
+    pub plain: String,
+    pub non_native: String,
+    pub native: String,
+}
+
+impl Entity {
+    pub fn new<S: AsRef<str>>(name: S) -> Self {
+        Self{
+            plain: name.as_ref().to_string() + "AsIs",
+            non_native: name.as_ref().to_string() + "Cross",
+            native: name.as_ref().to_string(),
+        }
+    }
 }
 

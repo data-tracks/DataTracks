@@ -11,8 +11,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use tokio::task::JoinSet;
 use tracing::{debug, error, info};
 use util::container::Mapping;
-use util::queue::{RecordContext, RecordQueue};
-use util::{container, queue};
+use util::{container, queue, InitialMeta, TargetedMeta};
 use value::Value;
 
 const TOPIC: &str = "poly"; // The topic to consume from
@@ -25,7 +24,7 @@ struct KafkaSink {
 impl KafkaSink {
     pub async fn start(
         &mut self,
-        sender: Sender<(Value, RecordContext)>,
+        sender: Sender<(Value, InitialMeta)>,
     ) -> Result<(), Box<dyn Error>> {
         let consumer: StreamConsumer = ClientConfig::new()
             .set("group.id", GROUP_ID)
@@ -59,17 +58,13 @@ impl KafkaSink {
 
                     debug!("Received message: {:?}", payload);
 
-                    // --- Sink Logic: This is where you write to the external system ---
                     match serde_json::from_str::<SinkRecord>(payload) {
                         Ok(record) => {
                             match sender
                                 .send((
                                     Value::from(record.value),
-                                    RecordContext {
-                                        meta: queue::Meta {
-                                            name: Some(record.id),
-                                        },
-                                        entity: None,
+                                    InitialMeta {
+                                        name: Some(record.id),
                                     },
                                 ))
                             {
@@ -279,7 +274,7 @@ impl Kafka {
 
 pub async fn start(
     joins: &mut JoinSet<()>,
-    sender: Sender<(Value, RecordContext)>,
+    sender: Sender<(Value, InitialMeta)>,
 ) -> Result<Kafka, Box<dyn Error + Send + Sync>> {
     let kafka = Kafka::new("localhost", 9092).await;
     kafka.start().await?;

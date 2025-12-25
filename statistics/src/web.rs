@@ -9,32 +9,27 @@ use tokio::net::TcpListener;
 use tokio::sync::broadcast::Sender;
 use tokio::task::JoinSet;
 
-// 1. Define the shared state for your metrics
 struct AppState {
     sender: Arc<Sender<Event>>,
 }
 
 pub async fn start(joins: &mut JoinSet<()>, tx: Sender<Event>) {
     joins.spawn(async move {
-        // Initialize state
         let shared_state = Arc::new(AppState {
             sender: Arc::new(tx),
         });
 
-        // 2. Build the router
         let app = Router::new()
             //.route("/", get(root_handler))
             .route("/ws", get(ws_handler))
             .with_state(shared_state);
 
-        // 3. Start the server
-        let listener = TcpListener::bind("127.0.0.1:3000").await.unwrap();
-        println!("Server running on http://127.0.0.1:3000");
+        let listener = TcpListener::bind("127.0.0.1:3131").await.unwrap();
+        println!("Server running on http://127.0.0.1:3131");
         axum::serve(listener, app).await.unwrap();
     });
 }
 
-// WebSocket handler
 async fn ws_handler(
     ws: WebSocketUpgrade,
     State(state): State<Arc<AppState>>,

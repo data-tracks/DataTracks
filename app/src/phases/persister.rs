@@ -4,22 +4,22 @@ use engine::engine::Engine;
 use engine::EngineKind;
 use flume::{unbounded, Receiver, RecvError};
 use futures::StreamExt;
+use num_format::Locale::sl;
 use num_format::{CustomFormat, Grouping, ToFormattedString};
 use speedy::{Readable, Writable};
 use statistics::Event;
+use std::alloc::System;
 use std::collections::HashMap;
 use std::error::Error;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
-use num_format::Locale::sl;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 use tokio::sync::{Mutex, RwLock};
 use tokio::task::JoinSet;
 use tokio::time::{sleep, Instant};
 use tracing::{debug, error, info};
 use util::definition::Definition;
-use util::queue::{Meta, RecordContext, RecordQueue};
-use util::SegmentedLog;
+use util::{InitialMeta, SegmentedLog, TargetedMeta, TimedMeta};
 use value::Value;
 
 pub struct Persister {
@@ -41,12 +41,11 @@ impl Persister {
 
     pub async fn move_to_engines(
         &mut self,
-        value: Value,
-        context: RecordContext,
+        record: (Value, TimedMeta),
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
-        let (engine, context) = self.select_engines(&value, context).await?;
+        let (engine, value, meta) = self.select_engines(record).await?;
 
-        debug!("store {} - {}", engine, value);
+        debug!("store {} - {:?}", engine, value);
         if engine.tx.len() > 10_000 {
             let format = CustomFormat::builder().separator("'").build()?;
 
@@ -61,16 +60,16 @@ impl Persister {
                 *log = Instant::now();
                 self.overwhelmed.store(true, Ordering::Relaxed);
             }
-        }else if self.overwhelmed.load(Ordering::Relaxed) {
+        } else if self.overwhelmed.load(Ordering::Relaxed) {
             let format = CustomFormat::builder().separator("'").build()?;
-                info!(
-                    "Engine queue {} relaxed: {}",
-                    engine,
-                    engine.tx.len().to_formatted_string(&format)
-                );
+            info!(
+                "Engine queue {} relaxed: {}",
+                engine,
+                engine.tx.len().to_formatted_string(&format)
+            );
             self.overwhelmed.store(false, Ordering::Relaxed);
         }
-        engine.tx.send((value, context))?;
+        engine.tx.send((value, meta))?;
 
         Ok(())
     }
@@ -78,7 +77,7 @@ impl Persister {
     pub async fn start(
         mut self,
         joins: &mut JoinSet<()>,
-        incoming: Receiver<(Value, RecordContext)>,
+        incoming: Receiver<(Value, InitialMeta)>,
     ) {
         let workers = 10;
 
@@ -93,7 +92,7 @@ impl Persister {
             joins.spawn(async move {
                 let mut count = 0;
 
-                let mut available_ids= vec![];
+                let mut available_ids = vec![];
                 loop {
                     if count % 1_000 == 0 && incoming.len() > 100_0000 {
                         error!("Timer is overwhelmed! {}", incoming.len());
@@ -111,15 +110,15 @@ impl Persister {
                     if available_ids.is_empty() {
                         error!("No available ids in worker {}", i);
                         sleep(Duration::from_millis(50)).await;
-                        continue
+                        continue;
                     }
 
                     match incoming.recv_async().await {
                         Err(_) => {}
                         Ok((value, context)) => {
                             let id = available_ids.pop().unwrap(); // can unwrap, check above
-                            let record = WritableRecord::from((id, context, value));
-                            sender.send(record).unwrap();
+                            let context = TimedMeta::new(id, context);
+                            sender.send((value, context)).unwrap();
                         }
                     }
                     count += 1;
@@ -163,16 +162,13 @@ impl Persister {
             loop {
                 match rx.recv_async().await {
                     Err(_) => {}
-                    Ok(record) => self
-                        .move_to_engines(record.value, record.context)
-                        .await
-                        .unwrap(),
+                    Ok(record) => self.move_to_engines(record).await.unwrap(),
                 }
             }
         });
     }
 
-    async fn log(log: &mut SegmentedLog, record: WritableRecord) {
+    async fn log(log: &mut SegmentedLog, record: (Value, TimedMeta)) {
         let mut bytes = record.write_to_vec().unwrap();
         bytes.push(b'\n');
         log.write(bytes.as_slice()).await;
@@ -180,15 +176,14 @@ impl Persister {
 
     async fn select_engines(
         &self,
-        value: &Value,
-        context: RecordContext,
-    ) -> Result<(&Engine, RecordContext), Box<dyn Error + Send + Sync>> {
+        record: (Value, TimedMeta),
+    ) -> Result<(&Engine, Value, TargetedMeta), Box<dyn Error + Send + Sync>> {
         let definitions = self.catalog.definitions().await;
 
         let mut definition = Definition::empty();
 
         for mut d in definitions {
-            if d.matches(value, &context.meta) {
+            if d.matches(&record.0, &record.1) {
                 definition = d;
             }
         }
@@ -196,7 +191,7 @@ impl Persister {
         let costs: Vec<_> = self
             .engines
             .iter()
-            .map(|e| (e.cost(value, &definition), e))
+            .map(|e| (e.cost(&record.0, &definition), e))
             .collect();
 
         debug!(
@@ -213,22 +208,20 @@ impl Persister {
 
         Ok((
             cost.1,
-            RecordContext {
-                meta: context.meta,
-                entity: Some(definition.entity),
-            },
+            record.0,
+            TargetedMeta::new(record.1, definition.entity),
         ))
     }
 
     pub async fn start_distributor(&mut self, joins: &mut JoinSet<()>) {
         for engine in self.catalog.engines().await {
-            let clone = engine.clone();
+            let mut clone = engine.clone();
 
             joins.spawn(async move {
                 let mut error_count = 0;
                 let mut count = 0;
                 let mut first_ts = Instant::now();
-                let mut buckets: HashMap<String, Vec<Value>> = HashMap::new();
+                let mut buckets: HashMap<String, Vec<(Value, TargetedMeta)>> = HashMap::new();
 
                 let mut last_log = Instant::now();
 
@@ -238,9 +231,9 @@ impl Persister {
                     if first_ts.elapsed().as_millis() > 200 || count > 1_000_000 {
                         // try to drain the "buffer"
 
-                        for (entity, values) in buckets.drain() {
-                            let length = values.len();
-                            match clone.store(entity.clone(), values.clone()).await {
+                        for (entity, records) in buckets.drain() {
+                            let length = records.len();
+                            match clone.store(entity.clone(), records.clone()).await {
                                 Ok(_) => {
                                     engine.statistic_sender.send(Event::Insert(entity, length, name.to_string())).unwrap();
                                     error_count = 0;
@@ -248,18 +241,15 @@ impl Persister {
                                 }
                                 Err(err) => {
                                     error_count += 1;
-                                    let errors: Vec<_> = values
+                                    let errors: Vec<_> = records
                                         .into_iter()
                                         .filter_map(|v| {
                                             let res = engine
                                                 .tx
-                                                .send((
-                                                    v,
-                                                    RecordContext::new(
-                                                        Meta::new(Some(entity.clone())),
-                                                        entity.clone(),
-                                                    ),
-                                                ))
+                                                .send(
+                                                    (v.0,
+                                                    v.1)
+                                                )
                                                 .map_err(|err| format!("{:?}", err));
                                             res.err()
                                         })
@@ -285,13 +275,12 @@ impl Persister {
 
                     match engine.rx.try_recv() {
                         Err(_) => sleep(Duration::from_millis(1)).await, // max shift after max timeout for sending finished chunk out
-                        Ok((v, context)) => {
-                            let entity = context.entity.unwrap_or("_stream".to_string());
+                        Ok(record) => {
 
                             if buckets.is_empty() {
                                 first_ts = Instant::now();
                             }
-                            buckets.entry(entity).or_default().push(v);
+                            buckets.entry(record.1.entity.plain.clone()).or_default().push(record);
                             count += 1;
                         }
                     }
@@ -322,24 +311,5 @@ impl Persister {
             }
         });
         rx
-    }
-}
-
-#[derive(Debug, Clone, Writable, Readable)]
-pub struct WritableRecord {
-    pub id: usize,
-    pub value: Value,
-    pub timestamp: i64,
-    pub context: RecordContext,
-}
-
-impl From<(usize, RecordContext, Value)> for WritableRecord {
-    fn from(value: (usize, RecordContext, Value)) -> Self {
-        WritableRecord {
-            id: value.0,
-            value: value.2,
-            timestamp: Utc::now().timestamp_millis(),
-            context: value.1,
-        }
     }
 }

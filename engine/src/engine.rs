@@ -13,13 +13,14 @@ use std::time::Duration;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
 use util::definition::{Definition, Model};
-use util::queue::RecordContext;
+use util::{TargetedMeta};
 use value::Value;
 
 #[derive(Clone, Debug)]
 pub struct Engine {
-    pub tx: Sender<(Value, RecordContext)>,
-    pub rx: Receiver<(Value, RecordContext)>,
+    pub tx: Sender<(Value, TargetedMeta)>,
+    pub rx: Receiver<(Value, TargetedMeta)>,
+    pub ids: Vec<usize>,
     pub statistic_sender: Sender<Event>,
     pub engine_kind: EngineKind,
 }
@@ -38,10 +39,11 @@ impl Display for Engine {
 
 impl Engine {
     pub fn new(engine_kind: EngineKind, sender: Sender<Event>) -> Self {
-        let (tx, rx) = unbounded::<(Value, RecordContext)>();
+        let (tx, rx) = unbounded::<(Value, TargetedMeta)>();
         Engine {
             tx,
             rx,
+            ids: vec![],
             statistic_sender: sender,
             engine_kind,
         }
@@ -92,10 +94,13 @@ impl Engine {
     }
 
     pub async fn store(
-        &self,
+        &mut self,
         entity: String,
-        values: Vec<Value>,
+        values: Vec<(Value, TargetedMeta)>,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
+        let (values, meta):(Vec<_>, Vec<_>) = values.into_iter().unzip();
+        self.ids.extend(meta.into_iter().map(|m| m.id));
+
         match &self.engine_kind {
             EngineKind::Postgres(p) => p.store(entity, values).await,
             EngineKind::MongoDB(m) => m.store(entity, values).await,
@@ -123,7 +128,7 @@ impl Display for EngineKind {
 
 impl EngineKind {
     pub async fn create_entity(&mut self, name: &str) -> Result<(), Box<dyn Error + Send + Sync>> {
-        let _: () = match self {
+        match self {
             EngineKind::Postgres(p) => p.create_table(name).await?,
             EngineKind::MongoDB(m) => m.create_collection(name).await?,
             EngineKind::Neo4j(n) => n.create_entity(name).await,

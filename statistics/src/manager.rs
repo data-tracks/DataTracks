@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 use tokio::select;
 use tokio::task::JoinSet;
 use tokio::time::interval;
+use crate::web;
 
 pub struct Statistics {
     engines: HashMap<String, EngineStatistic>,
@@ -37,6 +38,8 @@ impl Statistics {
 
 pub async fn start(joins: &mut JoinSet<()>) -> Sender<Event> {
     let (tx, rx) = unbounded::<Event>();
+    let (bc_tx, bc_rx) = tokio::sync::broadcast::channel(100_000);
+    let clone_bc_tx = bc_tx.clone();
     joins.spawn(async move {
         let mut statistics = Statistics::new();
 
@@ -49,17 +52,19 @@ pub async fn start(joins: &mut JoinSet<()>) -> Sender<Event> {
                 maybe_event = rx.recv_async() => {
                     match maybe_event {
                         Ok(event) => {
-                            statistics.handle_event(event).await;
+                            statistics.handle_event(event.clone()).await;
+                            let res = clone_bc_tx.send(event);
                         }
                         Err(_) => {}
                     }
-                }
+                },
                 _ = timer.tick() => {
-                    println!{"{}", statistics.data(initial).unwrap()}
+                    println! {"{}", statistics.data(initial).unwrap()}
                 }
             }
         }
     });
+    web::start(joins, bc_tx).await;
 
     tx
 }
@@ -100,13 +105,15 @@ impl Statistics {
             for (_, amount) in &stats.handled_entities {
                 total += amount.load(Ordering::Relaxed);
             }
-            table_engines.add_row(vec![name.clone(), (total.div_ceil(epoch_delta as usize)).to_formatted_string(&format)]);
+            table_engines.add_row(vec![
+                name.clone(),
+                (total.div_ceil(epoch_delta as usize)).to_formatted_string(&format),
+            ]);
         }
 
         Ok(format!("{}\n{}", table, table_engines))
     }
 }
-
 
 #[derive(Default)]
 pub struct EngineStatistic {
@@ -122,15 +129,14 @@ impl EngineStatistic {
     }
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Debug)]
 pub enum Event {
     Insert(String, usize, String),
     Runtime(RuntimeEvent),
     Engine(String),
 }
 
-
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Debug)]
 pub struct RuntimeEvent {
     pub active_tasks: usize,
     pub worker_threads: usize,

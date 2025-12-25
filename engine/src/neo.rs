@@ -207,7 +207,7 @@ impl Neo4j {
             _ => Load::High,
         };
 
-        *self.load.lock().unwrap() = load;
+        *self.load.lock().map_err(|err| err.to_string())? = load;
 
         statistic_tx.send_async(Engine(format!("✅ Throughput (TPS): {:.2}", tps))).await?;
 

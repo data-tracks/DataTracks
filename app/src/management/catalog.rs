@@ -7,7 +7,6 @@ use flume::Sender;
 use tokio::sync::Mutex;
 use statistics::Event;
 use util::definition::Definition;
-use util::queue::RecordQueue;
 
 #[derive(Default)]
 pub struct Catalog {
@@ -33,7 +32,9 @@ impl Catalog {
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
         let mut state = self.state.lock().await;
         for engine in &mut state.engines {
-            engine.engine_kind.create_entity(&definition.entity).await?;
+            engine.engine_kind.create_entity(&definition.entity.plain).await?;
+            engine.engine_kind.create_entity(&definition.entity.non_native).await?;
+            engine.engine_kind.create_entity(&definition.entity.native).await?;
         }
 
         state.definitions.push(definition);
