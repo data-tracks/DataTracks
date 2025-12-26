@@ -23,7 +23,6 @@ pub struct TimedMeta {
 }
 
 impl TimedMeta {
-
     pub fn new(id: usize, initial_meta: InitialMeta) -> Self {
         Self {
             id,
@@ -46,16 +45,5 @@ impl TargetedMeta {
             timestamp: meta.timestamp,
             entity,
         }
-    }
-}
-
-#[derive(Clone, Debug, Writable, Readable, PartialEq)]
-pub struct Meta {
-    pub name: Option<String>,
-}
-
-impl Meta {
-    pub fn new(name: Option<String>) -> Self {
-        Self { name }
     }
 }

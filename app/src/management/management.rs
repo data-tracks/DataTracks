@@ -14,6 +14,7 @@ use tracing::{error, info};
 use statistics::Event::Runtime;
 use util::definition::{Definition, DefinitionFilter, Model};
 use value::Value;
+use crate::phases::nativer::Nativer;
 
 #[derive(Default)]
 pub struct Manager {
@@ -65,6 +66,10 @@ impl Manager {
         persister.start_distributor(&mut self.joins).await;
 
         let kafka = self.start_sinks(persister).await?;
+
+        let nativer = Nativer::new();
+
+        nativer.start(&mut self.joins).await;
 
         joins.spawn(async move {
             let metrics = Handle::current().metrics();
