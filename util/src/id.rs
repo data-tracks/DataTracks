@@ -1,4 +1,20 @@
+use serde::{Deserialize, Serialize};
+use speedy::{Readable, Writable};
 use std::sync::atomic::{AtomicUsize, Ordering};
+
+#[derive(
+    Copy, Clone, Debug, Serialize, Deserialize, Readable, Writable, Hash, Eq, PartialEq, Default,
+)]
+pub struct EngineId(pub u64);
+#[derive(
+    Copy, Clone, Debug, Serialize, Deserialize, Readable, Writable, Hash, Eq, PartialEq, Default,
+)]
+pub struct EntityId(pub u64);
+
+#[derive(
+    Copy, Clone, Debug, Serialize, Deserialize, Readable, Writable, Hash, Eq, PartialEq, Default,
+)]
+pub struct DefinitionId(pub u64);
 
 static GLOBAL_ID: AtomicUsize = AtomicUsize::new(0);
 

@@ -1,29 +1,29 @@
-use core::fmt::Pointer;
 use crate::array::Array;
 use crate::date::Date;
-use crate::dict::{Dict};
-use crate::r#type::ValType;
+use crate::dict::Dict;
 use crate::edge::Edge;
 use crate::node::Node;
 use crate::text::Text;
 use crate::time::Time;
+use crate::r#type::ValType;
 use crate::value::Value::Null;
 use crate::{Bool, Float, Int, bool};
 use bytes::{BufMut, BytesMut};
+use core::fmt::Pointer;
 use flatbuffers::{FlatBufferBuilder, ForwardsUOffset, Vector, WIPOffset};
 use json::JsonValue;
-use mongodb::bson::{Bson, Document};
-use neo4rs::{BoltBoolean, BoltFloat, BoltInteger, BoltNull, BoltString, BoltType};
+use mongodb::bson::{Bson, DateTime, Document, Timestamp, to_bson};
+use neo4rs::{BoltBoolean, BoltFloat, BoltInteger, BoltNull, BoltString, BoltType, Row};
 use postgres::types::{IsNull, Type};
 use redb::{Key, TypeName};
 use rumqttc::{Event, Incoming};
-use rumqttd::protocol::Publish;
 use rumqttd::Notification;
+use rumqttd::protocol::Publish;
 use rusqlite::types::{FromSqlResult, ToSqlOutput, ValueRef};
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 use std::cmp::{Ordering, PartialEq};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
@@ -96,9 +96,9 @@ impl Value {
             Value::Date(_) => todo!("remove"),
             Value::Array(i) => Some(i.flatternize(builder).as_union_value()),
             Value::Dict(i) => Some(i.flatternize(builder).as_union_value()),
-            Null => Some(FlatNull::create(builder, &NullArgs {}).as_union_value()),
+            Value::Null => Some(FlatNull::create(builder, &NullArgs {}).as_union_value()),
             Value::Node(_) => todo!(),
-            Value::Edge(_) => todo!()
+            Value::Edge(_) => todo!(),
         };
 
         ValueWrapper::create(builder, &ValueWrapperArgs { data_type, data })
@@ -116,7 +116,7 @@ impl Value {
             Value::Dict(_) => FlatValue::Document,
             Null => FlatValue::Null,
             Value::Node(_) => todo!(),
-            Value::Edge(_) => todo!()
+            Value::Edge(_) => todo!(),
         }
     }
 
@@ -373,6 +373,16 @@ impl From<Value> for BoltType {
     }
 }
 
+impl From<Row> for Value {
+    fn from(row: Row) -> Self {
+        let mut values = vec![];
+        for key in row.keys() {
+            values.push(row.get::<Value>(&key.value).unwrap())
+        }
+        Value::array(values)
+    }
+}
+
 impl TryFrom<ValueWrapper<'_>> for Value {
     type Error = String;
 
@@ -416,6 +426,12 @@ impl TryFrom<ValueWrapper<'_>> for Value {
 
 impl From<i32> for Value {
     fn from(value: i32) -> Self {
+        Value::int(value as i64)
+    }
+}
+
+impl From<u64> for Value {
+    fn from(value: u64) -> Self {
         Value::int(value as i64)
     }
 }
@@ -573,7 +589,7 @@ impl Display for Value {
             Null => write!(f, "null"),
             Value::Date(d) => d.fmt(f),
             Value::Node(n) => n.fmt(f),
-            Value::Edge(e) => e.fmt(f)
+            Value::Edge(e) => e.fmt(f),
         }
     }
 }
@@ -611,6 +627,32 @@ impl From<bool> for Value {
 impl From<Dict> for Value {
     fn from(value: Dict) -> Self {
         Value::Dict(value)
+    }
+}
+
+impl Into<Bson> for Value {
+    fn into(self) -> Bson {
+        match self {
+            Value::Int(i) => Bson::Int32(i.0 as i32),
+            Value::Float(f) => Bson::Double(f.as_f64()),
+            Value::Bool(b) => Bson::Boolean(b.0),
+            Value::Text(t) => Bson::String(t.0),
+            Value::Time(t) => Bson::Timestamp(Timestamp {
+                time: t.ms as u32,
+                increment: 0,
+            }),
+            Value::Date(d) => Bson::DateTime(DateTime::from_millis(d.as_epoch())),
+            Value::Array(a) => Bson::Array(a.values.into_iter().map(|v| v.into()).collect()),
+            Value::Dict(d) => to_bson(
+                &d.into_iter()
+                    .map(|(k, v)| (k, v.into()))
+                    .collect::<HashMap<String, Bson>>(),
+            )
+            .unwrap(),
+            Value::Node(_) => todo!(),
+            Value::Edge(_) => todo!(),
+            Null => Bson::Null,
+        }
     }
 }
 
@@ -1079,7 +1121,7 @@ impl rusqlite::types::ToSql for Value {
             Null => Ok(ToSqlOutput::from(rusqlite::types::Null)),
             Value::Date(d) => Ok(ToSqlOutput::from(d.days)),
             Value::Node(n) => Ok(ToSqlOutput::from(n.write_to_vec().unwrap())),
-            Value::Edge(e) => Ok(ToSqlOutput::from(e.write_to_vec().unwrap()))
+            Value::Edge(e) => Ok(ToSqlOutput::from(e.write_to_vec().unwrap())),
         }
     }
 }
@@ -1087,8 +1129,8 @@ impl rusqlite::types::ToSql for Value {
 #[cfg(test)]
 mod tests {
     use crate::value::Value;
-    use std::collections::hash_map::DefaultHasher;
     use std::collections::HashMap;
+    use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
     use std::vec;
 

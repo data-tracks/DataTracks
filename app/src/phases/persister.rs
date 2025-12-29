@@ -1,8 +1,8 @@
 use crate::management::catalog::Catalog;
 use chrono::Utc;
-use engine::engine::Engine;
 use engine::EngineKind;
-use flume::{unbounded, Receiver, RecvError};
+use engine::engine::Engine;
+use flume::{Receiver, RecvError, unbounded};
 use futures::StreamExt;
 use num_format::Locale::sl;
 use num_format::{CustomFormat, Grouping, ToFormattedString};
@@ -13,13 +13,13 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
+use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 use tokio::sync::{Mutex, RwLock};
 use tokio::task::JoinSet;
-use tokio::time::{sleep, Instant};
+use tokio::time::{Instant, sleep};
 use tracing::{debug, error, info};
 use util::definition::Definition;
-use util::{InitialMeta, SegmentedLog, TargetedMeta, TimedMeta};
+use util::{DefinitionId, EntityId, InitialMeta, SegmentedLog, TargetedMeta, TimedMeta};
 use value::Value;
 
 pub struct Persister {
@@ -206,11 +206,7 @@ impl Persister {
 
         debug!("cost:{:?}", cost.1.engine_kind.to_string());
 
-        Ok((
-            cost.1,
-            record.0,
-            TargetedMeta::new(record.1, definition.entity),
-        ))
+        Ok((cost.1, record.0, TargetedMeta::new(record.1, definition.id)))
     }
 
     pub async fn start_distributor(&mut self, joins: &mut JoinSet<()>) {
@@ -221,21 +217,21 @@ impl Persister {
                 let mut error_count = 0;
                 let mut count = 0;
                 let mut first_ts = Instant::now();
-                let mut buckets: HashMap<String, Vec<(Value, TargetedMeta)>> = HashMap::new();
+                let mut buckets: HashMap<DefinitionId, Vec<(Value, TargetedMeta)>> = HashMap::new();
 
                 let mut last_log = Instant::now();
 
-                let name = engine.to_string();
+                let engine_id = engine.id;
 
                 loop {
                     if first_ts.elapsed().as_millis() > 200 || count > 1_000_000 {
                         // try to drain the "buffer"
 
-                        for (entity, records) in buckets.drain() {
+                        for (id, records) in buckets.drain() {
                             let length = records.len();
-                            match clone.store(entity.clone(), records.clone()).await {
+                            match clone.store(id, records.clone()).await {
                                 Ok(_) => {
-                                    engine.statistic_sender.send(Event::Insert(entity, length, name.to_string())).unwrap();
+                                    engine.statistic_sender.send(Event::Insert(id, length, engine_id)).unwrap();
                                     error_count = 0;
                                     count = 0;
                                 }
@@ -280,7 +276,7 @@ impl Persister {
                             if buckets.is_empty() {
                                 first_ts = Instant::now();
                             }
-                            buckets.entry(record.1.entity.plain.clone()).or_default().push(record);
+                            buckets.entry(record.1.definition).or_default().push(record);
                             count += 1;
                         }
                     }
@@ -289,19 +285,19 @@ impl Persister {
         }
     }
 
-    fn start_id_generator(&self, join_set: &mut JoinSet<()>, workers: i32) -> Receiver<Vec<usize>> {
+    fn start_id_generator(&self, join_set: &mut JoinSet<()>, workers: i32) -> Receiver<Vec<u64>> {
         let (tx, rx) = unbounded();
 
         let prepared_ids = (workers * 2) as usize;
-        const ID_PACKETS_SIZE: usize = 100_000;
+        const ID_PACKETS_SIZE: u64 = 100_000;
         join_set.spawn(async move {
             // we prepare as much "id packets" as we have workers plus some more
-            let mut count = 0usize;
+            let mut count = 0u64;
             loop {
                 if tx.len() > prepared_ids {
                     sleep(Duration::from_millis(50)).await;
                 } else {
-                    let mut ids: Vec<usize> = vec![ID_PACKETS_SIZE];
+                    let mut ids: Vec<u64> = vec![ID_PACKETS_SIZE];
                     for _ in 0..ID_PACKETS_SIZE {
                         ids.push(count);
                         count += 1;

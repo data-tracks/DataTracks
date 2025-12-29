@@ -5,24 +5,30 @@ use crate::postgres::Postgres;
 use derive_more::From;
 use flume::{Receiver, Sender, unbounded};
 use statistics::Event;
+use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::ops::Mul;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
 use util::definition::{Definition, Model};
-use util::{TargetedMeta};
+use util::{DefinitionId, EngineId, PlainContext, TargetedMeta};
 use value::Value;
+
+static ID_BUILDER: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Clone, Debug)]
 pub struct Engine {
     pub tx: Sender<(Value, TargetedMeta)>,
     pub rx: Receiver<(Value, TargetedMeta)>,
-    pub ids: Vec<usize>,
+    pub ids: Vec<u64>,
     pub statistic_sender: Sender<Event>,
     pub engine_kind: EngineKind,
+    pub id: EngineId,
+    pub definitions: HashMap<DefinitionId, Definition>,
 }
 
 impl AsRef<EngineKind> for Engine {
@@ -40,12 +46,15 @@ impl Display for Engine {
 impl Engine {
     pub fn new(engine_kind: EngineKind, sender: Sender<Event>) -> Self {
         let (tx, rx) = unbounded::<(Value, TargetedMeta)>();
+        let id = EngineId(ID_BUILDER.fetch_add(1, Ordering::Relaxed));
         Engine {
+            id,
             tx,
             rx,
             ids: vec![],
             statistic_sender: sender,
             engine_kind,
+            definitions: Default::default(),
         }
     }
 
@@ -55,6 +64,10 @@ impl Engine {
             EngineKind::MongoDB(m) => m.stop().await,
             EngineKind::Neo4j(n) => n.stop().await,
         }
+    }
+
+    pub fn add_definition(&mut self, definition: &Definition) {
+        self.definitions.insert(definition.id, definition.clone());
     }
 
     /// Mixture between current running tx, complexity of mapping (and user suggestion).
@@ -76,15 +89,6 @@ impl Engine {
         cost
     }
 
-    fn current_load(&self) -> f64 {
-        match &self.engine_kind {
-            EngineKind::Postgres(p) => p.current_load(),
-            EngineKind::MongoDB(m) => m.current_load(),
-            EngineKind::Neo4j(n) => n.current_load(),
-        }
-        .to_f64()
-    }
-
     fn model(&self) -> Model {
         match self.engine_kind {
             EngineKind::Postgres(_) => Model::Relational,
@@ -95,16 +99,38 @@ impl Engine {
 
     pub async fn store(
         &mut self,
-        entity: String,
+        definition_id: DefinitionId,
         values: Vec<(Value, TargetedMeta)>,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
-        let (values, meta):(Vec<_>, Vec<_>) = values.into_iter().unzip();
-        self.ids.extend(meta.into_iter().map(|m| m.id));
+        let ids = values.iter().map(|(_v, m)| m.id).collect::<Vec<_>>();
+        self.ids.extend(ids.clone());
+        let definition = self.definitions.get(&definition_id).unwrap();
+        let entity = definition.entity.plain.clone();
 
-        match &self.engine_kind {
+        match match &self.engine_kind {
             EngineKind::Postgres(p) => p.store(entity, values).await,
             EngineKind::MongoDB(m) => m.store(entity, values).await,
             EngineKind::Neo4j(n) => n.store(entity, values).await,
+        } {
+            Ok(_) => definition
+                .native
+                .0
+                .send_async(PlainContext::new(self.id, ids))
+                .await
+                .map_err(|err| Box::from(err.to_string())),
+            Err(err) => Err(err),
+        }
+    }
+
+    pub async fn read(
+        &mut self,
+        entity: String,
+        ids: Vec<u64>,
+    ) -> Result<Vec<Value>, Box<dyn Error + Send + Sync>> {
+        match &self.engine_kind {
+            EngineKind::Postgres(p) => p.read(entity, ids).await,
+            EngineKind::MongoDB(m) => m.read(entity, ids).await,
+            EngineKind::Neo4j(n) => n.read(entity, ids).await,
         }
     }
 }

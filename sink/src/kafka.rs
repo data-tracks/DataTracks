@@ -1,3 +1,4 @@
+use flume::Sender;
 use rand::prelude::IndexedRandom;
 use rdkafka::admin::{AdminClient, AdminOptions, NewTopic, TopicReplication};
 use rdkafka::consumer::{Consumer, StreamConsumer};
@@ -6,12 +7,10 @@ use rdkafka::{ClientConfig, Message};
 use std::error::Error;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use flume::Sender;
-use tokio::sync::mpsc::UnboundedSender;
 use tokio::task::JoinSet;
 use tracing::{debug, error, info};
 use util::container::Mapping;
-use util::{container, queue, InitialMeta, TargetedMeta};
+use util::{InitialMeta, container};
 use value::Value;
 
 const TOPIC: &str = "poly"; // The topic to consume from
@@ -60,14 +59,12 @@ impl KafkaSink {
 
                     match serde_json::from_str::<SinkRecord>(payload) {
                         Ok(record) => {
-                            match sender
-                                .send((
-                                    Value::from(record.value),
-                                    InitialMeta {
-                                        name: Some(record.id),
-                                    },
-                                ))
-                            {
+                            match sender.send((
+                                Value::from(record.value),
+                                InitialMeta {
+                                    name: Some(record.id),
+                                },
+                            )) {
                                 Ok(_) => {}
                                 Err(err) => return Err(err.to_string().into()),
                             };

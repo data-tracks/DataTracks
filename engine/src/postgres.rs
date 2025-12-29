@@ -1,20 +1,20 @@
 use crate::connection::PostgresConnection;
 use crate::engine::Load;
+use flume::Sender;
 use pin_utils::pin_mut;
+use statistics::Event;
 use std::collections::HashMap;
 use std::error::Error;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use flume::Sender;
 use tokio::task::JoinSet;
 use tokio::time::{sleep, timeout};
 use tokio_postgres::binary_copy::BinaryCopyInWriter;
 use tokio_postgres::types::Type;
 use tokio_postgres::{Client, Statement};
 use tracing::{debug, info};
-use statistics::Event;
-use util::container;
 use util::container::Mapping;
+use util::{TargetedMeta, container};
 use value::Value;
 
 #[derive(Clone, Debug)]
@@ -72,7 +72,7 @@ impl Postgres {
     pub(crate) async fn store(
         &self,
         entity: String,
-        values: Vec<Value>,
+        values: Vec<(Value, TargetedMeta)>,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
         match &self.client {
             None => return Err(Box::from("Could not create postgres database")),
@@ -86,14 +86,45 @@ impl Postgres {
         Ok(())
     }
 
-    pub(crate) async fn monitor(&self, statistic_tx: &Sender<Event>) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub async fn read(
+        &self,
+        entity: String,
+        ids: Vec<u64>,
+    ) -> Result<Vec<Value>, Box<dyn Error + Send + Sync>> {
+        match &self.client {
+            None => Err(Box::from("Could not create postgres database")),
+            Some(client) => {
+                let insert_query = format!("SELECT * FROM {} WHERE id IN($1)", entity);
+                let statement = client.prepare(&insert_query).await?;
+
+                let res = client
+                    .query(
+                        &statement,
+                        &[&ids.into_iter().map(Value::from).collect::<Vec<_>>()],
+                    )
+                    .await?
+                    .into_iter()
+                    .map(Value::from)
+                    .collect::<Vec<_>>();
+                Ok(res)
+            }
+        }
+    }
+
+    pub(crate) async fn monitor(
+        &self,
+        statistic_tx: &Sender<Event>,
+    ) -> Result<(), Box<dyn Error + Send + Sync>> {
         loop {
             self.check_throughput(statistic_tx).await?;
             sleep(Duration::from_secs(5)).await;
         }
     }
 
-    async fn check_throughput(&self, statistic_tx: &Sender<Event>) -> Result<(), Box<dyn Error + Send + Sync>> {
+    async fn check_throughput(
+        &self,
+        statistic_tx: &Sender<Event>,
+    ) -> Result<(), Box<dyn Error + Send + Sync>> {
         let interval_seconds = 5;
 
         // Initial read
@@ -116,7 +147,12 @@ impl Postgres {
 
         *self.load.lock().unwrap() = load;
 
-        statistic_tx.send_async(Event::Engine(format!("✅ Throughput (TPS): {:.2}", tps))).await?;
+        statistic_tx
+            .send_async(Event::EngineStatus(format!(
+                "✅ Throughput (TPS): {:.2}",
+                tps
+            )))
+            .await?;
 
         Ok(())
     }
@@ -127,14 +163,15 @@ impl Postgres {
             Some(client) => {
                 let create_table_query = format!(
                     "CREATE TABLE IF NOT EXISTS {} (
-                    id SERIAL PRIMARY KEY,
+                    _id SERIAL PRIMARY KEY,
+                    id BIGINT,
                     value TEXT)",
                     name
                 );
 
                 client.execute(&create_table_query, &[]).await?;
                 info!("Table '{}' ensured to exist.", name);
-                let insert_query = format!("INSERT INTO {} (value) VALUES ($1)", name);
+                let insert_query = format!("INSERT INTO {} (id,value) VALUES ($1,$2)", name);
                 let statement = client.prepare(&insert_query).await?;
                 self.prepared_statements.insert(name.to_string(), statement);
             }
@@ -183,21 +220,21 @@ impl Postgres {
         &self,
         client: &Arc<Client>,
         entity: String,
-        values: Vec<Value>,
+        values: Vec<(Value, TargetedMeta)>,
     ) -> Result<usize, Box<dyn Error + Send + Sync>> {
         let rows = values.len();
 
         let sink = client
-            .copy_in(&format!("COPY {} (value) FROM STDIN BINARY", entity))
+            .copy_in(&format!("COPY {} (id, value) FROM STDIN BINARY", entity))
             .await?;
 
-        let writer = BinaryCopyInWriter::new(sink, &[Type::TEXT]);
+        let writer = BinaryCopyInWriter::new(sink, &[Type::INT8, Type::TEXT]);
 
         pin_mut!(writer);
 
         // 3. Encode each row
-        for value in values {
-            writer.as_mut().write(&[&value]).await?;
+        for (value, meta) in values {
+            writer.as_mut().write(&[&(meta.id as i64), &value]).await?;
         }
 
         writer.finish().await?;
@@ -228,6 +265,7 @@ impl Postgres {
 pub mod tests {
     use crate::EngineKind;
     use tokio::task::JoinSet;
+    use util::TargetedMeta;
     use value::Value;
 
     #[tokio::test]
@@ -238,8 +276,11 @@ pub mod tests {
 
         pg.create_table("users").await.unwrap();
 
-        pg.store(String::from("users"), vec![Value::text("test")])
-            .await
-            .unwrap();
+        pg.store(
+            String::from("users"),
+            vec![(Value::text("test"), TargetedMeta::default())],
+        )
+        .await
+        .unwrap();
     }
 }

@@ -1,22 +1,22 @@
 use crate::engine::Load;
+use flume::Sender;
 use futures_util::future::{err, join_all};
 use log::debug;
 use neo4rs::{Graph, query};
 use reqwest::Client;
 use serde::Deserialize;
+use statistics::Event;
+use statistics::Event::EngineStatus;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use flume::Sender;
 use tokio::io::join;
 use tokio::time::{Instant, sleep};
 use tracing::{error, info};
-use statistics::Event;
-use statistics::Event::Engine;
-use util::container;
 use util::container::Mapping;
+use util::{TargetedMeta, container};
 use value::Value;
 
 #[derive(Clone)]
@@ -90,7 +90,7 @@ impl Neo4j {
     }
 
     pub(crate) async fn create_entity(&mut self, name: &str) {
-        let cypher_query = self.query(String::from(name));
+        let cypher_query = self.create_query(String::from(name));
         self.prepared_queries
             .insert(String::from(name), cypher_query);
     }
@@ -107,7 +107,10 @@ impl Neo4j {
         1.0
     }
 
-    pub(crate) async fn monitor(&self, statistic_tx: &Sender<Event>) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub(crate) async fn monitor(
+        &self,
+        statistic_tx: &Sender<Event>,
+    ) -> Result<(), Box<dyn Error + Send + Sync>> {
         let clone = self.clone();
 
         loop {
@@ -144,7 +147,7 @@ impl Neo4j {
     pub(crate) async fn store(
         &self,
         entity: String,
-        values: Vec<Value>,
+        values: Vec<(Value, TargetedMeta)>,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
         match &self.graph {
             None => Err(Box::from("No graph")),
@@ -156,7 +159,16 @@ impl Neo4j {
                     .get(&entity)
                     .ok_or(format!("No prepared query in neo4j for {}", entity))?;
 
-                g.run(query(cypher_query).param("values", values)).await?;
+                g.run(
+                    query(cypher_query).param(
+                        "values",
+                        values
+                            .into_iter()
+                            .map(|(v, m)| vec![v, Value::int(m.id as i64)])
+                            .collect::<Vec<_>>(),
+                    ),
+                )
+                .await?;
 
                 debug!("neo4j values {}", len);
                 Ok(())
@@ -164,7 +176,46 @@ impl Neo4j {
         }
     }
 
-    async fn check_throughput(&self, statistic_tx: &Sender<Event>) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub async fn read(
+        &self,
+        entity: String,
+        ids: Vec<u64>,
+    ) -> Result<Vec<Value>, Box<dyn Error + Send + Sync>> {
+        match &self.graph {
+            None => Err(Box::from("No graph")),
+            Some(g) => {
+                let len = ids.len();
+
+                let cypher_query = self
+                    .prepared_queries
+                    .get(&entity)
+                    .ok_or(format!("No prepared query in neo4j for {}", entity))?;
+
+                let mut res = g
+                    .execute_read(
+                        query(cypher_query).param(
+                            "values",
+                            ids.into_iter()
+                                .map(|id| Value::from(id))
+                                .collect::<Vec<_>>(),
+                        ),
+                    )
+                    .await?;
+
+                debug!("neo4j values {}", len);
+                let mut values = vec![];
+                while let Some(value) = res.next().await? {
+                    values.push(Value::from(value))
+                }
+                Ok(values)
+            }
+        }
+    }
+
+    async fn check_throughput(
+        &self,
+        statistic_tx: &Sender<Event>,
+    ) -> Result<(), Box<dyn Error + Send + Sync>> {
         let http_client = Client::new();
         let management_uri = "http://localhost:7474";
 
@@ -209,14 +260,25 @@ impl Neo4j {
 
         *self.load.lock().map_err(|err| err.to_string())? = load;
 
-        statistic_tx.send_async(Engine(format!("✅ Throughput (TPS): {:.2}", tps))).await?;
+        statistic_tx
+            .send_async(EngineStatus(format!("✅ Throughput (TPS): {:.2}", tps)))
+            .await?;
 
         Ok(())
     }
 
-    fn query(&self, entity: String) -> String {
+    fn create_query(&self, entity: String) -> String {
         format!(
-            "UNWIND $values as row CREATE (p:db_{} {{value: row}})",
+            "UNWIND $values as row \
+            CREATE (p:db_{} {{value: row[0], id: row[1]}})",
+            entity
+        )
+    }
+
+    fn read_query(&self, entity: String) -> String {
+        format!(
+            "MATCH (p:db_{}) \
+            WHERE p.id IN $values",
             entity
         )
     }
@@ -225,6 +287,7 @@ impl Neo4j {
 #[cfg(test)]
 mod tests {
     use crate::EngineKind;
+    use util::TargetedMeta;
     use value::Value;
 
     #[tokio::test]
@@ -235,12 +298,18 @@ mod tests {
 
         neo.create_entity("users").await;
 
-        neo.store(String::from("users"), vec![Value::text("test")])
-            .await
-            .unwrap();
+        neo.store(
+            String::from("users"),
+            vec![(Value::text("test"), TargetedMeta::default())],
+        )
+        .await
+        .unwrap();
 
-        neo.store(String::from("users"), vec![Value::text("test")])
-            .await
-            .unwrap();
+        neo.store(
+            String::from("users"),
+            vec![(Value::text("test"), TargetedMeta::default())],
+        )
+        .await
+        .unwrap();
     }
 }

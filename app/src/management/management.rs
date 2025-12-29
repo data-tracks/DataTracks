@@ -1,20 +1,18 @@
 use crate::management::catalog::Catalog;
 use crate::phases::Persister;
+use crate::phases::nativer::Nativer;
 use engine::EngineKind;
 use flume::{Sender, unbounded};
 use sink::dummy::DummySink;
 use sink::kafka::Kafka;
-use statistics::{Event, RuntimeEvent};
+use statistics::Event;
 use std::error::Error;
 use std::time::Duration;
-use tokio::runtime::Handle;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
 use tracing::{error, info};
-use statistics::Event::Runtime;
 use util::definition::{Definition, DefinitionFilter, Model};
 use value::Value;
-use crate::phases::nativer::Nativer;
 
 #[derive(Default)]
 pub struct Manager {
@@ -36,54 +34,18 @@ impl Manager {
         let mut joins: JoinSet<()> = JoinSet::new();
 
         let statistic_tx = statistics::start(&mut self.joins).await;
+        let mut persister = Persister::new(self.catalog.clone()).await?;
+        let nativer = Nativer::new(self.catalog.clone());
 
-        let mut persister = self.init_engines(statistic_tx.clone()).await?;
+        self.init_engines(statistic_tx.clone()).await?;
 
-        self.catalog
-            .add_definition(Definition::new(
-                DefinitionFilter::MetaName(String::from("doc")),
-                Model::Document,
-                String::from("doc"),
-            ))
-            .await?;
-
-        self.catalog
-            .add_definition(Definition::new(
-                DefinitionFilter::MetaName(String::from("relational")),
-                Model::Relational,
-                String::from("relational"),
-            ))
-            .await?;
-
-        self.catalog
-            .add_definition(Definition::new(
-                DefinitionFilter::MetaName(String::from("graph")),
-                Model::Graph,
-                String::from("graph"),
-            ))
-            .await?;
+        self.init_definitions(statistic_tx).await?;
 
         persister.start_distributor(&mut self.joins).await;
 
         let kafka = self.start_sinks(persister).await?;
 
-        let nativer = Nativer::new();
-
         nativer.start(&mut self.joins).await;
-
-        joins.spawn(async move {
-            let metrics = Handle::current().metrics();
-
-            loop {
-                statistic_tx.send_async(Runtime(RuntimeEvent{
-                    active_tasks: metrics.num_alive_tasks(),
-                    worker_threads: metrics.num_workers(),
-                    blocking_threads: metrics.num_blocking_threads(),
-                    budget_forces_yield: metrics.budget_forced_yield_count() as usize,
-                })).await.unwrap();
-                sleep(Duration::from_secs(5)).await;
-            }
-        });
 
         tokio::select! {
                 _ = ctrl_c_signal => {
@@ -112,18 +74,55 @@ impl Manager {
         Ok(())
     }
 
+    async fn init_definitions(
+        &mut self,
+        statistic_tx: Sender<Event>,
+    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+        self.catalog
+            .add_definition(
+                Definition::new(
+                    DefinitionFilter::MetaName(String::from("doc")),
+                    Model::Document,
+                    String::from("doc"),
+                ),
+                statistic_tx.clone(),
+            )
+            .await?;
+
+        self.catalog
+            .add_definition(
+                Definition::new(
+                    DefinitionFilter::MetaName(String::from("relational")),
+                    Model::Relational,
+                    String::from("relational"),
+                ),
+                statistic_tx.clone(),
+            )
+            .await?;
+
+        self.catalog
+            .add_definition(
+                Definition::new(
+                    DefinitionFilter::MetaName(String::from("graph")),
+                    Model::Graph,
+                    String::from("graph"),
+                ),
+                statistic_tx,
+            )
+            .await?;
+        Ok(())
+    }
+
     async fn init_engines(
         &mut self,
         statistic_tx: Sender<Event>,
-    ) -> Result<Persister, Box<dyn Error + Send + Sync>> {
-        let persister = Persister::new(self.catalog.clone()).await?;
-
+    ) -> Result<(), Box<dyn Error + Send + Sync>> {
         let engines = EngineKind::start_all(&mut self.joins, statistic_tx.clone()).await?;
         for engine in engines.into_iter() {
             self.catalog.add_engine(engine, statistic_tx.clone()).await;
         }
 
-        Ok(persister)
+        Ok(())
     }
 
     async fn start_sinks(

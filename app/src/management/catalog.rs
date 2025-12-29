@@ -1,11 +1,11 @@
 use engine::EngineKind;
 use engine::engine::Engine;
+use flume::Sender;
 use futures::future::join_all;
+use statistics::Event;
 use std::error::Error;
 use std::sync::Arc;
-use flume::Sender;
 use tokio::sync::Mutex;
-use statistics::Event;
 use util::definition::Definition;
 
 #[derive(Default)]
@@ -29,13 +29,28 @@ impl Catalog {
     pub async fn add_definition(
         &self,
         definition: Definition,
+        sender: Sender<Event>,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
         let mut state = self.state.lock().await;
         for engine in &mut state.engines {
-            engine.engine_kind.create_entity(&definition.entity.plain).await?;
-            engine.engine_kind.create_entity(&definition.entity.non_native).await?;
-            engine.engine_kind.create_entity(&definition.entity.native).await?;
+            engine
+                .engine_kind
+                .create_entity(&definition.entity.plain)
+                .await?;
+            engine
+                .engine_kind
+                .create_entity(&definition.entity.non_native)
+                .await?;
+            engine
+                .engine_kind
+                .create_entity(&definition.entity.native)
+                .await?;
+
+            engine.add_definition(&definition);
         }
+        sender
+            .send_async(Event::Definition(definition.id, definition.clone()))
+            .await?;
 
         state.definitions.push(definition);
         Ok(())
@@ -50,7 +65,12 @@ impl Catalog {
     }
 
     pub async fn add_engine(&mut self, engine: EngineKind, sender: Sender<Event>) {
-        self.state.lock().await.engines.push(Engine::new(engine, sender))
+        let engine = Engine::new(engine, sender.clone());
+        sender
+            .send_async(Event::Engine(engine.id, engine.to_string()))
+            .await
+            .unwrap();
+        self.state.lock().await.engines.push(engine);
     }
 
     pub async fn stop(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
