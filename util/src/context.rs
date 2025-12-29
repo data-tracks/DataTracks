@@ -1,7 +1,8 @@
-use crate::{DefinitionId, EngineId};
+use crate::DefinitionId;
 use chrono::Utc;
 use serde::Serialize;
 use speedy::{Readable, Writable};
+use value::Value;
 
 #[derive(Clone, Debug, Writable, Readable)]
 pub struct InitialMeta {
@@ -31,7 +32,7 @@ impl TimedMeta {
     }
 }
 
-#[derive(Clone, Debug, Writable, Readable, Default)]
+#[derive(Clone, Debug, Writable, Readable, Serialize, Default)]
 pub struct TargetedMeta {
     pub id: u64,
     pub timestamp: i64,
@@ -49,13 +50,12 @@ impl TargetedMeta {
 }
 
 #[derive(Clone, Debug, Writable, Readable, Serialize, Default)]
-pub struct PlainContext {
-    pub engine_id: EngineId,
-    pub ids: Vec<u64>,
+pub struct PlainRecord {
+    pub values: Vec<(Value, TargetedMeta)>,
 }
 
-impl PlainContext {
-    pub fn new(id: EngineId, ids: Vec<u64>) -> Self {
-        Self { engine_id: id, ids }
+impl PlainRecord {
+    pub fn new(values: Vec<(Value, TargetedMeta)>) -> Self {
+        Self { values }
     }
 }

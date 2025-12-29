@@ -1,5 +1,5 @@
 use crate::definition::DefinitionFilter::AllMatch;
-use crate::{DefinitionId, EntityId, PlainContext, TimedMeta};
+use crate::{DefinitionId, EntityId, PlainRecord, TimedMeta};
 use flume::{Receiver, Sender, unbounded};
 use serde::Serialize;
 use speedy::{Readable, Writable};
@@ -19,10 +19,11 @@ pub struct Definition {
     /// final destination
     pub entity: Entity,
     #[serde(skip)]
-    pub native: (Sender<PlainContext>, Receiver<PlainContext>), // which "key|index" is used to identify a new value
-                                                                //uniqueness: Vec<String>,
-                                                                //query: Option<String>,
-                                                                //ordering: Option<ValueExtractor>
+    pub native: (Sender<PlainRecord>, Receiver<PlainRecord>),
+    // which "key|index" is used to identify a new value
+    //uniqueness: Vec<String>,
+    //query: Option<String>,
+    //ordering: Option<ValueExtractor>
 }
 
 impl Definition {

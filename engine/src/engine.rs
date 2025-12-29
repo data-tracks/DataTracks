@@ -15,7 +15,7 @@ use std::time::Duration;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
 use util::definition::{Definition, Model};
-use util::{DefinitionId, EngineId, PlainContext, TargetedMeta};
+use util::{DefinitionId, EngineId, TargetedMeta};
 use value::Value;
 
 static ID_BUILDER: AtomicU64 = AtomicU64::new(0);
@@ -89,7 +89,7 @@ impl Engine {
         cost
     }
 
-    fn model(&self) -> Model {
+    pub fn model(&self) -> Model {
         match self.engine_kind {
             EngineKind::Postgres(_) => Model::Relational,
             EngineKind::MongoDB(_) => Model::Document,
@@ -99,26 +99,16 @@ impl Engine {
 
     pub async fn store(
         &mut self,
-        definition_id: DefinitionId,
+        entity_name: String,
         values: Vec<(Value, TargetedMeta)>,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
         let ids = values.iter().map(|(_v, m)| m.id).collect::<Vec<_>>();
         self.ids.extend(ids.clone());
-        let definition = self.definitions.get(&definition_id).unwrap();
-        let entity = definition.entity.plain.clone();
 
-        match match &self.engine_kind {
-            EngineKind::Postgres(p) => p.store(entity, values).await,
-            EngineKind::MongoDB(m) => m.store(entity, values).await,
-            EngineKind::Neo4j(n) => n.store(entity, values).await,
-        } {
-            Ok(_) => definition
-                .native
-                .0
-                .send_async(PlainContext::new(self.id, ids))
-                .await
-                .map_err(|err| Box::from(err.to_string())),
-            Err(err) => Err(err),
+        match &self.engine_kind {
+            EngineKind::Postgres(p) => p.store(entity_name, values).await,
+            EngineKind::MongoDB(m) => m.store(entity_name, values).await,
+            EngineKind::Neo4j(n) => n.store(entity_name, values).await,
         }
     }
 
@@ -259,14 +249,4 @@ pub enum Load {
     Low,
     Middle,
     High,
-}
-
-impl Load {
-    fn to_f64(&self) -> f64 {
-        match self {
-            Load::Low => 1.0,
-            Load::Middle => 100.0,
-            Load::High => 1000.0,
-        }
-    }
 }

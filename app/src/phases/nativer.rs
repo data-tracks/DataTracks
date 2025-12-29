@@ -1,5 +1,7 @@
 use crate::management::catalog::Catalog;
+use engine::engine::Engine;
 use std::collections::HashMap;
+use std::error::Error;
 use tokio::task::JoinSet;
 use tracing::info;
 
@@ -16,23 +18,20 @@ impl Nativer {
                 .engines()
                 .await
                 .into_iter()
-                .map(|eng| (eng.id, eng))
-                .collect::<HashMap<_, _>>();
+                .filter(|e| e.model() == definition.model)
+                .collect::<Vec<Engine>>();
             join_set.spawn(async move {
                 let rx = definition.native.1;
                 let entity = definition.entity;
-
+                let mut engine = engines.into_iter().next().unwrap();
                 loop {
-                    if let Ok(ctx) = rx.recv_async().await {
-                        let engine_id = ctx.engine_id;
-                        if let Some(engine) = engines.get_mut(&engine_id) {
-                            let entity = entity.plain.clone();
-                            if let Ok(v) = engine.read(entity, ctx.ids).await
-                                && !v.is_empty()
-                            {
-                                info!("{:?}", v)
-                            };
-                        }
+                    if let Ok(record) = rx.recv_async().await {
+                        match engine.store(entity.native.clone(), record.values).await {
+                            Ok(_) => {}
+                            Err(err) => {
+                                info!("{}", err)
+                            }
+                        };
                     }
                 }
             });

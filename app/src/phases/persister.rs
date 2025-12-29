@@ -1,25 +1,19 @@
 use crate::management::catalog::Catalog;
-use chrono::Utc;
-use engine::EngineKind;
 use engine::engine::Engine;
-use flume::{Receiver, RecvError, unbounded};
-use futures::StreamExt;
-use num_format::Locale::sl;
-use num_format::{CustomFormat, Grouping, ToFormattedString};
-use speedy::{Readable, Writable};
+use flume::{Receiver, unbounded};
+use num_format::{CustomFormat, ToFormattedString};
+use speedy::Writable;
 use statistics::Event;
-use std::alloc::System;
 use std::collections::HashMap;
 use std::error::Error;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
-use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::RwLock;
 use tokio::task::JoinSet;
 use tokio::time::{Instant, sleep};
 use tracing::{debug, error, info};
 use util::definition::Definition;
-use util::{DefinitionId, EntityId, InitialMeta, SegmentedLog, TargetedMeta, TimedMeta};
+use util::{DefinitionId, InitialMeta, SegmentedLog, TargetedMeta, TimedMeta};
 use value::Value;
 
 pub struct Persister {
@@ -212,7 +206,13 @@ impl Persister {
     pub async fn start_distributor(&mut self, joins: &mut JoinSet<()>) {
         for engine in self.catalog.engines().await {
             let mut clone = engine.clone();
-
+            let definitions = self
+                .catalog
+                .definitions()
+                .await
+                .into_iter()
+                .map(|d| (d.id, d))
+                .collect::<HashMap<_, _>>();
             joins.spawn(async move {
                 let mut error_count = 0;
                 let mut count = 0;
@@ -229,7 +229,8 @@ impl Persister {
 
                         for (id, records) in buckets.drain() {
                             let length = records.len();
-                            match clone.store(id, records.clone()).await {
+                            let name = definitions.get(&id).unwrap().entity.plain.clone();
+                            match clone.store(name, records.clone()).await {
                                 Ok(_) => {
                                     engine.statistic_sender.send(Event::Insert(id, length, engine_id)).unwrap();
                                     error_count = 0;
