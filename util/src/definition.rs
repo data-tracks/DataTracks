@@ -20,6 +20,7 @@ pub struct Definition {
     pub entity: Entity,
     #[serde(skip)]
     pub native: (Sender<PlainRecord>, Receiver<PlainRecord>),
+    pub transformer: DefinitionTarget
     // which "key|index" is used to identify a new value
     //uniqueness: Vec<String>,
     //query: Option<String>,

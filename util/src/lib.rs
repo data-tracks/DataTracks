@@ -6,6 +6,7 @@ pub mod id;
 pub mod queue;
 mod record;
 mod segment;
+mod mappings;
 
 pub use segment::SegmentedLog;
 
