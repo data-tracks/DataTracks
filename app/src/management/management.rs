@@ -1,6 +1,6 @@
 use crate::management::catalog::Catalog;
 use crate::phases::Persister;
-use crate::phases::nativer::Nativer;
+use crate::phases::mapper::Nativer;
 use engine::EngineKind;
 use flume::{Sender, unbounded};
 use sink::dummy::DummySink;
@@ -12,6 +12,7 @@ use tokio::task::JoinSet;
 use tokio::time::sleep;
 use tracing::{error, info};
 use util::definition::{Definition, DefinitionFilter, Model};
+use util::DefinitionMapping;
 use value::Value;
 
 #[derive(Default)]
@@ -82,6 +83,7 @@ impl Manager {
             .add_definition(
                 Definition::new(
                     DefinitionFilter::MetaName(String::from("doc")),
+                    DefinitionMapping::document(),
                     Model::Document,
                     String::from("doc"),
                 ),
@@ -93,6 +95,7 @@ impl Manager {
             .add_definition(
                 Definition::new(
                     DefinitionFilter::MetaName(String::from("relational")),
+                    DefinitionMapping::document(),
                     Model::Relational,
                     String::from("relational"),
                 ),
@@ -104,6 +107,7 @@ impl Manager {
             .add_definition(
                 Definition::new(
                     DefinitionFilter::MetaName(String::from("graph")),
+                    DefinitionMapping::doc_to_graph(),
                     Model::Graph,
                     String::from("graph"),
                 ),
@@ -164,7 +168,7 @@ impl Manager {
         for _ in 0..amount {
             let tx = tx.clone();
             self.joins.spawn(async {
-                let mut dummy = DummySink::new(Value::text("test"), Duration::from_millis(1));
+                let mut dummy = DummySink::new(Value::dict_from_pairs(vec![("test", Value::text("test")),("key2", Value::text("test2"))]), Duration::from_millis(1));
                 dummy.start(String::from("doc"), tx).await;
             });
         }
@@ -180,7 +184,7 @@ impl Manager {
         for _ in 0..amount {
             let tx = tx.clone();
             self.joins.spawn(async {
-                let mut dummy = DummySink::new(Value::text("test"), Duration::from_millis(10));
+                let mut dummy = DummySink::new(Value::dict_from_pairs(vec![("id", Value::text("test")),("label", Value::text("test2")),("properties", Value::dict_from_pairs(vec![]))]), Duration::from_millis(10));
                 dummy.start(String::from("graph"), tx).await;
             });
         }

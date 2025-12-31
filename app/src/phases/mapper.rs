@@ -24,10 +24,24 @@ impl Nativer {
                 let rx = definition.native.1;
                 let entity = definition.entity;
                 let mut engine = engines.into_iter().next().unwrap();
+
+                let mapper = definition.mapping.build();
                 loop {
                     if let Ok(record) = rx.recv_async().await {
-                        match engine.store(entity.native.clone(), record.values).await {
-                            Ok(_) => {}
+                        match engine
+                            .store(
+                                entity.native.clone(),
+                                record
+                                    .values
+                                    .into_iter()
+                                    .map(|(v, m)| (mapper(v), m))
+                                    .collect(),
+                            )
+                            .await
+                        {
+                            Ok(r) => {
+                                info!("mapped")
+                            }
                             Err(err) => {
                                 info!("{}", err)
                             }

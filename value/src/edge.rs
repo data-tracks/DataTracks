@@ -18,8 +18,9 @@ use std::collections::BTreeMap;
     PartialEq,
 )]
 pub struct Edge {
-    pub label: Option<String>,
+    pub id: Value,
+    pub label: Option<Value>,
     pub start: usize,
     pub end: usize,
-    pub properties: BTreeMap<Value, Value>,
+    pub properties: BTreeMap<String, Value>,
 }

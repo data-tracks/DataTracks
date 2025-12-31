@@ -21,7 +21,7 @@ use std::ops::{Add, Div, Sub};
     Readable,
     Writable,
 )]
-pub struct Int(pub(crate) i64);
+pub struct Int(pub i64);
 
 impl Int {
     pub fn new(value: i64) -> Int {

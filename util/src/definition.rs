@@ -6,6 +6,7 @@ use speedy::{Readable, Writable};
 use std::sync::atomic::{AtomicU64, Ordering};
 use value::Value;
 use value::Value::Dict;
+use crate::mappings::{DefinitionMapping};
 
 static ID_BUILDER: AtomicU64 = AtomicU64::new(0);
 
@@ -20,25 +21,19 @@ pub struct Definition {
     pub entity: Entity,
     #[serde(skip)]
     pub native: (Sender<PlainRecord>, Receiver<PlainRecord>),
-    pub transformer: DefinitionTarget
-    // which "key|index" is used to identify a new value
-    //uniqueness: Vec<String>,
-    //query: Option<String>,
-    //ordering: Option<ValueExtractor>
+    pub mapping: DefinitionMapping
 }
 
 impl Definition {
-    pub fn new(filter: DefinitionFilter, model: Model, entity: String) -> Self {
+    pub fn new(filter: DefinitionFilter, mapping: DefinitionMapping, model: Model, entity: String) -> Self {
         let id = DefinitionId(ID_BUILDER.fetch_add(1, Ordering::Relaxed));
         Definition {
             id,
             filter,
             model,
             entity: Entity::new(entity),
-            //uniqueness: vec![],
-            //query: None,
-            //ordering: None,
             native: unbounded(),
+            mapping,
         }
     }
 
@@ -49,10 +44,8 @@ impl Definition {
             filter: AllMatch,
             model: Model::Document,
             entity: Entity::new("_stream"),
-            //uniqueness: vec![],
-            //query: None,
-            //ordering: None,
             native: unbounded(),
+            mapping: DefinitionMapping::document(),
         }
     }
 

@@ -3,22 +3,25 @@ use crate::date::Date;
 use crate::dict::Dict;
 use crate::edge::Edge;
 use crate::node::Node;
+use crate::r#type::ValType;
 use crate::text::Text;
 use crate::time::Time;
-use crate::r#type::ValType;
 use crate::value::Value::Null;
-use crate::{Bool, Float, Int, bool};
+use crate::{bool, Bool, Float, Int};
 use bytes::{BufMut, BytesMut};
 use core::fmt::Pointer;
 use flatbuffers::{FlatBufferBuilder, ForwardsUOffset, Vector, WIPOffset};
 use json::JsonValue;
-use mongodb::bson::{Bson, DateTime, Document, Timestamp, to_bson};
-use neo4rs::{BoltBoolean, BoltFloat, BoltInteger, BoltNull, BoltString, BoltType, Row};
+use mongodb::bson::{to_bson, Bson, DateTime, Document, Timestamp};
+use neo4rs::{
+    BoltBoolean, BoltFloat, BoltInteger, BoltList, BoltMap, BoltNode, BoltNull, BoltString,
+    BoltType, Row,
+};
 use postgres::types::{IsNull, Type};
 use redb::{Key, TypeName};
 use rumqttc::{Event, Incoming};
-use rumqttd::Notification;
 use rumqttd::protocol::Publish;
+use rumqttd::Notification;
 use rusqlite::types::{FromSqlResult, ToSqlOutput, ValueRef};
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
@@ -34,7 +37,7 @@ use track_rails::message_generated::protocol::{
     Null as FlatNull, NullArgs, Value as FlatValue, ValueWrapper, ValueWrapperArgs,
 };
 
-#[derive(Clone, Debug, Serialize, Deserialize, Ord, PartialOrd, Readable, Writable)]
+#[derive(Clone, Debug, Serialize, Deserialize, Ord, PartialOrd, Readable, Writable, Default)]
 pub enum Value {
     Int(Int),
     Float(Float),
@@ -46,6 +49,7 @@ pub enum Value {
     Dict(Dict),
     Node(Box<Node>),
     Edge(Box<Edge>),
+    #[default]
     Null,
 }
 
@@ -367,8 +371,22 @@ impl From<Value> for BoltType {
             Value::Float(f) => BoltType::Float(BoltFloat::new(f.as_f64())),
             Value::Bool(b) => BoltType::Boolean(BoltBoolean::new(b.0)),
             Value::Text(t) => BoltType::String(BoltString::new(&t.0)),
+            Value::Node(n) => BoltType::Node(BoltNode::new(
+                BoltInteger::new(n.id.as_int().unwrap().0),
+                BoltList {
+                    value: n.labels.into_iter().map(|l| BoltType::from(l)).collect(),
+                },
+                BoltMap {
+                    value: n
+                        .properties
+                        .into_iter()
+                        .map(|(k, v)| (BoltString::new(k.as_str()), BoltType::from(v)))
+                        .collect::<HashMap<_, _>>(),
+                },
+            )),
+            Value::Dict(d) => BoltType::Map(BoltMap{ value: d.values.into_iter().map(|(k,v)| (BoltString::new(k.as_str()), BoltType::from(v))).collect() }),
             Null => BoltType::Null(BoltNull),
-            _ => todo!(),
+            v => todo!("{}", v),
         }
     }
 }
@@ -1129,8 +1147,8 @@ impl rusqlite::types::ToSql for Value {
 #[cfg(test)]
 mod tests {
     use crate::value::Value;
-    use std::collections::HashMap;
     use std::collections::hash_map::DefaultHasher;
+    use std::collections::HashMap;
     use std::hash::{Hash, Hasher};
     use std::vec;
 

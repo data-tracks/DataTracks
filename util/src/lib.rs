@@ -13,3 +13,5 @@ pub use segment::SegmentedLog;
 pub use context::*;
 
 pub use id::*;
+
+pub use mappings::*;

@@ -18,6 +18,7 @@ use std::collections::BTreeMap;
     PartialEq,
 )]
 pub struct Node {
-    pub labels: Vec<String>,
-    pub properties: BTreeMap<Value, Value>,
+    pub id: Value,
+    pub labels: Vec<Value>,
+    pub properties: BTreeMap<String, Value>,
 }

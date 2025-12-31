@@ -15,7 +15,7 @@ use track_rails::message_generated::protocol::{
     Eq, Clone, Debug, Default, Serialize, Deserialize, Ord, PartialOrd, Readable, Writable,
 )]
 pub struct Dict {
-    values: BTreeMap<String, Value>,
+    pub values: BTreeMap<String, Value>,
     alternative: BTreeMap<String, String>, // "alternative_name" -> Value
 }
 
