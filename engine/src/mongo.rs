@@ -15,6 +15,7 @@ use tokio::time::{sleep, timeout};
 use tracing::{error, info};
 use util::container::Mapping;
 use util::{TargetedMeta, container};
+use util::definition::Stage;
 use value::Value;
 
 #[derive(Clone, Debug)]
@@ -69,6 +70,7 @@ impl MongoDB {
 
     pub(crate) async fn store(
         &self,
+        stage: Stage,
         entity: String,
         values: Vec<(Value, TargetedMeta)>,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {

@@ -133,7 +133,7 @@ impl Statistics {
                     "{:?}:{} ",
                     self.definitions
                         .get(definition)
-                        .map(|d| d.entity.native.clone())
+                        .map(|d| d.entity.mapped.clone())
                         .unwrap_or(id),
                     amount.load(Ordering::Relaxed).to_formatted_string(&format)
                 );

@@ -152,8 +152,8 @@ impl DefinitionMapping {
                 Box::new(move |value: &Value| {
                     Some(Value::Node(Box::new(
                         Node {
-                            id: id(&value).unwrap_or_default(),
-                            labels: label(&value).map(|v| vec![v]).unwrap_or_default(),
+                            id: id(&value).map(|i| i.as_int().ok().unwrap_or_default()).unwrap_or_default(),
+                            labels: label(&value).map(|v| v.as_text().ok().map(|v| vec![v]).unwrap_or_default()).unwrap_or_default(),
                             properties: properties(&value).map(|v| v.as_dict().ok().map(|m| m.values).unwrap_or_default()).unwrap_or_default()
                         }
                     )))

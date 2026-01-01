@@ -84,8 +84,7 @@ static ENTITY_ID_BUILDER: AtomicU64 = AtomicU64::new(0);
 pub struct Entity {
     pub id: EntityId,
     pub plain: String,
-    pub non_native: String,
-    pub native: String,
+    pub mapped: String,
 }
 
 impl Entity {
@@ -94,8 +93,13 @@ impl Entity {
         Self {
             id,
             plain: name.as_ref().to_string() + "AsIs",
-            non_native: name.as_ref().to_string() + "Cross",
-            native: name.as_ref().to_string(),
+            mapped: name.as_ref().to_string(),
         }
     }
+}
+
+#[derive(Clone, Debug, Hash, Eq, PartialEq)]
+pub enum Stage {
+    Plain,
+    Mapped,
 }

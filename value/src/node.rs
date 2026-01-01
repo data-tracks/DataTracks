@@ -1,4 +1,4 @@
-use crate::Value;
+use crate::{Int, Text, Value};
 use serde::{Deserialize, Serialize};
 use speedy::Readable;
 use speedy::Writable;
@@ -18,7 +18,7 @@ use std::collections::BTreeMap;
     PartialEq,
 )]
 pub struct Node {
-    pub id: Value,
-    pub labels: Vec<Value>,
+    pub id: Int,
+    pub labels: Vec<Text>,
     pub properties: BTreeMap<String, Value>,
 }

@@ -14,7 +14,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
-use util::definition::{Definition, Model};
+use util::definition::{Definition, Model, Stage};
 use util::{DefinitionId, EngineId, TargetedMeta};
 use value::Value;
 
@@ -99,6 +99,7 @@ impl Engine {
 
     pub async fn store(
         &mut self,
+        stage: Stage,
         entity_name: String,
         values: Vec<(Value, TargetedMeta)>,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -106,9 +107,9 @@ impl Engine {
         self.ids.extend(ids.clone());
 
         match &self.engine_kind {
-            EngineKind::Postgres(p) => p.store(entity_name, values).await,
-            EngineKind::MongoDB(m) => m.store(entity_name, values).await,
-            EngineKind::Neo4j(n) => n.store(entity_name, values).await,
+            EngineKind::Postgres(p) => p.store(stage, entity_name, values).await,
+            EngineKind::MongoDB(m) => m.store(stage, entity_name, values).await,
+            EngineKind::Neo4j(n) => n.store(stage, entity_name, values).await,
         }
     }
 

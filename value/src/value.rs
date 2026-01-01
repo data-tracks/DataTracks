@@ -6,17 +6,13 @@ use crate::node::Node;
 use crate::r#type::ValType;
 use crate::text::Text;
 use crate::time::Time;
-use crate::value::Value::Null;
 use crate::{bool, Bool, Float, Int};
 use bytes::{BufMut, BytesMut};
 use core::fmt::Pointer;
 use flatbuffers::{FlatBufferBuilder, ForwardsUOffset, Vector, WIPOffset};
 use json::JsonValue;
 use mongodb::bson::{to_bson, Bson, DateTime, Document, Timestamp};
-use neo4rs::{
-    BoltBoolean, BoltFloat, BoltInteger, BoltList, BoltMap, BoltNode, BoltNull, BoltString,
-    BoltType, Row,
-};
+use neo4rs::{BoltBoolean, BoltFloat, BoltInteger, BoltList, BoltMap, BoltNode, BoltNull, BoltString, BoltType, Row};
 use postgres::types::{IsNull, Type};
 use redb::{Key, TypeName};
 use rumqttc::{Event, Incoming};
@@ -32,7 +28,7 @@ use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::ops::{Add, AddAssign, Div, Mul, Sub};
 use std::str;
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 use track_rails::message_generated::protocol::{
     Null as FlatNull, NullArgs, Value as FlatValue, ValueWrapper, ValueWrapperArgs,
 };
@@ -52,6 +48,7 @@ pub enum Value {
     #[default]
     Null,
 }
+
 
 impl Value {
     pub fn text(string: &str) -> Value {
@@ -79,6 +76,14 @@ impl Value {
 
     pub fn date(days: i64) -> Value {
         Value::Date(Date::new(days))
+    }
+
+    pub fn node(id: Int, labels: Vec<Text>, properties: BTreeMap<String, Value>) -> Value {
+        Value::Node(Box::new(Node{
+            id,
+            labels,
+            properties,
+        }))
     }
 
     pub fn array(tuple: Vec<Value>) -> Value {
@@ -118,7 +123,7 @@ impl Value {
             Value::Date(_) => todo!("remove"),
             Value::Array(_) => FlatValue::List,
             Value::Dict(_) => FlatValue::Document,
-            Null => FlatValue::Null,
+            Value::Null => FlatValue::Null,
             Value::Node(_) => todo!(),
             Value::Edge(_) => todo!(),
         }
@@ -156,7 +161,7 @@ impl Value {
     }
 
     pub fn null() -> Value {
-        Null
+        Value::Null
     }
 
     pub fn type_(&self) -> ValType {
@@ -167,7 +172,7 @@ impl Value {
             Value::Text(_) => ValType::Text,
             Value::Array(_) => ValType::Array,
             Value::Dict(_) => ValType::Dict,
-            Null => ValType::Null,
+            Value::Null => ValType::Null,
             Value::Time(_) => ValType::Time,
             Value::Date(_) => ValType::Date,
             Value::Node(_) => ValType::Node,
@@ -183,7 +188,7 @@ impl Value {
             Value::Text(t) => t.0.parse::<i64>().map(Int).map_err(|err| err.to_string()),
             Value::Array(_) => Err(String::from("Array cannot be converted")),
             Value::Dict(_) => Err(String::from("Dict cannot be converted")),
-            Null => Err(String::from("Null cannot be converted")),
+            Value::Null => Err(String::from("Null cannot be converted")),
             Value::Time(t) => Ok(Int(t.ms)),
             Value::Date(d) => Ok(Int::new(d.as_epoch())),
             Value::Node(_) => Err(String::from("Node cannot be converted")),
@@ -207,7 +212,7 @@ impl Value {
             }
             Value::Array(_) => Err(String::from("Array cannot be converted")),
             Value::Dict(_) => Err(String::from("Dict cannot be converted")),
-            Null => Err(String::from("Null cannot be converted")),
+            Value::Null => Err(String::from("Null cannot be converted")),
             Value::Time(t) => Ok(if t.ns != 0 {
                 Float::new(t.ms as f64 + t.ns as f64 / 1e6)
             } else {
@@ -247,7 +252,7 @@ impl Value {
             Value::Time(t) => Ok(*t),
             Value::Array(_) => Err(String::from("Array cannot be converted")),
             Value::Dict(_) => Err(String::from("Dict cannot be converted")),
-            Null => Err(String::from("Null cannot be converted")),
+            Value::Null => Err(String::from("Null cannot be converted")),
             Value::Date(_) => Ok(Time::new(0, 0)),
             Value::Node(_) => Err(String::from("Node cannot be converted")),
             Value::Edge(_) => Err(String::from("Edge cannot be converted")),
@@ -264,7 +269,7 @@ impl Value {
             Value::Date(d) => Ok(d.clone()),
             Value::Array(_) => Err(String::from("Array cannot be converted")),
             Value::Dict(_) => Err(String::from("Dict cannot be converted")),
-            Null => Err(String::from("Null cannot be converted")),
+            Value::Null => Err(String::from("Null cannot be converted")),
             Value::Node(_) => Err(String::from("Node cannot be converted")),
             Value::Edge(_) => Err(String::from("Edge cannot be converted")),
         }
@@ -281,7 +286,7 @@ impl Value {
             | Value::Date(_)
             | Value::Node(_)
             | Value::Edge(_)
-            | Null => Err(String::from("Dict cannot be converted")),
+            | Value::Null => Err(String::from("Dict cannot be converted")),
             Value::Dict(d) => Ok(d.clone()),
         }
     }
@@ -297,7 +302,7 @@ impl Value {
             | Value::Dict(_)
             | Value::Node(_)
             | Value::Edge(_)
-            | Null => Err(String::from("Array cannot be converted")),
+            | Value::Null => Err(String::from("Array cannot be converted")),
             Value::Array(a) => Ok(a.clone()),
         }
     }
@@ -317,7 +322,7 @@ impl Value {
             Value::Time(t) => Ok(if t.ms > 0 { Bool(true) } else { Bool(false) }),
             Value::Array(a) => Ok(Bool(!a.values.is_empty())),
             Value::Dict(d) => Ok(Bool(!d.is_empty())),
-            Null => Ok(Bool(false)),
+            Value::Null => Ok(Bool(false)),
             Value::Date(d) => Ok(Bool::new(d.days > 0)),
             Value::Node(_) => Err(String::from("Node cannot be converted")),
             Value::Edge(_) => Err(String::from("Edge cannot be converted")),
@@ -345,7 +350,7 @@ impl Value {
                     .collect::<Vec<String>>()
                     .join(",")
             ))),
-            Null => Ok(Text("null".to_owned())),
+            Value::Null => Ok(Text("null".to_owned())),
             Value::Time(t) => Ok(Text(t.to_string())),
             Value::Date(d) => Ok(Text(d.to_string())),
             Value::Node(_) => Err(String::from("Node cannot be converted")),
@@ -371,21 +376,24 @@ impl From<Value> for BoltType {
             Value::Float(f) => BoltType::Float(BoltFloat::new(f.as_f64())),
             Value::Bool(b) => BoltType::Boolean(BoltBoolean::new(b.0)),
             Value::Text(t) => BoltType::String(BoltString::new(&t.0)),
-            Value::Node(n) => BoltType::Node(BoltNode::new(
-                BoltInteger::new(n.id.as_int().unwrap().0),
-                BoltList {
-                    value: n.labels.into_iter().map(|l| BoltType::from(l)).collect(),
-                },
-                BoltMap {
-                    value: n
-                        .properties
-                        .into_iter()
-                        .map(|(k, v)| (BoltString::new(k.as_str()), BoltType::from(v)))
-                        .collect::<HashMap<_, _>>(),
-                },
-            )),
+            Value::Node(n) => {
+                let value = BoltType::Node(BoltNode::new(
+                    BoltInteger::new(n.id.0),
+                    BoltList {
+                        value: n.labels.into_iter().map(|l| BoltType::String(BoltString::new(&l.0))).collect(),
+                    },
+                    BoltMap {
+                        value: n
+                            .properties
+                            .into_iter()
+                            .map(|(k, v)| (BoltString::new(k.as_str()), BoltType::from(v)))
+                            .collect::<HashMap<_, _>>(),
+                    },
+                ));
+                value
+            },
             Value::Dict(d) => BoltType::Map(BoltMap{ value: d.values.into_iter().map(|(k,v)| (BoltString::new(k.as_str()), BoltType::from(v))).collect() }),
-            Null => BoltType::Null(BoltNull),
+            Value::Null => BoltType::Null(BoltNull),
             v => todo!("{}", v),
         }
     }
@@ -492,8 +500,8 @@ impl PartialEq for Value {
         debug!("{} == {}", self, other);
 
         match (self, other) {
-            (Null, Null) => true,
-            (Null, _) | (_, Null) => false,
+            (Value::Null, Value::Null) => true,
+            (Value::Null, _) | (_, Value::Null) => false,
             (Value::Int(_), Value::Float(_)) => self
                 .as_float()
                 .map(|v| &Value::Float(v) == other)
@@ -570,7 +578,7 @@ impl Hash for Value {
                     v.hash(state);
                 }
             }
-            Null => {
+            Value::Null => {
                 "null".hash(state);
             }
             Value::Time(t) => {
@@ -604,7 +612,7 @@ impl Display for Value {
             Value::Time(t) => t.fmt(f),
             Value::Array(a) => a.fmt(f),
             Value::Dict(d) => d.fmt(f),
-            Null => write!(f, "null"),
+            Value::Null => write!(f, "null"),
             Value::Date(d) => d.fmt(f),
             Value::Node(n) => n.fmt(f),
             Value::Edge(e) => e.fmt(f),
@@ -669,7 +677,7 @@ impl Into<Bson> for Value {
             .unwrap(),
             Value::Node(_) => todo!(),
             Value::Edge(_) => todo!(),
-            Null => Bson::Null,
+            Value::Null => Bson::Null,
         }
     }
 }
@@ -900,7 +908,7 @@ impl AddAssign for Value {
             Value::Text(t) => t.0 += &rhs.as_text().unwrap().0,
             Value::Array(a) => a.values.push(rhs),
             Value::Dict(d) => d.append(&mut rhs.as_dict().unwrap()),
-            Null => {}
+            Value::Null => {}
             Value::Time(t) => {
                 let time = rhs.as_time().unwrap();
                 t.ms += time.ms;
@@ -1086,7 +1094,7 @@ impl postgres::types::ToSql for Value {
             Value::Text(t) => out.extend_from_slice(t.0.as_bytes()),
             Value::Array(_) => return Err("Array not supported".into()),
             Value::Dict(_) => return Err("Dict not supported".into()),
-            Null => return Ok(IsNull::Yes),
+            Value::Null => return Ok(IsNull::Yes),
             Value::Time(t) => out.put_i128(t.ms as i128),
             Value::Date(d) => out.put_i64(d.days),
             Value::Node(n) => out.extend_from_slice(n.write_to_vec()?.as_slice()),
@@ -1136,7 +1144,7 @@ impl rusqlite::types::ToSql for Value {
             Value::Time(t) => Ok(ToSqlOutput::from(t.ms)),
             Value::Array(_) => Err(rusqlite::Error::InvalidQuery),
             Value::Dict(_) => Err(rusqlite::Error::InvalidQuery),
-            Null => Ok(ToSqlOutput::from(rusqlite::types::Null)),
+            Value::Null => Ok(ToSqlOutput::from(rusqlite::types::Null)),
             Value::Date(d) => Ok(ToSqlOutput::from(d.days)),
             Value::Node(n) => Ok(ToSqlOutput::from(n.write_to_vec().unwrap())),
             Value::Edge(e) => Ok(ToSqlOutput::from(e.write_to_vec().unwrap())),

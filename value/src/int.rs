@@ -20,7 +20,7 @@ use std::ops::{Add, Div, Sub};
     PartialOrd,
     Readable,
     Writable,
-)]
+    Default)]
 pub struct Int(pub i64);
 
 impl Int {

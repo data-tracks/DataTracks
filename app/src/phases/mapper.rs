@@ -3,7 +3,8 @@ use engine::engine::Engine;
 use std::collections::HashMap;
 use std::error::Error;
 use tokio::task::JoinSet;
-use tracing::info;
+use tracing::{debug, error, info};
+use util::definition::Stage;
 
 pub struct Nativer {
     catalog: Catalog,
@@ -30,7 +31,8 @@ impl Nativer {
                     if let Ok(record) = rx.recv_async().await {
                         match engine
                             .store(
-                                entity.native.clone(),
+                                Stage::Mapped,
+                                entity.mapped.clone(),
                                 record
                                     .values
                                     .into_iter()
@@ -39,11 +41,11 @@ impl Nativer {
                             )
                             .await
                         {
-                            Ok(r) => {
-                                info!("mapped")
+                            Ok(_) => {
+                                debug!("mapped")
                             }
                             Err(err) => {
-                                info!("{}", err)
+                                error!("{}", err)
                             }
                         };
                     }

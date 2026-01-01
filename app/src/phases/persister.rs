@@ -12,8 +12,8 @@ use tokio::sync::RwLock;
 use tokio::task::JoinSet;
 use tokio::time::{Instant, sleep};
 use tracing::{debug, error, info};
-use util::definition::Definition;
-use util::{DefinitionId, InitialMeta, SegmentedLog, TargetedMeta, TimedMeta};
+use util::definition::{Definition, Stage};
+use util::{DefinitionId, InitialMeta, PlainRecord, SegmentedLog, TargetedMeta, TimedMeta};
 use value::Value;
 
 pub struct Persister {
@@ -229,10 +229,12 @@ impl Persister {
 
                         for (id, records) in buckets.drain() {
                             let length = records.len();
-                            let name = definitions.get(&id).unwrap().entity.plain.clone();
-                            match clone.store(name, records.clone()).await {
+                            let definition = definitions.get(&id).unwrap();
+                            let name = definition.entity.plain.clone();
+                            match clone.store(Stage::Plain, name, records.clone()).await {
                                 Ok(_) => {
                                     engine.statistic_sender.send(Event::Insert(id, length, engine_id)).unwrap();
+                                    definition.native.0.send_async(PlainRecord::new(records)).await.unwrap();
                                     error_count = 0;
                                     count = 0;
                                 }

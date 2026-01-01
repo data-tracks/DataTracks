@@ -43,7 +43,7 @@ impl Catalog {
                 .await?;
             engine
                 .engine_kind
-                .create_entity(&definition.entity.native)
+                .create_entity(&definition.entity.mapped)
                 .await?;
 
             engine.add_definition(&definition);

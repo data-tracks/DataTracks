@@ -12,7 +12,7 @@ use tokio::task::JoinSet;
 use tokio::time::sleep;
 use tracing::{error, info};
 use util::definition::{Definition, DefinitionFilter, Model};
-use util::DefinitionMapping;
+use util::{DefinitionMapping, InitialMeta};
 use value::Value;
 
 #[derive(Default)]
@@ -139,7 +139,13 @@ impl Manager {
 
         persister.start(&mut self.joins, rx).await;
 
-        let amount = 20_000;
+        self.build_dummy(tx, &kafka);
+
+        Ok(kafka)
+    }
+
+    fn build_dummy(&mut self, tx: Sender<(Value, InitialMeta)>, kafka: &Kafka) {
+        let amount = 20;
 
         let clone_graph = kafka.clone();
         self.joins.spawn(async move {
@@ -152,7 +158,7 @@ impl Manager {
         for _ in 0..amount {
             let tx = tx.clone();
             self.joins.spawn(async {
-                let mut dummy = DummySink::new(Value::text("test"), Duration::from_millis(100));
+                let mut dummy = DummySink::new(Value::text("test"), Duration::from_millis(10));
                 dummy.start(String::from("relational"), tx).await;
             });
         }
@@ -161,14 +167,14 @@ impl Manager {
         self.joins.spawn(async move {
             loop {
                 clone_rel.send_value_relational().await.unwrap();
-                sleep(Duration::from_nanos(10)).await;
+                sleep(Duration::from_millis(10)).await;
             }
         });
 
         for _ in 0..amount {
             let tx = tx.clone();
             self.joins.spawn(async {
-                let mut dummy = DummySink::new(Value::dict_from_pairs(vec![("test", Value::text("test")),("key2", Value::text("test2"))]), Duration::from_millis(1));
+                let mut dummy = DummySink::new(Value::dict_from_pairs(vec![("test", Value::text("test")), ("key2", Value::text("test2"))]), Duration::from_millis(10));
                 dummy.start(String::from("doc"), tx).await;
             });
         }
@@ -177,18 +183,16 @@ impl Manager {
         self.joins.spawn(async move {
             loop {
                 clone_doc.send_value_doc().await.unwrap();
-                sleep(Duration::from_millis(1)).await;
+                sleep(Duration::from_millis(10)).await;
             }
         });
 
         for _ in 0..amount {
             let tx = tx.clone();
             self.joins.spawn(async {
-                let mut dummy = DummySink::new(Value::dict_from_pairs(vec![("id", Value::text("test")),("label", Value::text("test2")),("properties", Value::dict_from_pairs(vec![]))]), Duration::from_millis(10));
+                let mut dummy = DummySink::new(Value::dict_from_pairs(vec![("id", Value::text("test")), ("label", Value::text("test2")), ("properties", Value::dict_from_pairs(vec![]))]), Duration::from_millis(10));
                 dummy.start(String::from("graph"), tx).await;
             });
         }
-
-        Ok(kafka)
     }
 }

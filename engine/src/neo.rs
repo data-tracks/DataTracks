@@ -17,6 +17,7 @@ use tokio::time::{Instant, sleep};
 use tracing::{error, info};
 use util::container::Mapping;
 use util::{TargetedMeta, container};
+use util::definition::{Entity, Stage};
 use value::Value;
 
 #[derive(Clone)]
@@ -28,7 +29,7 @@ pub struct Neo4j {
     pub(crate) password: String,
     pub(crate) database: String,
     pub(crate) graph: Option<Graph>,
-    pub(crate) prepared_queries: HashMap<String, String>,
+    pub(crate) prepared_queries: HashMap<(Stage, String), String>,
 }
 
 impl Debug for Neo4j {
@@ -90,9 +91,15 @@ impl Neo4j {
     }
 
     pub(crate) async fn create_entity(&mut self, name: &str) {
-        let cypher_query = self.create_query(String::from(name));
+        // native query
+        let cypher_query = self.create_value_query(String::from(name));
         self.prepared_queries
-            .insert(String::from(name), cypher_query);
+            .insert((Stage::Plain, String::from(name)), cypher_query);
+
+        // mapped query
+        let cypher_query = self.create_node_query();
+        self.prepared_queries
+            .insert((Stage::Mapped, String::from(name)), cypher_query);
     }
 
     pub(crate) async fn stop(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -146,6 +153,7 @@ impl Neo4j {
 
     pub(crate) async fn store(
         &self,
+        stage: Stage,
         entity: String,
         values: Vec<(Value, TargetedMeta)>,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -156,16 +164,19 @@ impl Neo4j {
 
                 let cypher_query = self
                     .prepared_queries
-                    .get(&entity)
+                    .get(&(stage, entity.clone()))
                     .ok_or(format!("No prepared query in neo4j for {}", entity))?;
 
+                let values = values
+                    .into_iter()
+                    .map(|(v, m)| vec![v, Value::int(m.id as i64)])
+                    .collect::<Vec<_>>();
+
+                // info!("{:?}",values);
                 g.run(
                     query(cypher_query).param(
                         "values",
-                        values
-                            .into_iter()
-                            .map(|(v, m)| vec![v, Value::int(m.id as i64)])
-                            .collect::<Vec<_>>(),
+                        values,
                     ),
                 )
                 .await?;
@@ -188,7 +199,7 @@ impl Neo4j {
 
                 let cypher_query = self
                     .prepared_queries
-                    .get(&entity)
+                    .get(&(Stage::Plain, entity.clone()))
                     .ok_or(format!("No prepared query in neo4j for {}", entity))?;
 
                 let mut res = g
@@ -267,12 +278,16 @@ impl Neo4j {
         Ok(())
     }
 
-    fn create_query(&self, entity: String) -> String {
+    fn create_value_query(&self, entity: String) -> String {
         format!(
             "UNWIND $values as row \
             CREATE (p:db_{} {{value: row[0], id: row[1]}})",
             entity
         )
+    }
+
+    fn create_node_query(&self) -> String {
+        "UNWIND $values as row CREATE (row[0])".to_string()
     }
 
     fn read_query(&self, entity: String) -> String {
@@ -286,11 +301,15 @@ impl Neo4j {
 
 #[cfg(test)]
 mod tests {
+    use tracing_test::traced_test;
+    use std::collections::BTreeMap;
+    use util::definition::Stage;
     use crate::EngineKind;
     use util::TargetedMeta;
     use value::Value;
 
     #[tokio::test]
+    #[traced_test]
     async fn test_insert() {
         let mut neo = EngineKind::neo4j();
 
@@ -299,6 +318,7 @@ mod tests {
         neo.create_entity("users").await;
 
         neo.store(
+            Stage::Plain,
             String::from("users"),
             vec![(Value::text("test"), TargetedMeta::default())],
         )
@@ -306,10 +326,19 @@ mod tests {
         .unwrap();
 
         neo.store(
+            Stage::Plain,
             String::from("users"),
             vec![(Value::text("test"), TargetedMeta::default())],
         )
         .await
         .unwrap();
+
+        neo.store(
+            Stage::Mapped,
+            String::from("users"),
+            vec![(Value::node(Value::int(0).as_int().unwrap(), vec![Value::text("test").as_text().unwrap()], BTreeMap::new()), TargetedMeta::default())],
+        )
+            .await
+            .unwrap();
     }
 }

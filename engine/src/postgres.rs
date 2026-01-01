@@ -15,6 +15,7 @@ use tokio_postgres::{Client, Statement};
 use tracing::{debug, info};
 use util::container::Mapping;
 use util::{TargetedMeta, container};
+use util::definition::Stage;
 use value::Value;
 
 #[derive(Clone, Debug)]
@@ -71,6 +72,7 @@ impl Postgres {
 
     pub(crate) async fn store(
         &self,
+        stage: Stage,
         entity: String,
         values: Vec<(Value, TargetedMeta)>,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -265,6 +267,7 @@ impl Postgres {
 pub mod tests {
     use crate::EngineKind;
     use tokio::task::JoinSet;
+    use util::definition::Stage;
     use util::TargetedMeta;
     use value::Value;
 
@@ -277,6 +280,7 @@ pub mod tests {
         pg.create_table("users").await.unwrap();
 
         pg.store(
+            Stage::Plain,
             String::from("users"),
             vec![(Value::text("test"), TargetedMeta::default())],
         )
