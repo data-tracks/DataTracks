@@ -14,7 +14,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
-use util::definition::{Definition, Model, Stage};
+use util::definition::{Definition, Entity, Model, Stage};
 use util::{DefinitionId, EngineId, TargetedMeta};
 use value::Value;
 
@@ -144,11 +144,11 @@ impl Display for EngineKind {
 }
 
 impl EngineKind {
-    pub async fn create_entity(&mut self, name: &str) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub async fn init_entity(&mut self, definition: &Definition) -> Result<(), Box<dyn Error + Send + Sync>> {
         match self {
-            EngineKind::Postgres(p) => p.create_table(name).await?,
-            EngineKind::MongoDB(m) => m.create_collection(name).await?,
-            EngineKind::Neo4j(n) => n.create_entity(name).await,
+            EngineKind::Postgres(p) => p.init_entity(definition).await?,
+            EngineKind::MongoDB(m) => m.init_entity(definition).await?,
+            EngineKind::Neo4j(n) => n.init_entity(definition).await,
         };
         Ok(())
     }
@@ -175,8 +175,8 @@ impl EngineKind {
         EngineKind::monitor(&mut neo4j, join, statistic_tx).await?;
 
         engines.push(pg);
-        engines.push(mongodb);
-        engines.push(neo4j);
+        //engines.push(mongodb);
+        //engines.push(neo4j);
 
         Ok(engines)
     }

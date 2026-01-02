@@ -1,3 +1,4 @@
+use crate::RelationalType;
 use serde::Serialize;
 use value::edge::Edge;
 use value::node::Node;
@@ -7,7 +8,7 @@ use value::Value::{Array, Dict};
 #[derive(Clone, Debug, Serialize)]
 /// The type of objects that can be produced by the definition, always of some specific data model
 pub enum DefinitionMapping {
-    // can produce Nodes, or Edegs or Subgraphs
+    // can produce Nodes, or Edges or Subgraphs
     Graph(Mapping<GraphMapping>),
     // can produce Documents
     Document(DocumentMapping),
@@ -31,7 +32,15 @@ pub enum DocumentMapping {
 
 #[derive(Clone, Debug, Serialize)]
 pub enum RelationalMapping {
-    Tuple(Mapping<MappingSource>),
+    Tuple(Vec<(String, RelationalType)>, Mapping<MappingSource>),
+}
+
+impl RelationalMapping {
+    pub fn get_types(&self) -> Vec<(String, RelationalType)> {
+        match self {
+            RelationalMapping::Tuple(types, _) => types.clone(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -46,6 +55,19 @@ impl DefinitionMapping {
             manual: vec![],
             auto: vec![],
         }))
+    }
+
+    pub fn tuple_to_relational(types: Vec<(String, RelationalType)>) -> Self {
+        DefinitionMapping::Relational(RelationalMapping::Tuple(
+            types.clone(),
+            Mapping {
+                initial: MappingSource::List {
+                    keys: types.into_iter().map(|(k,v)| k).collect(),
+                },
+                manual: vec![],
+                auto: vec![],
+            },
+        ))
     }
 
     pub fn doc_to_graph() -> Self {
@@ -64,9 +86,7 @@ impl DefinitionMapping {
         let mut funcs: Vec<Box<dyn Fn(&Value) -> Option<Value> + Sync + Send>> = vec![];
         match self {
             // we build a node, edge or subgraph
-            DefinitionMapping::Graph(g) => {
-                funcs.push(Self::handle_graph_mapping(&g.initial))
-            }
+            DefinitionMapping::Graph(g) => funcs.push(Self::handle_graph_mapping(&g.initial)),
             // we build a document in the end
             DefinitionMapping::Document(d) => {
                 let DocumentMapping::Document(m) = d;
@@ -87,9 +107,7 @@ impl DefinitionMapping {
                         .collect(),
                 );
             }
-            DefinitionMapping::Relational(r) => {
-                todo!()
-            }
+            DefinitionMapping::Relational(r) => funcs.push(Self::handle_rel_mapping(r)),
             DefinitionMapping::KeyValue(kv) => {
                 todo!()
             }
@@ -142,7 +160,9 @@ impl DefinitionMapping {
         }
     }
 
-    fn handle_graph_mapping(mapping: &GraphMapping) -> Box<dyn Fn(&Value) -> Option<Value> + Sync + Send> {
+    fn handle_graph_mapping(
+        mapping: &GraphMapping,
+    ) -> Box<dyn Fn(&Value) -> Option<Value> + Sync + Send> {
         match mapping {
             GraphMapping::Node(n) => {
                 let id = Self::handle_doc_mapping(&n.id);
@@ -150,13 +170,17 @@ impl DefinitionMapping {
                 let properties = Self::handle_doc_mapping(&n.properties);
 
                 Box::new(move |value: &Value| {
-                    Some(Value::Node(Box::new(
-                        Node {
-                            id: id(&value).map(|i| i.as_int().ok().unwrap_or_default()).unwrap_or_default(),
-                            labels: label(&value).map(|v| v.as_text().ok().map(|v| vec![v]).unwrap_or_default()).unwrap_or_default(),
-                            properties: properties(&value).map(|v| v.as_dict().ok().map(|m| m.values).unwrap_or_default()).unwrap_or_default()
-                        }
-                    )))
+                    Some(Value::Node(Box::new(Node {
+                        id: id(&value)
+                            .map(|i| i.as_int().ok().unwrap_or_default())
+                            .unwrap_or_default(),
+                        labels: label(&value)
+                            .map(|v| v.as_text().ok().map(|v| vec![v]).unwrap_or_default())
+                            .unwrap_or_default(),
+                        properties: properties(&value)
+                            .map(|v| v.as_dict().ok().map(|m| m.values).unwrap_or_default())
+                            .unwrap_or_default(),
+                    })))
                 })
             }
             GraphMapping::Edge(e) => {
@@ -167,15 +191,21 @@ impl DefinitionMapping {
                 let end = Self::handle_doc_mapping(&e.properties);
 
                 Box::new(move |value: &Value| {
-                    Some(Value::Edge(Box::new(
-                        Edge {
-                            id: id(&value).unwrap_or_default(),
-                            start: start(&value).map(|v|v.as_int()).map(|i| i.ok().map(|v| v.0).unwrap_or_default()).unwrap_or_default() as usize,
-                            label: Some(label(&value).unwrap_or_default()),
-                            properties: properties(&value).map(|v| v.as_dict().ok().map(|m| m.values).unwrap_or_default()).unwrap_or_default(),
-                            end: end(&value).map(|v|v.as_int()).map(|i| i.ok().map(|v| v.0).unwrap_or_default()).unwrap_or_default() as usize,
-                        }
-                    )))
+                    Some(Value::Edge(Box::new(Edge {
+                        id: id(&value).unwrap_or_default(),
+                        start: start(&value)
+                            .map(|v| v.as_int())
+                            .map(|i| i.ok().map(|v| v.0).unwrap_or_default())
+                            .unwrap_or_default() as usize,
+                        label: Some(label(&value).unwrap_or_default()),
+                        properties: properties(&value)
+                            .map(|v| v.as_dict().ok().map(|m| m.values).unwrap_or_default())
+                            .unwrap_or_default(),
+                        end: end(&value)
+                            .map(|v| v.as_int())
+                            .map(|i| i.ok().map(|v| v.0).unwrap_or_default())
+                            .unwrap_or_default() as usize,
+                    })))
                 })
             }
             GraphMapping::SubGraph(_) => {
@@ -183,13 +213,31 @@ impl DefinitionMapping {
             }
         }
     }
+
+    fn handle_rel_mapping(
+        mapping: &RelationalMapping,
+    ) -> Box<dyn Fn(&Value) -> Option<Value> + Sync + Send> {
+        match mapping {
+            RelationalMapping::Tuple(_, m) => match &m.initial {
+                MappingSource::Document(d) => {
+                    todo!()
+                }
+                MappingSource::List { .. } => Box::new(move |v: &Value| {
+                    if let Array(a) = v {
+                        return Some(Array(a.clone()));
+                    }
+                    return None;
+                }),
+            },
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize)]
 pub struct Mapping<T> {
-    initial: T,
-    manual: Vec<T>,
-    auto: Vec<T>,
+    pub initial: T,
+    pub manual: Vec<T>,
+    pub auto: Vec<T>,
 }
 
 #[derive(Clone, Debug, Serialize)]

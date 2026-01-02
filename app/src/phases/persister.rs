@@ -246,8 +246,7 @@ impl Persister {
                                             let res = engine
                                                 .tx
                                                 .send(
-                                                    (v.0,
-                                                    v.1)
+                                                    (v.0, v.1)
                                                 )
                                                 .map_err(|err| format!("{:?}", err));
                                             res.err()
@@ -255,7 +254,7 @@ impl Persister {
                                         .collect();
 
                                     if !errors.is_empty() {
-                                        error!("{}", errors.first().unwrap())
+                                        error!("{:?}", errors.first().unwrap())
                                     }
 
                                     if error_count > 1_000 && error_count < 10_000 && last_log.elapsed().as_secs() > 10 {

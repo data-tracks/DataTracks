@@ -16,8 +16,8 @@ use tokio::io::join;
 use tokio::time::{Instant, sleep};
 use tracing::{error, info};
 use util::container::Mapping;
-use util::{TargetedMeta, container};
-use util::definition::{Entity, Stage};
+use util::{TargetedMeta, container, DefinitionMapping};
+use util::definition::{Definition, Entity, Stage};
 use value::Value;
 
 #[derive(Clone)]
@@ -90,16 +90,19 @@ impl Neo4j {
         Ok(())
     }
 
-    pub(crate) async fn create_entity(&mut self, name: &str) {
+    pub(crate) async fn init_entity(&mut self, definition: &Definition) {
         // native query
-        let cypher_query = self.create_value_query(String::from(name));
+        let cypher_query = self.create_value_query(&definition.entity.plain);
         self.prepared_queries
-            .insert((Stage::Plain, String::from(name)), cypher_query);
+            .insert((Stage::Plain, definition.entity.plain.clone()), cypher_query);
 
-        // mapped query
-        let cypher_query = self.create_node_query();
-        self.prepared_queries
-            .insert((Stage::Mapped, String::from(name)), cypher_query);
+        if let DefinitionMapping::Graph(_) = definition.mapping {
+            // mapped query
+            let cypher_query = self.create_node_query(&definition.entity.mapped);
+            self.prepared_queries
+                .insert((Stage::Mapped, definition.entity.mapped.clone()), cypher_query);
+        }
+
     }
 
     pub(crate) async fn stop(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -172,7 +175,6 @@ impl Neo4j {
                     .map(|(v, m)| vec![v, Value::int(m.id as i64)])
                     .collect::<Vec<_>>();
 
-                // info!("{:?}",values);
                 g.run(
                     query(cypher_query).param(
                         "values",
@@ -278,7 +280,7 @@ impl Neo4j {
         Ok(())
     }
 
-    fn create_value_query(&self, entity: String) -> String {
+    fn create_value_query(&self, entity: &str) -> String {
         format!(
             "UNWIND $values as row \
             CREATE (p:db_{} {{value: row[0], id: row[1]}})",
@@ -286,8 +288,8 @@ impl Neo4j {
         )
     }
 
-    fn create_node_query(&self) -> String {
-        "UNWIND $values as row CREATE (row[0])".to_string()
+    fn create_node_query(&self, entity: &str) -> String {
+        format!("UNWIND $values AS row CREATE (n:db_{}:$(row[0].labels)) SET n = row[0].props SET n._id = row[1]", entity)
     }
 
     fn read_query(&self, entity: String) -> String {
@@ -302,10 +304,12 @@ impl Neo4j {
 #[cfg(test)]
 mod tests {
     use tracing_test::traced_test;
-    use std::collections::BTreeMap;
-    use util::definition::Stage;
+    use std::collections::{BTreeMap, HashMap};
+    use std::vec;
+    use neo4rs::{query, BoltInteger, BoltList, BoltMap, BoltNode, BoltString, BoltType, Graph};
+    use util::definition::{Definition, DefinitionFilter, Entity, Model, Stage};
     use crate::EngineKind;
-    use util::TargetedMeta;
+    use util::{DefinitionMapping, TargetedMeta};
     use value::Value;
 
     #[tokio::test]
@@ -315,7 +319,8 @@ mod tests {
 
         neo.start().await.unwrap();
 
-        neo.create_entity("users").await;
+        let definition = Definition::new(DefinitionFilter::AllMatch, DefinitionMapping::doc_to_graph(), Model::Document, "users".to_string());
+        neo.init_entity(&definition).await;
 
         neo.store(
             Stage::Plain,
@@ -340,5 +345,43 @@ mod tests {
         )
             .await
             .unwrap();
+    }
+
+    #[tokio::test]
+    #[traced_test]
+    async fn test_insert_node() {
+        let mut neo = EngineKind::neo4j();
+
+        neo.start().await.unwrap();
+
+        let definition = Definition::new(DefinitionFilter::AllMatch, DefinitionMapping::doc_to_graph(), Model::Document, "users".to_string());
+        neo.init_entity(&definition).await;
+
+
+        match neo.graph {
+            None => {}
+            Some(g) => {
+                let query = query("CREATE (n:$($labels) {}) SET n = $props");
+                let query = query.param("props", HashMap::<String, String>::new()).param("labels", vec![String::from("test"), String::from("test2")]);
+                g.run(query).await.unwrap();
+
+                let query = neo4rs::query("CREATE (n:$($labels) $props) SET n._id = $id");
+                let node = Value::node(Value::int(0).as_int().unwrap(), vec![Value::text("test3").as_text().unwrap()], BTreeMap::new());
+                let node = node.as_node().unwrap();
+                let mut props = HashMap::new();
+                props.insert(BoltString::new("key"), BoltType::String(BoltString::new("val")));
+                props.insert(BoltString::new("id"), BoltType::Integer(BoltInteger::new(2)));
+                let query = query.param("labels", node.labels.clone()).param("props", BoltType::Map(BoltMap{ value: props })).param("id", node.id);
+
+                g.run(query).await.unwrap();
+
+                let query = neo4rs::query("UNWIND $values AS row CREATE (n:addLabel:$(row.labels)) SET n = row.props SET n._id = row.id");
+                let node = Value::node(Value::int(0).as_int().unwrap(), vec![Value::text("test3").as_text().unwrap()], Value::dict_from_pairs(vec![("key", Value::int(3)), ("key2", Value::text("value2"))]).as_dict().unwrap().values);
+
+                let query = query.param("values", vec![node]);
+
+                g.run(query).await.unwrap();
+            }
+        }
     }
 }

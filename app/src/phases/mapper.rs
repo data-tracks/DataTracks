@@ -45,7 +45,7 @@ impl Nativer {
                                 debug!("mapped")
                             }
                             Err(err) => {
-                                error!("{}", err)
+                                error!("{:?}", err)
                             }
                         };
                     }

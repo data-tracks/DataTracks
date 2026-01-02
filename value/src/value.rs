@@ -12,7 +12,9 @@ use core::fmt::Pointer;
 use flatbuffers::{FlatBufferBuilder, ForwardsUOffset, Vector, WIPOffset};
 use json::JsonValue;
 use mongodb::bson::{to_bson, Bson, DateTime, Document, Timestamp};
-use neo4rs::{BoltBoolean, BoltFloat, BoltInteger, BoltList, BoltMap, BoltNode, BoltNull, BoltString, BoltType, Row};
+use neo4rs::{
+    BoltBoolean, BoltFloat, BoltInteger, BoltList, BoltMap, BoltNull, BoltString, BoltType, Row,
+};
 use postgres::types::{IsNull, Type};
 use redb::{Key, TypeName};
 use rumqttc::{Event, Incoming};
@@ -28,7 +30,7 @@ use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::ops::{Add, AddAssign, Div, Mul, Sub};
 use std::str;
-use tracing::{debug, error, info};
+use tracing::{debug, error};
 use track_rails::message_generated::protocol::{
     Null as FlatNull, NullArgs, Value as FlatValue, ValueWrapper, ValueWrapperArgs,
 };
@@ -48,7 +50,6 @@ pub enum Value {
     #[default]
     Null,
 }
-
 
 impl Value {
     pub fn text(string: &str) -> Value {
@@ -79,7 +80,7 @@ impl Value {
     }
 
     pub fn node(id: Int, labels: Vec<Text>, properties: BTreeMap<String, Value>) -> Value {
-        Value::Node(Box::new(Node{
+        Value::Node(Box::new(Node {
             id,
             labels,
             properties,
@@ -224,7 +225,7 @@ impl Value {
         }
     }
 
-    pub(crate) fn as_node(&self) -> Result<&Box<Node>, String> {
+    pub fn as_node(&self) -> Result<&Box<Node>, String> {
         match self {
             Value::Node(n) => Ok(n),
             _ => Err(String::from("Cannot convert to Node")),
@@ -377,25 +378,59 @@ impl From<Value> for BoltType {
             Value::Bool(b) => BoltType::Boolean(BoltBoolean::new(b.0)),
             Value::Text(t) => BoltType::String(BoltString::new(&t.0)),
             Value::Node(n) => {
-                let value = BoltType::Node(BoltNode::new(
-                    BoltInteger::new(n.id.0),
-                    BoltList {
-                        value: n.labels.into_iter().map(|l| BoltType::String(BoltString::new(&l.0))).collect(),
-                    },
-                    BoltMap {
+                let mut map = HashMap::<BoltString, BoltType>::new();
+                map.insert(
+                    BoltString::new("id"),
+                    BoltType::Integer(BoltInteger::new(n.id.0)),
+                );
+                map.insert(
+                    BoltString::new("labels"),
+                    BoltType::List(BoltList {
+                        value: n
+                            .labels
+                            .into_iter()
+                            .map(|l| BoltType::String(BoltString::new(&l.0)))
+                            .collect(),
+                    }),
+                );
+                map.insert(
+                    BoltString::new("props"),
+                    BoltType::Map(BoltMap {
                         value: n
                             .properties
                             .into_iter()
                             .map(|(k, v)| (BoltString::new(k.as_str()), BoltType::from(v)))
                             .collect::<HashMap<_, _>>(),
-                    },
-                ));
-                value
-            },
-            Value::Dict(d) => BoltType::Map(BoltMap{ value: d.values.into_iter().map(|(k,v)| (BoltString::new(k.as_str()), BoltType::from(v))).collect() }),
+                    }),
+                );
+
+                BoltType::Map(BoltMap { value: map })
+            }
+            Value::Dict(d) => BoltType::Map(BoltMap {
+                value: d
+                    .values
+                    .into_iter()
+                    .map(|(k, v)| (BoltString::new(k.as_str()), BoltType::from(v)))
+                    .collect(),
+            }),
             Value::Null => BoltType::Null(BoltNull),
+            Value::Array(a) => BoltType::List(BoltList {
+                value: a.values.into_iter().map(|v| v.into()).collect(),
+            }),
             v => todo!("{}", v),
         }
+    }
+}
+
+impl From<Text> for BoltType {
+    fn from(value: Text) -> Self {
+        BoltType::String(BoltString::new(&value.0))
+    }
+}
+
+impl From<Int> for BoltType {
+    fn from(value: Int) -> Self {
+        BoltType::Integer(BoltInteger::new(value.0))
     }
 }
 
@@ -1088,7 +1123,7 @@ impl postgres::types::ToSql for Value {
         Self: Sized,
     {
         match self {
-            Value::Int(i) => out.put_i64(i.0),
+            Value::Int(i) => out.put_i32(i.0 as i32),
             Value::Float(f) => out.put_f64(f.as_f64()),
             Value::Bool(b) => out.extend_from_slice(&[b.0 as u8]),
             Value::Text(t) => out.extend_from_slice(t.0.as_bytes()),

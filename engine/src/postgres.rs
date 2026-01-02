@@ -10,12 +10,12 @@ use std::time::Duration;
 use tokio::task::JoinSet;
 use tokio::time::{sleep, timeout};
 use tokio_postgres::binary_copy::BinaryCopyInWriter;
-use tokio_postgres::types::Type;
-use tokio_postgres::{Client, Statement};
-use tracing::{debug, info};
+use tokio_postgres::types::{ToSql, Type};
+use tokio_postgres::{Client,  Statement};
+use tracing::{debug, error, info};
 use util::container::Mapping;
-use util::{TargetedMeta, container};
-use util::definition::Stage;
+use util::{TargetedMeta, container, DefinitionMapping, RelationalMapping, RelationalType};
+use util::definition::{Definition, Entity, Stage};
 use value::Value;
 
 #[derive(Clone, Debug)]
@@ -23,7 +23,7 @@ pub struct Postgres {
     pub(crate) load: Arc<Mutex<Load>>,
     pub(crate) connector: PostgresConnection,
     pub(crate) client: Option<Arc<Client>>,
-    pub(crate) prepared_statements: HashMap<String, Statement>,
+    pub(crate) prepared_statements: HashMap<(String, Stage), (Statement,Vec<Type>)>,
 }
 
 #[derive(Debug)]
@@ -53,8 +53,6 @@ impl Postgres {
         timeout(Duration::from_secs(5), client.check_connection()).await??;
         self.client = Some(Arc::new(client));
 
-        self.create_table("_stream").await?;
-
         Ok(())
     }
 
@@ -79,7 +77,7 @@ impl Postgres {
         match &self.client {
             None => return Err(Box::from("Could not create postgres database")),
             Some(client) => {
-                let rows_affected = self.copy_in(client, entity, values).await?;
+                let rows_affected = self.copy_in(stage,client, entity, values).await?;
                 //let rows_affected = self.load_insert(client, entity, values).await?;
 
                 debug!("Inserted {} row(s) into 'users'.", rows_affected);
@@ -159,7 +157,17 @@ impl Postgres {
         Ok(())
     }
 
-    pub async fn create_table(&mut self, name: &str) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub async fn init_entity(&mut self, definition: &Definition) -> Result<(), Box<dyn Error + Send + Sync>> {
+        self.create_table_plain(&definition.entity.plain).await?;
+
+        if let DefinitionMapping::Relational(m) = &definition.mapping {
+            self.create_table_mapped(m, definition.entity.clone()).await?;
+        }
+
+        Ok(())
+    }
+
+    pub async fn create_table_plain(&mut self, name: &str) -> Result<(), Box<dyn Error + Send + Sync>> {
         match &self.client {
             None => return Err(Box::from("could not create postgres database")),
             Some(client) => {
@@ -173,11 +181,39 @@ impl Postgres {
 
                 client.execute(&create_table_query, &[]).await?;
                 info!("Table '{}' ensured to exist.", name);
-                let insert_query = format!("INSERT INTO {} (id,value) VALUES ($1,$2)", name);
-                let statement = client.prepare(&insert_query).await?;
-                self.prepared_statements.insert(name.to_string(), statement);
+                let copy_query = format!("COPY {} (id, value) FROM STDIN BINARY", name);
+                let statement = client.prepare(&copy_query).await?;
+                self.prepared_statements.insert((name.to_string(), Stage::Plain), (statement, vec![Type::INT8, Type::TEXT]));
             }
         }
+        Ok(())
+    }
+
+    async fn create_table_mapped(&mut self, mapping: &RelationalMapping, entity: Entity) -> Result<(), Box<dyn Error + Send + Sync>> {
+        let types = mapping.get_types();
+
+        match &self.client {
+            None => return Err(Box::from("could not create postgres database")),
+            Some(client) => {
+                let create_table_query = format!(
+                    "CREATE TABLE IF NOT EXISTS {} (
+                    _id SERIAL PRIMARY KEY,
+                    {})",
+                    entity.mapped,
+                    types.iter().map(|(name, t)| format!("{} {}", name, t) ).collect::<Vec<_>>().join(",\n")
+                );
+
+                //info!("{}", create_table_query);
+
+                client.execute(&create_table_query, &[]).await?;
+                info!("Table '{}' ensured to exist.", entity.mapped);
+                let copy_query = format!("COPY {} ({}) FROM STDIN BINARY", entity.mapped, types.iter().map(|(n, _)|n.to_string()).collect::<Vec<_>>().join(", "));
+
+                let statement = client.prepare(&copy_query).await?;
+                self.prepared_statements.insert((entity.mapped, Stage::Mapped), (statement, types.into_iter().map(|(n,t)| Self::pg_type(t)).collect()));
+            }
+        }
+
         Ok(())
     }
 
@@ -220,23 +256,37 @@ impl Postgres {
 
     async fn copy_in(
         &self,
+        stage: Stage,
         client: &Arc<Client>,
         entity: String,
         values: Vec<(Value, TargetedMeta)>,
     ) -> Result<usize, Box<dyn Error + Send + Sync>> {
         let rows = values.len();
 
+        let (query, types) = self.prepared_statements.get(&(entity, stage.clone())).unwrap();
+
         let sink = client
-            .copy_in(&format!("COPY {} (id, value) FROM STDIN BINARY", entity))
+            .copy_in(query)
             .await?;
 
-        let writer = BinaryCopyInWriter::new(sink, &[Type::INT8, Type::TEXT]);
+        let writer = BinaryCopyInWriter::new(sink, types);
 
         pin_mut!(writer);
 
         // 3. Encode each row
         for (value, meta) in values {
-            writer.as_mut().write(&[&(meta.id as i64), &value]).await?;
+            match &stage {
+                Stage::Plain => {
+                    writer.as_mut().write(&[&(meta.id as i64), &value]).await?;
+                }
+                Stage::Mapped => {
+                    if let Value::Array(a) = value {
+                        writer.as_mut().write(&a.values.iter().map(|v| v as &(dyn ToSql + Sync)).collect::<Vec<_>>()).await?;
+                    }else {
+                        error!("error value {:?}", value)
+                    }
+                }
+            }
         }
 
         writer.finish().await?;
@@ -250,9 +300,9 @@ impl Postgres {
         entity: String,
         values: Vec<Value>,
     ) -> Result<usize, Box<dyn Error + Send + Sync>> {
-        let statement = self
+        let (statement, _) = self
             .prepared_statements
-            .get(entity.as_str())
+            .get(&(entity.clone(), Stage::Plain))
             .ok_or(format!("No prepared statement for {} on postgres", entity))?;
         let mut affected_rows = 0;
 
@@ -261,23 +311,35 @@ impl Postgres {
         }
         Ok(affected_rows as usize)
     }
+
+    fn pg_type(t: RelationalType) -> Type {
+        match t {
+            RelationalType::Varchar(_) => Type::VARCHAR,
+            RelationalType::Integer => Type::INT4,
+            RelationalType::Float => Type::FLOAT4,
+            RelationalType::Bool => Type::BOOL,
+            RelationalType::Text => Type::TEXT,
+        }
+    }
 }
 
 #[cfg(test)]
 pub mod tests {
     use crate::EngineKind;
     use tokio::task::JoinSet;
-    use util::definition::Stage;
-    use util::TargetedMeta;
+    use tracing_test::traced_test;
+    use util::definition::{Entity, Stage};
+    use util::{DefinitionMapping, Mapping, MappingSource, RelationalMapping, RelationalType, TargetedMeta};
     use value::Value;
 
     #[tokio::test]
+    #[traced_test]
     pub async fn test_postgres() {
         let mut pg = EngineKind::postgres();
         let mut joins = JoinSet::new();
         pg.start(&mut joins).await.unwrap();
 
-        pg.create_table("users").await.unwrap();
+        pg.create_table_plain("users").await.unwrap();
 
         pg.store(
             Stage::Plain,
@@ -286,5 +348,29 @@ pub mod tests {
         )
         .await
         .unwrap();
+    }
+
+    #[tokio::test]
+    #[traced_test]
+    pub async fn test_postgres_mapped() {
+        let mut pg = EngineKind::postgres();
+        let mut joins = JoinSet::new();
+        pg.start(&mut joins).await.unwrap();
+
+        let r = RelationalMapping::Tuple(vec![("name".to_string(), RelationalType::Text),("age".to_string(), RelationalType::Integer)], Mapping{
+            initial: MappingSource::List { keys: vec!["name".to_string(), "age".to_string()] },
+            manual: vec![],
+            auto: vec![]
+        });
+
+        pg.create_table_mapped(&r, Entity::new("users")).await.unwrap();
+
+        pg.store(
+            Stage::Mapped,
+            String::from("users"),
+            vec![(Value::array(vec![Value::text("test"), Value::int(30)]), TargetedMeta::default())],
+        )
+            .await
+            .unwrap();
     }
 }

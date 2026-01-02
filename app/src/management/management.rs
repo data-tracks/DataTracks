@@ -12,7 +12,7 @@ use tokio::task::JoinSet;
 use tokio::time::sleep;
 use tracing::{error, info};
 use util::definition::{Definition, DefinitionFilter, Model};
-use util::{DefinitionMapping, InitialMeta};
+use util::{DefinitionMapping, InitialMeta, RelationalType};
 use value::Value;
 
 #[derive(Default)]
@@ -95,7 +95,7 @@ impl Manager {
             .add_definition(
                 Definition::new(
                     DefinitionFilter::MetaName(String::from("relational")),
-                    DefinitionMapping::document(),
+                    DefinitionMapping::tuple_to_relational(vec![("name".to_string(), RelationalType::Text), ("age".to_string(), RelationalType::Integer)]),
                     Model::Relational,
                     String::from("relational"),
                 ),
@@ -147,29 +147,29 @@ impl Manager {
     fn build_dummy(&mut self, tx: Sender<(Value, InitialMeta)>, kafka: &Kafka) {
         let amount = 20;
 
-        let clone_graph = kafka.clone();
+        /*let clone_graph = kafka.clone();
         self.joins.spawn(async move {
             loop {
                 clone_graph.send_value_graph().await.unwrap();
                 sleep(Duration::from_nanos(100)).await;
             }
-        });
+        });*/
 
         for _ in 0..amount {
             let tx = tx.clone();
             self.joins.spawn(async {
-                let mut dummy = DummySink::new(Value::text("test"), Duration::from_millis(10));
+                let mut dummy = DummySink::new(Value::array(vec![Value::text("David"), Value::int(31)]), Duration::from_millis(10));
                 dummy.start(String::from("relational"), tx).await;
             });
         }
 
-        let clone_rel = kafka.clone();
+        /*let clone_rel = kafka.clone();
         self.joins.spawn(async move {
             loop {
                 clone_rel.send_value_relational().await.unwrap();
-                sleep(Duration::from_millis(10)).await;
+                sleep(Duration::from_secs(10)).await;
             }
-        });
+        });*/
 
         for _ in 0..amount {
             let tx = tx.clone();
@@ -179,18 +179,18 @@ impl Manager {
             });
         }
 
-        let clone_doc = kafka.clone();
+        /*let clone_doc = kafka.clone();
         self.joins.spawn(async move {
             loop {
                 clone_doc.send_value_doc().await.unwrap();
-                sleep(Duration::from_millis(10)).await;
+                sleep(Duration::from_secs(10)).await;
             }
-        });
+        });*/
 
         for _ in 0..amount {
             let tx = tx.clone();
             self.joins.spawn(async {
-                let mut dummy = DummySink::new(Value::dict_from_pairs(vec![("id", Value::text("test")), ("label", Value::text("test2")), ("properties", Value::dict_from_pairs(vec![]))]), Duration::from_millis(10));
+                let mut dummy = DummySink::new(Value::dict_from_pairs(vec![("id", Value::text("test")), ("label", Value::text("test2")), ("properties", Value::dict_from_pairs(vec![("test", Value::text("text"))]))]), Duration::from_millis(10));
                 dummy.start(String::from("graph"), tx).await;
             });
         }

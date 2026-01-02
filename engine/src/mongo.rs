@@ -14,8 +14,8 @@ use std::time::Duration;
 use tokio::time::{sleep, timeout};
 use tracing::{error, info};
 use util::container::Mapping;
-use util::{TargetedMeta, container};
-use util::definition::Stage;
+use util::{TargetedMeta, container, DefinitionMapping};
+use util::definition::{Definition, Stage};
 use value::Value;
 
 #[derive(Clone, Debug)]
@@ -154,6 +154,19 @@ impl MongoDB {
             };
             sleep(Duration::from_secs(5)).await;
         }
+    }
+
+    pub(crate) async fn init_entity(
+        &self,
+        definition: &Definition,
+    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+        self.create_collection(&definition.entity.plain).await?;
+
+        if let DefinitionMapping::Document(_) = definition.mapping {
+            self.create_collection(&definition.entity.mapped).await?;
+        }
+
+        Ok(())
     }
 
     pub(crate) async fn create_collection(

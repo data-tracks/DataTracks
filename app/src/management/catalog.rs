@@ -35,15 +35,7 @@ impl Catalog {
         for engine in &mut state.engines {
             engine
                 .engine_kind
-                .create_entity(&definition.entity.plain)
-                .await?;
-            engine
-                .engine_kind
-                .create_entity(&definition.entity.non_native)
-                .await?;
-            engine
-                .engine_kind
-                .create_entity(&definition.entity.mapped)
+                .init_entity(&definition)
                 .await?;
 
             engine.add_definition(&definition);
