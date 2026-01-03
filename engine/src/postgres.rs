@@ -277,7 +277,7 @@ impl Postgres {
         for (value, meta) in values {
             match &stage {
                 Stage::Plain => {
-                    writer.as_mut().write(&[&(meta.id as i64), &value]).await?;
+                    writer.as_mut().write(&[&(meta.id as i64), &serde_json::to_string(&value).unwrap()]).await?;
                 }
                 Stage::Mapped => {
                     if let Value::Array(a) = value {

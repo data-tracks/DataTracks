@@ -14,10 +14,10 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::io::join;
 use tokio::time::{Instant, sleep};
-use tracing::{error, info};
+use tracing::{info};
 use util::container::Mapping;
 use util::{TargetedMeta, container, DefinitionMapping};
-use util::definition::{Definition, Entity, Stage};
+use util::definition::{Definition, Stage};
 use value::Value;
 
 #[derive(Clone)]
@@ -167,13 +167,14 @@ impl Neo4j {
 
                 let cypher_query = self
                     .prepared_queries
-                    .get(&(stage, entity.clone()))
+                    .get(&(stage.clone(), entity.clone()))
                     .ok_or(format!("No prepared query in neo4j for {}", entity))?;
 
-                let values = values
-                    .into_iter()
-                    .map(|(v, m)| vec![v, Value::int(m.id as i64)])
-                    .collect::<Vec<_>>();
+                let values = match &stage {
+                    Stage::Plain => Self::wrap_value_plain(values),
+                    Stage::Mapped => Self::wrap_value_mapped(values),
+                };
+
 
                 g.run(
                     query(cypher_query).param(
@@ -188,6 +189,21 @@ impl Neo4j {
             }
         }
     }
+
+    fn wrap_value_plain(values: Vec<(Value, TargetedMeta)>) -> Vec<Vec<Value>> {
+        values
+            .into_iter()
+            .map(|(v, m)| vec![Value::text(&serde_json::to_string(&v).unwrap()), Value::int(m.id as i64)])
+            .collect::<Vec<_>>()
+    }
+
+    fn wrap_value_mapped(values: Vec<(Value, TargetedMeta)>) -> Vec<Vec<Value>> {
+        values
+            .into_iter()
+            .map(|(v, m)| vec![v, Value::int(m.id as i64)])
+            .collect::<Vec<_>>()
+    }
+
 
     pub async fn read(
         &self,

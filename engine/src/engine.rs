@@ -175,8 +175,8 @@ impl EngineKind {
         EngineKind::monitor(&mut neo4j, join, statistic_tx).await?;
 
         engines.push(pg);
-        //engines.push(mongodb);
-        //engines.push(neo4j);
+        engines.push(mongodb);
+        engines.push(neo4j);
 
         Ok(engines)
     }

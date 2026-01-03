@@ -239,6 +239,7 @@ impl Persister {
                                     count = 0;
                                 }
                                 Err(err) => {
+                                    error!("{:?}", err);
                                     error_count += 1;
                                     let errors: Vec<_> = records
                                         .into_iter()
@@ -263,7 +264,7 @@ impl Persister {
                                         sleep(Duration::from_millis(10)).await;
                                     } else if error_count > 10_000 {
                                         error!("Error during distribution to engines over 10'000 tries, {} shut down", err);
-                                        panic!("Over 1 Mio retries")
+                                        panic!("Over 10'000 retries")
                                     }
                                 }
                             }
