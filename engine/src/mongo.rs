@@ -1,10 +1,9 @@
 use crate::engine::Load;
 use flume::Sender;
 use futures_util::StreamExt;
-use mongodb::bson::{Bson, doc};
+use mongodb::bson::{doc};
 use mongodb::options::{ClientOptions, ServerApi, ServerApiVersion};
 use mongodb::{Client, Cursor};
-use serde_json::json;
 use statistics::Event;
 use statistics::Event::EngineStatus;
 use std::collections::HashMap;
@@ -22,6 +21,7 @@ use value::Value;
 pub struct MongoDB {
     pub(crate) load: Arc<Mutex<Load>>,
     pub(crate) client: Option<Client>,
+    pub names: HashMap<(String, Stage), String>,
 }
 
 impl MongoDB {
@@ -55,7 +55,6 @@ impl MongoDB {
 
         self.client = Some(client);
 
-        self.create_collection("_stream").await?;
 
         Ok(())
     }
@@ -70,7 +69,7 @@ impl MongoDB {
 
     pub(crate) async fn store(
         &self,
-        stage: Stage,
+        _: Stage,
         entity: String,
         values: Vec<(Value, TargetedMeta)>,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {

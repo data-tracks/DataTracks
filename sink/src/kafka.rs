@@ -1,11 +1,9 @@
 use flume::Sender;
-use rand::prelude::IndexedRandom;
 use rdkafka::admin::{AdminClient, AdminOptions, NewTopic, TopicReplication};
 use rdkafka::consumer::{Consumer, StreamConsumer};
 use rdkafka::producer::{FutureProducer, FutureRecord, Producer};
 use rdkafka::{ClientConfig, Message};
 use std::error::Error;
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::task::JoinSet;
 use tracing::{debug, error, info};
@@ -103,8 +101,6 @@ pub struct Kafka {
     host: String,
     port: u16,
 }
-
-const TIMEOUT_MS: i32 = 5000;
 
 impl Kafka {
     pub async fn new(host: &str, port: u16) -> Self {

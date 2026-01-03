@@ -1,5 +1,5 @@
 use crate::definition::DefinitionFilter::AllMatch;
-use crate::{DefinitionId, EntityId, PlainRecord, TimedMeta};
+use crate::{log_channel, DefinitionId, EntityId, PlainRecord, TimedMeta};
 use flume::{Receiver, Sender, unbounded};
 use serde::Serialize;
 use speedy::{Readable, Writable};
@@ -27,24 +27,31 @@ pub struct Definition {
 impl Definition {
     pub fn new(filter: DefinitionFilter, mapping: DefinitionMapping, model: Model, entity: String) -> Self {
         let id = DefinitionId(ID_BUILDER.fetch_add(1, Ordering::Relaxed));
+
+        let (tx, rx) = unbounded::<PlainRecord>();
+        log_channel(tx.clone(), "Definition");
+
         Definition {
             id,
             filter,
             model,
             entity: Entity::new(entity),
-            native: unbounded(),
+            native: (tx, rx),
             mapping,
         }
     }
 
     pub fn empty() -> Definition {
         let id = DefinitionId(ID_BUILDER.fetch_add(1, Ordering::Relaxed));
+
+        let (tx, rx) = unbounded::<PlainRecord>();
+        log_channel(tx.clone(), "Definition");
         Definition {
             id,
             filter: AllMatch,
             model: Model::Document,
             entity: Entity::new("_stream"),
-            native: unbounded(),
+            native: (tx, rx),
             mapping: DefinitionMapping::document(),
         }
     }

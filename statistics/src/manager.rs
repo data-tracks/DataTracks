@@ -14,7 +14,7 @@ use tokio::select;
 use tokio::task::JoinSet;
 use tokio::time::{interval, sleep};
 use util::definition::Definition;
-use util::{DefinitionId, EngineId};
+use util::{log_channel, DefinitionId, EngineId};
 
 pub struct Statistics {
     engines: HashMap<EngineId, EngineStatistic>,
@@ -67,6 +67,7 @@ impl Statistics {
 
 pub async fn start(joins: &mut JoinSet<()>) -> Sender<Event> {
     let (tx, rx) = unbounded::<Event>();
+    log_channel(tx.clone(), "Events");
     let (bc_tx, _) = tokio::sync::broadcast::channel(100_000);
     let clone_bc_tx = bc_tx.clone();
     joins.spawn(async move {

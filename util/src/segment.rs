@@ -1,4 +1,4 @@
-use memmap2::MmapMut;
+use memmap2::{MmapMut, MmapOptions};
 use std::error::Error;
 use std::path::{Path, PathBuf};
 use tokio::fs;
@@ -53,7 +53,7 @@ impl SegmentedLog {
 
         file.set_len(size).await.expect("Failed to set file size");
         // theoretically other processes could change the file, while we are writing
-        unsafe { MmapMut::map_mut(&file).expect("Failed to mmap") }
+        unsafe { MmapOptions::new().populate().map_mut(&file).expect("Failed to mmap") }
     }
 
     async fn rotate(&mut self) {

@@ -1,7 +1,5 @@
 use crate::management::catalog::Catalog;
 use engine::engine::Engine;
-use std::collections::HashMap;
-use std::error::Error;
 use tokio::task::JoinSet;
 use tracing::{debug, error, info};
 use util::definition::Stage;
@@ -14,7 +12,7 @@ impl Nativer {
     pub(crate) async fn start(&self, join_set: &mut JoinSet<()>) {
         //let catalog = self.catalog.clone();
         for definition in self.catalog.definitions().await {
-            let mut engines = self
+            let engines = self
                 .catalog
                 .engines()
                 .await

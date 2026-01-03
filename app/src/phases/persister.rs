@@ -1,26 +1,21 @@
 use crate::management::catalog::Catalog;
 use engine::engine::Engine;
 use flume::{Receiver, unbounded};
-use num_format::{CustomFormat, ToFormattedString};
 use speedy::Writable;
 use statistics::Event;
 use std::collections::HashMap;
 use std::error::Error;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
-use tokio::sync::RwLock;
 use tokio::task::JoinSet;
 use tokio::time::{Instant, sleep};
-use tracing::{debug, error, info};
+use tracing::{debug, error};
 use util::definition::{Definition, Stage};
-use util::{DefinitionId, InitialMeta, PlainRecord, SegmentedLog, TargetedMeta, TimedMeta};
+use util::{log_channel, DefinitionId, InitialMeta, PlainRecord, SegmentedLog, TargetedMeta, TimedMeta};
 use value::Value;
 
 pub struct Persister {
     engines: Vec<Engine>,
     catalog: Catalog,
-    last_log: RwLock<Instant>,
-    overwhelmed: AtomicBool,
 }
 
 impl Persister {
@@ -28,8 +23,6 @@ impl Persister {
         Ok(Persister {
             engines: vec![],
             catalog,
-            last_log: RwLock::new(Instant::now()),
-            overwhelmed: AtomicBool::new(false),
         })
     }
 
@@ -40,29 +33,7 @@ impl Persister {
         let (engine, value, meta) = self.select_engines(record).await?;
 
         debug!("store {} - {:?}", engine, value);
-        if engine.tx.len() > 10_000 {
-            let format = CustomFormat::builder().separator("'").build()?;
 
-            let do_log = self.last_log.read().await.elapsed() > Duration::from_secs(10);
-            if do_log {
-                error!(
-                    "Engine queue {} too big: {}",
-                    engine,
-                    engine.tx.len().to_formatted_string(&format)
-                );
-                let mut log = self.last_log.write().await;
-                *log = Instant::now();
-                self.overwhelmed.store(true, Ordering::Relaxed);
-            }
-        } else if self.overwhelmed.load(Ordering::Relaxed) {
-            let format = CustomFormat::builder().separator("'").build()?;
-            info!(
-                "Engine queue {} relaxed: {}",
-                engine,
-                engine.tx.len().to_formatted_string(&format)
-            );
-            self.overwhelmed.store(false, Ordering::Relaxed);
-        }
         engine.tx.send((value, meta))?;
 
         Ok(())
@@ -73,11 +44,12 @@ impl Persister {
         joins: &mut JoinSet<()>,
         incoming: Receiver<(Value, InitialMeta)>,
     ) {
-        let workers = 10;
+        let workers = 200;
 
         let id_queue = self.start_id_generator(joins, workers); // work stealing
 
         let (sender, receiver) = unbounded();
+        log_channel(sender.clone(), "Timer");
         // timer
         for i in 0..workers {
             let incoming = incoming.clone();
@@ -121,16 +93,21 @@ impl Persister {
         }
 
         let (tx, rx) = unbounded();
+        log_channel(tx.clone(), "WAL");
+
+        let local = tokio::task::LocalSet::new();
         // wal logger
         for i in 0..workers {
             let rx = receiver.clone();
             let tx = tx.clone();
             joins.spawn(async move {
                 let mut log =
-                    SegmentedLog::new(&format!("wals/wal_segments_{}", i), 10 * 2048 * 2048)
+                    SegmentedLog::new(&format!("wals/wal_segments_{}", i), 100 * 2048 * 2048)
                         .await
                         .unwrap();
                 let mut count = 0;
+
+                let mut batch = Vec::with_capacity(100_000);
                 loop {
                     if count % 1_000 == 0 && rx.len() > 100_0000 {
                         error!("WAL is overwhelmed! {}", rx.len());
@@ -138,8 +115,14 @@ impl Persister {
                     match rx.recv_async().await {
                         Err(_) => {}
                         Ok(record) => {
-                            Self::log(&mut log, record.clone()).await;
-                            tx.send(record).unwrap();
+                            batch.push(record);
+                            batch.extend(rx.try_iter().take(99_999));
+
+                            Self::log(&mut log, &batch).await;
+
+                            for record in batch.drain(..) {
+                                tx.send(record).unwrap();
+                            }
                         }
                     }
                     count += 1;
@@ -162,9 +145,13 @@ impl Persister {
         });
     }
 
-    async fn log(log: &mut SegmentedLog, record: (Value, TimedMeta)) {
-        let mut bytes = record.write_to_vec().unwrap();
-        bytes.push(b'\n');
+    async fn log(log: &mut SegmentedLog, records: &Vec<(Value, TimedMeta)>) {
+        let mut bytes = Vec::new();
+        for record in records {
+            bytes.extend(record.write_to_vec().unwrap());
+            bytes.push(b'\n');
+        }
+
         log.write(bytes.as_slice()).await;
     }
 
@@ -190,7 +177,7 @@ impl Persister {
 
         debug!(
             "costs:{:?}",
-            costs.iter().map(|(k, v)| k).collect::<Vec<_>>()
+            costs.iter().map(|(k, _)| k).collect::<Vec<_>>()
         );
 
         let cost = costs
@@ -290,6 +277,7 @@ impl Persister {
 
     fn start_id_generator(&self, join_set: &mut JoinSet<()>, workers: i32) -> Receiver<Vec<u64>> {
         let (tx, rx) = unbounded();
+        log_channel(tx.clone(), "Id generator");
 
         let prepared_ids = (workers * 2) as usize;
         const ID_PACKETS_SIZE: u64 = 100_000;

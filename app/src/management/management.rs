@@ -9,10 +9,9 @@ use statistics::Event;
 use std::error::Error;
 use std::time::Duration;
 use tokio::task::JoinSet;
-use tokio::time::sleep;
 use tracing::{error, info};
 use util::definition::{Definition, DefinitionFilter, Model};
-use util::{DefinitionMapping, InitialMeta, RelationalType};
+use util::{log_channel, DefinitionMapping, InitialMeta, RelationalType};
 use value::Value;
 
 #[derive(Default)]
@@ -134,6 +133,7 @@ impl Manager {
         persister: Persister,
     ) -> Result<Kafka, Box<dyn Error + Send + Sync>> {
         let (tx, rx) = unbounded();
+        log_channel(tx.clone(), "Sink Input");
 
         let kafka = sink::kafka::start(&mut self.joins, tx.clone()).await?;
 
@@ -144,8 +144,8 @@ impl Manager {
         Ok(kafka)
     }
 
-    fn build_dummy(&mut self, tx: Sender<(Value, InitialMeta)>, kafka: &Kafka) {
-        let amount = 20;
+    fn build_dummy(&mut self, tx: Sender<(Value, InitialMeta)>, _: &Kafka) {
+        let amount = 20_000;
 
         /*let clone_graph = kafka.clone();
         self.joins.spawn(async move {

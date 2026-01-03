@@ -62,7 +62,7 @@ impl DefinitionMapping {
             types.clone(),
             Mapping {
                 initial: MappingSource::List {
-                    keys: types.into_iter().map(|(k,v)| k).collect(),
+                    keys: types.into_iter().map(|(k,_)| k).collect(),
                 },
                 manual: vec![],
                 auto: vec![],
@@ -108,7 +108,7 @@ impl DefinitionMapping {
                 );
             }
             DefinitionMapping::Relational(r) => funcs.push(Self::handle_rel_mapping(r)),
-            DefinitionMapping::KeyValue(kv) => {
+            DefinitionMapping::KeyValue(_) => {
                 todo!()
             }
         }
@@ -219,7 +219,7 @@ impl DefinitionMapping {
     ) -> Box<dyn Fn(&Value) -> Option<Value> + Sync + Send> {
         match mapping {
             RelationalMapping::Tuple(_, m) => match &m.initial {
-                MappingSource::Document(d) => {
+                MappingSource::Document(_) => {
                     todo!()
                 }
                 MappingSource::List { .. } => Box::new(move |v: &Value| {

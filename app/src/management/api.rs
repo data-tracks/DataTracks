@@ -1,16 +1,13 @@
 use crate::management::api::Status::Error;
 use flatbuffers::FlatBufferBuilder;
 use std::sync::{Arc, Mutex};
-use tracing::{debug, info, warn};
+use tracing::{debug};
 use track_rails::message_generated::protocol::{
-    BindRequest, BindRequestArgs, Catalog, CatalogArgs, CreatePlanRequest, CreatePlanResponse,
-    CreatePlanResponseArgs, DeletePlanRequest, DeletePlanResponse, DeletePlanResponseArgs,
-    ErrorStatus, ErrorStatusArgs, FilterType, GetPlansRequest, Message, MessageArgs, OkStatus,
-    OkStatusArgs, Payload, Plans, PlansArgs, RegisterRequest, RegisterResponse,
-    RegisterResponseArgs, StartPlanRequest, StartPlanResponse, StartPlanResponseArgs,
-    Status as ProtStatus, StopPlanRequest, StopPlanResponse, StopPlanResponseArgs,
+    BindRequest, BindRequestArgs,
+    ErrorStatus, ErrorStatusArgs, Message, MessageArgs, OkStatus,
+    OkStatusArgs, Payload,
+    Status as ProtStatus,
 };
-use error::error::TrackError;
 
 #[derive(Debug, Default)]
 pub struct Api {
@@ -26,7 +23,7 @@ impl Api {
     }
 
     pub fn handle_message(
-        api: Arc<Mutex<Api>>,
+        _: Arc<Mutex<Api>>,
         msg: Message,
     ) -> Result<Vec<u8>, Vec<u8>> {
         match msg.data_type() {

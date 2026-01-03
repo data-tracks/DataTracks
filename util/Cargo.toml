@@ -12,12 +12,10 @@ bollard = "0.19.4"
 tokio = { workspace = true }
 tracing = { workspace = true }
 futures-util = "0.3.31"
-thiserror = "2.0.17"
 value = { workspace = true }
-crossbeam = { workspace = true }
 memmap2 = { workspace = true }
 speedy = { workspace = true }
 chrono = { workspace = true }
 flume = { workspace = true }
 serde = { version = "1.0.228", features = ["derive"] }
-clap = { version = "4.5.49", features = ["derive"] }
+num-format = { workspace = true }

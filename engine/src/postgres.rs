@@ -210,7 +210,7 @@ impl Postgres {
                 let copy_query = format!("COPY {} ({}) FROM STDIN BINARY", entity.mapped, types.iter().map(|(n, _)|n.to_string()).collect::<Vec<_>>().join(", "));
 
                 let statement = client.prepare(&copy_query).await?;
-                self.prepared_statements.insert((entity.mapped, Stage::Mapped), (statement, types.into_iter().map(|(n,t)| Self::pg_type(t)).collect()));
+                self.prepared_statements.insert((entity.mapped, Stage::Mapped), (statement, types.into_iter().map(|(_,t)| Self::pg_type(t)).collect()));
             }
         }
 
@@ -225,7 +225,7 @@ impl Postgres {
                 let user_age = 30;
 
                 let insert_query = "INSERT INTO users (name, age) VALUES ($1, $2)";
-                let rows_affected = client
+                let _ = client
                     .execute(insert_query, &[&user_name, &user_age])
                     .await?;
 

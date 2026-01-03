@@ -3,7 +3,7 @@ use crate::mongo::MongoDB;
 use crate::neo::Neo4j;
 use crate::postgres::Postgres;
 use derive_more::From;
-use flume::{Receiver, Sender, unbounded};
+use flume::{unbounded, Receiver, Sender};
 use statistics::Event;
 use std::collections::HashMap;
 use std::error::Error;
@@ -14,8 +14,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
-use util::definition::{Definition, Entity, Model, Stage};
-use util::{DefinitionId, EngineId, TargetedMeta};
+use util::definition::{Definition, Model, Stage};
+use util::{log_channel, DefinitionId, EngineId, TargetedMeta};
 use value::Value;
 
 static ID_BUILDER: AtomicU64 = AtomicU64::new(0);
@@ -46,6 +46,8 @@ impl Display for Engine {
 impl Engine {
     pub fn new(engine_kind: EngineKind, sender: Sender<Event>) -> Self {
         let (tx, rx) = unbounded::<(Value, TargetedMeta)>();
+        log_channel(tx.clone(), engine_kind.to_string());
+
         let id = EngineId(ID_BUILDER.fetch_add(1, Ordering::Relaxed));
         Engine {
             id,
@@ -228,6 +230,7 @@ impl EngineKind {
         MongoDB {
             load: Arc::new(Mutex::new(Load::Low)),
             client: None,
+            names: Default::default(),
         }
     }
 
