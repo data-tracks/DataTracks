@@ -46,6 +46,8 @@ impl Persister {
     ) {
         let workers = 200;
 
+        let dedicated_workers = 35;
+
         let id_queue = self.start_id_generator(joins, workers); // work stealing
 
         let (sender, receiver) = unbounded();
@@ -56,13 +58,9 @@ impl Persister {
             let sender = sender.clone();
             let id_queue = id_queue.clone();
             joins.spawn(async move {
-                let mut count = 0;
 
                 let mut available_ids = vec![];
                 loop {
-                    if count % 1_000 == 0 && incoming.len() > 100_0000 {
-                        error!("Timer is overwhelmed! {}", incoming.len());
-                    }
                     if available_ids.is_empty() {
                         match id_queue.recv_async().await {
                             Ok(ids) => available_ids.extend(ids),
@@ -87,7 +85,6 @@ impl Persister {
                             sender.send((value, context)).unwrap();
                         }
                     }
-                    count += 1;
                 }
             });
         }
@@ -95,38 +92,41 @@ impl Persister {
         let (tx, rx) = unbounded();
         log_channel(tx.clone(), "WAL");
 
-        let local = tokio::task::LocalSet::new();
         // wal logger
-        for i in 0..workers {
+        for i in 0..dedicated_workers {
             let rx = receiver.clone();
             let tx = tx.clone();
-            joins.spawn(async move {
-                let mut log =
-                    SegmentedLog::new(&format!("wals/wal_segments_{}", i), 100 * 2048 * 2048)
-                        .await
-                        .unwrap();
-                let mut count = 0;
 
-                let mut batch = Vec::with_capacity(100_000);
-                loop {
-                    if count % 1_000 == 0 && rx.len() > 100_0000 {
-                        error!("WAL is overwhelmed! {}", rx.len());
-                    }
-                    match rx.recv_async().await {
-                        Err(_) => {}
-                        Ok(record) => {
-                            batch.push(record);
-                            batch.extend(rx.try_iter().take(99_999));
+            // dedicated runtime in thread
+            let wal_runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
 
-                            Self::log(&mut log, &batch).await;
+            std::thread::spawn(move || {
+                wal_runtime.block_on(async {
+                    let mut log =
+                        SegmentedLog::new(&format!("wals/wal_segments_{}", i), 200 * 2048 * 2048)
+                            .await
+                            .unwrap();
 
-                            for record in batch.drain(..) {
-                                tx.send(record).unwrap();
+                    let mut batch = Vec::with_capacity(100_000);
+                    loop {
+                        match rx.recv() {
+                            Err(_) => {}
+                            Ok(record) => {
+                                batch.push(record);
+                                batch.extend(rx.try_iter().take(99_999));
+
+                                log.log(&batch).await;
+
+                                for record in batch.drain(..) {
+                                    tx.send(record).unwrap();
+                                }
                             }
                         }
                     }
-                    count += 1;
-                }
+                });
             });
         }
 

@@ -1,7 +1,6 @@
 pub mod container;
 mod context;
 pub mod definition;
-mod extractor;
 pub mod id;
 pub mod queue;
 mod record;

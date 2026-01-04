@@ -1,9 +1,12 @@
 use memmap2::{MmapMut, MmapOptions};
 use std::error::Error;
 use std::path::{Path, PathBuf};
+use speedy::Writable;
 use tokio::fs;
 use tokio::fs::OpenOptions;
 use tracing::debug;
+use value::Value;
+use crate::TimedMeta;
 
 pub struct SegmentedLog {
     base_path: PathBuf,
@@ -11,6 +14,7 @@ pub struct SegmentedLog {
     current_segment_id: usize,
     mmap: MmapMut,
     cursor: usize,
+    batch: Vec<u8>
 }
 
 impl SegmentedLog {
@@ -38,6 +42,7 @@ impl SegmentedLog {
             current_segment_id: first_segment_id,
             mmap,
             cursor: 0,
+            batch: vec![],
         })
     }
 
@@ -65,6 +70,26 @@ impl SegmentedLog {
         self.mmap =
             Self::map_segment(&self.base_path, self.current_segment_id, self.segment_size).await;
         debug!("Rotated to segment {}", self.current_segment_id);
+    }
+
+    pub async fn log(&mut self, records: &Vec<(Value, TimedMeta)>) {
+        self.batch.clear();
+        for record in records {
+            record.write_to_stream(&mut self.batch).unwrap();
+            self.batch.push(b'\n');
+        }
+
+        self.write_batch().await;
+    }
+
+    pub async fn write_batch(&mut self) {
+        if self.cursor + self.batch.len() > self.segment_size as usize {
+            self.rotate().await;
+        }
+
+        // Copy data to the memory-mapped region
+        self.mmap[self.cursor..self.cursor + self.batch.len()].copy_from_slice(&self.batch);
+        self.cursor += self.batch.len();
     }
 
     pub async fn write(&mut self, data: &[u8]) {

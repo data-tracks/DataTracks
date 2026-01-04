@@ -59,10 +59,6 @@ impl MongoDB {
         Ok(())
     }
 
-    pub(crate) fn current_load(&self) -> Load {
-        self.load.lock().unwrap().clone()
-    }
-
     pub(crate) fn cost(&self, _: &Value) -> f64 {
         1.0
     }

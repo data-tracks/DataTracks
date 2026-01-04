@@ -56,9 +56,6 @@ impl Postgres {
         Ok(())
     }
 
-    pub(crate) fn current_load(&self) -> Load {
-        self.load.lock().unwrap().clone()
-    }
 
     pub(crate) async fn stop(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
         container::stop("engine-postgres").await
