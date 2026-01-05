@@ -2,4 +2,4 @@
 
 ---
 
-- Adjusted incorrect ```Status``` creation in UI 
+- Adjusted incorrect ```StatusComponent``` creation in UI 

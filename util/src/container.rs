@@ -1,3 +1,4 @@
+use bollard::Docker;
 use bollard::container::LogOutput;
 use bollard::exec::{CreateExecOptions, StartExecOptions, StartExecResults};
 use bollard::models::{
@@ -8,7 +9,6 @@ use bollard::query_parameters::{
     ListImagesOptionsBuilder, RemoveContainerOptions, RemoveContainerOptionsBuilder,
     StartContainerOptions, StopContainerOptions, StopContainerOptionsBuilder,
 };
-use bollard::{Docker};
 use futures_util::TryStreamExt;
 use std::collections::HashMap;
 use std::error::Error;
@@ -212,7 +212,7 @@ pub async fn start_container(
 
     while let Some(msg) = status.try_next().await? {
         if let Some(status) = msg.status {
-            info!("Pull Status: {}", status);
+            info!("Pull StatusComponent: {}", status);
         }
     }
 

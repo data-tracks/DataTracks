@@ -20,9 +20,9 @@ pub async fn start(joins: &mut JoinSet<()>, tx: Sender<Event>) {
     joins.spawn(async move {
         let root_dir = std::env::current_dir().unwrap();
         let dist_path = root_dir
-            .join("dashboard")
+            .join("../../dashboard_bak")
             .join("dist")
-            .join("dashboard")
+            .join("../../dashboard_bak")
             .join("browser");
 
         info!("{:?}", dist_path);
