@@ -3,7 +3,7 @@ use crate::mongo::MongoDB;
 use crate::neo::Neo4j;
 use crate::postgres::Postgres;
 use derive_more::From;
-use flume::{unbounded, Receiver, Sender};
+use flume::{Receiver, Sender, unbounded};
 use statistics::Event;
 use std::collections::HashMap;
 use std::error::Error;
@@ -15,7 +15,7 @@ use std::time::Duration;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
 use util::definition::{Definition, Model, Stage};
-use util::{log_channel, DefinitionId, EngineId, TargetedMeta};
+use util::{DefinitionId, EngineId, TargetedMeta, log_channel};
 use value::Value;
 
 static ID_BUILDER: AtomicU64 = AtomicU64::new(0);
@@ -146,7 +146,10 @@ impl Display for EngineKind {
 }
 
 impl EngineKind {
-    pub async fn init_entity(&mut self, definition: &Definition) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub async fn init_entity(
+        &mut self,
+        definition: &Definition,
+    ) -> Result<(), Box<dyn Error + Send + Sync>> {
         match self {
             EngineKind::Postgres(p) => p.init_entity(definition).await?,
             EngineKind::MongoDB(m) => m.init_entity(definition).await?,
@@ -241,7 +244,6 @@ impl EngineKind {
             port: 7687,
             user: "neo4j".to_string(),
             password: "neoneoneo".to_string(),
-            database: "neo4j".to_string(),
             graph: None,
             prepared_queries: Default::default(),
         }

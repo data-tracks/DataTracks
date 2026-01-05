@@ -11,11 +11,11 @@ use tokio::task::JoinSet;
 use tokio::time::{sleep, timeout};
 use tokio_postgres::binary_copy::BinaryCopyInWriter;
 use tokio_postgres::types::{ToSql, Type};
-use tokio_postgres::{Client,  Statement};
+use tokio_postgres::{Client, Statement};
 use tracing::{debug, error, info};
 use util::container::Mapping;
-use util::{TargetedMeta, container, DefinitionMapping, RelationalMapping, RelationalType};
 use util::definition::{Definition, Entity, Stage};
+use util::{DefinitionMapping, RelationalMapping, RelationalType, TargetedMeta, container};
 use value::Value;
 
 #[derive(Clone, Debug)]
@@ -23,7 +23,7 @@ pub struct Postgres {
     pub(crate) load: Arc<Mutex<Load>>,
     pub(crate) connector: PostgresConnection,
     pub(crate) client: Option<Arc<Client>>,
-    pub(crate) prepared_statements: HashMap<(String, Stage), (Statement,Vec<Type>)>,
+    pub(crate) prepared_statements: HashMap<(String, Stage), (Statement, Vec<Type>)>,
 }
 
 #[derive(Debug)]
@@ -56,7 +56,6 @@ impl Postgres {
         Ok(())
     }
 
-
     pub(crate) async fn stop(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
         container::stop("engine-postgres").await
     }
@@ -74,7 +73,7 @@ impl Postgres {
         match &self.client {
             None => return Err(Box::from("Could not create postgres database")),
             Some(client) => {
-                let rows_affected = self.copy_in(stage,client, entity, values).await?;
+                let rows_affected = self.copy_in(stage, client, entity, values).await?;
                 //let rows_affected = self.load_insert(client, entity, values).await?;
 
                 debug!("Inserted {} row(s) into 'users'.", rows_affected);
@@ -154,17 +153,24 @@ impl Postgres {
         Ok(())
     }
 
-    pub async fn init_entity(&mut self, definition: &Definition) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub async fn init_entity(
+        &mut self,
+        definition: &Definition,
+    ) -> Result<(), Box<dyn Error + Send + Sync>> {
         self.create_table_plain(&definition.entity.plain).await?;
 
         if let DefinitionMapping::Relational(m) = &definition.mapping {
-            self.create_table_mapped(m, definition.entity.clone()).await?;
+            self.create_table_mapped(m, definition.entity.clone())
+                .await?;
         }
 
         Ok(())
     }
 
-    pub async fn create_table_plain(&mut self, name: &str) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub async fn create_table_plain(
+        &mut self,
+        name: &str,
+    ) -> Result<(), Box<dyn Error + Send + Sync>> {
         match &self.client {
             None => return Err(Box::from("could not create postgres database")),
             Some(client) => {
@@ -180,13 +186,20 @@ impl Postgres {
                 info!("Table '{}' ensured to exist.", name);
                 let copy_query = format!("COPY {} (id, value) FROM STDIN BINARY", name);
                 let statement = client.prepare(&copy_query).await?;
-                self.prepared_statements.insert((name.to_string(), Stage::Plain), (statement, vec![Type::INT8, Type::TEXT]));
+                self.prepared_statements.insert(
+                    (name.to_string(), Stage::Plain),
+                    (statement, vec![Type::INT8, Type::TEXT]),
+                );
             }
         }
         Ok(())
     }
 
-    async fn create_table_mapped(&mut self, mapping: &RelationalMapping, entity: Entity) -> Result<(), Box<dyn Error + Send + Sync>> {
+    async fn create_table_mapped(
+        &mut self,
+        mapping: &RelationalMapping,
+        entity: Entity,
+    ) -> Result<(), Box<dyn Error + Send + Sync>> {
         let types = mapping.get_types();
 
         match &self.client {
@@ -197,17 +210,35 @@ impl Postgres {
                     _id SERIAL PRIMARY KEY,
                     {})",
                     entity.mapped,
-                    types.iter().map(|(name, t)| format!("{} {}", name, t) ).collect::<Vec<_>>().join(",\n")
+                    types
+                        .iter()
+                        .map(|(name, t)| format!("{} {}", name, t))
+                        .collect::<Vec<_>>()
+                        .join(",\n")
                 );
 
                 //info!("{}", create_table_query);
 
                 client.execute(&create_table_query, &[]).await?;
                 info!("Table '{}' ensured to exist.", entity.mapped);
-                let copy_query = format!("COPY {} ({}) FROM STDIN BINARY", entity.mapped, types.iter().map(|(n, _)|n.to_string()).collect::<Vec<_>>().join(", "));
+                let copy_query = format!(
+                    "COPY {} ({}) FROM STDIN BINARY",
+                    entity.mapped,
+                    types
+                        .iter()
+                        .map(|(n, _)| n.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
 
                 let statement = client.prepare(&copy_query).await?;
-                self.prepared_statements.insert((entity.mapped, Stage::Mapped), (statement, types.into_iter().map(|(_,t)| Self::pg_type(t)).collect()));
+                self.prepared_statements.insert(
+                    (entity.mapped, Stage::Mapped),
+                    (
+                        statement,
+                        types.into_iter().map(|(_, t)| Self::pg_type(t)).collect(),
+                    ),
+                );
             }
         }
 
@@ -260,11 +291,12 @@ impl Postgres {
     ) -> Result<usize, Box<dyn Error + Send + Sync>> {
         let rows = values.len();
 
-        let (query, types) = self.prepared_statements.get(&(entity, stage.clone())).unwrap();
+        let (query, types) = self
+            .prepared_statements
+            .get(&(entity, stage.clone()))
+            .unwrap();
 
-        let sink = client
-            .copy_in(query)
-            .await?;
+        let sink = client.copy_in(query).await?;
 
         let writer = BinaryCopyInWriter::new(sink, types);
 
@@ -274,12 +306,23 @@ impl Postgres {
         for (value, meta) in values {
             match &stage {
                 Stage::Plain => {
-                    writer.as_mut().write(&[&(meta.id as i64), &serde_json::to_string(&value).unwrap()]).await?;
+                    writer
+                        .as_mut()
+                        .write(&[&(meta.id as i64), &serde_json::to_string(&value).unwrap()])
+                        .await?;
                 }
                 Stage::Mapped => {
                     if let Value::Array(a) = value {
-                        writer.as_mut().write(&a.values.iter().map(|v| v as &(dyn ToSql + Sync)).collect::<Vec<_>>()).await?;
-                    }else {
+                        writer
+                            .as_mut()
+                            .write(
+                                &a.values
+                                    .iter()
+                                    .map(|v| v as &(dyn ToSql + Sync))
+                                    .collect::<Vec<_>>(),
+                            )
+                            .await?;
+                    } else {
                         error!("error value {:?}", value)
                     }
                 }
@@ -291,6 +334,7 @@ impl Postgres {
         Ok(rows)
     }
 
+    #[allow(dead_code)]
     async fn load_insert(
         &self,
         client: &Arc<Client>,
@@ -326,7 +370,9 @@ pub mod tests {
     use tokio::task::JoinSet;
     use tracing_test::traced_test;
     use util::definition::{Entity, Stage};
-    use util::{DefinitionMapping, Mapping, MappingSource, RelationalMapping, RelationalType, TargetedMeta};
+    use util::{
+        DefinitionMapping, Mapping, MappingSource, RelationalMapping, RelationalType, TargetedMeta,
+    };
     use value::Value;
 
     #[tokio::test]
@@ -354,20 +400,33 @@ pub mod tests {
         let mut joins = JoinSet::new();
         pg.start(&mut joins).await.unwrap();
 
-        let r = RelationalMapping::Tuple(vec![("name".to_string(), RelationalType::Text),("age".to_string(), RelationalType::Integer)], Mapping{
-            initial: MappingSource::List { keys: vec!["name".to_string(), "age".to_string()] },
-            manual: vec![],
-            auto: vec![]
-        });
+        let r = RelationalMapping::Tuple(
+            vec![
+                ("name".to_string(), RelationalType::Text),
+                ("age".to_string(), RelationalType::Integer),
+            ],
+            Mapping {
+                initial: MappingSource::List {
+                    keys: vec!["name".to_string(), "age".to_string()],
+                },
+                manual: vec![],
+                auto: vec![],
+            },
+        );
 
-        pg.create_table_mapped(&r, Entity::new("users")).await.unwrap();
+        pg.create_table_mapped(&r, Entity::new("users"))
+            .await
+            .unwrap();
 
         pg.store(
             Stage::Mapped,
             String::from("users"),
-            vec![(Value::array(vec![Value::text("test"), Value::int(30)]), TargetedMeta::default())],
+            vec![(
+                Value::array(vec![Value::text("test"), Value::int(30)]),
+                TargetedMeta::default(),
+            )],
         )
-            .await
-            .unwrap();
+        .await
+        .unwrap();
     }
 }

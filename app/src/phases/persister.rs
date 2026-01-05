@@ -1,7 +1,6 @@
 use crate::management::catalog::Catalog;
 use engine::engine::Engine;
 use flume::{Receiver, unbounded};
-use speedy::Writable;
 use statistics::Event;
 use std::collections::HashMap;
 use std::error::Error;
@@ -10,7 +9,9 @@ use tokio::task::JoinSet;
 use tokio::time::{Instant, sleep};
 use tracing::{debug, error};
 use util::definition::{Definition, Stage};
-use util::{log_channel, DefinitionId, InitialMeta, PlainRecord, SegmentedLog, TargetedMeta, TimedMeta};
+use util::{
+    DefinitionId, InitialMeta, PlainRecord, SegmentedLog, TargetedMeta, TimedMeta, log_channel,
+};
 use value::Value;
 
 pub struct Persister {
@@ -58,7 +59,6 @@ impl Persister {
             let sender = sender.clone();
             let id_queue = id_queue.clone();
             joins.spawn(async move {
-
                 let mut available_ids = vec![];
                 loop {
                     if available_ids.is_empty() {
@@ -143,16 +143,6 @@ impl Persister {
                 }
             }
         });
-    }
-
-    async fn log(log: &mut SegmentedLog, records: &Vec<(Value, TimedMeta)>) {
-        let mut bytes = Vec::new();
-        for record in records {
-            bytes.extend(record.write_to_vec().unwrap());
-            bytes.push(b'\n');
-        }
-
-        log.write(bytes.as_slice()).await;
     }
 
     async fn select_engines(

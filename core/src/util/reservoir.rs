@@ -1,6 +1,6 @@
-use std::collections::BTreeMap;
-use std::sync::{Arc};
 use parking_lot::Mutex;
+use std::collections::BTreeMap;
+use std::sync::Arc;
 use value::Value;
 /// Sharable and thread-save value store
 #[derive(Clone)]
@@ -84,11 +84,6 @@ struct MemCache {
 }
 
 impl MemCache {
-    pub fn delete(&mut self, key: Value) -> Result<(), String> {
-        self.cache.remove(&key);
-
-        Ok(())
-    }
     pub fn write_value(&mut self, key: Value, value: Value) {
         self.cache.insert(key, value);
     }

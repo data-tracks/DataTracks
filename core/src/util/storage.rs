@@ -4,7 +4,6 @@ use speedy::{Readable, Writable};
 use std::fs;
 use tempfile::NamedTempFile;
 use uuid::Uuid;
-use value::Value;
 use value::train::{Train, TrainId};
 
 pub struct Storage {
@@ -32,8 +31,7 @@ impl Storage {
 
     /// Create a new storage instance from a specified file path.
     pub fn new_from_path<S: AsRef<str>>(file: S) -> Result<Storage, String> {
-        let db = Database::create(file.as_ref())
-            .map_err(|e| e.to_string())?;
+        let db = Database::create(file.as_ref()).map_err(|e| e.to_string())?;
         let uuid = Uuid::new_v4();
 
         let cache = Cache::new(100_000);
@@ -76,10 +74,7 @@ impl Storage {
     }
     /// Write a key-value pair to the storage.
     fn write(&self, key: TrainId, value: Vec<u8>) -> Result<(), String> {
-        let mut write_txn = self
-            .database
-            .begin_write()
-            .map_err(|e| e.to_string())?;
+        let mut write_txn = self.database.begin_write().map_err(|e| e.to_string())?;
         {
             let mut table = write_txn
                 .open_table(self.table())
@@ -88,19 +83,16 @@ impl Storage {
                 .insert(key.to_string(), value)
                 .map_err(|e| e.to_string())?;
         }
-        write_txn.set_durability(Durability::Immediate).map_err(|err| err.to_string())?;
         write_txn
-            .commit()
-            .map_err(|e| e.to_string())?;
+            .set_durability(Durability::Immediate)
+            .map_err(|err| err.to_string())?;
+        write_txn.commit().map_err(|e| e.to_string())?;
         Ok(())
     }
 
     /// Write a key-value pair to the storage.
     fn writes(&self, values: Vec<(TrainId, Vec<u8>)>) -> Result<(), String> {
-        let mut write_txn = self
-            .database
-            .begin_write()
-            .map_err(|e| e.to_string())?;
+        let mut write_txn = self.database.begin_write().map_err(|e| e.to_string())?;
         {
             let mut table = write_txn
                 .open_table(self.table())
@@ -111,19 +103,16 @@ impl Storage {
                     .map_err(|e| e.to_string())?;
             }
         }
-        write_txn.set_durability(Durability::Immediate).map_err(|err| err.to_string())?;
         write_txn
-            .commit()
-            .map_err(|e| e.to_string())?;
+            .set_durability(Durability::Immediate)
+            .map_err(|err| err.to_string())?;
+        write_txn.commit().map_err(|e| e.to_string())?;
         Ok(())
     }
 
     /// Read a value by its key from the storage.
     fn read_u8(&self, key: TrainId) -> Result<Vec<u8>, String> {
-        let read_txn = self
-            .database
-            .begin_read()
-            .map_err(|e| e.to_string())?;
+        let read_txn = self.database.begin_read().map_err(|e| e.to_string())?;
         let table = read_txn
             .open_table(self.table())
             .map_err(|e| e.to_string())?;
@@ -134,29 +123,13 @@ impl Storage {
             .map(|entry| entry.value().clone());
         value.ok_or("Key not found".to_string())
     }
-    /// Delete a key-value pair from the storage.
-    fn delete(&self, key: Value) -> Result<(), String> {
-        let delete_txn = self
-            .database
-            .begin_write()
-            .map_err(|e| e.to_string())?;
-        {
-            let mut table = delete_txn
-                .open_table(self.table())
-                .map_err(|e| e.to_string())?;
-            table
-                .remove(key.to_string())
-                .map_err(|e| e.to_string())?;
-        }
-        delete_txn
-            .commit()
-            .map_err(|e| e.to_string())
-    }
 }
 
 impl Drop for Storage {
     fn drop(&mut self) {
-        if let Some(path) = self.path.take() && let Err(e) = fs::remove_file(path) {
+        if let Some(path) = self.path.take()
+            && let Err(e) = fs::remove_file(path)
+        {
             eprintln!("Failed to remove file: {e}");
         }
     }

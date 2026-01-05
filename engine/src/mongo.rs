@@ -1,7 +1,7 @@
 use crate::engine::Load;
 use flume::Sender;
 use futures_util::StreamExt;
-use mongodb::bson::{doc};
+use mongodb::bson::doc;
 use mongodb::options::{ClientOptions, ServerApi, ServerApiVersion};
 use mongodb::{Client, Cursor};
 use statistics::Event;
@@ -13,8 +13,8 @@ use std::time::Duration;
 use tokio::time::{sleep, timeout};
 use tracing::{error, info};
 use util::container::Mapping;
-use util::{TargetedMeta, container, DefinitionMapping};
 use util::definition::{Definition, Stage};
+use util::{DefinitionMapping, TargetedMeta, container};
 use value::Value;
 
 #[derive(Clone, Debug)]
@@ -54,7 +54,6 @@ impl MongoDB {
         info!("☑️ Connected to mongoDB database");
 
         self.client = Some(client);
-
 
         Ok(())
     }
@@ -106,32 +105,6 @@ impl MongoDB {
                     values.push(value);
                 }
                 Ok(values)
-            }
-        }
-    }
-
-    pub(crate) async fn insert_data(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
-        match &self.client {
-            None => Err(Box::from("No client")),
-            Some(client) => {
-                let user_document = doc! {
-                    "name": "Alice Smith",
-                    "age": 30,
-                    "email": "alice.smith@example.com",
-                    "hobbies": ["reading", "hiking", "coding"],
-                    "address": {
-                        "street": "123 Main St",
-                        "city": "Anytown"
-                    }
-                };
-
-                client
-                    .database("public")
-                    .collection("test")
-                    .insert_one(user_document)
-                    .await?;
-
-                Ok(())
             }
         }
     }

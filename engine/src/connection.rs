@@ -14,22 +14,6 @@ pub struct PostgresConnection {
 }
 
 impl PostgresConnection {
-    pub fn new<S1: AsRef<str>, S2: AsRef<str>, S3: AsRef<str>, S4: AsRef<str>>(
-        url: S1,
-        port: u16,
-        db: S2,
-        user: S3,
-        password: S4,
-    ) -> Self {
-        PostgresConnection {
-            url: url.as_ref().to_string(),
-            port,
-            db: db.as_ref().to_string(),
-            user: user.as_ref().to_string(),
-            password: password.as_ref().to_string(),
-        }
-    }
-
     pub async fn connect(
         &self,
         join: &mut JoinSet<()>,

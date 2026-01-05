@@ -50,6 +50,7 @@ num-format = "0.4.4"
 comfy-table = "7.2.1"
 memmap2 = "0.9.9"
 axum = { version = "0.8.8", features = ["ws"] }
+tower-http = { version = "0.6.8", features = ["full"] }
 
 # The profile that 'cargo dist' will build with
 [profile.dist]

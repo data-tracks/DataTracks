@@ -8,21 +8,34 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::broadcast::Sender;
 use tokio::task::JoinSet;
+use tower_http::cors::CorsLayer;
+use tower_http::services::ServeDir;
+use tracing::info;
 
-struct AppState {
+struct EventState {
     sender: Arc<Sender<Event>>,
 }
 
 pub async fn start(joins: &mut JoinSet<()>, tx: Sender<Event>) {
     joins.spawn(async move {
-        let shared_state = Arc::new(AppState {
+        let root_dir = std::env::current_dir().unwrap();
+        let dist_path = root_dir
+            .join("dashboard")
+            .join("dist")
+            .join("dashboard")
+            .join("browser");
+
+        info!("{:?}", dist_path);
+
+        let shared_state = Arc::new(EventState {
             sender: Arc::new(tx),
         });
 
         let app = Router::new()
-            //.route("/", get(root_handler))
-            .route("/ws", get(ws_handler))
-            .with_state(shared_state);
+            .route("/events", get(ws_event_handler))
+            .layer(CorsLayer::permissive())
+            .with_state(shared_state)
+            .fallback_service(ServeDir::new(dist_path));
 
         let listener = TcpListener::bind("127.0.0.1:3131").await.unwrap();
         println!("Server running on http://127.0.0.1:3131");
@@ -30,11 +43,15 @@ pub async fn start(joins: &mut JoinSet<()>, tx: Sender<Event>) {
     });
 }
 
-async fn ws_handler(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    ws.on_upgrade(|socket| handle_socket(socket, state))
+async fn ws_event_handler(
+    ws: WebSocketUpgrade,
+    State(state): State<Arc<EventState>>,
+) -> impl IntoResponse {
+    ws.on_upgrade(|socket| handle_event_socket(socket, state))
 }
 
-async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
+async fn handle_event_socket(mut socket: WebSocket, state: Arc<EventState>) {
+    info!("connected");
     let mut rx = state.sender.subscribe();
 
     while let Ok(event) = rx.recv().await {

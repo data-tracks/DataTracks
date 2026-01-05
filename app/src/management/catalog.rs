@@ -20,12 +20,6 @@ pub struct State {
 }
 
 impl Catalog {
-    pub fn new() -> Self {
-        Catalog {
-            state: Arc::new(Mutex::new(State::default())),
-        }
-    }
-
     pub async fn add_definition(
         &self,
         definition: Definition,
@@ -33,10 +27,7 @@ impl Catalog {
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
         let mut state = self.state.lock().await;
         for engine in &mut state.engines {
-            engine
-                .engine_kind
-                .init_entity(&definition)
-                .await?;
+            engine.engine_kind.init_entity(&definition).await?;
 
             engine.add_definition(&definition);
         }

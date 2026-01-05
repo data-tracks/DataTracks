@@ -1,9 +1,9 @@
 use crate::RelationalType;
 use serde::Serialize;
-use value::edge::Edge;
-use value::node::Node;
 use value::Value;
 use value::Value::{Array, Dict};
+use value::edge::Edge;
+use value::node::Node;
 
 #[derive(Clone, Debug, Serialize)]
 /// The type of objects that can be produced by the definition, always of some specific data model
@@ -62,7 +62,7 @@ impl DefinitionMapping {
             types.clone(),
             Mapping {
                 initial: MappingSource::List {
-                    keys: types.into_iter().map(|(k,_)| k).collect(),
+                    keys: types.into_iter().map(|(k, _)| k).collect(),
                 },
                 manual: vec![],
                 auto: vec![],
@@ -260,12 +260,6 @@ pub struct EdgeMapping {
 pub enum MappingSource {
     Document(DocumentSource),
     List { keys: Vec<String> },
-}
-
-impl MappingSource {
-    fn document() -> Self {
-        MappingSource::Document(DocumentSource::Whole)
-    }
 }
 
 #[derive(Clone, Debug, Serialize)]
