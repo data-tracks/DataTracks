@@ -1,28 +1,33 @@
-import {Injectable, NgZone} from '@angular/core';
-import {Observable} from "rxjs";
+import {Injectable, NgZone, signal} from '@angular/core';
 
 @Injectable({
-    providedIn: 'root',
+  providedIn: 'root',
 })
 export class EventsService {
-    constructor(private zone: NgZone) {
-    }
 
-    getUpdates(): Observable<String[]> {
-        return new Observable(observer => {
-            const socket = new WebSocket('ws://localhost:3131/events');
+  private _channels = signal<any>(null);
 
-            socket.onmessage = (event) => {
-                console.log(event.data)
-                this.zone.run(() => observer.next(JSON.parse(event.data).toString()));
-            };
+  public channels = this._channels.asReadonly();
 
-            socket.onerror = (err) => {
-                this.zone.run(() => observer.error(err));
-            };
+  constructor(private zone: NgZone) {
+    this.initConnection()
+  }
 
-            return () => socket.close();
-        });
-    }
+  private initConnection() {
+    const socket = new WebSocket('ws://localhost:3131/events');
+
+    socket.onmessage = (event) => {
+      this.zone.run(() => {
+        const data = JSON.parse(event.data);
+
+        this._channels.set(data);
+      });
+    };
+
+    socket.onclose = () => {
+      console.warn('Disconnected from Rust. Retrying in 2s...');
+      setTimeout(() => this.initConnection(), 2000);
+    };
+  }
 
 }

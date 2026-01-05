@@ -1,13 +1,13 @@
 import {Component, signal} from '@angular/core';
 import {RouterOutlet} from '@angular/router';
-import {Status} from "./status/status";
+import {StatusComponent} from "./status/status.component";
 
 @Component({
-    selector: 'app-root',
-    imports: [RouterOutlet, Status],
-    templateUrl: './app.html',
-    styleUrl: './app.scss'
+  selector: 'app-root',
+  imports: [RouterOutlet, RouterOutlet, StatusComponent],
+  templateUrl: './app.html',
+  styleUrl: './app.css'
 })
 export class App {
-    protected readonly title = signal('dashboard');
+  protected readonly title = signal('dashboard');
 }

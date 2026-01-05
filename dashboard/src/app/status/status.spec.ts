@@ -1,23 +1,23 @@
 import {ComponentFixture, TestBed} from '@angular/core/testing';
 
-import {Status} from './status';
+import {StatusComponent} from './status.component';
 
 describe('Status', () => {
-    let component: Status;
-    let fixture: ComponentFixture<Status>;
+  let component: StatusComponent;
+  let fixture: ComponentFixture<StatusComponent>;
 
-    beforeEach(async () => {
-        await TestBed.configureTestingModule({
-            imports: [Status]
-        })
-            .compileComponents();
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [StatusComponent]
+    })
+        .compileComponents();
 
-        fixture = TestBed.createComponent(Status);
-        component = fixture.componentInstance;
-        await fixture.whenStable();
-    });
+    fixture = TestBed.createComponent(StatusComponent);
+    component = fixture.componentInstance;
+    await fixture.whenStable();
+  });
 
-    it('should create', () => {
-        expect(component).toBeTruthy();
-    });
+  it('should create', () => {
+    expect(component).toBeTruthy();
+  });
 });
