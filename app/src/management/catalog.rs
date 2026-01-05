@@ -2,11 +2,11 @@ use engine::EngineKind;
 use engine::engine::Engine;
 use flume::Sender;
 use futures::future::join_all;
-use statistics::Event;
 use std::error::Error;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use util::definition::Definition;
+use util::Event;
 
 #[derive(Default)]
 pub struct Catalog {

@@ -4,7 +4,6 @@ use crate::neo::Neo4j;
 use crate::postgres::Postgres;
 use derive_more::From;
 use flume::{Receiver, Sender, unbounded};
-use statistics::Event;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
@@ -15,7 +14,7 @@ use std::time::Duration;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
 use util::definition::{Definition, Model, Stage};
-use util::{DefinitionId, EngineId, TargetedMeta, log_channel};
+use util::{DefinitionId, EngineId, TargetedMeta, log_channel, Event};
 use value::Value;
 
 static ID_BUILDER: AtomicU64 = AtomicU64::new(0);

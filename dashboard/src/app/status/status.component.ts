@@ -1,4 +1,4 @@
-import {Component, effect, inject, signal, WritableSignal} from '@angular/core';
+import {Component, effect, inject, input, signal, WritableSignal} from '@angular/core';
 import {EventsService} from "../events.service";
 
 @Component({
@@ -9,14 +9,14 @@ import {EventsService} from "../events.service";
 })
 export class StatusComponent {
 
-    protected service = inject(EventsService);
-
     protected msgs: WritableSignal<any[]> = signal([]);
     protected readonly JSON = JSON;
 
+    inputs = input.required<any[]>();
+
     constructor() {
         effect(() => {
-            let data = this.service.channels();
+            let data = this.inputs();
 
             this.msgs.update(msgs => {
                 const updated = [...msgs, data];

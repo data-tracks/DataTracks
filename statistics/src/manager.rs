@@ -1,10 +1,8 @@
-use crate::Event::Runtime;
 use crate::web;
 use comfy_table::Table;
 use comfy_table::presets::UTF8_FULL;
 use flume::{Sender, unbounded};
 use num_format::{CustomFormat, ToFormattedString};
-use serde::Serialize;
 use std::collections::HashMap;
 use std::error::Error;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -14,7 +12,8 @@ use tokio::select;
 use tokio::task::JoinSet;
 use tokio::time::{interval, sleep};
 use util::definition::Definition;
-use util::{DefinitionId, EngineId, log_channel};
+use util::{DefinitionId, EngineId, log_channel, set_statistic_sender, Event, RuntimeEvent};
+use util::Event::Runtime;
 
 pub struct Statistics {
     engines: HashMap<EngineId, EngineStatistic>,
@@ -58,6 +57,8 @@ impl Statistics {
 
 pub async fn start(joins: &mut JoinSet<()>) -> Sender<Event> {
     let (tx, rx) = unbounded::<Event>();
+    set_statistic_sender(tx.clone());
+
     log_channel(tx.clone(), "EventsService");
     let (bc_tx, _) = tokio::sync::broadcast::channel(100_000);
     let clone_bc_tx = bc_tx.clone();
@@ -175,19 +176,3 @@ impl EngineStatistic {
     }
 }
 
-#[derive(Serialize, Clone, Debug)]
-pub enum Event {
-    Insert(DefinitionId, usize, EngineId),
-    Definition(DefinitionId, Definition),
-    Engine(EngineId, String),
-    Runtime(RuntimeEvent),
-    EngineStatus(String),
-}
-
-#[derive(Serialize, Clone, Debug)]
-pub struct RuntimeEvent {
-    pub active_tasks: usize,
-    pub worker_threads: usize,
-    pub blocking_threads: usize,
-    pub budget_forces_yield: usize,
-}

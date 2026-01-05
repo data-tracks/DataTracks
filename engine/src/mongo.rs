@@ -4,8 +4,6 @@ use futures_util::StreamExt;
 use mongodb::bson::doc;
 use mongodb::options::{ClientOptions, ServerApi, ServerApiVersion};
 use mongodb::{Client, Cursor};
-use statistics::Event;
-use statistics::Event::EngineStatus;
 use std::collections::HashMap;
 use std::error::Error;
 use std::sync::{Arc, Mutex};
@@ -14,7 +12,8 @@ use tokio::time::{sleep, timeout};
 use tracing::{error, info};
 use util::container::Mapping;
 use util::definition::{Definition, Stage};
-use util::{DefinitionMapping, TargetedMeta, container};
+use util::{DefinitionMapping, TargetedMeta, container, Event};
+use util::Event::EngineStatus;
 use value::Value;
 
 #[derive(Clone, Debug)]

@@ -1,6 +1,7 @@
-import {Component, signal} from '@angular/core';
+import {Component, inject, signal, WritableSignal} from '@angular/core';
 import {RouterOutlet} from '@angular/router';
 import {StatusComponent} from "./status/status.component";
+import {EventsService} from "./events.service";
 
 @Component({
   selector: 'app-root',
@@ -10,4 +11,5 @@ import {StatusComponent} from "./status/status.component";
 })
 export class App {
   protected readonly title = signal('dashboard');
+  protected service = inject(EventsService);
 }

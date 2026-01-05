@@ -1,7 +1,6 @@
 use crate::management::catalog::Catalog;
 use engine::engine::Engine;
 use flume::{Receiver, unbounded};
-use statistics::Event;
 use std::collections::HashMap;
 use std::error::Error;
 use std::time::Duration;
@@ -9,9 +8,7 @@ use tokio::task::JoinSet;
 use tokio::time::{Instant, sleep};
 use tracing::{debug, error};
 use util::definition::{Definition, Stage};
-use util::{
-    DefinitionId, InitialMeta, PlainRecord, SegmentedLog, TargetedMeta, TimedMeta, log_channel,
-};
+use util::{DefinitionId, InitialMeta, PlainRecord, SegmentedLog, TargetedMeta, TimedMeta, log_channel, Event};
 use value::Value;
 
 pub struct Persister {

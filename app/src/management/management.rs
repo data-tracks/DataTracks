@@ -5,13 +5,12 @@ use engine::EngineKind;
 use flume::{Sender, unbounded};
 use sink::dummy::DummySink;
 use sink::kafka::Kafka;
-use statistics::Event;
 use std::error::Error;
 use std::time::Duration;
 use tokio::task::JoinSet;
 use tracing::{error, info};
 use util::definition::{Definition, DefinitionFilter, Model};
-use util::{log_channel, DefinitionMapping, InitialMeta, RelationalType};
+use util::{log_channel, DefinitionMapping, Event, InitialMeta, RelationalType};
 use value::Value;
 
 #[derive(Default)]

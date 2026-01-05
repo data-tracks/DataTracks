@@ -2,7 +2,6 @@ use crate::connection::PostgresConnection;
 use crate::engine::Load;
 use flume::Sender;
 use pin_utils::pin_mut;
-use statistics::Event;
 use std::collections::HashMap;
 use std::error::Error;
 use std::sync::{Arc, Mutex};
@@ -15,7 +14,7 @@ use tokio_postgres::{Client, Statement};
 use tracing::{debug, error, info};
 use util::container::Mapping;
 use util::definition::{Definition, Entity, Stage};
-use util::{DefinitionMapping, RelationalMapping, RelationalType, TargetedMeta, container};
+use util::{DefinitionMapping, RelationalMapping, RelationalType, TargetedMeta, container, Event};
 use value::Value;
 
 #[derive(Clone, Debug)]

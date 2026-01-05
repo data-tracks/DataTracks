@@ -8,6 +8,7 @@ mod segment;
 mod mappings;
 mod types;
 mod channel;
+mod event;
 
 pub use segment::SegmentedLog;
 
@@ -20,3 +21,5 @@ pub use mappings::*;
 pub use types::*;
 
 pub use channel::*;
+
+pub use event::*;

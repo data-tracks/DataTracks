@@ -1,4 +1,3 @@
-use crate::Event;
 use axum::Router;
 use axum::extract::ws::{Message, Utf8Bytes, WebSocket};
 use axum::extract::{State, WebSocketUpgrade};
@@ -11,18 +10,18 @@ use tokio::task::JoinSet;
 use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
 use tracing::info;
+use util::Event;
 
 struct EventState {
     sender: Arc<Sender<Event>>,
 }
-
 pub async fn start(joins: &mut JoinSet<()>, tx: Sender<Event>) {
     joins.spawn(async move {
         let root_dir = std::env::current_dir().unwrap();
         let dist_path = root_dir
-            .join("../../dashboard_bak")
+            .join("dashboard")
             .join("dist")
-            .join("../../dashboard_bak")
+            .join("dashboard")
             .join("browser");
 
         info!("{:?}", dist_path);
@@ -33,6 +32,7 @@ pub async fn start(joins: &mut JoinSet<()>, tx: Sender<Event>) {
 
         let app = Router::new()
             .route("/events", get(ws_event_handler))
+            .route("/queue", get(ws_queue_handler))
             .layer(CorsLayer::permissive())
             .with_state(shared_state)
             .fallback_service(ServeDir::new(dist_path));
@@ -55,14 +55,51 @@ async fn handle_event_socket(mut socket: WebSocket, state: Arc<EventState>) {
     let mut rx = state.sender.subscribe();
 
     while let Ok(event) = rx.recv().await {
-        if let Ok(msg) = serde_json::to_string(&event)
-            && socket
-                .send(Message::Text(Utf8Bytes::from(msg)))
-                .await
-                .is_err()
-        {
-            // Client disconnected
-            break;
+        match event {
+            Event::Queue(_) => {
+            },
+            e => {
+                if let Ok(msg) = serde_json::to_string(&e)
+                    && socket
+                    .send(Message::Text(Utf8Bytes::from(msg)))
+                    .await
+                    .is_err()
+                {
+                    // Client disconnected
+                    break;
+                }
+            }
         }
+
+    }
+}
+
+async fn ws_queue_handler(
+    ws: WebSocketUpgrade,
+    State(state): State<Arc<EventState>>,
+) -> impl IntoResponse {
+    ws.on_upgrade(|socket| handle_queue_socket(socket, state))
+}
+
+async fn handle_queue_socket(mut socket: WebSocket, state: Arc<EventState>) {
+    info!("connected");
+    let mut rx = state.sender.subscribe();
+
+    while let Ok(event) = rx.recv().await {
+        match event {
+            Event::Queue(q) => {
+                if let Ok(msg) = serde_json::to_string(&q)
+                    && socket
+                    .send(Message::Text(Utf8Bytes::from(msg)))
+                    .await
+                    .is_err()
+                {
+                    // Client disconnected
+                    break;
+                }
+            },
+            _ => {}
+        }
+
     }
 }

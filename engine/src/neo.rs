@@ -4,8 +4,6 @@ use log::debug;
 use neo4rs::{Graph, query};
 use reqwest::Client;
 use serde::Deserialize;
-use statistics::Event;
-use statistics::Event::EngineStatus;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::Debug;
@@ -15,7 +13,8 @@ use tokio::time::{Instant, sleep};
 use tracing::info;
 use util::container::Mapping;
 use util::definition::{Definition, Stage};
-use util::{DefinitionMapping, TargetedMeta, container};
+use util::{DefinitionMapping, TargetedMeta, container, Event};
+use util::Event::EngineStatus;
 use value::Value;
 
 #[derive(Clone)]
