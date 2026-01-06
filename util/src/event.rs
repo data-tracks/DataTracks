@@ -3,6 +3,7 @@ use crate::{DefinitionId, EngineId};
 use crate::definition::Definition;
 
 #[derive(Serialize, Clone, Debug)]
+#[serde(tag = "type",content = "data")]
 pub enum Event {
     Insert(DefinitionId, usize, EngineId),
     Definition(DefinitionId, Definition),

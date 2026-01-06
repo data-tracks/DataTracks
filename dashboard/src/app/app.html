@@ -1,4 +1,4 @@
-<main class="shadow w-full bg-base-200">
+<main class="shadow w-full bg-base-200 m-4">
     <div class="w-full">
         <div class="stat">
             <div class="stat-figure text-primary">
@@ -14,14 +14,14 @@
         </div>
     </div>
 
-    <div class="stats w-full">
-        <div class="stat w-1/2">
-            <div class="stat-title">Events</div>
+    <div class="grid grid-cols-2 gap-2 content-start">
+        <div class="card bg-base-300 rounded-box grid grow place-items-center">
+            <div class="stat-title text-xl mb-2">Events</div>
             <app-status [inputs]="service.events()"/>
         </div>
-        <div class="stat w-1/2">
-            <div class="stat-title">Queues</div>
-            <app-status [inputs]="service.queues()"/>
+        <div class="card bg-base-300 rounded-box grid grow place-items-center content-start">
+            <div class="stat-title text-xl mb-2">Queues</div>
+            <app-queue [inputs]="service.queues()"/>
         </div>
     </div>
 </main>

@@ -9,7 +9,7 @@ use tokio::sync::broadcast::Sender;
 use tokio::task::JoinSet;
 use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
-use tracing::info;
+use tracing::{debug, info};
 use util::Event;
 
 struct EventState {
@@ -32,7 +32,7 @@ pub async fn start(joins: &mut JoinSet<()>, tx: Sender<Event>) {
 
         let app = Router::new()
             .route("/events", get(ws_event_handler))
-            .route("/queue", get(ws_queue_handler))
+            .route("/queues", get(ws_queue_handler))
             .layer(CorsLayer::permissive())
             .with_state(shared_state)
             .fallback_service(ServeDir::new(dist_path));
@@ -51,7 +51,7 @@ async fn ws_event_handler(
 }
 
 async fn handle_event_socket(mut socket: WebSocket, state: Arc<EventState>) {
-    info!("connected");
+    debug!("connected");
     let mut rx = state.sender.subscribe();
 
     while let Ok(event) = rx.recv().await {
@@ -82,7 +82,7 @@ async fn ws_queue_handler(
 }
 
 async fn handle_queue_socket(mut socket: WebSocket, state: Arc<EventState>) {
-    info!("connected");
+    debug!("connected");
     let mut rx = state.sender.subscribe();
 
     while let Ok(event) = rx.recv().await {
