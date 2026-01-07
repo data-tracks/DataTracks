@@ -11,9 +11,9 @@ use tokio::runtime::Handle;
 use tokio::select;
 use tokio::task::JoinSet;
 use tokio::time::{interval, sleep};
-use util::definition::Definition;
-use util::{DefinitionId, EngineId, log_channel, set_statistic_sender, Event, RuntimeEvent};
 use util::Event::Runtime;
+use util::definition::Definition;
+use util::{DefinitionId, EngineId, Event, RuntimeEvent, log_channel, set_statistic_sender};
 
 pub struct Statistics {
     engines: HashMap<EngineId, EngineStatistic>,
@@ -59,7 +59,7 @@ pub async fn start(joins: &mut JoinSet<()>) -> Sender<Event> {
     let (tx, rx) = unbounded::<Event>();
     set_statistic_sender(tx.clone());
 
-    log_channel(tx.clone(), "EventsService");
+    log_channel(tx.clone(), "Events");
     let (bc_tx, _) = tokio::sync::broadcast::channel(100_000);
     let clone_bc_tx = bc_tx.clone();
     joins.spawn(async move {
@@ -113,7 +113,7 @@ impl Statistics {
 
         table.load_preset(UTF8_FULL);
 
-        table.set_header(vec!["Entity", "EventsService"]);
+        table.set_header(vec!["Entity", "Events"]);
 
         let format = CustomFormat::builder().separator("'").build()?;
 
@@ -175,4 +175,3 @@ impl EngineStatistic {
             .fetch_add(amount, Ordering::Relaxed);
     }
 }
-

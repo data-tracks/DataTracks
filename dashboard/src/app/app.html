@@ -8,20 +8,34 @@
                           d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                 </svg>
             </div>
-            <div class="stat-title">System Status</div>
-            <div class="stat-value text-success">Operational</div>
+            <div class="stat-title">System StatusComponent</div>
+
+            @if (service.connected()) {
+                <div class="stat-value text-success">Operational</div>
+            } @else {
+                <div class="stat-value text-error">Disconnected</div>
+            }
+
             <div class="stat-desc">Rust Node: v1.75.0</div>
         </div>
     </div>
 
     <div class="grid grid-cols-2 gap-2 content-start">
-        <div class="card bg-base-300 rounded-box grid grow place-items-center">
-            <div class="stat-title text-xl mb-2">Events</div>
-            <app-status [inputs]="service.events()"/>
+        <div class="card bg-base-300 rounded-box grid grow place-items-center p-4">
+            <div class="flex gap-1">
+                <div class="text-xl mb-2">Events</div>
+                <app-status [status]="service.connectedEvents()"/>
+            </div>
+
+            <app-events [inputs]="service.events()" class="w-full"/>
         </div>
-        <div class="card bg-base-300 rounded-box grid grow place-items-center content-start">
-            <div class="stat-title text-xl mb-2">Queues</div>
-            <app-queue [inputs]="service.queues()"/>
+        <div class="card bg-base-300 rounded-box grid grow place-items-center content-start p-4">
+            <div class="flex gap-1">
+                <div class="text-xl mb-2">Queues</div>
+                <app-status [status]="service.connectedQueues()"/>
+            </div>
+
+            <app-queues [inputs]="service.queues()" class="w-full"/>
         </div>
     </div>
 </main>

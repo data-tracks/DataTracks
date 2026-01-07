@@ -1,6 +1,6 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import {ComponentFixture, TestBed} from '@angular/core/testing';
 
-import { QueueComponent } from './queue.component';
+import {QueueComponent} from './queue.component';
 
 describe('QueueComponent', () => {
   let component: QueueComponent;

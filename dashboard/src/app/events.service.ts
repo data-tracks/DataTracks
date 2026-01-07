@@ -1,4 +1,4 @@
-import {Injectable, NgZone, signal} from '@angular/core';
+import {computed, Injectable, NgZone, signal} from '@angular/core';
 
 @Injectable({
   providedIn: 'root',
@@ -11,6 +11,11 @@ export class EventsService {
   private _queues = signal<any>(null);
   public queues = this._queues.asReadonly();
 
+  public connectedEvents = signal<boolean>(false);
+  public connectedQueues = signal<boolean>(false);
+
+  public connected = computed(() => this.connectedQueues() && this.connectedEvents())
+
   constructor(private zone: NgZone) {
     this.initEventsConnection();
     this.initQueueConnection();
@@ -21,6 +26,7 @@ export class EventsService {
 
     socket.onmessage = (event) => {
       this.zone.run(() => {
+        this.connectedEvents.set(true);
         const data = JSON.parse(event.data);
 
         this._events.set(data);
@@ -28,6 +34,7 @@ export class EventsService {
     };
 
     socket.onclose = () => {
+      this.connectedEvents.set(false);
       console.warn('Disconnected from Rust. Retrying in 2s...');
       setTimeout(() => this.initEventsConnection(), 2000);
     };
@@ -38,6 +45,7 @@ export class EventsService {
 
     socket.onmessage = (queue) => {
       this.zone.run(() => {
+        this.connectedQueues.set(true);
         const data = JSON.parse(queue.data);
 
         this._queues.set(data);
@@ -45,6 +53,7 @@ export class EventsService {
     };
 
     socket.onclose = () => {
+      this.connectedQueues.set(false);
       console.warn('Disconnected from Rust. Retrying in 2s...');
       setTimeout(() => this.initQueueConnection(), 2000);
     };

@@ -9,7 +9,7 @@ use tokio::sync::broadcast::Sender;
 use tokio::task::JoinSet;
 use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 use util::Event;
 
 struct EventState {
@@ -56,21 +56,20 @@ async fn handle_event_socket(mut socket: WebSocket, state: Arc<EventState>) {
 
     while let Ok(event) = rx.recv().await {
         match event {
-            Event::Queue(_) => {
-            },
+            Event::Queue(_) => {}
             e => {
                 if let Ok(msg) = serde_json::to_string(&e)
                     && socket
-                    .send(Message::Text(Utf8Bytes::from(msg)))
-                    .await
-                    .is_err()
+                        .send(Message::Text(Utf8Bytes::from(msg)))
+                        .await
+                        .is_err()
                 {
                     // Client disconnected
+                    error!("disconnected event");
                     break;
                 }
             }
         }
-
     }
 }
 
@@ -86,20 +85,16 @@ async fn handle_queue_socket(mut socket: WebSocket, state: Arc<EventState>) {
     let mut rx = state.sender.subscribe();
 
     while let Ok(event) = rx.recv().await {
-        match event {
-            Event::Queue(q) => {
-                if let Ok(msg) = serde_json::to_string(&q)
-                    && socket
-                    .send(Message::Text(Utf8Bytes::from(msg)))
-                    .await
-                    .is_err()
-                {
-                    // Client disconnected
-                    break;
-                }
-            },
-            _ => {}
+        if let Event::Queue(q) = event
+            && let Ok(msg) = serde_json::to_string(&q)
+            && socket
+                .send(Message::Text(Utf8Bytes::from(msg)))
+                .await
+                .is_err()
+        {
+            // Client disconnected
+            error!("disconnected queue");
+            break;
         }
-
     }
 }

@@ -1,14 +1,14 @@
-use flume::{Sender};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::OnceLock;
-use std::time::Duration;
+use flume::Sender;
 use num_format::{CustomFormat, ToFormattedString};
+use std::sync::OnceLock;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 use tokio::spawn;
 
+use crate::event::{Event, QueueEvent};
 use tokio::sync::RwLock;
 use tokio::time::Instant;
 use tracing::info;
-use crate::{Event, QueueEvent};
 
 const WARNING: usize = 10_000;
 
@@ -21,7 +21,6 @@ pub fn get_statistic_sender() -> Sender<Event> {
 pub fn set_statistic_sender(sender: Sender<Event>) {
     EVENT_SENDER.set(sender).unwrap();
 }
-
 
 pub fn log_channel<S: AsRef<str>, P: Send + 'static>(tx: Sender<P>, name: S) {
     let name = name.as_ref().to_string();
@@ -39,25 +38,30 @@ pub fn log_channel<S: AsRef<str>, P: Send + 'static>(tx: Sender<P>, name: S) {
         loop {
             interval.tick().await;
             len = tx.len();
-            statistics.send(Event::Queue(QueueEvent{ name: name.clone(), size: len })).unwrap();
+            statistics
+                .send(Event::Queue(QueueEvent {
+                    name: name.clone(),
+                    size: len,
+                }))
+                .unwrap();
             if tx.len() > WARNING {
                 let do_log = last_log.read().await.elapsed() > Duration::from_secs(10);
                 if do_log {
                     tracing::error!(
-                    "Queue {} too big: {}",
-                    name,
-                    tx.len().to_formatted_string(&format)
-                );
+                        "Queue {} too big: {}",
+                        name,
+                        tx.len().to_formatted_string(&format)
+                    );
                     let mut log = last_log.write().await;
                     *log = Instant::now();
                     overwhelmed.store(true, Ordering::Relaxed);
                 }
             } else if overwhelmed.load(Ordering::Relaxed) {
                 info!(
-                "Queue {} relaxed: {}",
-                name,
-                tx.len().to_formatted_string(&format)
-            );
+                    "Queue {} relaxed: {}",
+                    name,
+                    tx.len().to_formatted_string(&format)
+                );
                 overwhelmed.store(false, Ordering::Relaxed);
             }
         }

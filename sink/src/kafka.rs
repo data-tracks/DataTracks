@@ -191,7 +191,7 @@ impl Kafka {
             }
         }
 
-        // Explicitly flush the producer queue before the application exits
+        // Explicitly flush the producer queues before the application exits
         producer
             .flush(Duration::from_secs(5))
             .map_err(|err| Box::from(err.to_string()))

@@ -1,12 +1,13 @@
-import {Component, inject, signal, WritableSignal} from '@angular/core';
+import {Component, inject, signal} from '@angular/core';
 import {RouterOutlet} from '@angular/router';
-import {StatusComponent} from "./status/status.component";
+import {EventsComponent} from "./events/events.component";
 import {EventsService} from "./events.service";
-import {QueueComponent} from "./queue/queue.component";
+import {QueuesComponent} from "./queues/queues.component";
+import {StatusComponent} from "./status/status.component";
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, RouterOutlet, StatusComponent, QueueComponent],
+  imports: [RouterOutlet, RouterOutlet, EventsComponent, QueuesComponent, StatusComponent],
   templateUrl: './app.html',
   styleUrl: './app.css'
 })

@@ -212,7 +212,7 @@ pub async fn start_container(
 
     while let Some(msg) = status.try_next().await? {
         if let Some(status) = msg.status {
-            info!("Pull StatusComponent: {}", status);
+            info!("Pull EventsComponent: {}", status);
         }
     }
 
