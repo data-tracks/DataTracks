@@ -1,0 +1,9 @@
+<ul class="list bg-base-100 rounded-box shadow-md">
+    @for (chan of msgs(); track chan) {
+        @if (chan) {
+            <li class="list-row">
+                <pre class="whitespace-pre-wrap wrap-break-word">{{ JSON.stringify(chan, null, 2) }}</pre>
+            </li>
+        }
+    }
+</ul>

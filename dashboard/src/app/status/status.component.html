@@ -1,9 +1,7 @@
 <div>
-    @for (chan of msgs(); track chan) {
-        @if (chan) {
-            <div class="card mb-2 text-wrap">
-                <pre>{{ JSON.stringify(chan, null, 2) }}</pre>
-            </div>
-        }
+    @if (status()) {
+        <div aria-label="success" class="status status-success"></div>
+    } @else {
+        <div aria-label="error" class="status status-error"></div>
     }
 </div>
