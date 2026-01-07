@@ -8,13 +8,12 @@ mod util;
 
 mod phases;
 
-#[tokio::main]
-async fn main() {
+fn main() {
     setup_logging();
     util::logo();
 
-    let mut manager = Manager::new();
-    manager.start().await.unwrap()
+    let manager = Manager::new();
+    manager.start().unwrap();
 }
 
 fn setup_logging() {

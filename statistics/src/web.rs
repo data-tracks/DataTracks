@@ -5,8 +5,8 @@ use axum::response::IntoResponse;
 use axum::routing::get;
 use std::sync::Arc;
 use tokio::net::TcpListener;
+use tokio::runtime::Runtime;
 use tokio::sync::broadcast::Sender;
-use tokio::task::JoinSet;
 use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
 use tracing::{debug, error, info};
@@ -15,8 +15,8 @@ use util::Event;
 struct EventState {
     sender: Arc<Sender<Event>>,
 }
-pub async fn start(joins: &mut JoinSet<()>, tx: Sender<Event>) {
-    joins.spawn(async move {
+pub fn start(rt: &mut Runtime, tx: Sender<Event>) {
+    rt.spawn(async move {
         let root_dir = std::env::current_dir().unwrap();
         let dist_path = root_dir
             .join("dashboard")

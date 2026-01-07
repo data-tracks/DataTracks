@@ -1,12 +1,14 @@
 use crate::management::catalog::Catalog;
-use crate::phases::Persister;
 use crate::phases::mapper::Nativer;
+use crate::phases::Persister;
 use engine::EngineKind;
-use flume::{Sender, unbounded};
+use flume::{unbounded, Sender};
 use sink::dummy::DummySink;
 use sink::kafka::Kafka;
 use std::error::Error;
+use std::thread;
 use std::time::Duration;
+use tokio::runtime::Builder;
 use tokio::task::JoinSet;
 use tracing::{error, info};
 use util::definition::{Definition, DefinitionFilter, Model};
@@ -27,50 +29,60 @@ impl Manager {
         }
     }
 
-    pub async fn start(&mut self) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub fn start(mut self) -> Result<(), Box<dyn Error + Send + Sync>> {
         let ctrl_c_signal = tokio::signal::ctrl_c();
 
-        let mut joins: JoinSet<()> = JoinSet::new();
+        let main_rt = Builder::new_multi_thread()
+            .thread_name("main-rt")
+            .enable_all()
+            .build()?;
 
-        let statistic_tx = statistics::start(&mut self.joins).await;
-        let mut persister = Persister::new(self.catalog.clone()).await?;
+        let (tx, rx) = unbounded::<Event>();
+
+        let statistic_tx = statistics::start(tx, rx);
+        let mut persister = Persister::new(self.catalog.clone())?;
         let nativer = Nativer::new(self.catalog.clone());
 
-        self.init_engines(statistic_tx.clone()).await?;
+        self.init_engines(statistic_tx.clone())?;
 
-        self.init_definitions(statistic_tx).await?;
 
-        persister.start_distributor(&mut self.joins).await;
 
-        let kafka = self.start_sinks(persister).await?;
+        main_rt.block_on(async move {
+            let mut joins: JoinSet<()> = JoinSet::new();
 
-        nativer.start(&mut self.joins).await;
+            self.init_definitions(statistic_tx).await?;
 
-        tokio::select! {
-                _ = ctrl_c_signal => {
-                    info!("#️⃣ Ctrl-C received!");
-                }
-                Some(res) = joins.join_next() => {
-                    if let Err(e) = res {
-                        error!("\nFatal Error: A core task crashed: {:?}", e);
+            persister.start_distributor(&mut self.joins).await;
+
+            let kafka = self.start_sinks(persister).await?;
+
+            nativer.start(&mut self.joins).await;
+
+            tokio::select! {
+                    _ = ctrl_c_signal => {
+                        info!("#️⃣ Ctrl-C received!");
                     }
-                }
-        }
+                    Some(res) = joins.join_next() => {
+                        if let Err(e) = res {
+                            error!("\nFatal Error: A core task crashed: {:?}", e);
+                        }
+                    }
+            }
 
-        info!("Stopping kafka...");
-        kafka.stop().await?;
+            info!("Stopping kafka...");
+            kafka.stop().await?;
 
-        info!("Stopping engines...");
-        self.catalog.stop().await?;
+            info!("Stopping engines...");
+            self.catalog.stop().await?;
 
-        // Clean up all remaining running tasks
-        info!("🧹 Aborting remaining tasks...");
-        joins.abort_all();
-        while joins.join_next().await.is_some() {}
+            // Clean up all remaining running tasks
+            info!("🧹 Aborting remaining tasks...");
+            joins.abort_all();
+            while joins.join_next().await.is_some() {}
 
-        info!("✅ All services shut down. Exiting.");
-
-        Ok(())
+            info!("✅ All services shut down. Exiting.");
+            Ok::<(), Box<dyn Error + Send + Sync>>(())
+        })
     }
 
     async fn init_definitions(
@@ -84,7 +96,7 @@ impl Manager {
                     DefinitionMapping::document(),
                     Model::Document,
                     String::from("doc"),
-                ),
+                ).await,
                 statistic_tx.clone(),
             )
             .await?;
@@ -93,10 +105,13 @@ impl Manager {
             .add_definition(
                 Definition::new(
                     DefinitionFilter::MetaName(String::from("relational")),
-                    DefinitionMapping::tuple_to_relational(vec![("name".to_string(), RelationalType::Text), ("age".to_string(), RelationalType::Integer)]),
+                    DefinitionMapping::tuple_to_relational(vec![
+                        ("name".to_string(), RelationalType::Text),
+                        ("age".to_string(), RelationalType::Integer),
+                    ]),
                     Model::Relational,
                     String::from("relational"),
-                ),
+                ).await,
                 statistic_tx.clone(),
             )
             .await?;
@@ -108,21 +123,34 @@ impl Manager {
                     DefinitionMapping::doc_to_graph(),
                     Model::Graph,
                     String::from("graph"),
-                ),
+                ).await,
                 statistic_tx,
             )
             .await?;
         Ok(())
     }
 
-    async fn init_engines(
+    fn init_engines(
         &mut self,
         statistic_tx: Sender<Event>,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
-        let engines = EngineKind::start_all(&mut self.joins, statistic_tx.clone()).await?;
-        for engine in engines.into_iter() {
-            self.catalog.add_engine(engine, statistic_tx.clone()).await;
-        }
+        let mut catalog = self.catalog.clone();
+
+        thread::spawn(move || {
+            let rt = Builder::new_current_thread()
+                .thread_name("engine-rt")
+                .enable_all()
+                .build().unwrap();
+
+            rt.block_on(async move {
+                let mut joins: JoinSet<()> = JoinSet::new();
+
+                let engines = EngineKind::start_all(&mut joins, statistic_tx.clone()).await.unwrap();
+                for engine in engines.into_iter() {
+                    catalog.add_engine(engine, statistic_tx.clone()).await;
+                }
+            });
+        });
 
         Ok(())
     }
@@ -132,11 +160,11 @@ impl Manager {
         persister: Persister,
     ) -> Result<Kafka, Box<dyn Error + Send + Sync>> {
         let (tx, rx) = unbounded();
-        log_channel(tx.clone(), "Sink Input");
+        log_channel(tx.clone(), "Sink Input").await;
 
         let kafka = sink::kafka::start(&mut self.joins, tx.clone()).await?;
 
-        persister.start(&mut self.joins, rx).await;
+        persister.start(rx);
 
         self.build_dummy(tx, &kafka);
 
@@ -157,7 +185,10 @@ impl Manager {
         for _ in 0..amount {
             let tx = tx.clone();
             self.joins.spawn(async {
-                let mut dummy = DummySink::new(Value::array(vec![Value::text("David"), Value::int(31)]), Duration::from_millis(10));
+                let mut dummy = DummySink::new(
+                    Value::array(vec![Value::text("David"), Value::int(31)]),
+                    Duration::from_millis(10),
+                );
                 dummy.start(String::from("relational"), tx).await;
             });
         }
@@ -173,7 +204,13 @@ impl Manager {
         for _ in 0..amount {
             let tx = tx.clone();
             self.joins.spawn(async {
-                let mut dummy = DummySink::new(Value::dict_from_pairs(vec![("test", Value::text("test")), ("key2", Value::text("test2"))]), Duration::from_millis(10));
+                let mut dummy = DummySink::new(
+                    Value::dict_from_pairs(vec![
+                        ("test", Value::text("test")),
+                        ("key2", Value::text("test2")),
+                    ]),
+                    Duration::from_millis(10),
+                );
                 dummy.start(String::from("doc"), tx).await;
             });
         }
@@ -189,7 +226,17 @@ impl Manager {
         for _ in 0..amount {
             let tx = tx.clone();
             self.joins.spawn(async {
-                let mut dummy = DummySink::new(Value::dict_from_pairs(vec![("id", Value::text("test")), ("label", Value::text("test2")), ("properties", Value::dict_from_pairs(vec![("test", Value::text("text"))]))]), Duration::from_millis(10));
+                let mut dummy = DummySink::new(
+                    Value::dict_from_pairs(vec![
+                        ("id", Value::text("test")),
+                        ("label", Value::text("test2")),
+                        (
+                            "properties",
+                            Value::dict_from_pairs(vec![("test", Value::text("text"))]),
+                        ),
+                    ]),
+                    Duration::from_millis(10),
+                );
                 dummy.start(String::from("graph"), tx).await;
             });
         }

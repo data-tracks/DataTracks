@@ -1,14 +1,19 @@
 use crate::management::catalog::Catalog;
 use engine::engine::Engine;
-use flume::{Receiver, unbounded};
+use flume::{unbounded, Receiver};
 use std::collections::HashMap;
 use std::error::Error;
+use std::thread;
 use std::time::Duration;
+use tokio::runtime::Builder;
 use tokio::task::JoinSet;
-use tokio::time::{Instant, sleep};
+use tokio::time::{sleep, Instant};
 use tracing::{debug, error};
 use util::definition::{Definition, Stage};
-use util::{DefinitionId, InitialMeta, PlainRecord, SegmentedLog, TargetedMeta, TimedMeta, log_channel, Event};
+use util::{
+    log_channel, DefinitionId, Event, InitialMeta, PlainRecord, SegmentedLog, TargetedMeta,
+    TimedMeta,
+};
 use value::Value;
 
 pub struct Persister {
@@ -17,7 +22,7 @@ pub struct Persister {
 }
 
 impl Persister {
-    pub async fn new(catalog: Catalog) -> Result<Self, Box<dyn Error + Send + Sync>> {
+    pub fn new(catalog: Catalog) -> Result<Self, Box<dyn Error + Send + Sync>> {
         Ok(Persister {
             engines: vec![],
             catalog,
@@ -37,108 +42,119 @@ impl Persister {
         Ok(())
     }
 
-    pub async fn start(
-        mut self,
-        joins: &mut JoinSet<()>,
-        incoming: Receiver<(Value, InitialMeta)>,
-    ) {
+    pub fn start(mut self, incoming: Receiver<(Value, InitialMeta)>) {
         let workers = 200;
 
         let dedicated_workers = 35;
 
-        let id_queue = self.start_id_generator(joins, workers); // work stealing
-
         let (sender, receiver) = unbounded();
-        log_channel(sender.clone(), "Timer");
-        // timer
-        for i in 0..workers {
-            let incoming = incoming.clone();
-            let sender = sender.clone();
-            let id_queue = id_queue.clone();
-            joins.spawn(async move {
-                let mut available_ids = vec![];
-                loop {
-                    if available_ids.is_empty() {
-                        match id_queue.recv_async().await {
-                            Ok(ids) => available_ids.extend(ids),
-                            Err(_) => {
-                                error!("No available ids in worker {}", i);
-                                sleep(Duration::from_millis(50)).await;
-                                continue;
-                            }
-                        }
-                    }
-                    if available_ids.is_empty() {
-                        error!("No available ids in worker {}", i);
-                        sleep(Duration::from_millis(50)).await;
-                        continue;
-                    }
 
-                    match incoming.recv_async().await {
-                        Err(_) => {}
-                        Ok((value, context)) => {
-                            let id = available_ids.pop().unwrap(); // can unwrap, check above
-                            let context = TimedMeta::new(id, context);
-                            sender.send((value, context)).unwrap();
-                        }
-                    }
-                }
-            });
-        }
-
-        let (tx, rx) = unbounded();
-        log_channel(tx.clone(), "WAL");
-
-        // wal logger
-        for i in 0..dedicated_workers {
-            let rx = receiver.clone();
-            let tx = tx.clone();
-
-            // dedicated runtime in thread
-            let wal_runtime = tokio::runtime::Builder::new_current_thread()
+        thread::spawn(move || {
+            // timer
+            let rt_timer = Builder::new_current_thread()
+                .worker_threads(4)
+                .thread_name("timer-processor")
                 .enable_all()
                 .build()
                 .unwrap();
 
-            std::thread::spawn(move || {
-                wal_runtime.block_on(async {
-                    let mut log =
-                        SegmentedLog::new(&format!("wals/wal_segments_{}", i), 200 * 2048 * 2048)
-                            .await
-                            .unwrap();
+            rt_timer.block_on(async move {
+                log_channel(sender.clone(), "Timer").await;
+                let mut joins: JoinSet<()> = JoinSet::new();
+                let id_queue = self.start_id_generator(&mut joins, workers).await; // work stealing
 
-                    let mut batch = Vec::with_capacity(100_000);
-                    loop {
-                        match rx.recv() {
-                            Err(_) => {}
-                            Ok(record) => {
-                                batch.push(record);
-                                batch.extend(rx.try_iter().take(99_999));
-
-                                log.log(&batch).await;
-
-                                for record in batch.drain(..) {
-                                    tx.send(record).unwrap();
+                for i in 0..workers {
+                    let incoming = incoming.clone();
+                    let sender = sender.clone();
+                    let id_queue = id_queue.clone();
+                    joins.spawn(async move {
+                        let mut available_ids = vec![];
+                        loop {
+                            if available_ids.is_empty() {
+                                match id_queue.recv_async().await {
+                                    Ok(ids) => available_ids.extend(ids),
+                                    Err(_) => {
+                                        error!("No available ids in worker {}", i);
+                                        sleep(Duration::from_millis(50)).await;
+                                        continue;
+                                    }
                                 }
                             }
+                            if available_ids.is_empty() {
+                                error!("No available ids in worker {}", i);
+                                sleep(Duration::from_millis(50)).await;
+                                continue;
+                            }
+
+                            match incoming.recv_async().await {
+                                Err(_) => {}
+                                Ok((value, context)) => {
+                                    let id = available_ids.pop().unwrap(); // can unwrap, check above
+                                    let context = TimedMeta::new(id, context);
+                                    sender.send((value, context)).unwrap();
+                                }
+                            }
+                        }
+                    });
+                }
+
+                let (tx, rx) = unbounded();
+                log_channel(tx.clone(), "WAL").await;
+
+                // wal logger
+                for i in 0..dedicated_workers {
+                    let rx = receiver.clone();
+                    let tx = tx.clone();
+
+                    // dedicated runtime in thread
+                    let wal_runtime = tokio::runtime::Builder::new_current_thread()
+                        .enable_all()
+                        .build()
+                        .unwrap();
+
+                    std::thread::spawn(move || {
+                        wal_runtime.block_on(async {
+                            let mut log = SegmentedLog::new(
+                                &format!("wals/wal_segments_{}", i),
+                                200 * 2048 * 2048,
+                            )
+                                .await
+                                .unwrap();
+
+                            let mut batch = Vec::with_capacity(100_000);
+                            loop {
+                                match rx.recv() {
+                                    Err(_) => {}
+                                    Ok(record) => {
+                                        batch.push(record);
+                                        batch.extend(rx.try_iter().take(99_999));
+
+                                        log.log(&batch).await;
+
+                                        for record in batch.drain(..) {
+                                            tx.send(record).unwrap();
+                                        }
+                                    }
+                                }
+                            }
+                        });
+                    });
+                }
+
+                // storer
+                joins.spawn(async move {
+                    let mut engines = self.catalog.engines().await;
+
+                    self.engines.append(&mut engines);
+
+                    loop {
+                        match rx.recv_async().await {
+                            Err(_) => {}
+                            Ok(record) => self.move_to_engines(record).await.unwrap(),
                         }
                     }
                 });
             });
-        }
-
-        // storer
-        joins.spawn(async move {
-            let mut engines = self.catalog.engines().await;
-
-            self.engines.append(&mut engines);
-
-            loop {
-                match rx.recv_async().await {
-                    Err(_) => {}
-                    Ok(record) => self.move_to_engines(record).await.unwrap(),
-                }
-            }
         });
     }
 
@@ -148,7 +164,7 @@ impl Persister {
     ) -> Result<(&Engine, Value, TargetedMeta), Box<dyn Error + Send + Sync>> {
         let definitions = self.catalog.definitions().await;
 
-        let mut definition = Definition::empty();
+        let mut definition = Definition::empty().await;
 
         for mut d in definitions {
             if d.matches(&record.0, &record.1) {
@@ -262,9 +278,9 @@ impl Persister {
         }
     }
 
-    fn start_id_generator(&self, join_set: &mut JoinSet<()>, workers: i32) -> Receiver<Vec<u64>> {
+    async fn start_id_generator(&self, join_set: &mut JoinSet<()>, workers: i32) -> Receiver<Vec<u64>> {
         let (tx, rx) = unbounded();
-        log_channel(tx.clone(), "Id generator");
+        log_channel(tx.clone(), "Id generator").await;
 
         let prepared_ids = (workers * 2) as usize;
         const ID_PACKETS_SIZE: u64 = 100_000;

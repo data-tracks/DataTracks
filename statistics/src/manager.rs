@@ -1,19 +1,19 @@
 use crate::web;
-use comfy_table::Table;
 use comfy_table::presets::UTF8_FULL;
-use flume::{Sender, unbounded};
+use comfy_table::Table;
+use flume::{Receiver, Sender};
 use num_format::{CustomFormat, ToFormattedString};
 use std::collections::HashMap;
 use std::error::Error;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::thread::spawn;
 use std::time::{Duration, Instant};
-use tokio::runtime::Handle;
+use tokio::runtime::{Builder, Handle};
 use tokio::select;
-use tokio::task::JoinSet;
 use tokio::time::{interval, sleep};
-use util::Event::Runtime;
 use util::definition::Definition;
-use util::{DefinitionId, EngineId, Event, RuntimeEvent, log_channel, set_statistic_sender};
+use util::Event::Runtime;
+use util::{log_channel, set_statistic_sender, DefinitionId, EngineId, Event, RuntimeEvent};
 
 pub struct Statistics {
     engines: HashMap<EngineId, EngineStatistic>,
@@ -55,22 +55,31 @@ impl Statistics {
     }
 }
 
-pub async fn start(joins: &mut JoinSet<()>) -> Sender<Event> {
-    let (tx, rx) = unbounded::<Event>();
+pub fn start(tx: Sender<Event>, rx: Receiver<Event>) -> Sender<Event> {
     set_statistic_sender(tx.clone());
 
-    log_channel(tx.clone(), "Events");
     let (bc_tx, _) = tokio::sync::broadcast::channel(100_000);
     let clone_bc_tx = bc_tx.clone();
-    joins.spawn(async move {
-        let mut statistics = Statistics::new();
 
-        let mut timer = interval(Duration::from_secs(20));
+    let tx_clone = tx.clone();
+    spawn(move || {
+        let tx = tx_clone.clone();
+        let mut rt = Builder::new_current_thread()
+            .thread_name("statistic-rt")
+            .enable_all()
+            .build().unwrap();
 
-        let initial = Instant::now();
+        rt.spawn(async move {
+            log_channel(tx_clone.clone(), "Events").await;
 
-        loop {
-            select! {
+            let mut statistics = Statistics::new();
+
+            let mut timer = interval(Duration::from_secs(20));
+
+            let initial = Instant::now();
+
+            loop {
+                select! {
                 maybe_event = rx.recv_async() => {
                     if let Ok(event) = maybe_event {
                         statistics.handle_event(event.clone()).await;
@@ -81,27 +90,28 @@ pub async fn start(joins: &mut JoinSet<()>) -> Sender<Event> {
                     println! {"{}", statistics.data(initial).unwrap()}
                 }
             }
-        }
-    });
-    web::start(joins, bc_tx).await;
+            }
+        });
+        web::start(&mut rt, bc_tx);
 
-    let statistic_tx = tx.clone();
+        let statistic_tx = tx.clone();
 
-    joins.spawn(async move {
-        let metrics = Handle::current().metrics();
+        rt.block_on(async move {
+            let metrics = Handle::current().metrics();
 
-        loop {
-            statistic_tx
-                .send_async(Runtime(RuntimeEvent {
-                    active_tasks: metrics.num_alive_tasks(),
-                    worker_threads: metrics.num_workers(),
-                    blocking_threads: metrics.num_blocking_threads(),
-                    budget_forces_yield: metrics.budget_forced_yield_count() as usize,
-                }))
-                .await
-                .unwrap();
-            sleep(Duration::from_secs(5)).await;
-        }
+            loop {
+                statistic_tx
+                    .send_async(Runtime(RuntimeEvent {
+                        active_tasks: metrics.num_alive_tasks(),
+                        worker_threads: metrics.num_workers(),
+                        blocking_threads: metrics.num_blocking_threads(),
+                        budget_forces_yield: metrics.budget_forced_yield_count() as usize,
+                    }))
+                    .await
+                    .unwrap();
+                sleep(Duration::from_secs(5)).await;
+            }
+        });
     });
 
     tx

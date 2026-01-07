@@ -48,7 +48,7 @@ impl Catalog {
     }
 
     pub async fn add_engine(&mut self, engine: EngineKind, sender: Sender<Event>) {
-        let engine = Engine::new(engine, sender.clone());
+        let engine = Engine::new(engine, sender.clone()).await;
         sender
             .send_async(Event::Engine(engine.id, engine.to_string()))
             .await

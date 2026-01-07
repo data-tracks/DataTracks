@@ -3,8 +3,6 @@ use num_format::{CustomFormat, ToFormattedString};
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
-use tokio::spawn;
-
 use crate::event::{Event, QueueEvent};
 use tokio::sync::RwLock;
 use tokio::time::Instant;
@@ -22,18 +20,18 @@ pub fn set_statistic_sender(sender: Sender<Event>) {
     EVENT_SENDER.set(sender).unwrap();
 }
 
-pub fn log_channel<S: AsRef<str>, P: Send + 'static>(tx: Sender<P>, name: S) {
+pub async fn log_channel<S: AsRef<str>, P: Send + 'static>(tx: Sender<P>, name: S) {
     let name = name.as_ref().to_string();
     let statistics = get_statistic_sender();
 
-    spawn(async move {
+    tokio::spawn(async move {
         let last_log = RwLock::new(Instant::now());
         let overwhelmed = AtomicBool::new(false);
 
         let format = CustomFormat::builder().separator("'").build().unwrap();
         let mut interval = tokio::time::interval(Duration::from_secs(3));
 
-        let mut len = 0;
+        let mut len;
 
         loop {
             interval.tick().await;

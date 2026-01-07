@@ -17,9 +17,11 @@ impl DummySink {
         let duration = self.interval.clone();
         let value = self.value.clone();
         loop {
-            sender
-                .send((value.clone(), InitialMeta::new(Some(name.clone()))))
-                .unwrap();
+            match sender
+                .send((value.clone(), InitialMeta::new(Some(name.clone())))) {
+                Ok(_) => {}
+                Err(err) => {}
+            };
             tokio::time::sleep(duration).await;
         }
     }

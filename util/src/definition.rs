@@ -25,11 +25,11 @@ pub struct Definition {
 }
 
 impl Definition {
-    pub fn new(filter: DefinitionFilter, mapping: DefinitionMapping, model: Model, entity: String) -> Self {
+    pub async fn new(filter: DefinitionFilter, mapping: DefinitionMapping, model: Model, entity: String) -> Self {
         let id = DefinitionId(ID_BUILDER.fetch_add(1, Ordering::Relaxed));
 
         let (tx, rx) = unbounded::<PlainRecord>();
-        log_channel(tx.clone(), "Definition");
+        log_channel(tx.clone(), "Definition").await;
 
         Definition {
             id,
@@ -41,11 +41,11 @@ impl Definition {
         }
     }
 
-    pub fn empty() -> Definition {
+    pub async fn empty() -> Definition {
         let id = DefinitionId(ID_BUILDER.fetch_add(1, Ordering::Relaxed));
 
         let (tx, rx) = unbounded::<PlainRecord>();
-        log_channel(tx.clone(), "Definition");
+        log_channel(tx.clone(), "Definition").await;
         Definition {
             id,
             filter: AllMatch,
