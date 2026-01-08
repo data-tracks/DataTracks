@@ -54,20 +54,37 @@ async fn handle_event_socket(mut socket: WebSocket, state: Arc<EventState>) {
     debug!("connected");
     let mut rx = state.sender.subscribe();
 
-    while let Ok(event) = rx.recv().await {
-        match event {
-            Event::Queue(_) => {}
-            e => {
-                if let Ok(msg) = serde_json::to_string(&e)
-                    && socket
-                        .send(Message::Text(Utf8Bytes::from(msg)))
-                        .await
-                        .is_err()
-                {
-                    // Client disconnected
-                    error!("disconnected event");
-                    break;
+    let mut events = vec![];
+    loop {
+        match rx.recv().await {
+            Ok(event) => {
+                events.push(event);
+
+                while let Ok(event) = rx.try_recv() {
+                    events.push(event);
                 }
+
+                for event in events.drain(..) {
+                    match event {
+                        Event::Queue(_) => {}
+                        Event::Insert(..) => {}
+                        e => {
+                            if let Ok(msg) = serde_json::to_string(&e)
+                                && socket
+                                    .send(Message::Text(Utf8Bytes::from(msg)))
+                                    .await
+                                    .is_err()
+                            {
+                                // Client disconnected
+                                error!("disconnected event");
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            Err(err) => {
+                debug!("event: {}", err)
             }
         }
     }
@@ -84,17 +101,36 @@ async fn handle_queue_socket(mut socket: WebSocket, state: Arc<EventState>) {
     debug!("connected");
     let mut rx = state.sender.subscribe();
 
-    while let Ok(event) = rx.recv().await {
-        if let Event::Queue(q) = event
-            && let Ok(msg) = serde_json::to_string(&q)
-            && socket
-                .send(Message::Text(Utf8Bytes::from(msg)))
-                .await
-                .is_err()
-        {
-            // Client disconnected
-            error!("disconnected queue");
-            break;
+    let mut events = vec![];
+    loop {
+        match rx.recv().await {
+            Ok(event) => {
+                events.push(event);
+                while let Ok(event) = rx.try_recv() {
+                    events.push(event)
+                }
+
+                for event in events.drain(..) {
+                    if let Event::Queue(q) = event
+                        && let Ok(msg) = serde_json::to_string(&q)
+                    {
+                        if (socket)
+                            .send(Message::Text(Utf8Bytes::from(msg)))
+                            .await
+                            .is_err()
+                        {
+                            // Client disconnected
+                            error!("disconnected queue");
+                            break;
+                        }
+                    } else {
+                        // we ignore others
+                    }
+                }
+            }
+            Err(err) => {
+                debug!("error: {}", err)
+            }
         }
     }
 }
