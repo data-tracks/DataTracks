@@ -14,14 +14,11 @@ impl DummySink {
     }
 
     pub async fn start(&mut self, name: String, sender: Sender<(Value, InitialMeta)>) {
-        let duration = self.interval.clone();
+        let duration = self.interval;
         let value = self.value.clone();
         loop {
-            match sender
-                .send((value.clone(), InitialMeta::new(Some(name.clone())))) {
-                Ok(_) => {}
-                Err(err) => {}
-            };
+            if sender
+                .send((value.clone(), InitialMeta::new(Some(name.clone())))).is_ok() {};
             tokio::time::sleep(duration).await;
         }
     }

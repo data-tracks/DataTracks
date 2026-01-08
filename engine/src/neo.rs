@@ -311,7 +311,7 @@ mod tests {
             DefinitionMapping::doc_to_graph(),
             Model::Document,
             "users".to_string(),
-        );
+        ).await;
         neo.init_entity(&definition).await;
 
         neo.store(
@@ -358,7 +358,7 @@ mod tests {
             DefinitionMapping::doc_to_graph(),
             Model::Document,
             "users".to_string(),
-        );
+        ).await;
         neo.init_entity(&definition).await;
 
         match neo.graph {

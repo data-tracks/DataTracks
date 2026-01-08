@@ -10,6 +10,7 @@ use std::thread;
 use std::time::Duration;
 use tokio::runtime::Builder;
 use tokio::task::JoinSet;
+use tokio::time::sleep;
 use tracing::{error, info};
 use util::definition::{Definition, DefinitionFilter, Model};
 use util::{log_channel, DefinitionMapping, Event, InitialMeta, RelationalType};
@@ -44,8 +45,6 @@ impl Manager {
         let nativer = Nativer::new(self.catalog.clone());
 
         self.init_engines(statistic_tx.clone())?;
-
-
 
         main_rt.block_on(async move {
             let mut joins: JoinSet<()> = JoinSet::new();
@@ -136,8 +135,11 @@ impl Manager {
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
         let mut catalog = self.catalog.clone();
 
+        let (tx, rx) = unbounded();
+
         thread::spawn(move || {
             let rt = Builder::new_current_thread()
+                .worker_threads(4)
                 .thread_name("engine-rt")
                 .enable_all()
                 .build().unwrap();
@@ -149,8 +151,14 @@ impl Manager {
                 for engine in engines.into_iter() {
                     catalog.add_engine(engine, statistic_tx.clone()).await;
                 }
+                tx.send_async(true).await.unwrap();
+                loop {
+                    sleep(Duration::from_secs(10)).await;
+                }
             });
         });
+
+        rx.recv()?;
 
         Ok(())
     }
@@ -172,7 +180,7 @@ impl Manager {
     }
 
     fn build_dummy(&mut self, tx: Sender<(Value, InitialMeta)>, _: &Kafka) {
-        let amount = 20_000;
+        let amount = 200;
 
         /*let clone_graph = kafka.clone();
         self.joins.spawn(async move {

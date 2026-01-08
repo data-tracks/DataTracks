@@ -107,12 +107,12 @@ impl Persister {
                     let tx = tx.clone();
 
                     // dedicated runtime in thread
-                    let wal_runtime = tokio::runtime::Builder::new_current_thread()
+                    let wal_runtime = Builder::new_current_thread()
                         .enable_all()
                         .build()
                         .unwrap();
 
-                    std::thread::spawn(move || {
+                    thread::spawn(move || {
                         wal_runtime.block_on(async {
                             let mut log = SegmentedLog::new(
                                 &format!("wals/wal_segments_{}", i),
@@ -154,7 +154,13 @@ impl Persister {
                         }
                     }
                 });
+                joins.join_all().await;
             });
+
+            loop {
+                thread::sleep(Duration::from_secs(10));
+            }
+
         });
     }
 
@@ -203,6 +209,7 @@ impl Persister {
                 .into_iter()
                 .map(|d| (d.id, d))
                 .collect::<HashMap<_, _>>();
+
             joins.spawn(async move {
                 let mut error_count = 0;
                 let mut count = 0;

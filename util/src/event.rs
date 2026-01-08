@@ -6,11 +6,12 @@ use crate::definition::Definition;
 #[serde(tag = "type",content = "data")]
 pub enum Event {
     Insert(DefinitionId, usize, EngineId),
-    Definition(DefinitionId, Definition),
-    Engine(EngineId, String),
+    Definition(DefinitionId, Box<Definition>),
+    Engine(EngineId, EngineEvent),
     Runtime(RuntimeEvent),
     EngineStatus(String),
     Queue(QueueEvent),
+    Startup(bool)
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -25,4 +26,11 @@ pub struct RuntimeEvent {
 pub struct QueueEvent {
     pub name: String,
     pub size: usize,
+}
+
+
+#[derive(Serialize, Clone, Debug)]
+pub enum EngineEvent {
+    Running(bool),
+    Name(String),
 }

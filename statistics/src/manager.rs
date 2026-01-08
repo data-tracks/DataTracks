@@ -1,7 +1,7 @@
 use crate::web;
 use comfy_table::presets::UTF8_FULL;
 use comfy_table::Table;
-use flume::{Receiver, Sender};
+use flume::{unbounded, Receiver, Sender};
 use num_format::{CustomFormat, ToFormattedString};
 use std::collections::HashMap;
 use std::error::Error;
@@ -13,7 +13,7 @@ use tokio::select;
 use tokio::time::{interval, sleep};
 use util::definition::Definition;
 use util::Event::Runtime;
-use util::{log_channel, set_statistic_sender, DefinitionId, EngineId, Event, RuntimeEvent};
+use util::{log_channel, set_statistic_sender, DefinitionId, EngineEvent, EngineId, Event, RuntimeEvent};
 
 pub struct Statistics {
     engines: HashMap<EngineId, EngineStatistic>,
@@ -45,9 +45,9 @@ impl Statistics {
                     .handle_insert(amount, definition_id);
             }
             Event::Definition(definition_id, definition) => {
-                self.definitions.insert(definition_id, definition);
+                self.definitions.insert(definition_id, *definition);
             }
-            Event::Engine(engine_id, name) => {
+            Event::Engine(engine_id, EngineEvent::Name(name)) => {
                 self.engine_names.insert(engine_id, name);
             }
             _ => {}
@@ -57,6 +57,8 @@ impl Statistics {
 
 pub fn start(tx: Sender<Event>, rx: Receiver<Event>) -> Sender<Event> {
     set_statistic_sender(tx.clone());
+
+    let (status_tx, status_rx) = unbounded();
 
     let (bc_tx, _) = tokio::sync::broadcast::channel(100_000);
     let clone_bc_tx = bc_tx.clone();
@@ -96,6 +98,7 @@ pub fn start(tx: Sender<Event>, rx: Receiver<Event>) -> Sender<Event> {
 
         let statistic_tx = tx.clone();
 
+        status_tx.send(true).unwrap();
         rt.block_on(async move {
             let metrics = Handle::current().metrics();
 
@@ -113,6 +116,7 @@ pub fn start(tx: Sender<Event>, rx: Receiver<Event>) -> Sender<Event> {
             }
         });
     });
+    status_rx.recv().unwrap();
 
     tx
 }

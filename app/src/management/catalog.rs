@@ -1,12 +1,12 @@
-use engine::EngineKind;
 use engine::engine::Engine;
+use engine::EngineKind;
 use flume::Sender;
 use futures::future::join_all;
 use std::error::Error;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use util::definition::Definition;
-use util::Event;
+use util::{EngineEvent, Event};
 
 #[derive(Default)]
 pub struct Catalog {
@@ -32,7 +32,7 @@ impl Catalog {
             engine.add_definition(&definition);
         }
         sender
-            .send_async(Event::Definition(definition.id, definition.clone()))
+            .send_async(Event::Definition(definition.id, Box::new(definition.clone())))
             .await?;
 
         state.definitions.push(definition);
@@ -50,7 +50,7 @@ impl Catalog {
     pub async fn add_engine(&mut self, engine: EngineKind, sender: Sender<Event>) {
         let engine = Engine::new(engine, sender.clone()).await;
         sender
-            .send_async(Event::Engine(engine.id, engine.to_string()))
+            .send_async(Event::Engine(engine.id, EngineEvent::Name(engine.to_string())))
             .await
             .unwrap();
         self.state.lock().await.engines.push(engine);
