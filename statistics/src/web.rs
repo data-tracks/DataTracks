@@ -77,7 +77,7 @@ async fn handle_event_socket(mut socket: WebSocket, state: Arc<EventState>) {
                             {
                                 // Client disconnected
                                 error!("disconnected event");
-                                break;
+                                return;
                             }
                         }
                     }
@@ -121,7 +121,7 @@ async fn handle_queue_socket(mut socket: WebSocket, state: Arc<EventState>) {
                         {
                             // Client disconnected
                             error!("disconnected queue");
-                            break;
+                            return;
                         }
                     } else {
                         // we ignore others

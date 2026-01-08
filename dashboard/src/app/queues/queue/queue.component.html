@@ -1,1 +1,6 @@
-<progress [value]="entry()" class="progress w-56" max="1_000_000"></progress>
+<div class="w-full">
+    <div class="text-xl">{{ name() }} : {{ entry() | number }}</div>
+    <progress [value]="entry()" class="progress w-full" [max]="max()"></progress>
+    <div class="justify-end">Max: {{max() | number}}</div>
+</div>
+

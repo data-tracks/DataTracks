@@ -45,7 +45,7 @@ impl Persister {
     pub fn start(mut self, incoming: Receiver<(Value, InitialMeta)>) {
         let workers = 200;
 
-        let dedicated_workers = 35;
+        let dedicated_workers = 20;
 
         let (sender, receiver) = unbounded();
 

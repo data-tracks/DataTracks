@@ -60,7 +60,7 @@ pub fn start(tx: Sender<Event>, rx: Receiver<Event>) -> Sender<Event> {
 
     let (status_tx, status_rx) = unbounded();
 
-    let (bc_tx, _) = tokio::sync::broadcast::channel(100_000);
+    let (bc_tx, _) = tokio::sync::broadcast::channel(1_000_000);
     let clone_bc_tx = bc_tx.clone();
 
     let tx_clone = tx.clone();

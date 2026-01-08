@@ -1,8 +1,7 @@
-<ul class="list bg-base-100 rounded-box shadow-md">
+<ul class="list bg-base-100 rounded-box shadow-md justify-items-stretch">
     @for (entry of queuesView(); track entry[0]) {
-        <li class="list-row w-full">
-            <div>{{ entry[0] }} : {{ entry[1] | number }}</div>
-            <app-queue [entry]="entry[1]"/>
+        <li class="list-row w-full flex">
+            <app-queue [name]="entry[0]" class="w-full flex" [entry]="entry[1]"/>
         </li>
     }
 </ul>
