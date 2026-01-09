@@ -18,7 +18,7 @@ export class EventsComponent {
 
             this.msgs.update(msgs => {
                 const updated = [...msgs, data];
-                return updated.slice(-10)
+                return updated.slice(-5)
             })
         });
 

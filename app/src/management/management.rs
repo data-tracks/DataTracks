@@ -10,7 +10,6 @@ use std::thread;
 use std::time::Duration;
 use tokio::runtime::Builder;
 use tokio::task::JoinSet;
-use tokio::time::sleep;
 use tracing::{error, info};
 use util::definition::{Definition, DefinitionFilter, Model};
 use util::{log_channel, DefinitionMapping, Event, InitialMeta, RelationalType};
@@ -153,9 +152,9 @@ impl Manager {
                     catalog.add_engine(engine, statistic_tx.clone()).await;
                 }
                 tx.send_async(true).await.unwrap();
-                loop {
-                    sleep(Duration::from_secs(10)).await;
-                }
+
+                joins.join_all().await;
+
             });
         });
 
@@ -181,7 +180,7 @@ impl Manager {
     }
 
     fn build_dummy(&mut self, tx: Sender<(Value, InitialMeta)>, _: &Kafka) {
-        let amount = 200;
+        let amount = 2_000;
 
         /*let clone_graph = kafka.clone();
         self.joins.spawn(async move {

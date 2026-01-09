@@ -9,7 +9,7 @@ use tokio::runtime::Builder;
 use tokio::task::JoinSet;
 use tokio::time::{Instant, sleep};
 use tracing::{debug, error};
-use util::definition::{Definition, Stage};
+use util::definition::{Stage};
 use util::{
     DefinitionId, Event, InitialMeta, PlainRecord, SegmentedLog, TargetedMeta, TimedMeta,
     log_channel,
@@ -52,7 +52,7 @@ impl Persister {
         thread::spawn(move || {
             // timer
             let rt_timer = Builder::new_current_thread()
-                .worker_threads(4)
+                .worker_threads(64)
                 .thread_name("timer-processor")
                 .enable_all()
                 .build()
@@ -61,7 +61,7 @@ impl Persister {
             rt_timer.block_on(async move {
                 log_channel(sender.clone(), "Timer").await;
                 let mut joins: JoinSet<()> = JoinSet::new();
-                let id_queue = self.start_id_generator(&mut joins, workers).await; // work stealing
+                let id_queue = self.start_id_generator(&mut joins, workers as i32).await; // work stealing
 
                 for i in 0..workers {
                     let incoming = incoming.clone();
@@ -153,10 +153,6 @@ impl Persister {
                 });
                 joins.join_all().await;
             });
-
-            loop {
-                thread::sleep(Duration::from_secs(10));
-            }
         });
     }
 
