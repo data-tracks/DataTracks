@@ -1,18 +1,18 @@
 use crate::management::catalog::Catalog;
 use engine::engine::Engine;
-use flume::{unbounded, Receiver};
+use flume::{Receiver, unbounded};
 use std::collections::HashMap;
 use std::error::Error;
 use std::thread;
 use std::time::Duration;
 use tokio::runtime::Builder;
 use tokio::task::JoinSet;
-use tokio::time::{sleep, Instant};
+use tokio::time::{Instant, sleep};
 use tracing::{debug, error};
 use util::definition::{Definition, Stage};
 use util::{
-    log_channel, DefinitionId, Event, InitialMeta, PlainRecord, SegmentedLog, TargetedMeta,
-    TimedMeta,
+    DefinitionId, Event, InitialMeta, PlainRecord, SegmentedLog, TargetedMeta, TimedMeta,
+    log_channel,
 };
 use value::Value;
 
@@ -107,10 +107,7 @@ impl Persister {
                     let tx = tx.clone();
 
                     // dedicated runtime in thread
-                    let wal_runtime = Builder::new_current_thread()
-                        .enable_all()
-                        .build()
-                        .unwrap();
+                    let wal_runtime = Builder::new_current_thread().enable_all().build().unwrap();
 
                     thread::spawn(move || {
                         wal_runtime.block_on(async {
@@ -118,8 +115,8 @@ impl Persister {
                                 &format!("wals/wal_segments_{}", i),
                                 200 * 2048 * 2048,
                             )
-                                .await
-                                .unwrap();
+                            .await
+                            .unwrap();
 
                             let mut batch = Vec::with_capacity(100_000);
                             loop {
@@ -160,7 +157,6 @@ impl Persister {
             loop {
                 thread::sleep(Duration::from_secs(10));
             }
-
         });
     }
 
@@ -170,13 +166,10 @@ impl Persister {
     ) -> Result<(&Engine, Value, TargetedMeta), Box<dyn Error + Send + Sync>> {
         let definitions = self.catalog.definitions().await;
 
-        let mut definition = Definition::empty().await;
-
-        for mut d in definitions {
-            if d.matches(&record.0, &record.1) {
-                definition = d;
-            }
-        }
+        let definition = definitions
+            .into_iter()
+            .find(|d| d.matches(&record.0, &record.1))
+            .unwrap();
 
         let costs: Vec<_> = self
             .engines
@@ -285,7 +278,11 @@ impl Persister {
         }
     }
 
-    async fn start_id_generator(&self, join_set: &mut JoinSet<()>, workers: i32) -> Receiver<Vec<u64>> {
+    async fn start_id_generator(
+        &self,
+        join_set: &mut JoinSet<()>,
+        workers: i32,
+    ) -> Receiver<Vec<u64>> {
         let (tx, rx) = unbounded();
         log_channel(tx.clone(), "Id generator").await;
 

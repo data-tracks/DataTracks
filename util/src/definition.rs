@@ -1,12 +1,12 @@
 use crate::definition::DefinitionFilter::AllMatch;
-use crate::{log_channel, DefinitionId, EntityId, PlainRecord, TimedMeta};
+use crate::mappings::DefinitionMapping;
+use crate::{DefinitionId, EntityId, PlainRecord, TimedMeta, log_channel};
 use flume::{Receiver, Sender, unbounded};
 use serde::Serialize;
 use speedy::{Readable, Writable};
 use std::sync::atomic::{AtomicU64, Ordering};
 use value::Value;
 use value::Value::Dict;
-use crate::mappings::{DefinitionMapping};
 
 static ID_BUILDER: AtomicU64 = AtomicU64::new(0);
 
@@ -21,11 +21,16 @@ pub struct Definition {
     pub entity: Entity,
     #[serde(skip)]
     pub native: (Sender<PlainRecord>, Receiver<PlainRecord>),
-    pub mapping: DefinitionMapping
+    pub mapping: DefinitionMapping,
 }
 
 impl Definition {
-    pub async fn new(filter: DefinitionFilter, mapping: DefinitionMapping, model: Model, entity: String) -> Self {
+    pub async fn new(
+        filter: DefinitionFilter,
+        mapping: DefinitionMapping,
+        model: Model,
+        entity: String,
+    ) -> Self {
         let id = DefinitionId(ID_BUILDER.fetch_add(1, Ordering::Relaxed));
 
         let (tx, rx) = unbounded::<PlainRecord>();
@@ -41,23 +46,8 @@ impl Definition {
         }
     }
 
-    pub async fn empty() -> Definition {
-        let id = DefinitionId(ID_BUILDER.fetch_add(1, Ordering::Relaxed));
-
-        let (tx, rx) = unbounded::<PlainRecord>();
-        log_channel(tx.clone(), "Definition").await;
-        Definition {
-            id,
-            filter: AllMatch,
-            model: Model::Document,
-            entity: Entity::new("_stream"),
-            native: (tx, rx),
-            mapping: DefinitionMapping::document(),
-        }
-    }
-
     /// does our event match the defined definition
-    pub fn matches(&mut self, value: &Value, meta: &TimedMeta) -> bool {
+    pub fn matches(&self, value: &Value, meta: &TimedMeta) -> bool {
         match &self.filter {
             AllMatch => true,
             DefinitionFilter::MetaName(n) => meta.name == Some(n.clone()),

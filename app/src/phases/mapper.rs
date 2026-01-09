@@ -3,6 +3,7 @@ use engine::engine::Engine;
 use tokio::task::JoinSet;
 use tracing::{debug, error};
 use util::definition::Stage;
+use util::log_channel;
 
 pub struct Nativer {
     catalog: Catalog,
@@ -21,6 +22,9 @@ impl Nativer {
                 .collect::<Vec<Engine>>();
             join_set.spawn(async move {
                 let rx = definition.native.1;
+
+                log_channel(definition.native.0.clone(), "Mapper").await;
+
                 let entity = definition.entity;
                 let mut engine = engines.into_iter().next().unwrap();
 

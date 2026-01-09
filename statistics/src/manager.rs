@@ -1,7 +1,7 @@
 use crate::web;
-use comfy_table::presets::UTF8_FULL;
 use comfy_table::Table;
-use flume::{unbounded, Receiver, Sender};
+use comfy_table::presets::UTF8_FULL;
+use flume::{Receiver, Sender, unbounded};
 use num_format::{CustomFormat, ToFormattedString};
 use std::collections::HashMap;
 use std::error::Error;
@@ -11,9 +11,11 @@ use std::time::{Duration, Instant};
 use tokio::runtime::{Builder, Handle};
 use tokio::select;
 use tokio::time::{interval, sleep};
-use util::definition::Definition;
 use util::Event::Runtime;
-use util::{log_channel, set_statistic_sender, DefinitionId, EngineEvent, EngineId, Event, RuntimeEvent};
+use util::definition::Definition;
+use util::{
+    DefinitionId, EngineEvent, EngineId, Event, RuntimeEvent, log_channel, set_statistic_sender,
+};
 
 pub struct Statistics {
     engines: HashMap<EngineId, EngineStatistic>,
@@ -69,7 +71,8 @@ pub fn start(tx: Sender<Event>, rx: Receiver<Event>) -> Sender<Event> {
         let mut rt = Builder::new_current_thread()
             .thread_name("statistic-rt")
             .enable_all()
-            .build().unwrap();
+            .build()
+            .unwrap();
 
         rt.spawn(async move {
             log_channel(tx_clone.clone(), "Events").await;
@@ -82,16 +85,16 @@ pub fn start(tx: Sender<Event>, rx: Receiver<Event>) -> Sender<Event> {
 
             loop {
                 select! {
-                maybe_event = rx.recv_async() => {
-                    if let Ok(event) = maybe_event {
-                        statistics.handle_event(event.clone()).await;
-                        let _res = clone_bc_tx.send(event);
+                    maybe_event = rx.recv_async() => {
+                        if let Ok(event) = maybe_event {
+                            statistics.handle_event(event.clone()).await;
+                            let _res = clone_bc_tx.send(event);
+                        }
+                    },
+                    _ = timer.tick() => {
+                        println! {"{}", statistics.data(initial).unwrap()}
                     }
-                },
-                _ = timer.tick() => {
-                    println! {"{}", statistics.data(initial).unwrap()}
                 }
-            }
             }
         });
         web::start(&mut rt, bc_tx);
@@ -127,7 +130,7 @@ impl Statistics {
 
         table.load_preset(UTF8_FULL);
 
-        table.set_header(vec!["Entity", "Events"]);
+        table.set_header(vec!["Entity", "Tuples"]);
 
         let format = CustomFormat::builder().separator("'").build()?;
 
