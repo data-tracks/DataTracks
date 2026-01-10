@@ -1,18 +1,19 @@
 use crate::management::catalog::Catalog;
+use crate::management::Runtimes;
 use engine::engine::Engine;
-use flume::{Receiver, unbounded};
+use flume::{unbounded, Receiver};
 use std::collections::HashMap;
 use std::error::Error;
 use std::thread;
 use std::time::Duration;
 use tokio::runtime::Builder;
 use tokio::task::JoinSet;
-use tokio::time::{Instant, sleep};
+use tokio::time::{sleep, Instant};
 use tracing::{debug, error};
-use util::definition::{Stage};
+use util::definition::Stage;
 use util::{
-    DefinitionId, Event, InitialMeta, PlainRecord, SegmentedLog, TargetedMeta, TimedMeta,
-    log_channel,
+    log_channel, DefinitionId, Event, InitialMeta, PlainRecord, SegmentedLog, TargetedMeta,
+    TimedMeta,
 };
 use value::Value;
 
@@ -42,17 +43,18 @@ impl Persister {
         Ok(())
     }
 
-    pub fn start(mut self, incoming: Receiver<(Value, InitialMeta)>) {
-        let workers = 200;
+    pub fn start(mut self, incoming: Receiver<(Value, InitialMeta)>, rt: Runtimes) {
+        let id_workers = 24;
 
-        let dedicated_workers = 20;
+        let timer_workers = 50;
+
+        let wal_workers = 30;
 
         let (sender, receiver) = unbounded();
 
-        thread::spawn(move || {
+        let timer = thread::spawn(move || {
             // timer
             let rt_timer = Builder::new_current_thread()
-                .worker_threads(64)
                 .thread_name("timer-processor")
                 .enable_all()
                 .build()
@@ -61,9 +63,9 @@ impl Persister {
             rt_timer.block_on(async move {
                 log_channel(sender.clone(), "Timer").await;
                 let mut joins: JoinSet<()> = JoinSet::new();
-                let id_queue = self.start_id_generator(&mut joins, workers as i32).await; // work stealing
+                let id_queue = Self::start_id_generator(&mut joins, id_workers).await; // work stealing
 
-                for i in 0..workers {
+                for i in 0..timer_workers {
                     let incoming = incoming.clone();
                     let sender = sender.clone();
                     let id_queue = id_queue.clone();
@@ -87,7 +89,9 @@ impl Persister {
                             }
 
                             match incoming.recv_async().await {
-                                Err(_) => {}
+                                Err(_) => {
+                                    error!("No incoming {}", i);
+                                }
                                 Ok((value, context)) => {
                                     let id = available_ids.pop().unwrap(); // can unwrap, check above
                                     let context = TimedMeta::new(id, context);
@@ -97,63 +101,73 @@ impl Persister {
                         }
                     });
                 }
+                joins.join_all().await;
+            })
+        });
 
-                let (tx, rx) = unbounded();
-                log_channel(tx.clone(), "WAL").await;
+        rt.add_handle(timer);
 
-                // wal logger
-                for i in 0..dedicated_workers {
-                    let rx = receiver.clone();
-                    let tx = tx.clone();
 
-                    // dedicated runtime in thread
-                    let wal_runtime = Builder::new_current_thread().enable_all().build().unwrap();
+        let (wal_tx, wal_rx) = unbounded();
+        let wal_tx_clone = wal_tx.clone();
+        rt.attach_runtime(&0, async move { log_channel(wal_tx_clone, "WAL").await; });
 
-                    thread::spawn(move || {
-                        wal_runtime.block_on(async {
-                            let mut log = SegmentedLog::new(
-                                &format!("wals/wal_segments_{}", i),
-                                200 * 2048 * 2048,
-                            )
+        // wal logger
+        for i in 0..wal_workers {
+            let rx = receiver.clone();
+            let tx = wal_tx.clone();
+
+            // dedicated runtime in thread
+            let wal_runtime = Builder::new_current_thread().enable_all().build().unwrap();
+
+            thread::spawn(move || {
+                wal_runtime.block_on(async {
+                    let mut log =
+                        SegmentedLog::new(&format!("wals/wal_segments_{}", i), 200 * 2048 * 2048)
                             .await
                             .unwrap();
 
-                            let mut batch = Vec::with_capacity(100_000);
-                            loop {
-                                match rx.recv() {
-                                    Err(_) => {}
-                                    Ok(record) => {
-                                        batch.push(record);
-                                        batch.extend(rx.try_iter().take(99_999));
+                    let mut batch = Vec::with_capacity(100_000);
+                    loop {
+                        match rx.recv() {
+                            Err(_) => {}
+                            Ok(record) => {
+                                batch.push(record);
+                                batch.extend(rx.try_iter().take(99_999));
 
-                                        log.log(&batch).await;
+                                log.log(&batch).await;
 
-                                        for record in batch.drain(..) {
-                                            tx.send(record).unwrap();
-                                        }
-                                    }
+                                for record in batch.drain(..) {
+                                    tx.send(record).unwrap();
                                 }
                             }
-                        });
-                    });
-                }
-
-                // storer
-                joins.spawn(async move {
-                    let mut engines = self.catalog.engines().await;
-
-                    self.engines.append(&mut engines);
-
-                    loop {
-                        match rx.recv_async().await {
-                            Err(_) => {}
-                            Ok(record) => self.move_to_engines(record).await.unwrap(),
                         }
                     }
                 });
-                joins.join_all().await;
+            });
+        }
+
+        let storer = thread::spawn(move || {
+            let rt_storer = Builder::new_current_thread()
+                .thread_name("storer")
+                .enable_all()
+                .build()
+                .unwrap();
+
+            rt_storer.block_on(async {
+                let mut engines = self.catalog.engines().await;
+
+                self.engines.append(&mut engines);
+
+                loop {
+                    match wal_rx.recv_async().await {
+                        Err(_) => {}
+                        Ok(record) => self.move_to_engines(record).await.unwrap(),
+                    }
+                }
             });
         });
+        rt.add_handle(storer);
     }
 
     async fn select_engines(
@@ -261,7 +275,6 @@ impl Persister {
                     match engine.rx.try_recv() {
                         Err(_) => sleep(Duration::from_millis(1)).await, // max shift after max timeout for sending finished chunk out
                         Ok(record) => {
-
                             if buckets.is_empty() {
                                 first_ts = Instant::now();
                             }
@@ -275,7 +288,6 @@ impl Persister {
     }
 
     async fn start_id_generator(
-        &self,
         join_set: &mut JoinSet<()>,
         workers: i32,
     ) -> Receiver<Vec<u64>> {

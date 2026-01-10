@@ -14,11 +14,13 @@ use tracing::{error, info};
 use util::definition::{Definition, DefinitionFilter, Model};
 use util::{log_channel, DefinitionMapping, Event, InitialMeta, RelationalType};
 use value::Value;
+use util::runtimes::Runtimes;
 
 #[derive(Default)]
 pub struct Manager {
     catalog: Catalog,
     joins: JoinSet<()>,
+    runtimes: Runtimes,
 }
 
 impl Manager {
@@ -26,6 +28,7 @@ impl Manager {
         Manager {
             joins: JoinSet::new(),
             catalog: Catalog::default(),
+            runtimes: Runtimes::new()
         }
     }
 
@@ -38,13 +41,25 @@ impl Manager {
             .enable_all()
             .build()?;
 
+        let trash_rt = Builder::new_multi_thread()
+            .worker_threads(8)
+            .thread_name("trash-rt")
+            .enable_all()
+            .build()?;
+
+        self.runtimes.add_runtime(trash_rt);
+
         let (tx, rx) = unbounded::<Event>();
 
-        let statistic_tx = statistics::start(tx, rx);
+        let rt = self.runtimes.clone();
+
+        let statistic_tx = statistics::start(rt, tx, rx);
         let mut persister = Persister::new(self.catalog.clone())?;
         let nativer = Nativer::new(self.catalog.clone());
 
         self.init_engines(statistic_tx.clone())?;
+
+        let rt = self.runtimes.clone();
 
         main_rt.block_on(async move {
             let mut joins: JoinSet<()> = JoinSet::new();
@@ -53,7 +68,7 @@ impl Manager {
 
             persister.start_distributor(&mut self.joins).await;
 
-            let kafka = self.start_sinks(persister).await?;
+            let kafka = self.start_sinks(persister, rt).await?;
 
             nativer.start(&mut self.joins).await;
 
@@ -166,13 +181,14 @@ impl Manager {
     async fn start_sinks(
         &mut self,
         persister: Persister,
+        rt: Runtimes,
     ) -> Result<Kafka, Box<dyn Error + Send + Sync>> {
         let (tx, rx) = unbounded();
         log_channel(tx.clone(), "Sink Input").await;
 
         let kafka = sink::kafka::start(&mut self.joins, tx.clone()).await?;
 
-        persister.start(rx);
+        persister.start(rx, rt);
 
         self.build_dummy(tx, &kafka);
 

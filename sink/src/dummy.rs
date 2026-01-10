@@ -1,5 +1,6 @@
-use flume::Sender;
+use flume::{Sender};
 use std::time::Duration;
+use tracing::error;
 use util::InitialMeta;
 use value::Value;
 
@@ -17,8 +18,13 @@ impl DummySink {
         let duration = self.interval;
         let value = self.value.clone();
         loop {
-            if sender
-                .send((value.clone(), InitialMeta::new(Some(name.clone())))).is_ok() {};
+            match sender
+                .send((value.clone(), InitialMeta::new(Some(name.clone())))) {
+                Ok(_) => {}
+                Err(err) => {
+                    error!("Could not sink: {}", err)
+                }
+            }
             tokio::time::sleep(duration).await;
         }
     }

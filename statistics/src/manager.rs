@@ -13,9 +13,7 @@ use tokio::select;
 use tokio::time::{interval, sleep};
 use util::Event::Runtime;
 use util::definition::Definition;
-use util::{
-    DefinitionId, EngineEvent, EngineId, Event, RuntimeEvent, log_channel, set_statistic_sender,
-};
+use util::{DefinitionId, EngineEvent, EngineId, Event, RuntimeEvent, log_channel, set_statistic_sender, Runtimes};
 
 pub struct Statistics {
     engines: HashMap<EngineId, EngineStatistic>,
@@ -51,13 +49,14 @@ impl Statistics {
             }
             Event::Engine(engine_id, EngineEvent::Name(name)) => {
                 self.engine_names.insert(engine_id, name);
+                self.engines.insert(engine_id, EngineStatistic::default());
             }
             _ => {}
         }
     }
 }
 
-pub fn start(tx: Sender<Event>, rx: Receiver<Event>) -> Sender<Event> {
+pub fn start(rt: Runtimes, tx: Sender<Event>, rx: Receiver<Event>) -> Sender<Event> {
     set_statistic_sender(tx.clone());
 
     let (status_tx, status_rx) = unbounded();
@@ -66,7 +65,7 @@ pub fn start(tx: Sender<Event>, rx: Receiver<Event>) -> Sender<Event> {
     let clone_bc_tx = bc_tx.clone();
 
     let tx_clone = tx.clone();
-    spawn(move || {
+    let statistic = spawn(move || {
         let tx = tx_clone.clone();
         let mut rt = Builder::new_current_thread()
             .thread_name("statistic-rt")
@@ -120,6 +119,8 @@ pub fn start(tx: Sender<Event>, rx: Receiver<Event>) -> Sender<Event> {
         });
     });
     status_rx.recv().unwrap();
+
+    rt.add_handle(statistic);
 
     tx
 }

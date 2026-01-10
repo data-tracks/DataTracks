@@ -9,6 +9,7 @@ mod mappings;
 mod types;
 mod channel;
 mod event;
+pub mod runtimes;
 
 pub use segment::SegmentedLog;
 
@@ -23,3 +24,5 @@ pub use types::*;
 pub use channel::*;
 
 pub use event::*;
+
+pub use runtimes::*;
