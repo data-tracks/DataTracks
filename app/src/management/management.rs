@@ -152,7 +152,7 @@ impl Manager {
 
         let (tx, rx) = unbounded();
 
-        thread::spawn(move || {
+        let engines = thread::spawn(move || {
             let rt = Builder::new_current_thread()
                 .worker_threads(4)
                 .thread_name("engine-rt")
@@ -172,6 +172,7 @@ impl Manager {
 
             });
         });
+        self.runtimes.add_handle(engines);
 
         rx.recv()?;
 

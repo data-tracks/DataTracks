@@ -10,16 +10,19 @@ use std::thread::spawn;
 use std::time::{Duration, Instant};
 use tokio::runtime::{Builder, Handle};
 use tokio::select;
+use tokio::sync::broadcast;
 use tokio::time::{interval, sleep};
+use tracing::log::debug;
 use util::Event::Runtime;
 use util::definition::Definition;
-use util::{DefinitionId, EngineEvent, EngineId, Event, RuntimeEvent, log_channel, set_statistic_sender, Runtimes};
+use util::{DefinitionId, EngineEvent, EngineId, Event, RuntimeEvent, log_channel, set_statistic_sender, Runtimes, StatisticEvent};
 
 pub struct Statistics {
     engines: HashMap<EngineId, EngineStatistic>,
     engine_names: HashMap<EngineId, String>,
     definitions: HashMap<DefinitionId, Definition>,
 }
+
 
 impl Default for Statistics {
     fn default() -> Self {
@@ -54,6 +57,12 @@ impl Statistics {
             _ => {}
         }
     }
+
+    pub(crate) fn get_summary(&self) -> Event {
+        Event::Statistics(StatisticEvent{
+            engines: self.engines.iter().clone().map(|(id, stat)| (id.clone(), stat.to_stat())).collect(),
+        })
+    }
 }
 
 pub fn start(rt: Runtimes, tx: Sender<Event>, rx: Receiver<Event>) -> Sender<Event> {
@@ -61,7 +70,7 @@ pub fn start(rt: Runtimes, tx: Sender<Event>, rx: Receiver<Event>) -> Sender<Eve
 
     let (status_tx, status_rx) = unbounded();
 
-    let (bc_tx, _) = tokio::sync::broadcast::channel(1_000_000);
+    let (bc_tx, _) = broadcast::channel(1_000_000);
     let clone_bc_tx = bc_tx.clone();
 
     let tx_clone = tx.clone();
@@ -80,8 +89,6 @@ pub fn start(rt: Runtimes, tx: Sender<Event>, rx: Receiver<Event>) -> Sender<Eve
 
             let mut timer = interval(Duration::from_secs(20));
 
-            let initial = Instant::now();
-
             loop {
                 select! {
                     maybe_event = rx.recv_async() => {
@@ -91,7 +98,9 @@ pub fn start(rt: Runtimes, tx: Sender<Event>, rx: Receiver<Event>) -> Sender<Eve
                         }
                     },
                     _ = timer.tick() => {
-                        println! {"{}", statistics.data(initial).unwrap()}
+                        if clone_bc_tx.send(statistics.get_summary()).is_err() {
+                            debug!("Statistic ticks", )
+                        }
                     }
                 }
             }
@@ -126,7 +135,7 @@ pub fn start(rt: Runtimes, tx: Sender<Event>, rx: Receiver<Event>) -> Sender<Eve
 }
 
 impl Statistics {
-    fn data(&self, initial: Instant) -> Result<String, Box<dyn Error + Send + Sync>> {
+    fn qdata(&self, initial: Instant) -> Result<String, Box<dyn Error + Send + Sync>> {
         let mut table = Table::new();
 
         table.load_preset(UTF8_FULL);
@@ -186,6 +195,10 @@ pub struct EngineStatistic {
 }
 
 impl EngineStatistic {
+    pub(crate) fn to_stat(&self) -> Vec<(DefinitionId, usize)> {
+        self.handled_entities.iter().map(|(k,v)| (k.clone(), v.load(Ordering::Relaxed)) ).collect()
+    }
+
     pub(crate) fn handle_insert(&mut self, amount: usize, definition: DefinitionId) {
         self.handled_entities
             .entry(definition)

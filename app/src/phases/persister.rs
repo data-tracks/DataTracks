@@ -1,16 +1,17 @@
 use crate::management::catalog::Catalog;
 use crate::management::Runtimes;
 use engine::engine::Engine;
-use flume::{unbounded, Receiver};
+use flume::{unbounded, Receiver, Sender};
 use std::collections::HashMap;
 use std::error::Error;
 use std::thread;
+use std::thread::JoinHandle;
 use std::time::Duration;
 use tokio::runtime::Builder;
 use tokio::task::JoinSet;
 use tokio::time::{sleep, Instant};
 use tracing::{debug, error};
-use util::definition::Stage;
+use util::definition::{Definition, Stage};
 use util::{
     log_channel, DefinitionId, Event, InitialMeta, PlainRecord, SegmentedLog, TargetedMeta,
     TimedMeta,
@@ -31,10 +32,11 @@ impl Persister {
     }
 
     pub async fn move_to_engines(
-        &mut self,
         record: (Value, TimedMeta),
+        engine: &mut Vec<Engine>,
+        definitions: &mut Vec<Definition>,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
-        let (engine, value, meta) = self.select_engines(record).await?;
+        let (engine, value, meta) = Self::select_engines(record, engine, definitions).await?;
 
         debug!("store {} - {:?}", engine, value);
 
@@ -43,27 +45,109 @@ impl Persister {
         Ok(())
     }
 
-    pub fn start(mut self, incoming: Receiver<(Value, InitialMeta)>, rt: Runtimes) {
-        let id_workers = 24;
+    pub fn start(self, incoming: Receiver<(Value, InitialMeta)>, rt: Runtimes) {
+        let timer_workers = 10;
 
-        let timer_workers = 50;
+        let wal_workers = 4;
 
-        let wal_workers = 30;
+        let storer_workers = 4;
 
         let (sender, receiver) = unbounded();
+        let sender_clone = sender.clone();
+        rt.attach_runtime(&0, async move { log_channel(sender_clone, "Timer -> WAL").await; });
 
+        for _ in 0..1 {
+            let timer = Self::start_timer(incoming.clone(), timer_workers, sender.clone());
+
+            rt.add_handle(timer);
+        }
+
+        let (wal_tx, wal_rx) = unbounded();
+        let wal_tx_clone = wal_tx.clone();
+        rt.attach_runtime(&0, async move { log_channel(wal_tx_clone, "WAL -> Engines").await; });
+
+        // wal logger
+        for i in 0..wal_workers {
+            let rx = receiver.clone();
+            let tx = wal_tx.clone();
+
+            let wal = thread::spawn(move || {
+                // dedicated runtime in thread
+                let wal_runtime = Builder::new_current_thread().enable_all().build().unwrap();
+
+                wal_runtime.block_on(async {
+                    let mut log =
+                        SegmentedLog::new(&format!("wals/wal_segments_{}", i), 200 * 2048 * 2048)
+                            .await
+                            .unwrap();
+
+                    let mut batch = Vec::with_capacity(100_000);
+                    loop {
+                        match rx.recv_async().await {
+                            Err(err) => {
+                                error!("Error in WAL: {}", err)
+                            }
+                            Ok(record) => {
+                                batch.push(record);
+                                batch.extend(rx.try_iter().take(99_999));
+
+                                log.log(&batch).await;
+
+                                for record in batch.drain(..) {
+                                    tx.send(record).unwrap();
+                                }
+                            }
+                        }
+                    }
+                });
+            });
+            rt.add_handle(wal);
+        }
+
+        let storer = thread::spawn(move || {
+            let rt_storer = Builder::new_current_thread()
+                .thread_name("storer")
+                .enable_all()
+                .build()
+                .unwrap();
+
+            rt_storer.block_on(async {
+                let mut joins = JoinSet::new();
+
+                for _ in 0..storer_workers {
+                    let mut engines = self.catalog.engines().await;
+                    let mut definitions = self.catalog.definitions().await;
+                    let wal_rx_clone = wal_rx.clone();
+                    joins.spawn(async move {
+                        loop {
+                            match wal_rx_clone.recv_async().await {
+                                Err(_) => {}
+                                Ok(record) => Self::move_to_engines(record, &mut engines, &mut definitions).await.unwrap(),
+                            }
+                        }
+                    });
+                }
+
+                joins.join_all().await;
+            });
+
+        });
+        rt.add_handle(storer);
+    }
+
+    fn start_timer(incoming: Receiver<(Value, InitialMeta)>, timer_workers: usize, sender: Sender<(Value, TimedMeta)>) -> JoinHandle<()> {
         let timer = thread::spawn(move || {
             // timer
-            let rt_timer = Builder::new_current_thread()
+            let rt_timer = Builder::new_multi_thread()
+                .worker_threads(timer_workers.clone())
                 .thread_name("timer-processor")
                 .enable_all()
                 .build()
                 .unwrap();
 
             rt_timer.block_on(async move {
-                log_channel(sender.clone(), "Timer").await;
                 let mut joins: JoinSet<()> = JoinSet::new();
-                let id_queue = Self::start_id_generator(&mut joins, id_workers).await; // work stealing
+                let id_queue = Self::start_id_generator(&mut joins, (timer_workers / 4) as i32).await; // work stealing
 
                 for i in 0..timer_workers {
                     let incoming = incoming.clone();
@@ -100,89 +184,28 @@ impl Persister {
                             }
                         }
                     });
+                    // to distribute the "workers"
+                    sleep(Duration::from_millis(50)).await;
                 }
                 joins.join_all().await;
             })
         });
-
-        rt.add_handle(timer);
-
-
-        let (wal_tx, wal_rx) = unbounded();
-        let wal_tx_clone = wal_tx.clone();
-        rt.attach_runtime(&0, async move { log_channel(wal_tx_clone, "WAL").await; });
-
-        // wal logger
-        for i in 0..wal_workers {
-            let rx = receiver.clone();
-            let tx = wal_tx.clone();
-
-            // dedicated runtime in thread
-            let wal_runtime = Builder::new_current_thread().enable_all().build().unwrap();
-
-            thread::spawn(move || {
-                wal_runtime.block_on(async {
-                    let mut log =
-                        SegmentedLog::new(&format!("wals/wal_segments_{}", i), 200 * 2048 * 2048)
-                            .await
-                            .unwrap();
-
-                    let mut batch = Vec::with_capacity(100_000);
-                    loop {
-                        match rx.recv() {
-                            Err(_) => {}
-                            Ok(record) => {
-                                batch.push(record);
-                                batch.extend(rx.try_iter().take(99_999));
-
-                                log.log(&batch).await;
-
-                                for record in batch.drain(..) {
-                                    tx.send(record).unwrap();
-                                }
-                            }
-                        }
-                    }
-                });
-            });
-        }
-
-        let storer = thread::spawn(move || {
-            let rt_storer = Builder::new_current_thread()
-                .thread_name("storer")
-                .enable_all()
-                .build()
-                .unwrap();
-
-            rt_storer.block_on(async {
-                let mut engines = self.catalog.engines().await;
-
-                self.engines.append(&mut engines);
-
-                loop {
-                    match wal_rx.recv_async().await {
-                        Err(_) => {}
-                        Ok(record) => self.move_to_engines(record).await.unwrap(),
-                    }
-                }
-            });
-        });
-        rt.add_handle(storer);
+        timer
     }
 
-    async fn select_engines(
-        &self,
+    async fn select_engines<'a>(
         record: (Value, TimedMeta),
-    ) -> Result<(&Engine, Value, TargetedMeta), Box<dyn Error + Send + Sync>> {
-        let definitions = self.catalog.definitions().await;
+        engines: &'a mut Vec<Engine>,
+        definitions: &mut Vec<Definition>,
+    ) -> Result<(&'a Engine, Value, TargetedMeta), Box<dyn Error + Send + Sync>> {
 
         let definition = definitions
             .into_iter()
             .find(|d| d.matches(&record.0, &record.1))
             .unwrap();
 
-        let costs: Vec<_> = self
-            .engines
+        let costs: Vec<_> =
+            engines
             .iter()
             .map(|e| (e.cost(&record.0, &definition), e))
             .collect();

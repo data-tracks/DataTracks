@@ -34,7 +34,7 @@ impl KafkaSink {
         // 2. Subscribe to the topic
         consumer.subscribe(&[TOPIC])?;
 
-        println!("Consumer running. Waiting for messages on topic: {}", TOPIC);
+        info!("Consumer running. Waiting for messages on topic: {}", TOPIC);
 
         // 3. Start the Consumption Loop
         loop {
@@ -210,7 +210,7 @@ impl Kafka {
         // new_topic.set("retention.ms", "86400000");
 
         // 3. Create the topic
-        println!(
+        info!(
             "Attempting to create topic '{}' with {} partitions...",
             TOPIC, 3
         );
@@ -222,7 +222,7 @@ impl Kafka {
                 for result in results {
                     match result {
                         Ok(topic_result) => {
-                            println!("✅ Topic created successfully: {}", topic_result)
+                            info!("✅ Topic created successfully: {}", topic_result)
                         }
                         Err((name, error)) => {
                             eprintln!("❌ Failed to create topic '{}': {:?}", name, error);

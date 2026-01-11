@@ -33,12 +33,13 @@ pub fn start(rt: &mut Runtime, tx: Sender<Event>) {
         let app = Router::new()
             .route("/events", get(ws_event_handler))
             .route("/queues", get(ws_queue_handler))
+            .route("/statistics", get(ws_statistics_handler))
             .layer(CorsLayer::permissive())
             .with_state(shared_state)
             .fallback_service(ServeDir::new(dist_path));
 
         let listener = TcpListener::bind("127.0.0.1:3131").await.unwrap();
-        println!("Server running on http://127.0.0.1:3131");
+        info!("Web server running on http://127.0.0.1:3131");
         axum::serve(listener, app).await.unwrap();
     });
 }
@@ -112,6 +113,52 @@ async fn handle_queue_socket(mut socket: WebSocket, state: Arc<EventState>) {
 
                 for event in events.drain(..) {
                     if let Event::Queue(q) = event
+                        && let Ok(msg) = serde_json::to_string(&q)
+                    {
+                        if (socket)
+                            .send(Message::Text(Utf8Bytes::from(msg)))
+                            .await
+                            .is_err()
+                        {
+                            // Client disconnected
+                            error!("disconnected queue");
+                            return;
+                        }
+                    } else {
+                        // we ignore others
+                    }
+                }
+            }
+            Err(err) => {
+                debug!("error: {}", err)
+            }
+        }
+    }
+}
+
+
+async fn ws_statistics_handler(
+    ws: WebSocketUpgrade,
+    State(state): State<Arc<EventState>>,
+) -> impl IntoResponse {
+    ws.on_upgrade(|socket| handle_statistics_socket(socket, state))
+}
+
+async fn handle_statistics_socket(mut socket: WebSocket, state: Arc<EventState>) {
+    debug!("connected");
+    let mut rx = state.sender.subscribe();
+
+    let mut events = vec![];
+    loop {
+        match rx.recv().await {
+            Ok(event) => {
+                events.push(event);
+                while let Ok(event) = rx.try_recv() {
+                    events.push(event)
+                }
+
+                for event in events.drain(..) {
+                    if let Event::Statistics(q) = event
                         && let Ok(msg) = serde_json::to_string(&q)
                     {
                         if (socket)

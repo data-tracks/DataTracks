@@ -1,6 +1,7 @@
-use serde::Serialize;
-use crate::{DefinitionId, EngineId};
 use crate::definition::Definition;
+use crate::{DefinitionId, EngineId};
+use serde::Serialize;
+use std::collections::HashMap;
 
 #[derive(Serialize, Clone, Debug)]
 #[serde(tag = "type",content = "data")]
@@ -11,7 +12,8 @@ pub enum Event {
     Runtime(RuntimeEvent),
     EngineStatus(String),
     Queue(QueueEvent),
-    Startup(bool)
+    Startup(bool),
+    Statistics(StatisticEvent)
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -20,6 +22,11 @@ pub struct RuntimeEvent {
     pub worker_threads: usize,
     pub blocking_threads: usize,
     pub budget_forces_yield: usize,
+}
+
+#[derive(Serialize, Clone, Debug)]
+pub struct StatisticEvent {
+    pub engines: HashMap<EngineId, Vec<(DefinitionId, usize)>>,
 }
 
 #[derive(Serialize, Clone, Debug)]
