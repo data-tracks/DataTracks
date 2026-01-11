@@ -1,7 +1,7 @@
 use crate::management::catalog::Catalog;
 use engine::engine::Engine;
 use tokio::task::JoinSet;
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 use util::definition::Stage;
 use util::log_channel;
 

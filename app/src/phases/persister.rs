@@ -10,7 +10,7 @@ use std::time::Duration;
 use tokio::runtime::Builder;
 use tokio::task::JoinSet;
 use tokio::time::{sleep, Instant};
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 use util::definition::{Definition, Stage};
 use util::{
     log_channel, DefinitionId, Event, InitialMeta, PlainRecord, SegmentedLog, TargetedMeta,
@@ -298,11 +298,24 @@ impl Persister {
                     match engine.rx.try_recv() {
                         Err(_) => sleep(Duration::from_millis(1)).await, // max shift after max timeout for sending finished chunk out
                         Ok(record) => {
+                            info!("current {}", engine.rx.len());
+
+                            buckets.entry(record.1.definition).or_default().push(record);
+                            count += 1;
+
                             if buckets.is_empty() {
                                 first_ts = Instant::now();
                             }
-                            buckets.entry(record.1.definition).or_default().push(record);
-                            count += 1;
+
+                            let values = engine.rx.try_iter().take(999_999).collect::<Vec<_>>();
+
+                            info!("current after {}", engine.rx.len());
+
+                            for (record) in values {
+                                buckets.entry(record.1.definition).or_default().push(record);
+                                count += 1;
+                            }
+
                         }
                     }
                 }

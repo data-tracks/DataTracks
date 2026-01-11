@@ -135,7 +135,7 @@ pub fn start(rt: Runtimes, tx: Sender<Event>, rx: Receiver<Event>) -> Sender<Eve
 }
 
 impl Statistics {
-    fn qdata(&self, initial: Instant) -> Result<String, Box<dyn Error + Send + Sync>> {
+    fn data(&self, initial: Instant) -> Result<String, Box<dyn Error + Send + Sync>> {
         let mut table = Table::new();
 
         table.load_preset(UTF8_FULL);
