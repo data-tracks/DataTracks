@@ -11,14 +11,18 @@ export class EventsService {
   private _queues = signal<any>(null);
   public queues = this._queues.asReadonly();
 
+  public connectedStatistics = signal<boolean>(false);
+  public connected = computed(() => this.connectedQueues() && this.connectedEvents() && this.connectedStatistics)
+
   public connectedEvents = signal<boolean>(false);
   public connectedQueues = signal<boolean>(false);
-
-  public connected = computed(() => this.connectedQueues() && this.connectedEvents())
+  private _statistics = signal<any>(null);
+  public statistics = this._statistics.asReadonly();
 
   constructor(private zone: NgZone) {
     this.initEventsConnection();
     this.initQueueConnection();
+    this.initStatisticsConnection();
   }
 
   private initEventsConnection() {
@@ -54,6 +58,25 @@ export class EventsService {
 
     socket.onclose = () => {
       this.connectedQueues.set(false);
+      console.warn('Disconnected from Rust. Retrying in 2s...');
+      setTimeout(() => this.initQueueConnection(), 2000);
+    };
+  }
+
+  private initStatisticsConnection() {
+    const socket = new WebSocket('ws://localhost:3131/statistics');
+
+    socket.onmessage = (queue) => {
+      this.zone.run(() => {
+        this.connectedStatistics.set(true);
+        const data = JSON.parse(queue.data);
+
+        this._queues.set(data);
+      });
+    };
+
+    socket.onclose = () => {
+      this.connectedStatistics.set(false);
       console.warn('Disconnected from Rust. Retrying in 2s...');
       setTimeout(() => this.initQueueConnection(), 2000);
     };

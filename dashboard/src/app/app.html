@@ -37,6 +37,14 @@
 
             <app-queues [inputs]="service.queues()" class="w-full"/>
         </div>
+        <div class="card bg-base-300 rounded-box grid grow place-items-center content-start p-4">
+            <div class="flex gap-1">
+                <div class="text-xl mb-2">Statistics</div>
+                <app-status [status]="service.connectedStatistics()"/>
+            </div>
+
+            <app-statistics [inputs]="service.statistics()" class="w-full"/>
+        </div>
     </div>
 </main>
 

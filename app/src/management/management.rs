@@ -1,8 +1,8 @@
 use crate::management::catalog::Catalog;
-use crate::phases::mapper::Nativer;
 use crate::phases::Persister;
+use crate::phases::mapper::Nativer;
 use engine::EngineKind;
-use flume::{unbounded, Sender};
+use flume::{Sender, unbounded};
 use sink::dummy::DummySink;
 use sink::kafka::Kafka;
 use std::error::Error;
@@ -12,9 +12,9 @@ use tokio::runtime::Builder;
 use tokio::task::JoinSet;
 use tracing::{error, info};
 use util::definition::{Definition, DefinitionFilter, Model};
-use util::{log_channel, DefinitionMapping, Event, InitialMeta, RelationalType};
-use value::Value;
 use util::runtimes::Runtimes;
+use util::{DefinitionMapping, Event, InitialMeta, RelationalType, log_channel};
+use value::Value;
 
 #[derive(Default)]
 pub struct Manager {
@@ -28,7 +28,7 @@ impl Manager {
         Manager {
             joins: JoinSet::new(),
             catalog: Catalog::default(),
-            runtimes: Runtimes::new()
+            runtimes: Runtimes::new(),
         }
     }
 
@@ -110,7 +110,8 @@ impl Manager {
                     DefinitionMapping::document(),
                     Model::Document,
                     String::from("doc"),
-                ).await,
+                )
+                .await,
                 statistic_tx.clone(),
             )
             .await?;
@@ -125,7 +126,8 @@ impl Manager {
                     ]),
                     Model::Relational,
                     String::from("relational"),
-                ).await,
+                )
+                .await,
                 statistic_tx.clone(),
             )
             .await?;
@@ -137,7 +139,8 @@ impl Manager {
                     DefinitionMapping::doc_to_graph(),
                     Model::Graph,
                     String::from("graph"),
-                ).await,
+                )
+                .await,
                 statistic_tx,
             )
             .await?;
@@ -157,19 +160,21 @@ impl Manager {
                 .worker_threads(4)
                 .thread_name("engine-rt")
                 .enable_all()
-                .build().unwrap();
+                .build()
+                .unwrap();
 
             rt.block_on(async move {
                 let mut joins: JoinSet<()> = JoinSet::new();
 
-                let engines = EngineKind::start_all(&mut joins, statistic_tx.clone()).await.unwrap();
+                let engines = EngineKind::start_all(&mut joins, statistic_tx.clone())
+                    .await
+                    .unwrap();
                 for engine in engines.into_iter() {
                     catalog.add_engine(engine, statistic_tx.clone()).await;
                 }
                 tx.send_async(true).await.unwrap();
 
                 joins.join_all().await;
-
             });
         });
         self.runtimes.add_handle(engines);
@@ -197,7 +202,7 @@ impl Manager {
     }
 
     fn build_dummy(&mut self, tx: Sender<(Value, InitialMeta)>, _: &Kafka) {
-        let amount = 2_000;
+        let amount = 2_0;
 
         /*let clone_graph = kafka.clone();
         self.joins.spawn(async move {

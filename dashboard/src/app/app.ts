@@ -4,10 +4,11 @@ import {EventsComponent} from "./events/events.component";
 import {EventsService} from "./events.service";
 import {QueuesComponent} from "./queues/queues.component";
 import {StatusComponent} from "./status/status.component";
+import {StatisticsComponent} from "./statistics/statistics.component";
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, RouterOutlet, EventsComponent, QueuesComponent, StatusComponent],
+  imports: [RouterOutlet, RouterOutlet, EventsComponent, QueuesComponent, StatusComponent, StatisticsComponent],
   templateUrl: './app.html',
   styleUrl: './app.css'
 })

@@ -1,6 +1,7 @@
 <div class="w-full">
     <div class="text-xl">{{ name() }}</div>
-    <progress [value]="entry()" class="progress w-full" [class.progress-error]="entry() > max()*0.75" [max]="max()"></progress>
+    <progress [class.progress-error]="entry() > max()*0.75" [max]="max()" [value]="entry() || 0"
+              class="progress w-full"></progress>
     <div class="flex justify-between">
         <div>Current: {{ entry() | number }}</div>
         <div class="justify-end">Max: {{max() | number}}</div>

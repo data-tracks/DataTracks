@@ -1,7 +1,7 @@
-use crate::management::catalog::Catalog;
 use crate::management::Runtimes;
+use crate::management::catalog::Catalog;
 use engine::engine::Engine;
-use flume::{unbounded, Receiver, Sender};
+use flume::{Receiver, Sender, unbounded};
 use std::collections::HashMap;
 use std::error::Error;
 use std::thread;
@@ -9,12 +9,12 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 use tokio::runtime::Builder;
 use tokio::task::JoinSet;
-use tokio::time::{sleep, Instant};
+use tokio::time::{Instant, sleep};
 use tracing::{debug, error, info};
 use util::definition::{Definition, Stage};
 use util::{
-    log_channel, DefinitionId, Event, InitialMeta, PlainRecord, SegmentedLog, TargetedMeta,
-    TimedMeta,
+    DefinitionId, Event, InitialMeta, PlainRecord, SegmentedLog, TargetedMeta, TimedMeta,
+    log_channel,
 };
 use value::Value;
 
@@ -33,7 +33,7 @@ impl Persister {
 
     pub async fn move_to_engines(
         record: (Value, TimedMeta),
-        engine: &mut Vec<Engine>,
+        engine: &mut [Engine],
         definitions: &mut Vec<Definition>,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
         let (engine, value, meta) = Self::select_engines(record, engine, definitions).await?;
@@ -54,7 +54,9 @@ impl Persister {
 
         let (sender, receiver) = unbounded();
         let sender_clone = sender.clone();
-        rt.attach_runtime(&0, async move { log_channel(sender_clone, "Timer -> WAL").await; });
+        rt.attach_runtime(&0, async move {
+            log_channel(sender_clone, "Timer -> WAL").await;
+        });
 
         for _ in 0..1 {
             let timer = Self::start_timer(incoming.clone(), timer_workers, sender.clone());
@@ -64,7 +66,9 @@ impl Persister {
 
         let (wal_tx, wal_rx) = unbounded();
         let wal_tx_clone = wal_tx.clone();
-        rt.attach_runtime(&0, async move { log_channel(wal_tx_clone, "WAL -> Engines").await; });
+        rt.attach_runtime(&0, async move {
+            log_channel(wal_tx_clone, "WAL -> Engines").await;
+        });
 
         // wal logger
         for i in 0..wal_workers {
@@ -122,7 +126,11 @@ impl Persister {
                         loop {
                             match wal_rx_clone.recv_async().await {
                                 Err(_) => {}
-                                Ok(record) => Self::move_to_engines(record, &mut engines, &mut definitions).await.unwrap(),
+                                Ok(record) => {
+                                    Self::move_to_engines(record, &mut engines, &mut definitions)
+                                        .await
+                                        .unwrap()
+                                }
                             }
                         }
                     });
@@ -130,16 +138,19 @@ impl Persister {
 
                 joins.join_all().await;
             });
-
         });
         rt.add_handle(storer);
     }
 
-    fn start_timer(incoming: Receiver<(Value, InitialMeta)>, timer_workers: usize, sender: Sender<(Value, TimedMeta)>) -> JoinHandle<()> {
-        let timer = thread::spawn(move || {
+    fn start_timer(
+        incoming: Receiver<(Value, InitialMeta)>,
+        timer_workers: usize,
+        sender: Sender<(Value, TimedMeta)>,
+    ) -> JoinHandle<()> {
+        thread::spawn(move || {
             // timer
             let rt_timer = Builder::new_multi_thread()
-                .worker_threads(timer_workers.clone())
+                .worker_threads(timer_workers)
                 .thread_name("timer-processor")
                 .enable_all()
                 .build()
@@ -147,7 +158,8 @@ impl Persister {
 
             rt_timer.block_on(async move {
                 let mut joins: JoinSet<()> = JoinSet::new();
-                let id_queue = Self::start_id_generator(&mut joins, (timer_workers / 4) as i32).await; // work stealing
+                let id_queue =
+                    Self::start_id_generator(&mut joins, (timer_workers / 4) as i32).await; // work stealing
 
                 for i in 0..timer_workers {
                     let incoming = incoming.clone();
@@ -189,23 +201,20 @@ impl Persister {
                 }
                 joins.join_all().await;
             })
-        });
-        timer
+        })
     }
 
     async fn select_engines<'a>(
         record: (Value, TimedMeta),
-        engines: &'a mut Vec<Engine>,
+        engines: &'a mut [Engine],
         definitions: &mut Vec<Definition>,
     ) -> Result<(&'a Engine, Value, TargetedMeta), Box<dyn Error + Send + Sync>> {
-
         let definition = definitions
             .into_iter()
             .find(|d| d.matches(&record.0, &record.1))
             .unwrap();
 
-        let costs: Vec<_> =
-            engines
+        let costs: Vec<_> = engines
             .iter()
             .map(|e| (e.cost(&record.0, &definition), e))
             .collect();
@@ -298,7 +307,7 @@ impl Persister {
                     match engine.rx.try_recv() {
                         Err(_) => sleep(Duration::from_millis(1)).await, // max shift after max timeout for sending finished chunk out
                         Ok(record) => {
-                            info!("current {}", engine.rx.len());
+                            debug!("current {}", engine.rx.len());
 
                             buckets.entry(record.1.definition).or_default().push(record);
                             count += 1;
@@ -309,9 +318,9 @@ impl Persister {
 
                             let values = engine.rx.try_iter().take(999_999).collect::<Vec<_>>();
 
-                            info!("current after {}", engine.rx.len());
+                            debug!("current after {}", engine.rx.len());
 
-                            for (record) in values {
+                            for record in values {
                                 buckets.entry(record.1.definition).or_default().push(record);
                                 count += 1;
                             }
@@ -323,10 +332,7 @@ impl Persister {
         }
     }
 
-    async fn start_id_generator(
-        join_set: &mut JoinSet<()>,
-        workers: i32,
-    ) -> Receiver<Vec<u64>> {
+    async fn start_id_generator(join_set: &mut JoinSet<()>, workers: i32) -> Receiver<Vec<u64>> {
         let (tx, rx) = unbounded();
         log_channel(tx.clone(), "Id generator").await;
 
