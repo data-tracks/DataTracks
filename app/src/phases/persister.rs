@@ -10,7 +10,7 @@ use std::time::Duration;
 use tokio::runtime::Builder;
 use tokio::task::JoinSet;
 use tokio::time::{Instant, sleep};
-use tracing::{debug, error, info};
+use tracing::{debug, error};
 use util::definition::{Definition, Stage};
 use util::{
     DefinitionId, Event, InitialMeta, PlainRecord, SegmentedLog, TargetedMeta, TimedMeta,
@@ -19,14 +19,12 @@ use util::{
 use value::Value;
 
 pub struct Persister {
-    engines: Vec<Engine>,
     catalog: Catalog,
 }
 
 impl Persister {
     pub fn new(catalog: Catalog) -> Result<Self, Box<dyn Error + Send + Sync>> {
         Ok(Persister {
-            engines: vec![],
             catalog,
         })
     }

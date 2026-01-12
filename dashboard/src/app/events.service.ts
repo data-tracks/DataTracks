@@ -71,14 +71,14 @@ export class EventsService {
         this.connectedStatistics.set(true);
         const data = JSON.parse(queue.data);
 
-        this._queues.set(data);
+        this._statistics.set(data);
       });
     };
 
     socket.onclose = () => {
       this.connectedStatistics.set(false);
       console.warn('Disconnected from Rust. Retrying in 2s...');
-      setTimeout(() => this.initQueueConnection(), 2000);
+      setTimeout(() => this.initStatisticsConnection(), 2000);
     };
   }
 
