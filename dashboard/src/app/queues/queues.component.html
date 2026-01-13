@@ -1,5 +1,5 @@
 <ul class="list bg-base-100 rounded-box shadow-md justify-items-stretch">
-    @for (entry of queuesView(); track entry[0]) {
+    @for (entry of sortedQueues(); track entry[0];) {
         <li class="list-row w-full flex">
             <app-queue [name]="entry[0]" class="w-full flex" [entry]="entry[1]"/>
         </li>

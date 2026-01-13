@@ -5,7 +5,6 @@ import {QueueComponent} from "./queue/queue.component";
 @Component({
   selector: 'app-queues',
   imports: [
-    DecimalPipe,
     QueueComponent
   ],
   templateUrl: './queues.component.html',
@@ -14,9 +13,14 @@ import {QueueComponent} from "./queue/queue.component";
 export class QueuesComponent {
   inputs = input.required<any>();
 
-  queues = signal(new Map<String, number>);
+  queues = signal(new Map<string, number>);
 
   queuesView = computed(() => Array.from(this.queues().entries()));
+
+  sortedQueues = computed(() => {
+    // We spread into a new array [...raw] because .sort() mutates the array
+    return [...this.queuesView()].sort((a, b) => a[0].localeCompare(b[0]));
+  }).bind(this);
 
   constructor() {
     effect(() => {
@@ -38,6 +42,6 @@ export class QueuesComponent {
 
 
 export interface Queue {
-  name: String;
+  name: string;
   size: number
 }

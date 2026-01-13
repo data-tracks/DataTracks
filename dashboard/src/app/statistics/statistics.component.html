@@ -1,3 +1,11 @@
 <div>
-    Statistics
+    @for (entry of statistics(); track entry[0]){
+        <div class="pb-3">
+            <div class="xl font-bold">{{entry[0]}}</div>
+            {{entry[1]}}
+            @for (value of entry[1]; track $index){
+            {{value}}
+            }
+        </div>
+    }
 </div>

@@ -1,24 +1,47 @@
 import {Component, effect, input, signal, WritableSignal} from '@angular/core';
+import {DecimalPipe, JsonPipe} from "@angular/common";
 
 @Component({
     selector: 'app-statistics',
-    imports: [],
+    imports: [
+        DecimalPipe
+    ],
     templateUrl: './statistics.component.html',
     styleUrl: './statistics.component.css',
 })
 export class StatisticsComponent {
     inputs = input.required<any>();
-    protected msgs: WritableSignal<Map<string, WritableSignal<string>>> = signal(new Map());
+    protected statistics: WritableSignal<Map<string, [number, number][]>> = signal(new Map());
 
     constructor() {
         effect(() => {
             let data = this.inputs();
 
-            /*this.msgs.update(msgs => {
-              return data
-            })*/
-            console.log(data)
+            if (!data){
+                return;
+            }
+
+            let map: StatisticEvent = data;
+
+            console.log(map)
+
+            this.statistics.update(m => {
+                let d = new Map(m);
+
+                for (let key in map.engines) {
+                    let entmap.engines[key])
+                    d.set(key, [])
+                }
+                return d;
+            });
         });
 
     }
+}
+
+export type DefinitionId = number;
+export type EngineId = number;
+
+export interface StatisticEvent {
+    engines: Record<string, [[DefinitionId, number][], string]>;
 }

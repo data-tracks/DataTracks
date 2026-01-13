@@ -10,7 +10,7 @@ use tokio::sync::broadcast::Sender;
 use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
 use tracing::{debug, error, info};
-use util::Event;
+use util::{Event, StatisticEvent};
 
 struct EventState {
     sender: Arc<Sender<Event>>,
@@ -23,8 +23,6 @@ pub fn start(rt: &mut Runtime, tx: Sender<Event>) {
             .join("dist")
             .join("dashboard")
             .join("browser");
-
-        info!("{:?}", dist_path);
 
         let shared_state = Arc::new(EventState {
             sender: Arc::new(tx),
@@ -147,6 +145,23 @@ async fn ws_statistics_handler(
 async fn handle_statistics_socket(mut socket: WebSocket, state: Arc<EventState>) {
     debug!("connected");
     let mut rx = state.sender.subscribe();
+
+    // send first empty statistics
+    if let Ok(msg) = serde_json::to_string(&StatisticEvent{ engines: Default::default() })
+    {
+        if (socket)
+            .send(Message::Text(Utf8Bytes::from(msg)))
+            .await
+            .is_err()
+        {
+            // Client disconnected
+            error!("disconnected queue");
+            return;
+        }
+    } else {
+        // we ignore others
+    }
+
 
     let mut events = vec![];
     loop {
