@@ -29,8 +29,9 @@ export class StatisticsComponent {
                 let d = new Map(m);
 
                 for (let key in map.engines) {
-                    let entmap.engines[key])
-                    d.set(key, [])
+                    let entries = map.engines[key];
+                    let values = [...entries[0]].sort((a,b) => a[0] - b[0])
+                    d.set(entries[1], values)
                 }
                 return d;
             });

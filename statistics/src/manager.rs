@@ -59,8 +59,9 @@ impl Statistics {
     }
 
     pub(crate) fn get_summary(&self) -> Event {
+        let names = &self.engine_names;
         Event::Statistics(StatisticEvent{
-            engines: self.engines.iter().clone().map(|(id, stat)| (id.clone(), stat.to_stat())).collect(),
+            engines: self.engines.iter().clone().map(|(id, stat)| (id.clone(), (stat.to_stat(), names.get(id).cloned()))).collect(),
         })
     }
 }

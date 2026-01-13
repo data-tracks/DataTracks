@@ -26,7 +26,7 @@ pub struct RuntimeEvent {
 
 #[derive(Serialize, Clone, Debug)]
 pub struct StatisticEvent {
-    pub engines: HashMap<EngineId, Vec<(DefinitionId, usize)>>,
+    pub engines: HashMap<EngineId, (Vec<(DefinitionId, usize)>, Option<String>)>,
 }
 
 #[derive(Serialize, Clone, Debug)]

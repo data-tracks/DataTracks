@@ -34,7 +34,7 @@ impl Definition {
         let id = DefinitionId(ID_BUILDER.fetch_add(1, Ordering::Relaxed));
 
         let (tx, rx) = unbounded::<PlainRecord>();
-        log_channel(tx.clone(), format!("Definition {}", entity)).await;
+        log_channel(tx.clone(), format!("Definition {} - {}", id.0, entity)).await;
 
         Definition {
             id,
