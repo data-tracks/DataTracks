@@ -12,7 +12,9 @@ import {DecimalPipe, NgOptimizedImage} from "@angular/common";
 })
 export class StatisticsComponent {
     inputs = input.required<any>();
-    protected statistics: WritableSignal<Map<string, [number, string, number][]>> = signal(new Map());
+
+    protected plainStatistics: WritableSignal<Map<string, [number, Stage, string, number][]>> = signal(new Map());
+    protected mappedStatistics: WritableSignal<Map<string, [number, Stage, string, number][]>> = signal(new Map());
 
     constructor() {
         effect(() => {
@@ -26,16 +28,30 @@ export class StatisticsComponent {
 
             console.log(map)
 
-            this.statistics.update(m => {
+            this.plainStatistics.update(m => {
                 let d = new Map(m);
 
                 for (let key in map.engines) {
                     let entries = map.engines[key];
-                    let values = [...entries[0]].sort((a,b) => a[0] - b[0])
+
+                    let values = [...entries[0]].filter((e) => e[1] == Stage.Plain).sort((a, b) => a[0] - b[0])
                     d.set(entries[1], values)
                 }
                 return d;
             });
+
+            this.mappedStatistics.update(m => {
+                let d = new Map(m);
+
+                for (let key in map.engines) {
+                    let entries = map.engines[key];
+
+                    let values = [...entries[0]].filter((e) => e[1] == Stage.Mapped).sort((a, b) => a[0] - b[0])
+                    d.set(entries[1], values)
+                }
+                return d;
+            });
+
         });
 
     }
@@ -57,5 +73,10 @@ export type DefinitionId = number;
 export type EngineId = number;
 
 export interface StatisticEvent {
-    engines: Record<string, [[DefinitionId, string, number][], string]>;
+    engines: Record<string, [[DefinitionId, Stage, string, number][], string]>;
+}
+
+export enum Stage {
+    Plain = "Plain",
+    Mapped = "Mapped"
 }

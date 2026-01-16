@@ -1,32 +1,56 @@
-<div class="list bg-base-100 rounded-box shadow-md border border-base-300">
-    @for (entry of statistics(); track entry[0]) {
+<div class="flex flex-col gap-4">
+    @for (entry of plainStatistics(); track entry[0]) {
         @let img = getImage(entry[0]);
+        @let plainItems = plainStatistics().get(entry[0]);
+        @let mappedItems = mappedStatistics().get(entry[0]);
 
-        <div class="list-row items-center py-4 px-6 border-b border-base-200 last:border-none">
-            @if (img) {
-                <div class="avatar shrink-0">
-                    <div class="w-12 h-12">
-                        <img [ngSrc]="img"
-                             alt="Logo"
-                             class="logo-outline object-contain"
-                             height="100"
-                             width="100">
-                    </div>
-                </div>
-            }
-
-            <div class="flex-grow">
-                <h3 class="text-lg font-bold text-primary">{{ entry[0] }}</h3>
-
-                <div class="flex flex-wrap gap-x-4 gap-y-1 mt-1">
-                    @for (value of entry[1]; track $index) {
-                        <div class="text-sm opacity-80 flex items-center gap-1">
-                            <span class="badge badge-sm badge-ghost text-xs">({{ value[0] }})</span>
-                            <span class="font-medium">{{ value[1] }}:</span>
-                            <span class="font-mono">{{ value[2] | number }}</span>
+        <div class="card bg-base-100 border border-base-300 shadow-sm overflow-hidden">
+            <div class="bg-base-200/50 px-3 py-2 flex items-center gap-3 border-b border-base-300">
+                @if (img) {
+                    <div class="avatar shrink-0">
+                        <div class="w-8 h-8 rounded bg-black/20 p-1">
+                            <img [ngSrc]="img" alt="" class="logo-outline object-contain" height="32" width="32">
                         </div>
-                    }
-                </div>
+                    </div>
+                }
+                <span class="text-sm font-bold truncate uppercase tracking-tight">{{ entry[0] }}</span>
+            </div>
+
+            <div class="p-3 flex flex-col gap-4">
+
+                @if (plainItems?.length) {
+                    <div>
+                        <div class="text-[14px] font-black uppercase text-primary mb-2 flex items-center gap-2">
+                            <span>Plain</span>
+                            <div class="h-px grow bg-primary/10"></div>
+                        </div>
+                        <div class="grid grid-cols-3 gap-2">
+                            @for (value of plainItems; track $index) {
+                                <div class="flex flex-col border-l-2 border-primary/30 pl-2">
+                                    <span class="text-[14px] opacity-60 truncate">{{ value[2] }}</span>
+                                    <span class="text-xl font-mono font-bold leading-none">{{ value[3] | number }}</span>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+
+                @if (mappedItems?.length) {
+                    <div>
+                        <div class="text-[14px] font-black uppercase text-accent mb-2 flex items-center gap-2">
+                            <span>Mapped</span>
+                            <div class="h-px grow bg-accent/10"></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            @for (value of mappedItems; track $index) {
+                                <div class="flex flex-col border-l-2 border-accent/30 pl-2">
+                                    <span class="text-[14px] opacity-60 truncate">{{ value[2] }}</span>
+                                    <span class="text-xl font-mono font-bold leading-none">{{ value[3] | number }}</span>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
             </div>
         </div>
     }

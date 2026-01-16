@@ -1,9 +1,9 @@
 use crate::management::catalog::Catalog;
 use engine::engine::Engine;
 use tokio::task::JoinSet;
-use tracing::{debug, error,};
+use tracing::{debug, error};
 use util::definition::Stage;
-use util::log_channel;
+use util::{Event, log_channel};
 
 pub struct Nativer {
     catalog: Catalog,
@@ -31,6 +31,7 @@ impl Nativer {
                 let mapper = definition.mapping.build();
                 loop {
                     if let Ok(record) = rx.recv_async().await {
+                        let length = record.values.len();
                         match engine
                             .store(
                                 Stage::Mapped,
@@ -44,6 +45,15 @@ impl Nativer {
                             .await
                         {
                             Ok(_) => {
+                                engine
+                                    .statistic_sender
+                                    .send(Event::Insert(
+                                        definition.id,
+                                        length,
+                                        engine.id,
+                                        Stage::Mapped,
+                                    ))
+                                    .unwrap();
                                 debug!("mapped")
                             }
                             Err(err) => {

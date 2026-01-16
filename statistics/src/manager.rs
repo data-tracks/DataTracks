@@ -10,7 +10,7 @@ use tokio::sync::broadcast;
 use tokio::time::{interval, sleep};
 use tracing::log::debug;
 use util::Event::Runtime;
-use util::definition::Definition;
+use util::definition::{Definition, Stage};
 use util::{
     DefinitionId, EngineEvent, EngineId, Event, RuntimeEvent, Runtimes, StatisticEvent,
     log_channel, set_statistic_sender,
@@ -39,11 +39,12 @@ impl Statistics {
 
     async fn handle_event(&mut self, event: Event) {
         match event {
-            Event::Insert(definition_id, amount, engine_id) => {
-                self.engines
-                    .entry(engine_id)
-                    .or_default()
-                    .handle_insert(amount, definition_id);
+            Event::Insert(definition_id, amount, engine_id, stage) => {
+                self.engines.entry(engine_id).or_default().handle_insert(
+                    amount,
+                    definition_id,
+                    stage,
+                );
             }
             Event::Definition(definition_id, definition) => {
                 self.definitions.insert(definition_id, *definition);
@@ -150,19 +151,20 @@ pub fn start(rt: Runtimes, tx: Sender<Event>, rx: Receiver<Event>) -> Sender<Eve
 
 #[derive(Default)]
 pub struct EngineStatistic {
-    handled_entities: HashMap<DefinitionId, AtomicUsize>,
+    handled_entities: HashMap<(DefinitionId, Stage), AtomicUsize>,
 }
 
 impl EngineStatistic {
     pub(crate) fn to_stat(
         &self,
         definition_names: &HashMap<u64, String>,
-    ) -> Vec<(DefinitionId, String, usize)> {
+    ) -> Vec<(DefinitionId, Stage, String, usize)> {
         self.handled_entities
             .iter()
-            .map(|(k, v)| {
+            .map(|((k, stage), v)| {
                 (
                     *k,
+                    stage.clone(),
                     definition_names.get(&k.0).cloned().unwrap(),
                     v.load(Ordering::Relaxed),
                 )
@@ -170,9 +172,9 @@ impl EngineStatistic {
             .collect()
     }
 
-    pub(crate) fn handle_insert(&mut self, amount: usize, definition: DefinitionId) {
+    pub(crate) fn handle_insert(&mut self, amount: usize, definition: DefinitionId, stage: Stage) {
         self.handled_entities
-            .entry(definition)
+            .entry((definition, stage))
             .or_default()
             .fetch_add(amount, Ordering::Relaxed);
     }

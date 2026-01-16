@@ -1,14 +1,14 @@
-use crate::definition::Definition;
+use crate::definition::{Definition, Stage};
 use crate::{DefinitionId, EngineId};
 use serde::Serialize;
 use std::collections::HashMap;
 
-pub type DefinitionMeta = (Vec<(DefinitionId, String, usize)>, Option<String>);
+pub type DefinitionMeta = (Vec<(DefinitionId, Stage, String, usize)>, Option<String>);
 
 #[derive(Serialize, Clone, Debug)]
 #[serde(tag = "type", content = "data")]
 pub enum Event {
-    Insert(DefinitionId, usize, EngineId),
+    Insert(DefinitionId, usize, EngineId, Stage),
     Definition(DefinitionId, Box<Definition>),
     Engine(EngineId, EngineEvent),
     Runtime(RuntimeEvent),

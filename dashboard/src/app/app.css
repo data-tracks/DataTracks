@@ -1,0 +1,26 @@
+.grid {
+    display: grid;
+    grid-template-areas: "stack"; /* All tabs occupy the same space */
+}
+
+.tab-pane {
+    grid-area: stack;
+
+    /* Initial hidden state */
+    opacity: 0;
+    transform: translateY(10px);
+    pointer-events: none; /* Can't click hidden tabs */
+    visibility: hidden;
+
+    /* Smooth transition */
+    transition: opacity 0.3s ease-out,
+    transform 0.3s ease-out,
+    visibility 0.3s;
+}
+
+.tab-pane.active-tab {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+    visibility: visible;
+}

@@ -24,9 +24,7 @@ pub struct Persister {
 
 impl Persister {
     pub fn new(catalog: Catalog) -> Result<Self, Box<dyn Error + Send + Sync>> {
-        Ok(Persister {
-            catalog,
-        })
+        Ok(Persister { catalog })
     }
 
     pub async fn move_to_engines(
@@ -263,7 +261,7 @@ impl Persister {
                             let name = definition.entity.plain.clone();
                             match clone.store(Stage::Plain, name, records.clone()).await {
                                 Ok(_) => {
-                                    engine.statistic_sender.send(Event::Insert(id, length, engine_id)).unwrap();
+                                    engine.statistic_sender.send(Event::Insert(id, length, engine_id, Stage::Plain)).unwrap();
                                     definition.native.0.send_async(PlainRecord::new(records)).await.unwrap();
                                     error_count = 0;
                                     count = 0;

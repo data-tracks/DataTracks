@@ -102,7 +102,7 @@ impl Entity {
     }
 }
 
-#[derive(Clone, Debug, Hash, Eq, PartialEq)]
+#[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize)]
 pub enum Stage {
     Plain,
     Mapped,
