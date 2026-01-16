@@ -1,13 +1,9 @@
 use crate::web;
-use comfy_table::Table;
-use comfy_table::presets::UTF8_FULL;
 use flume::{Receiver, Sender, unbounded};
-use num_format::{CustomFormat, ToFormattedString};
 use std::collections::HashMap;
-use std::error::Error;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread::spawn;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tokio::runtime::{Builder, Handle};
 use tokio::select;
 use tokio::sync::broadcast;
@@ -15,14 +11,16 @@ use tokio::time::{interval, sleep};
 use tracing::log::debug;
 use util::Event::Runtime;
 use util::definition::Definition;
-use util::{DefinitionId, EngineEvent, EngineId, Event, RuntimeEvent, log_channel, set_statistic_sender, Runtimes, StatisticEvent};
+use util::{
+    DefinitionId, EngineEvent, EngineId, Event, RuntimeEvent, Runtimes, StatisticEvent,
+    log_channel, set_statistic_sender,
+};
 
 pub struct Statistics {
     engines: HashMap<EngineId, EngineStatistic>,
     engine_names: HashMap<EngineId, String>,
     definitions: HashMap<DefinitionId, Definition>,
 }
-
 
 impl Default for Statistics {
     fn default() -> Self {
@@ -60,8 +58,23 @@ impl Statistics {
 
     pub(crate) fn get_summary(&self) -> Event {
         let names = &self.engine_names;
-        Event::Statistics(StatisticEvent{
-            engines: self.engines.iter().clone().map(|(id, stat)| (id.clone(), (stat.to_stat(), names.get(id).cloned()))).collect(),
+        let definition_names = self
+            .definitions
+            .iter()
+            .map(|(id, d)| (id.0, d.name.clone()))
+            .collect::<HashMap<_, _>>();
+        Event::Statistics(StatisticEvent {
+            engines: self
+                .engines
+                .iter()
+                .clone()
+                .map(|(id, stat)| {
+                    (
+                        *id,
+                        (stat.to_stat(&definition_names), names.get(id).cloned()),
+                    )
+                })
+                .collect(),
         })
     }
 }
@@ -135,69 +148,26 @@ pub fn start(rt: Runtimes, tx: Sender<Event>, rx: Receiver<Event>) -> Sender<Eve
     tx
 }
 
-impl Statistics {
-    fn data(&self, initial: Instant) -> Result<String, Box<dyn Error + Send + Sync>> {
-        let mut table = Table::new();
-
-        table.load_preset(UTF8_FULL);
-
-        table.set_header(vec!["Entity", "Tuples"]);
-
-        let format = CustomFormat::builder().separator("'").build()?;
-
-        for (engine_id, stats) in &self.engines {
-            let mut info = "[".to_string();
-
-            for (definition, amount) in &stats.handled_entities {
-                let id = definition.0.to_string();
-                info += &format!(
-                    "{:?}:{} ",
-                    self.definitions
-                        .get(definition)
-                        .map(|d| d.entity.mapped.clone())
-                        .unwrap_or(id),
-                    amount.load(Ordering::Relaxed).to_formatted_string(&format)
-                );
-            }
-            info += "]";
-            let id = engine_id.0.to_string();
-            let engine_name = self.engine_names.get(engine_id).unwrap_or(&id);
-            table.add_row(vec![engine_name, &info.to_string()]);
-        }
-
-        let mut table_engines = Table::new();
-
-        table_engines.load_preset(UTF8_FULL);
-
-        table_engines.set_header(vec!["Engine", "Throughput/s"]);
-
-        let epoch_delta = initial.elapsed().as_secs();
-
-        for (engine_id, stats) in &self.engines {
-            let mut total = 0;
-            for (_, amount) in &stats.handled_entities {
-                total += amount.load(Ordering::Relaxed);
-            }
-            let id = engine_id.0.to_string();
-            let name = self.engine_names.get(engine_id).unwrap_or(&id);
-            table_engines.add_row(vec![
-                name.clone(),
-                (total.div_ceil(epoch_delta as usize)).to_formatted_string(&format),
-            ]);
-        }
-
-        Ok(format!("{}\n{}", table, table_engines))
-    }
-}
-
 #[derive(Default)]
 pub struct EngineStatistic {
     handled_entities: HashMap<DefinitionId, AtomicUsize>,
 }
 
 impl EngineStatistic {
-    pub(crate) fn to_stat(&self) -> Vec<(DefinitionId, usize)> {
-        self.handled_entities.iter().map(|(k,v)| (k.clone(), v.load(Ordering::Relaxed)) ).collect()
+    pub(crate) fn to_stat(
+        &self,
+        definition_names: &HashMap<u64, String>,
+    ) -> Vec<(DefinitionId, String, usize)> {
+        self.handled_entities
+            .iter()
+            .map(|(k, v)| {
+                (
+                    *k,
+                    definition_names.get(&k.0).cloned().unwrap(),
+                    v.load(Ordering::Relaxed),
+                )
+            })
+            .collect()
     }
 
     pub(crate) fn handle_insert(&mut self, amount: usize, definition: DefinitionId) {

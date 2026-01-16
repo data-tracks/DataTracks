@@ -3,8 +3,10 @@ use crate::{DefinitionId, EngineId};
 use serde::Serialize;
 use std::collections::HashMap;
 
+pub type DefinitionMeta = (Vec<(DefinitionId, String, usize)>, Option<String>);
+
 #[derive(Serialize, Clone, Debug)]
-#[serde(tag = "type",content = "data")]
+#[serde(tag = "type", content = "data")]
 pub enum Event {
     Insert(DefinitionId, usize, EngineId),
     Definition(DefinitionId, Box<Definition>),
@@ -13,7 +15,7 @@ pub enum Event {
     EngineStatus(String),
     Queue(QueueEvent),
     Startup(bool),
-    Statistics(StatisticEvent)
+    Statistics(StatisticEvent),
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -26,7 +28,7 @@ pub struct RuntimeEvent {
 
 #[derive(Serialize, Clone, Debug)]
 pub struct StatisticEvent {
-    pub engines: HashMap<EngineId, (Vec<(DefinitionId, usize)>, Option<String>)>,
+    pub engines: HashMap<EngineId, DefinitionMeta>,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -34,7 +36,6 @@ pub struct QueueEvent {
     pub name: String,
     pub size: usize,
 }
-
 
 #[derive(Serialize, Clone, Debug)]
 pub enum EngineEvent {

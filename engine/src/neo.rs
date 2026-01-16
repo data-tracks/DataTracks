@@ -11,10 +11,10 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::time::{Instant, sleep};
 use tracing::info;
+use util::Event::EngineStatus;
 use util::container::Mapping;
 use util::definition::{Definition, Stage};
-use util::{DefinitionMapping, TargetedMeta, container, Event};
-use util::Event::EngineStatus;
+use util::{DefinitionMapping, Event, TargetedMeta, container};
 use value::Value;
 
 #[derive(Clone)]
@@ -307,11 +307,13 @@ mod tests {
         neo.start().await.unwrap();
 
         let definition = Definition::new(
+            "test",
             DefinitionFilter::AllMatch,
             DefinitionMapping::doc_to_graph(),
             Model::Document,
             "users".to_string(),
-        ).await;
+        )
+        .await;
         neo.init_entity(&definition).await;
 
         neo.store(
@@ -354,11 +356,13 @@ mod tests {
         neo.start().await.unwrap();
 
         let definition = Definition::new(
+            "test",
             DefinitionFilter::AllMatch,
             DefinitionMapping::doc_to_graph(),
             Model::Document,
             "users".to_string(),
-        ).await;
+        )
+        .await;
         neo.init_entity(&definition).await;
 
         match neo.graph {

@@ -1,10 +1,35 @@
-<div class="w-full">
-    <div class="text-xl">{{ name() }}</div>
-    <progress [class.progress-error]="entry() > max()*0.75" [max]="max()" [value]="entry() || 0"
-              class="progress w-full"></progress>
-    <div class="flex justify-between">
-        <div>Current: {{ entry() | number }}</div>
-        <div class="justify-end">Max: {{max() | number}}</div>
+<div class="w-full flex flex-col gap-1">
+    <div class="flex justify-between items-end">
+        <div class="flex items-center gap-2">
+      <span class="text-xl opacity-70">
+        {{ getQueueIcon(name()) }}
+      </span>
+            <h3 [innerHTML]="name().replace(' - ', '<br>').replace('->', '→')"
+                class="text-lg font-semibold tracking-tight"></h3>
+        </div>
+        <span [class.text-error]="entry() > max() * 0.75"
+              class="text-xs font-mono opacity-60">
+      {{ (entry() / max()) | percent }}
+    </span>
+    </div>
+
+    <progress
+            [class.progress-error]="entry() > max() * 0.75"
+            [class.progress-primary]="entry() <= max() * 0.75"
+            [max]="max()"
+            [value]="entry()"
+            class="progress w-full transition-all duration-300">
+    </progress>
+
+    <div class="flex justify-between text-sm font-medium">
+        <div class="flex flex-col">
+            <span class="text-[10px] uppercase opacity-50 leading-none">Current</span>
+            <span [class.text-error]="entry() > max() * 0.75">{{ entry() | number }}</span>
+        </div>
+        <div class="flex flex-col items-end">
+            <span class="text-[10px] uppercase opacity-50 leading-none">Max</span>
+            <span class="opacity-80">{{ max() | number }}</span>
+        </div>
     </div>
 </div>
 

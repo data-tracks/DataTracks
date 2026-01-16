@@ -1,10 +1,11 @@
-import {Component, effect, Input, input, signal} from '@angular/core';
-import {DecimalPipe} from "@angular/common";
+import {Component, effect, input, signal} from '@angular/core';
+import {DecimalPipe, PercentPipe} from "@angular/common";
 
 @Component({
     selector: 'app-queue',
     imports: [
-        DecimalPipe
+        DecimalPipe,
+        PercentPipe
     ],
     templateUrl: './queue.component.html',
     styleUrl: './queue.component.css',
@@ -25,6 +26,15 @@ export class QueueComponent {
             }
         })
 
+    }
+
+    getQueueIcon(name: String): string {
+        const lowerName = name.toLowerCase();
+
+        if (lowerName.includes('definition')) return '🧬';
+        if (lowerName.includes('neo') || lowerName.includes('postgres') || lowerName.includes('mongo')) return '🗃️';
+
+        return '📦';
     }
 
 }

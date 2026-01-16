@@ -1,17 +1,18 @@
 import {Component, effect, input, signal, WritableSignal} from '@angular/core';
-import {DecimalPipe, JsonPipe} from "@angular/common";
+import {DecimalPipe, NgOptimizedImage} from "@angular/common";
 
 @Component({
     selector: 'app-statistics',
     imports: [
-        DecimalPipe
+        DecimalPipe,
+        NgOptimizedImage
     ],
     templateUrl: './statistics.component.html',
     styleUrl: './statistics.component.css',
 })
 export class StatisticsComponent {
     inputs = input.required<any>();
-    protected statistics: WritableSignal<Map<string, [number, number][]>> = signal(new Map());
+    protected statistics: WritableSignal<Map<string, [number, string, number][]>> = signal(new Map());
 
     constructor() {
         effect(() => {
@@ -38,11 +39,23 @@ export class StatisticsComponent {
         });
 
     }
+
+    protected getImage(engineName: string): string | null {
+        let name = engineName.toLowerCase();
+        if (name.includes("neo")) {
+            return "/assets/neo.png"
+        } else if (name.includes("mongo")) {
+            return "/assets/mongo.png"
+        } else if (name.includes("postgres")) {
+            return "/assets/pg.png"
+        }
+        return null
+    }
 }
 
 export type DefinitionId = number;
 export type EngineId = number;
 
 export interface StatisticEvent {
-    engines: Record<string, [[DefinitionId, number][], string]>;
+    engines: Record<string, [[DefinitionId, string, number][], string]>;
 }

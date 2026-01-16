@@ -106,6 +106,7 @@ impl Manager {
         self.catalog
             .add_definition(
                 Definition::new(
+                    "Document test",
                     DefinitionFilter::MetaName(String::from("doc")),
                     DefinitionMapping::document(),
                     Model::Document,
@@ -119,6 +120,7 @@ impl Manager {
         self.catalog
             .add_definition(
                 Definition::new(
+                    "Relational test",
                     DefinitionFilter::MetaName(String::from("relational")),
                     DefinitionMapping::tuple_to_relational(vec![
                         ("name".to_string(), RelationalType::Text),
@@ -135,6 +137,7 @@ impl Manager {
         self.catalog
             .add_definition(
                 Definition::new(
+                    "Graph test",
                     DefinitionFilter::MetaName(String::from("graph")),
                     DefinitionMapping::doc_to_graph(),
                     Model::Graph,

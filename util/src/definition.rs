@@ -15,6 +15,7 @@ static ID_BUILDER: AtomicU64 = AtomicU64::new(0);
 #[derive(Clone, Debug, Serialize)]
 pub struct Definition {
     pub id: DefinitionId,
+    pub name: String,
     filter: DefinitionFilter,
     pub model: Model,
     /// final destination
@@ -25,7 +26,8 @@ pub struct Definition {
 }
 
 impl Definition {
-    pub async fn new(
+    pub async fn new<S: AsRef<str>>(
+        name: S,
         filter: DefinitionFilter,
         mapping: DefinitionMapping,
         model: Model,
@@ -34,9 +36,14 @@ impl Definition {
         let id = DefinitionId(ID_BUILDER.fetch_add(1, Ordering::Relaxed));
 
         let (tx, rx) = unbounded::<PlainRecord>();
-        log_channel(tx.clone(), format!("Definition {} - {}", id.0, entity)).await;
+        log_channel(
+            tx.clone(),
+            format!("Definition {} - {}", id.0, name.as_ref()),
+        )
+        .await;
 
         Definition {
+            name: name.as_ref().to_string(),
             id,
             filter,
             model,
