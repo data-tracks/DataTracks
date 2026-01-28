@@ -15,7 +15,7 @@ eula = false
 
 [dependencies]
 value = { workspace = true }
-error = { workspace = true }
+anyhow = { workspace = true }
 core = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
@@ -25,18 +25,12 @@ util = { workspace = true }
 engine = { workspace = true }
 sink = { workspace = true }
 futures = { workspace = true }
-num-format = { workspace = true }
 statistics = { workspace = true }
 flume = { workspace = true }
-speedy = { workspace = true }
-chrono = { workspace = true }
 
 
 [dev-dependencies]
 
-[dependencies.track-rails]
-git = "https://github.com/data-tracks/TrackRails.git"
-branch = "generated"
 
 
 

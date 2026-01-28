@@ -18,4 +18,5 @@ speedy = { workspace = true }
 chrono = { workspace = true }
 flume = { workspace = true }
 serde = { version = "1.0.228", features = ["derive"] }
+anyhow = { workspace = true }
 num-format = { workspace = true }

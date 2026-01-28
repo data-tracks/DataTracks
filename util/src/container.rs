@@ -11,8 +11,7 @@ use bollard::query_parameters::{
 };
 use futures_util::TryStreamExt;
 use std::collections::HashMap;
-use std::error::Error;
-
+use anyhow::{Context};
 use tracing::{info, warn};
 
 pub struct Manager {
@@ -20,13 +19,13 @@ pub struct Manager {
 }
 
 impl Manager {
-    pub fn new() -> Result<Self, String> {
+    pub fn new() -> anyhow::Result<Self> {
         let docker = Self::connect()?;
         Ok(Manager { docker })
     }
 
-    pub fn connect() -> Result<Docker, String> {
-        Docker::connect_with_local_defaults().map_err(|e| e.to_string())
+    pub fn connect() -> anyhow::Result<Docker> {
+        Docker::connect_with_local_defaults().with_context(|| "Failed to connect to Docker daemon. Is it running?")
     }
 
     pub async fn load_image(&self, image_name: &str) -> Result<(), String> {
@@ -180,21 +179,12 @@ pub async fn start_container(
     image: &str,
     mappings: Vec<Mapping>,
     env_vars: Option<Vec<String>>,
-) -> Result<(), Box<dyn Error + Send + Sync>> {
-    let docker = match Manager::connect() {
-        Ok(d) => d,
-        Err(e) => {
-            return if e.contains("HyperLegacyError") {
-                Err(Box::from("Docker is probably not running"))
-            } else {
-                Err(Box::from(e))
-            };
-        }
-    };
+) -> anyhow::Result<()> {
+    let docker = Manager::connect()?;
 
     let option = ListContainersOptionsBuilder::new().all(true).build();
 
-    let list = docker.list_containers(Some(option)).await?;
+    let list = docker.list_containers(Some(option)).await.context( "Failed to connect to Docker daemon. Is it running?" )?;
 
     if list.into_iter().any(|c| {
         c.names
@@ -265,7 +255,7 @@ pub async fn start_container(
     Ok(())
 }
 
-pub async fn stop(name: &str) -> Result<(), Box<dyn Error + Send + Sync>> {
+pub async fn stop(name: &str) -> anyhow::Result<()> {
     let docker = Manager::connect()?;
     docker
         .stop_container(name, None::<StopContainerOptions>)

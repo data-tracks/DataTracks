@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use anyhow::bail;
 use tokio::time::{sleep, timeout};
 use tracing::{error, info};
 use util::container::Mapping;
@@ -24,7 +25,7 @@ pub struct MongoDB {
 }
 
 impl MongoDB {
-    pub(crate) async fn start(&mut self) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub(crate) async fn start(&mut self) -> anyhow::Result<()> {
         container::start_container(
             "engine-mongodb",
             "mongo:latest",
@@ -49,7 +50,7 @@ impl MongoDB {
             client.database("admin").run_command(doc! { "ping": 1 }),
         )
         .await?
-        .map_err(|err| format!("timeout after {}", err))?;
+        .map_err(|err| err)?;
         info!("☑️ Connected to mongoDB database");
 
         self.client = Some(client);
@@ -126,7 +127,7 @@ impl MongoDB {
     pub(crate) async fn init_entity(
         &self,
         definition: &Definition,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    ) -> anyhow::Result<()> {
         self.create_collection(&definition.entity.plain).await?;
 
         if let DefinitionMapping::Document(_) = definition.mapping {
@@ -139,9 +140,9 @@ impl MongoDB {
     pub(crate) async fn create_collection(
         &self,
         name: &str,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    ) -> anyhow::Result<()> {
         match &self.client {
-            None => Err(Box::from("No client")),
+            None => bail!("No client"),
             Some(client) => {
                 client.database("public").create_collection(name).await?;
 
@@ -150,13 +151,13 @@ impl MongoDB {
         }
     }
 
-    pub(crate) async fn stop(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub(crate) async fn stop(&self) -> anyhow::Result<()> {
         container::stop("engine-mongodb").await
     }
 
-    async fn get_opcounters(&self) -> Result<HashMap<String, i64>, Box<dyn Error + Send + Sync>> {
+    async fn get_opcounters(&self) -> anyhow::Result<HashMap<String, i64>> {
         match &self.client {
-            None => Err(Box::from("No client")),
+            None => bail!("No client"),
             Some(client) => {
                 // Run the db.serverStatus() command
                 let status_doc = client

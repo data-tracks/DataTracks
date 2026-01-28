@@ -59,7 +59,7 @@ impl Engine {
         }
     }
 
-    pub async fn stop(self) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub async fn stop(self) -> anyhow::Result<()> {
         match &self.engine_kind {
             EngineKind::Postgres(p) => p.stop().await,
             EngineKind::MongoDB(m) => m.stop().await,
@@ -148,7 +148,7 @@ impl EngineKind {
     pub async fn init_entity(
         &mut self,
         definition: &Definition,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    ) -> anyhow::Result<()> {
         match self {
             EngineKind::Postgres(p) => p.init_entity(definition).await?,
             EngineKind::MongoDB(m) => m.init_entity(definition).await?,
@@ -160,7 +160,7 @@ impl EngineKind {
     pub async fn start_all(
         join: &mut JoinSet<()>,
         statistic_tx: Sender<Event>,
-    ) -> Result<Vec<EngineKind>, Box<dyn Error + Send + Sync>> {
+    ) -> anyhow::Result<Vec<EngineKind>> {
         let mut engines = vec![];
 
         let mut pg = EngineKind::postgres();
@@ -185,7 +185,7 @@ impl EngineKind {
         Ok(engines)
     }
 
-    pub async fn stop(self) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub async fn stop(self) -> anyhow::Result<()> {
         match self {
             EngineKind::Postgres(p) => p.stop().await,
             EngineKind::MongoDB(m) => m.stop().await,
@@ -197,7 +197,7 @@ impl EngineKind {
         &mut self,
         join: &mut JoinSet<()>,
         statistic_tx: Sender<Event>,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    ) -> anyhow::Result<()> {
         let engine = self.clone();
 
         join.spawn(async move {

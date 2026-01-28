@@ -126,6 +126,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "anyhow"
+version = "1.0.100"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a23eb6b1614318a8071c9b2521f36b424b2c83db5eb3a0fead4a6c0809af6e61"
+
+[[package]]
 name = "arraydeque"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -992,21 +998,17 @@ checksum = "2a2330da5de22e8a3cb63252ce2abb30116bf5265e89c0e01bc17015ce30a476"
 name = "data-tracks"
 version = "0.5.1"
 dependencies = [
- "chrono",
+ "anyhow",
  "core",
  "engine",
- "error",
  "flatbuffers",
  "flume 0.12.0",
  "futures",
- "num-format",
  "sink",
- "speedy",
  "statistics",
  "tokio",
  "tracing",
  "tracing-subscriber",
- "track-rails",
  "util",
  "value",
 ]
@@ -1180,6 +1182,7 @@ dependencies = [
 name = "engine"
 version = "0.5.1"
 dependencies = [
+ "anyhow",
  "bollard",
  "bytes",
  "derive_more",
@@ -3766,6 +3769,7 @@ checksum = "e320a6c5ad31d271ad523dcf3ad13e2767ad8b1cb8f047f75a8aeaf8da139da2"
 name = "sink"
 version = "0.5.1"
 dependencies = [
+ "anyhow",
  "crossbeam",
  "flume 0.12.0",
  "rand 0.9.2",
@@ -4664,6 +4668,7 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 name = "util"
 version = "0.5.1"
 dependencies = [
+ "anyhow",
  "bollard",
  "chrono",
  "flume 0.12.0",

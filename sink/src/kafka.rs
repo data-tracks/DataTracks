@@ -1,3 +1,4 @@
+use anyhow::{bail, Context};
 use flume::Sender;
 use rdkafka::admin::{AdminClient, AdminOptions, NewTopic, TopicReplication};
 use rdkafka::consumer::{Consumer, StreamConsumer};
@@ -8,7 +9,7 @@ use std::time::Duration;
 use tokio::task::JoinSet;
 use tracing::{debug, error, info};
 use util::container::Mapping;
-use util::{InitialMeta, container};
+use util::{container, InitialMeta};
 use value::Value;
 
 const TOPIC: &str = "poly"; // The topic to consume from
@@ -110,7 +111,7 @@ impl Kafka {
         }
     }
 
-    pub async fn start(&self) -> Result<(), Box<dyn Error + Sync + Send>> {
+    pub async fn start(&self) -> anyhow::Result<()> {
         container::start_container(
             "kafka-mock",
             "apache/kafka:latest",
@@ -128,7 +129,7 @@ impl Kafka {
         Ok(())
     }
 
-    pub async fn stop(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub async fn stop(&self) -> anyhow::Result<()> {
         container::stop("kafka-mock").await
     }
 
@@ -197,7 +198,7 @@ impl Kafka {
             .map_err(|err| Box::from(err.to_string()))
     }
 
-    pub(crate) async fn create_topic(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub(crate) async fn create_topic(&self) -> anyhow::Result<()> {
         let admin_client: AdminClient<_> = ClientConfig::new()
             .set("bootstrap.servers", format!("{}:{}", self.host, self.port))
             .create()
@@ -238,13 +239,13 @@ impl Kafka {
         Ok(())
     }
 
-    async fn check_kafka_cluster_health(&self) -> Result<(), String> {
+    async fn check_kafka_cluster_health(&self) -> anyhow::Result<()> {
         let broker = format!("{}:{}", self.host, self.port);
         let consumer: StreamConsumer = ClientConfig::new()
             .set("group.id", "health-check-consumer")
             .set("bootstrap.servers", broker)
             .create()
-            .map_err(|e| format!("Consumer creation failed: {}", e))?;
+            .context("Consumer creation failed")?;
 
         // 2. Call fetch_metadata
         // Passing `None` for the topic requests metadata for *all* topics,
@@ -254,13 +255,11 @@ impl Kafka {
             Ok(metadata) => {
                 // Success: Metadata was retrieved. Check for active brokers.
                 if metadata.brokers().is_empty() {
-                    return Err(
-                        "Cluster metadata retrieved but no active brokers found.".to_string()
-                    );
+                    bail!("Cluster metadata retrieved but no active brokers found.");
                 }
                 Ok(())
             }
-            Err(e) => Err(format!("fetch_metadata failed (Timeout/Error): {}", e)),
+            Err(e) => bail!("fetch_metadata failed (Timeout/Error): {}", e),
         }
     }
 }
@@ -268,7 +267,7 @@ impl Kafka {
 pub async fn start(
     joins: &mut JoinSet<()>,
     sender: Sender<(Value, InitialMeta)>,
-) -> Result<Kafka, Box<dyn Error + Send + Sync>> {
+) -> anyhow::Result<Kafka> {
     let kafka = Kafka::new("localhost", 9092).await;
     kafka.start().await?;
     kafka.create_topic().await?;

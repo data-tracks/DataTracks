@@ -2,7 +2,6 @@ use engine::engine::Engine;
 use engine::EngineKind;
 use flume::Sender;
 use futures::future::join_all;
-use std::error::Error;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use util::definition::Definition;
@@ -24,7 +23,7 @@ impl Catalog {
         &self,
         definition: Definition,
         sender: Sender<Event>,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    ) -> anyhow::Result<()> {
         let mut state = self.state.lock().await;
         for engine in &mut state.engines {
             engine.engine_kind.init_entity(&definition).await?;
@@ -56,7 +55,7 @@ impl Catalog {
         self.state.lock().await.engines.push(engine);
     }
 
-    pub async fn stop(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub async fn stop(&self) -> anyhow::Result<()> {
         let futures: Vec<_> = self
             .state
             .lock()

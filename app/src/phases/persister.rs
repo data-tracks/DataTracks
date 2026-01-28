@@ -23,7 +23,7 @@ pub struct Persister {
 }
 
 impl Persister {
-    pub fn new(catalog: Catalog) -> Result<Self, Box<dyn Error + Send + Sync>> {
+    pub fn new(catalog: Catalog) -> anyhow::Result<Self> {
         Ok(Persister { catalog })
     }
 

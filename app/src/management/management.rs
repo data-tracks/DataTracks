@@ -5,7 +5,6 @@ use engine::EngineKind;
 use flume::{Sender, unbounded};
 use sink::dummy::DummySink;
 use sink::kafka::Kafka;
-use std::error::Error;
 use std::thread;
 use std::time::Duration;
 use tokio::runtime::Builder;
@@ -32,7 +31,7 @@ impl Manager {
         }
     }
 
-    pub fn start(mut self) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub fn start(mut self) -> anyhow::Result<()> {
         let ctrl_c_signal = tokio::signal::ctrl_c();
 
         let main_rt = Builder::new_multi_thread()
@@ -95,14 +94,14 @@ impl Manager {
             while joins.join_next().await.is_some() {}
 
             info!("✅ All services shut down. Exiting.");
-            Ok::<(), Box<dyn Error + Send + Sync>>(())
+            anyhow::Ok::<()>(())
         })
     }
 
     async fn init_definitions(
         &mut self,
         statistic_tx: Sender<Event>,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    ) -> anyhow::Result<()> {
         self.catalog
             .add_definition(
                 Definition::new(
@@ -153,7 +152,7 @@ impl Manager {
     fn init_engines(
         &mut self,
         statistic_tx: Sender<Event>,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    ) -> anyhow::Result<()> {
         let mut catalog = self.catalog.clone();
 
         let (tx, rx) = unbounded();
@@ -191,7 +190,7 @@ impl Manager {
         &mut self,
         persister: Persister,
         rt: Runtimes,
-    ) -> Result<Kafka, Box<dyn Error + Send + Sync>> {
+    ) -> anyhow::Result<Kafka> {
         let (tx, rx) = unbounded();
         log_channel(tx.clone(), "Sink Input").await;
 

@@ -1,5 +1,5 @@
-use std::error::Error;
 use std::time::Duration;
+use anyhow::bail;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
 use tokio_postgres::{Client, NoTls};
@@ -17,7 +17,7 @@ impl PostgresConnection {
     pub async fn connect(
         &self,
         join: &mut JoinSet<()>,
-    ) -> Result<Client, Box<dyn Error + Send + Sync>> {
+    ) -> anyhow::Result<Client> {
         let connection_string = format!(
             "dbname={db} host={host} port={port} user={user} password={password}",
             db = self.db,
@@ -45,6 +45,6 @@ impl PostgresConnection {
                 }
             }
         }
-        Err(Box::from("timeout while connecting to postgres"))
+        bail!("timeout while connecting to postgres")
     }
 }

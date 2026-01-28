@@ -9,6 +9,7 @@ use std::error::Error;
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use anyhow::bail;
 use tokio::time::{Instant, sleep};
 use tracing::info;
 use util::Event::EngineStatus;
@@ -43,7 +44,7 @@ struct TxMetrics {
 }
 
 impl Neo4j {
-    pub(crate) async fn start(&mut self) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub(crate) async fn start(&mut self) -> anyhow::Result<()> {
         container::start_container(
             "engine-neo4j",
             "neo4j:latest",
@@ -73,7 +74,7 @@ impl Neo4j {
                 Err(e) => {
                     let time = Instant::now();
                     if time.duration_since(start_time).as_secs() > 60 {
-                        return Err(Box::new(e));
+                        bail!(e);
                     }
                     sleep(Duration::from_secs(2)).await;
                 }
@@ -104,7 +105,7 @@ impl Neo4j {
         }
     }
 
-    pub(crate) async fn stop(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub(crate) async fn stop(&self) -> anyhow::Result<()> {
         container::stop("engine-neo4j").await
     }
 

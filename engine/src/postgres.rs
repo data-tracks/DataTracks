@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use anyhow::bail;
 use tokio::task::JoinSet;
 use tokio::time::{sleep, timeout};
 use tokio_postgres::binary_copy::BinaryCopyInWriter;
@@ -35,7 +36,7 @@ impl Postgres {
     pub(crate) async fn start(
         &mut self,
         join: &mut JoinSet<()>,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    ) -> anyhow::Result<()> {
         container::start_container(
             "engine-postgres",
             "postgres:latest",
@@ -55,7 +56,7 @@ impl Postgres {
         Ok(())
     }
 
-    pub(crate) async fn stop(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub(crate) async fn stop(&self) -> anyhow::Result<()> {
         container::stop("engine-postgres").await
     }
 
@@ -155,7 +156,7 @@ impl Postgres {
     pub async fn init_entity(
         &mut self,
         definition: &Definition,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    ) -> anyhow::Result<()> {
         self.create_table_plain(&definition.entity.plain).await?;
 
         if let DefinitionMapping::Relational(m) = &definition.mapping {
@@ -169,9 +170,9 @@ impl Postgres {
     pub async fn create_table_plain(
         &mut self,
         name: &str,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    ) -> anyhow::Result<()> {
         match &self.client {
-            None => return Err(Box::from("could not create postgres database")),
+            None => bail!("could not create postgres database"),
             Some(client) => {
                 let create_table_query = format!(
                     "CREATE TABLE IF NOT EXISTS {} (
@@ -198,11 +199,11 @@ impl Postgres {
         &mut self,
         mapping: &RelationalMapping,
         entity: Entity,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    ) -> anyhow::Result<()> {
         let types = mapping.get_types();
 
         match &self.client {
-            None => return Err(Box::from("could not create postgres database")),
+            None => bail!("Could not create postgres database"),
             Some(client) => {
                 let create_table_query = format!(
                     "CREATE TABLE IF NOT EXISTS {} (

@@ -45,7 +45,9 @@
                             @for (value of mappedItems; track $index) {
                                 <div class="flex flex-col border-l-2 border-accent/30 pl-2">
                                     <span class="text-[14px] opacity-60 truncate">{{ value[2] }}</span>
-                                    <span class="text-xl font-mono font-bold leading-none">{{ value[3] | number }}</span>
+                                    @for (v of [value[3]]; track v) {
+                                        <span class="text-xl font-mono font-bold leading-none animate-pop">{{ v | number }}</span>
+                                    }
                                 </div>
                             }
                         </div>
