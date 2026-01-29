@@ -14,7 +14,7 @@ use std::time::Duration;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
 use util::definition::{Definition, Model, Stage};
-use util::{DefinitionId, EngineId, TargetedMeta, log_channel, Event};
+use util::{DefinitionId, EngineId, Event, TargetedMeta, log_channel};
 use value::Value;
 
 static ID_BUILDER: AtomicU64 = AtomicU64::new(0);
@@ -145,10 +145,7 @@ impl Display for EngineKind {
 }
 
 impl EngineKind {
-    pub async fn init_entity(
-        &mut self,
-        definition: &Definition,
-    ) -> anyhow::Result<()> {
+    pub async fn init_entity(&mut self, definition: &Definition) -> anyhow::Result<()> {
         match self {
             EngineKind::Postgres(p) => p.init_entity(definition).await?,
             EngineKind::MongoDB(m) => m.init_entity(definition).await?,
@@ -157,30 +154,28 @@ impl EngineKind {
         Ok(())
     }
 
+    pub async fn start(&mut self, join: &mut JoinSet<()>) -> anyhow::Result<()> {
+        match self {
+            EngineKind::Postgres(p) => p.start(join).await,
+            EngineKind::MongoDB(m) => m.start().await,
+            EngineKind::Neo4j(n) => n.start().await,
+        }
+    }
+
     pub async fn start_all(
         join: &mut JoinSet<()>,
         statistic_tx: Sender<Event>,
     ) -> anyhow::Result<Vec<EngineKind>> {
-        let mut engines = vec![];
+        let mut engines: Vec<EngineKind> = vec![];
 
-        let mut pg = EngineKind::postgres();
-        pg.start(join).await?;
-        let mut pg = EngineKind::from(pg);
-        EngineKind::monitor(&mut pg, join, statistic_tx.clone()).await?;
+        engines.push(EngineKind::postgres().into());
+        engines.push(EngineKind::mongo_db().into());
+        engines.push(EngineKind::neo4j().into());
 
-        let mut mongodb = EngineKind::mongo_db();
-        mongodb.start().await?;
-        let mut mongodb = EngineKind::from(mongodb);
-        EngineKind::monitor(&mut mongodb, join, statistic_tx.clone()).await?;
-
-        let mut neo4j = EngineKind::neo4j();
-        neo4j.start().await?;
-        let mut neo4j = EngineKind::from(neo4j);
-        EngineKind::monitor(&mut neo4j, join, statistic_tx).await?;
-
-        engines.push(pg);
-        engines.push(mongodb);
-        engines.push(neo4j);
+        for engine in &mut engines {
+            engine.start(join).await?;
+            EngineKind::monitor(engine, join, statistic_tx.clone()).await?;
+        }
 
         Ok(engines)
     }

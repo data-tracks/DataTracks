@@ -2,6 +2,7 @@ use crate::management::catalog::Catalog;
 use crate::phases::Persister;
 use crate::phases::mapper::Nativer;
 use engine::EngineKind;
+use engine::engine::Engine;
 use flume::{Sender, unbounded};
 use sink::dummy::DummySink;
 use sink::kafka::Kafka;
@@ -15,19 +16,33 @@ use util::runtimes::Runtimes;
 use util::{DefinitionMapping, Event, InitialMeta, RelationalType, log_channel};
 use value::Value;
 
-#[derive(Default)]
 pub struct Manager {
     catalog: Catalog,
     joins: JoinSet<()>,
     runtimes: Runtimes,
+    statistic_tx: Sender<Event>,
+}
+
+impl Default for Manager {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Manager {
     pub fn new() -> Manager {
-        Manager {
+        let runtimes = Runtimes::new();
+        let (tx, rx) = unbounded::<Event>();
+
+        let rt = runtimes.clone();
+
+        let statistic_tx = statistics::start(rt, tx, rx);
+
+        Self {
             joins: JoinSet::new(),
-            catalog: Catalog::default(),
+            catalog: Catalog::new(statistic_tx.clone()),
             runtimes: Runtimes::new(),
+            statistic_tx,
         }
     }
 
@@ -48,17 +63,14 @@ impl Manager {
 
         self.runtimes.add_runtime(trash_rt);
 
-        let (tx, rx) = unbounded::<Event>();
-
-        let rt = self.runtimes.clone();
-
-        let statistic_tx = statistics::start(rt, tx, rx);
         let mut persister = Persister::new(self.catalog.clone())?;
         let nativer = Nativer::new(self.catalog.clone());
 
-        self.init_engines(statistic_tx.clone())?;
+        self.init_engines(self.statistic_tx.clone())?;
 
         let rt = self.runtimes.clone();
+
+        let statistic_tx = self.statistic_tx.clone();
 
         main_rt.block_on(async move {
             let mut joins: JoinSet<()> = JoinSet::new();
@@ -98,10 +110,7 @@ impl Manager {
         })
     }
 
-    async fn init_definitions(
-        &mut self,
-        statistic_tx: Sender<Event>,
-    ) -> anyhow::Result<()> {
+    async fn init_definitions(&mut self, statistic_tx: Sender<Event>) -> anyhow::Result<()> {
         self.catalog
             .add_definition(
                 Definition::new(
@@ -149,10 +158,7 @@ impl Manager {
         Ok(())
     }
 
-    fn init_engines(
-        &mut self,
-        statistic_tx: Sender<Event>,
-    ) -> anyhow::Result<()> {
+    fn init_engines(&mut self, statistic_tx: Sender<Event>) -> anyhow::Result<()> {
         let mut catalog = self.catalog.clone();
 
         let (tx, rx) = unbounded();
@@ -172,7 +178,8 @@ impl Manager {
                     .await
                     .unwrap();
                 for engine in engines.into_iter() {
-                    catalog.add_engine(engine, statistic_tx.clone()).await;
+                    let engine = Engine::new(engine, statistic_tx.clone()).await;
+                    catalog.add_engine(engine).await;
                 }
                 tx.send_async(true).await.unwrap();
 
@@ -186,11 +193,7 @@ impl Manager {
         Ok(())
     }
 
-    async fn start_sinks(
-        &mut self,
-        persister: Persister,
-        rt: Runtimes,
-    ) -> anyhow::Result<Kafka> {
+    async fn start_sinks(&mut self, persister: Persister, rt: Runtimes) -> anyhow::Result<Kafka> {
         let (tx, rx) = unbounded();
         log_channel(tx.clone(), "Sink Input").await;
 

@@ -1,5 +1,4 @@
 use engine::engine::Engine;
-use engine::EngineKind;
 use flume::Sender;
 use futures::future::join_all;
 use std::sync::Arc;
@@ -7,9 +6,9 @@ use tokio::sync::Mutex;
 use util::definition::Definition;
 use util::{EngineEvent, Event};
 
-#[derive(Default)]
 pub struct Catalog {
     state: Arc<Mutex<State>>,
+    statistic_tx: Sender<Event>,
 }
 
 #[derive(Default)]
@@ -19,6 +18,13 @@ pub struct State {
 }
 
 impl Catalog {
+    pub fn new(statistic_tx: Sender<Event>) -> Self {
+        Self {
+            state: Arc::new(Mutex::new(State::default())),
+            statistic_tx,
+        }
+    }
+
     pub async fn add_definition(
         &self,
         definition: Definition,
@@ -31,7 +37,10 @@ impl Catalog {
             engine.add_definition(&definition);
         }
         sender
-            .send_async(Event::Definition(definition.id, Box::new(definition.clone())))
+            .send_async(Event::Definition(
+                definition.id,
+                Box::new(definition.clone()),
+            ))
             .await?;
 
         state.definitions.push(definition);
@@ -46,13 +55,14 @@ impl Catalog {
         self.state.lock().await.engines.clone()
     }
 
-    pub async fn add_engine(&mut self, engine: EngineKind, sender: Sender<Event>) {
-        let engine = Engine::new(engine, sender.clone()).await;
-        sender
-            .send_async(Event::Engine(engine.id, EngineEvent::Name(engine.to_string())))
+    pub async fn add_engine(&mut self, engine: Engine) {
+        let id = engine.id;
+        let name = engine.to_string();
+        self.state.lock().await.engines.push(engine);
+        self.statistic_tx
+            .send_async(Event::Engine(id, EngineEvent::Name(name)))
             .await
             .unwrap();
-        self.state.lock().await.engines.push(engine);
     }
 
     pub async fn stop(&self) -> anyhow::Result<()> {
@@ -73,6 +83,7 @@ impl Clone for Catalog {
     fn clone(&self) -> Self {
         Catalog {
             state: self.state.clone(),
+            statistic_tx: self.statistic_tx.clone(),
         }
     }
 }

@@ -1,3 +1,4 @@
+use anyhow::Context;
 use bollard::Docker;
 use bollard::container::LogOutput;
 use bollard::exec::{CreateExecOptions, StartExecOptions, StartExecResults};
@@ -11,7 +12,6 @@ use bollard::query_parameters::{
 };
 use futures_util::TryStreamExt;
 use std::collections::HashMap;
-use anyhow::{Context};
 use tracing::{info, warn};
 
 pub struct Manager {
@@ -25,7 +25,8 @@ impl Manager {
     }
 
     pub fn connect() -> anyhow::Result<Docker> {
-        Docker::connect_with_local_defaults().with_context(|| "Failed to connect to Docker daemon. Is it running?")
+        Docker::connect_with_local_defaults()
+            .with_context(|| "Failed to connect to Docker daemon. Is it running?")
     }
 
     pub async fn load_image(&self, image_name: &str) -> Result<(), String> {
@@ -184,7 +185,10 @@ pub async fn start_container(
 
     let option = ListContainersOptionsBuilder::new().all(true).build();
 
-    let list = docker.list_containers(Some(option)).await.context( "Failed to connect to Docker daemon. Is it running?" )?;
+    let list = docker
+        .list_containers(Some(option))
+        .await
+        .context("Failed to connect to Docker daemon. Is it running?")?;
 
     if list.into_iter().any(|c| {
         c.names
@@ -200,11 +204,20 @@ pub async fn start_container(
 
     let mut status = docker.create_image(Some(options), None, None);
 
+    let mut first = true;
     while let Some(msg) = status.try_next().await? {
-        if let Some(status) = msg.status {
+        if let Some(progress) = msg.progress_detail {
+            if !first {
+                print!("\rLoading {:?}/{:?}", progress.current, progress.total)
+            } else {
+                println!("Loading {:?}/{:?}", progress.current, progress.total)
+            }
+            first = false;
+        } else if let Some(status) = msg.status {
             info!("Pull Event: {}", status);
         }
     }
+    print!("\r");
 
     let mut exposed_ports = HashMap::new();
     let mut port_bindings = HashMap::new();
