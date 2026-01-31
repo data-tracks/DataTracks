@@ -154,27 +154,34 @@ impl EngineKind {
         Ok(())
     }
 
-    pub async fn start(&mut self, join: &mut JoinSet<()>) -> anyhow::Result<()> {
+    pub async fn start(
+        &mut self,
+        join: &mut JoinSet<()>,
+        sender: Sender<Event>,
+    ) -> anyhow::Result<()> {
         match self {
-            EngineKind::Postgres(p) => p.start(join).await,
-            EngineKind::MongoDB(m) => m.start().await,
-            EngineKind::Neo4j(n) => n.start().await,
+            EngineKind::Postgres(p) => p.start(join).await?,
+            EngineKind::MongoDB(m) => m.start().await?,
+            EngineKind::Neo4j(n) => n.start().await?,
         }
+        self.monitor(join, sender.clone()).await
     }
 
     pub async fn start_all(
         join: &mut JoinSet<()>,
         statistic_tx: Sender<Event>,
-    ) -> anyhow::Result<Vec<EngineKind>> {
-        let mut engines: Vec<EngineKind> = vec![];
+    ) -> anyhow::Result<Vec<Engine>> {
+        let engine_kinds: Vec<EngineKind> = vec![
+            EngineKind::postgres().into(),
+            EngineKind::mongo_db().into(),
+            EngineKind::neo4j().into(),
+        ];
 
-        engines.push(EngineKind::postgres().into());
-        engines.push(EngineKind::mongo_db().into());
-        engines.push(EngineKind::neo4j().into());
+        let mut engines: Vec<Engine> = vec![];
 
-        for engine in &mut engines {
-            engine.start(join).await?;
-            EngineKind::monitor(engine, join, statistic_tx.clone()).await?;
+        for mut engine in &mut engine_kinds.into_iter() {
+            engine.start(join, statistic_tx.clone()).await?;
+            engines.push(Engine::new(engine, statistic_tx.clone()).await);
         }
 
         Ok(engines)

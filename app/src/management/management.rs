@@ -2,7 +2,6 @@ use crate::management::catalog::Catalog;
 use crate::phases::Persister;
 use crate::phases::mapper::Nativer;
 use engine::EngineKind;
-use engine::engine::Engine;
 use flume::{Sender, unbounded};
 use sink::dummy::DummySink;
 use sink::kafka::Kafka;
@@ -178,7 +177,6 @@ impl Manager {
                     .await
                     .unwrap();
                 for engine in engines.into_iter() {
-                    let engine = Engine::new(engine, statistic_tx.clone()).await;
                     catalog.add_engine(engine).await;
                 }
                 tx.send_async(true).await.unwrap();
