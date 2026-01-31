@@ -1007,6 +1007,7 @@ dependencies = [
  "sink",
  "statistics",
  "tokio",
+ "tokio-util",
  "tracing",
  "tracing-subscriber",
  "util",
@@ -3141,6 +3142,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "reactor"
+version = "0.5.1"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "flume 0.12.0",
+ "tokio",
+]
+
+[[package]]
 name = "redb"
 version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4270,9 +4281,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-util"
-version = "0.7.16"
+version = "0.7.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14307c986784f72ef81c89db7d9e28d6ac26d16213b109ea501696195e6e3ce5"
+checksum = "9ae9cec805b01e8fc3fd2fe289f89149a9b66dd16786abd8b19cfa7b48cb0098"
 dependencies = [
  "bytes",
  "futures-core",

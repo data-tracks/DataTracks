@@ -27,6 +27,7 @@ sink = { workspace = true }
 futures = { workspace = true }
 statistics = { workspace = true }
 flume = { workspace = true }
+tokio-util = "0.7.18"
 
 
 [dev-dependencies]

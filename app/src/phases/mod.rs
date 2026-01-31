@@ -1,3 +1,4 @@
 pub use persister::*;
-pub mod persister;
 pub mod mapper;
+pub mod persister;
+mod wal;

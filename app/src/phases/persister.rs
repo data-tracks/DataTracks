@@ -1,7 +1,8 @@
 use crate::management::Runtimes;
 use crate::management::catalog::Catalog;
+use crate::phases::wal::WalManager;
 use engine::engine::Engine;
-use flume::{Receiver, Sender, unbounded};
+use flume::{Receiver, RecvError, Sender, unbounded};
 use std::collections::HashMap;
 use std::error::Error;
 use std::thread;
@@ -30,7 +31,7 @@ impl Persister {
     pub async fn move_to_engines(
         record: (Value, TimedMeta),
         engine: &mut [Engine],
-        definitions: &mut Vec<Definition>,
+        definitions: &mut [Definition],
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
         let (engine, value, meta) = Self::select_engines(record, engine, definitions).await?;
 
@@ -60,49 +61,7 @@ impl Persister {
             rt.add_handle(timer);
         }
 
-        let (wal_tx, wal_rx) = unbounded();
-        let wal_tx_clone = wal_tx.clone();
-        rt.attach_runtime(&0, async move {
-            log_channel(wal_tx_clone, "WAL -> Engines").await;
-        });
-
-        // wal logger
-        for i in 0..wal_workers {
-            let rx = receiver.clone();
-            let tx = wal_tx.clone();
-
-            let wal = thread::spawn(move || {
-                // dedicated runtime in thread
-                let wal_runtime = Builder::new_current_thread().enable_all().build().unwrap();
-
-                wal_runtime.block_on(async {
-                    let mut log =
-                        SegmentedLog::new(&format!("wals/wal_segments_{}", i), 200 * 2048 * 2048)
-                            .await
-                            .unwrap();
-
-                    let mut batch = Vec::with_capacity(100_000);
-                    loop {
-                        match rx.recv_async().await {
-                            Err(err) => {
-                                error!("Error in WAL: {}", err)
-                            }
-                            Ok(record) => {
-                                batch.push(record);
-                                batch.extend(rx.try_iter().take(99_999));
-
-                                log.log(&batch).await;
-
-                                for record in batch.drain(..) {
-                                    tx.send(record).unwrap();
-                                }
-                            }
-                        }
-                    }
-                });
-            });
-            rt.add_handle(wal);
-        }
+        let wal_rx = Self::handle_wal(&rt, wal_workers, receiver);
 
         let storer = thread::spawn(move || {
             let rt_storer = Builder::new_current_thread()
@@ -136,6 +95,44 @@ impl Persister {
             });
         });
         rt.add_handle(storer);
+    }
+
+    fn handle_wal(
+        rt: &Runtimes,
+        wal_workers: i32,
+        receiver: Receiver<(Value, TimedMeta)>,
+    ) -> Receiver<(Value, TimedMeta)> {
+        let (wal_tx, wal_rx) = unbounded();
+        let wal_tx_clone = wal_tx.clone();
+        rt.attach_runtime(&0, async move {
+            log_channel(wal_tx_clone, "WAL -> Engines").await;
+        });
+
+        thread::spawn(move || {
+            let mut manager = WalManager::new();
+
+            let (control_tx, control_rx) = unbounded();
+
+            // wal logger
+            for _ in 0..wal_workers {
+                let rx = receiver.clone();
+                let tx = wal_tx.clone();
+                manager.add_worker(rx, tx);
+            }
+
+            loop {
+                let res: u64 = control_rx.recv().unwrap();
+                if res > 0 {
+                    let rx = receiver.clone();
+                    let tx = wal_tx.clone();
+                    manager.add_worker(rx, tx);
+                } else {
+                    manager.remove_worker()
+                }
+            }
+        });
+
+        wal_rx
     }
 
     fn start_timer(
@@ -203,10 +200,10 @@ impl Persister {
     async fn select_engines<'a>(
         record: (Value, TimedMeta),
         engines: &'a mut [Engine],
-        definitions: &mut Vec<Definition>,
+        definitions: &mut [Definition],
     ) -> Result<(&'a Engine, Value, TargetedMeta), Box<dyn Error + Send + Sync>> {
         let definition = definitions
-            .into_iter()
+            .iter_mut()
             .find(|d| d.matches(&record.0, &record.1))
             .unwrap();
 

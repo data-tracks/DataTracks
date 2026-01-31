@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["core", "app", "value", "threading", "macro", "engine", "util", "sink", "statistics"]
+members = ["core", "app", "value", "threading", "macro", "engine", "util", "sink", "statistics", "reactor"]
 
 
 [workspace.package]
