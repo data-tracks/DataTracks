@@ -20,10 +20,11 @@ impl Nativer {
                 .into_iter()
                 .filter(|e| e.model() == definition.model)
                 .collect::<Vec<Engine>>();
+
             join_set.spawn(async move {
                 let rx = definition.native.1;
 
-                log_channel(definition.native.0.clone(), "Mapper").await;
+                log_channel(definition.native.0.clone(), "Mapper", None).await;
 
                 let entity = definition.entity;
                 let mut engine = engines.into_iter().next().unwrap();

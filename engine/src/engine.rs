@@ -45,7 +45,8 @@ impl Display for Engine {
 impl Engine {
     pub async fn new(engine_kind: EngineKind, sender: Sender<Event>) -> Self {
         let (tx, rx) = unbounded::<(Value, TargetedMeta)>();
-        log_channel(tx.clone(), engine_kind.to_string()).await;
+
+        log_channel(tx.clone(), engine_kind.to_string(), None).await;
 
         let id = EngineId(ID_BUILDER.fetch_add(1, Ordering::Relaxed));
         Engine {

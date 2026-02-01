@@ -98,7 +98,7 @@ pub fn start(rt: Runtimes, tx: Sender<Event>, rx: Receiver<Event>) -> Sender<Eve
             .unwrap();
 
         rt.spawn(async move {
-            log_channel(tx_clone.clone(), "Events").await;
+            log_channel(tx_clone.clone(), "Events", None).await;
 
             let mut statistics = Statistics::new();
 

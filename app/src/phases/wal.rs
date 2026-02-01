@@ -1,13 +1,14 @@
-use flume::{Receiver, Sender};
+use flume::{Receiver, Sender, unbounded};
 use std::collections::HashMap;
+use std::thread;
 use tokio::runtime::Builder;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
-use util::{SegmentedLog, TimedMeta};
+use util::{Runtimes, SegmentedLog, TimedMeta, log_channel};
 use value::Value;
 
 struct WalWorker {
-    handle: std::thread::JoinHandle<()>,
+    handle: thread::JoinHandle<()>,
     cancel_token: CancellationToken,
 }
 
@@ -17,6 +18,10 @@ pub struct WalManager {
 }
 
 impl WalManager {
+    pub(crate) fn workers(&self) -> usize {
+        self.workers.len()
+    }
+
     pub(crate) fn new() -> Self {
         Self {
             workers: Default::default(),
@@ -25,11 +30,12 @@ impl WalManager {
     }
 
     pub fn add_worker(&mut self, rx: Receiver<(Value, TimedMeta)>, tx: Sender<(Value, TimedMeta)>) {
+        info!("Added worker: {}", self.workers.len());
         let id = self.next_id;
         let token = CancellationToken::new();
         let worker_token = token.clone();
 
-        let handle = std::thread::spawn(move || {
+        let handle = thread::spawn(move || {
             let rt = Builder::new_current_thread().enable_all().build().unwrap();
             rt.block_on(async {
                 let mut log = SegmentedLog::new(&format!("wals/wal_{}", id), 200 * 2048 * 2048)
@@ -74,9 +80,64 @@ impl WalManager {
 
     pub fn remove_worker(&mut self) {
         if let Some((id, worker)) = self.workers.pop() {
+            info!("Remove worker: {}", self.workers.len());
             worker.cancel_token.cancel();
             let _ = worker.handle.join();
             info!("WAL Worker {} removed.", id);
         }
     }
+}
+
+pub fn handle_wal_to_engines(
+    rt: &Runtimes,
+    receiver: Receiver<(Value, TimedMeta)>,
+    control_rx: Receiver<u64>,
+) -> (Receiver<(Value, TimedMeta)>, Receiver<u64>) {
+    let (wal_tx, wal_rx) = unbounded();
+    let wal_tx_clone = wal_tx.clone();
+
+    let (control_tx_wal, control_rx_wal) = unbounded();
+
+    rt.attach_runtime(&0, async move {
+        log_channel(wal_tx_clone, "WAL -> Engines", None).await;
+    });
+
+    thread::spawn(move || {
+        let mut manager = WalManager::new();
+
+        // wal logger
+        for _ in 0..1 {
+            let rx = receiver.clone();
+            let tx = wal_tx.clone();
+            manager.add_worker(rx, tx);
+        }
+
+        let repetition = 10;
+        let threshold = 10_000;
+
+        let mut over = 0;
+        let mut under = 0;
+        loop {
+            let res: u64 = control_rx.recv().unwrap();
+            if res > threshold {
+                over += 1;
+                under = 0;
+                if over > repetition {
+                    let rx = receiver.clone();
+                    let tx = wal_tx.clone();
+                    manager.add_worker(rx, tx);
+                    over = 0;
+                }
+            } else if res == 0 && manager.workers() > 1 {
+                over = 0;
+                under += 1;
+                if under > repetition {
+                    manager.remove_worker();
+                    under = 0;
+                }
+            }
+        }
+    });
+
+    (wal_rx, control_rx_wal)
 }

@@ -193,11 +193,14 @@ impl Manager {
 
     async fn start_sinks(&mut self, persister: Persister, rt: Runtimes) -> anyhow::Result<Kafka> {
         let (tx, rx) = unbounded();
-        log_channel(tx.clone(), "Sink Input").await;
+
+        let (control_tx, control_rx) = unbounded();
+
+        log_channel(tx.clone(), "Sink Input", Some(control_tx)).await;
 
         let kafka = sink::kafka::start(&mut self.joins, tx.clone()).await?;
 
-        persister.start(rx, rt);
+        persister.start(rx, rt, control_rx);
 
         self.build_dummy(tx, &kafka);
 
@@ -205,7 +208,7 @@ impl Manager {
     }
 
     fn build_dummy(&mut self, tx: Sender<(Value, InitialMeta)>, _: &Kafka) {
-        let amount = 2_0;
+        let amount = 2_00;
 
         /*let clone_graph = kafka.clone();
         self.joins.spawn(async move {

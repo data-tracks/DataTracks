@@ -1,6 +1,7 @@
 use crate::management::Runtimes;
 use crate::management::catalog::Catalog;
 use crate::phases::wal::WalManager;
+use crate::phases::{timer, wal};
 use engine::engine::Engine;
 use flume::{Receiver, RecvError, Sender, unbounded};
 use std::collections::HashMap;
@@ -13,10 +14,7 @@ use tokio::task::JoinSet;
 use tokio::time::{Instant, sleep};
 use tracing::{debug, error};
 use util::definition::{Definition, Stage};
-use util::{
-    DefinitionId, Event, InitialMeta, PlainRecord, SegmentedLog, TargetedMeta, TimedMeta,
-    log_channel,
-};
+use util::{DefinitionId, Event, InitialMeta, PlainRecord, SegmentedLog, TargetedMeta, TimedMeta};
 use value::Value;
 
 pub struct Persister {
@@ -42,26 +40,19 @@ impl Persister {
         Ok(())
     }
 
-    pub fn start(self, incoming: Receiver<(Value, InitialMeta)>, rt: Runtimes) {
-        let timer_workers = 10;
-
-        let wal_workers = 4;
-
+    pub fn start(
+        self,
+        incoming: Receiver<(Value, InitialMeta)>,
+        rt: Runtimes,
+        control_rx: Receiver<u64>,
+    ) {
         let storer_workers = 4;
 
         let (sender, receiver) = unbounded();
-        let sender_clone = sender.clone();
-        rt.attach_runtime(&0, async move {
-            log_channel(sender_clone, "Timer -> WAL").await;
-        });
 
-        for _ in 0..1 {
-            let timer = Self::start_timer(incoming.clone(), timer_workers, sender.clone());
+        let control_rx = timer::handle_initial_time_annotation(incoming, &rt, sender, control_rx);
 
-            rt.add_handle(timer);
-        }
-
-        let wal_rx = Self::handle_wal(&rt, wal_workers, receiver);
+        let (wal_rx, control_rx) = wal::handle_wal_to_engines(&rt, receiver, control_rx);
 
         let storer = thread::spawn(move || {
             let rt_storer = Builder::new_current_thread()
@@ -97,106 +88,6 @@ impl Persister {
         rt.add_handle(storer);
     }
 
-    fn handle_wal(
-        rt: &Runtimes,
-        wal_workers: i32,
-        receiver: Receiver<(Value, TimedMeta)>,
-    ) -> Receiver<(Value, TimedMeta)> {
-        let (wal_tx, wal_rx) = unbounded();
-        let wal_tx_clone = wal_tx.clone();
-        rt.attach_runtime(&0, async move {
-            log_channel(wal_tx_clone, "WAL -> Engines").await;
-        });
-
-        thread::spawn(move || {
-            let mut manager = WalManager::new();
-
-            let (control_tx, control_rx) = unbounded();
-
-            // wal logger
-            for _ in 0..wal_workers {
-                let rx = receiver.clone();
-                let tx = wal_tx.clone();
-                manager.add_worker(rx, tx);
-            }
-
-            loop {
-                let res: u64 = control_rx.recv().unwrap();
-                if res > 0 {
-                    let rx = receiver.clone();
-                    let tx = wal_tx.clone();
-                    manager.add_worker(rx, tx);
-                } else {
-                    manager.remove_worker()
-                }
-            }
-        });
-
-        wal_rx
-    }
-
-    fn start_timer(
-        incoming: Receiver<(Value, InitialMeta)>,
-        timer_workers: usize,
-        sender: Sender<(Value, TimedMeta)>,
-    ) -> JoinHandle<()> {
-        thread::spawn(move || {
-            // timer
-            let rt_timer = Builder::new_multi_thread()
-                .worker_threads(timer_workers)
-                .thread_name("timer-processor")
-                .enable_all()
-                .build()
-                .unwrap();
-
-            rt_timer.block_on(async move {
-                let mut joins: JoinSet<()> = JoinSet::new();
-                let id_queue =
-                    Self::start_id_generator(&mut joins, (timer_workers / 4) as i32).await; // work stealing
-
-                for i in 0..timer_workers {
-                    let incoming = incoming.clone();
-                    let sender = sender.clone();
-                    let id_queue = id_queue.clone();
-                    joins.spawn(async move {
-                        let mut available_ids = vec![];
-                        loop {
-                            if available_ids.is_empty() {
-                                match id_queue.recv_async().await {
-                                    Ok(ids) => available_ids.extend(ids),
-                                    Err(_) => {
-                                        error!("No available ids in worker {}", i);
-                                        sleep(Duration::from_millis(50)).await;
-                                        continue;
-                                    }
-                                }
-                            }
-                            if available_ids.is_empty() {
-                                error!("No available ids in worker {}", i);
-                                sleep(Duration::from_millis(50)).await;
-                                continue;
-                            }
-
-                            match incoming.recv_async().await {
-                                Err(_) => {
-                                    error!("No incoming {}", i);
-                                }
-                                Ok((value, context)) => {
-                                    let id = available_ids.pop().unwrap(); // can unwrap, check above
-                                    let context = TimedMeta::new(id, context);
-                                    sender.send((value, context)).unwrap();
-                                }
-                            }
-                        }
-                    });
-                    // to distribute the "workers"
-                    sleep(Duration::from_millis(50)).await;
-                }
-                joins.join_all().await;
-            })
-        })
-    }
-
     async fn select_engines<'a>(
         record: (Value, TimedMeta),
         engines: &'a mut [Engine],
@@ -209,7 +100,7 @@ impl Persister {
 
         let costs: Vec<_> = engines
             .iter()
-            .map(|e| (e.cost(&record.0, &definition), e))
+            .map(|e| (e.cost(&record.0, definition), e))
             .collect();
 
         debug!(
@@ -323,30 +214,5 @@ impl Persister {
                 }
             });
         }
-    }
-
-    async fn start_id_generator(join_set: &mut JoinSet<()>, workers: i32) -> Receiver<Vec<u64>> {
-        let (tx, rx) = unbounded();
-        log_channel(tx.clone(), "Id generator").await;
-
-        let prepared_ids = (workers * 2) as usize;
-        const ID_PACKETS_SIZE: u64 = 100_000;
-        join_set.spawn(async move {
-            // we prepare as much "id packets" as we have workers plus some more
-            let mut count = 0u64;
-            loop {
-                if tx.len() > prepared_ids {
-                    sleep(Duration::from_millis(50)).await;
-                } else {
-                    let mut ids: Vec<u64> = vec![ID_PACKETS_SIZE];
-                    for _ in 0..ID_PACKETS_SIZE {
-                        ids.push(count);
-                        count += 1;
-                    }
-                    tx.send(ids).unwrap();
-                }
-            }
-        });
-        rx
     }
 }

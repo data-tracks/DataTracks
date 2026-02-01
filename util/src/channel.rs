@@ -1,9 +1,9 @@
+use crate::event::{Event, QueueEvent};
 use flume::Sender;
 use num_format::{CustomFormat, ToFormattedString};
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
-use crate::event::{Event, QueueEvent};
 use tokio::sync::RwLock;
 use tokio::time::Instant;
 use tracing::info;
@@ -20,7 +20,11 @@ pub fn set_statistic_sender(sender: Sender<Event>) {
     EVENT_SENDER.set(sender).unwrap();
 }
 
-pub async fn log_channel<S: AsRef<str>, P: Send + 'static>(tx: Sender<P>, name: S) {
+pub async fn log_channel<S: AsRef<str>, P: Send + 'static>(
+    tx: Sender<P>,
+    name: S,
+    control_tx: Option<Sender<u64>>,
+) {
     let name = name.as_ref().to_string();
     let statistics = get_statistic_sender();
 
@@ -42,7 +46,7 @@ pub async fn log_channel<S: AsRef<str>, P: Send + 'static>(tx: Sender<P>, name: 
                     size: len,
                 }))
                 .unwrap();
-            if tx.len() > WARNING {
+            if len > WARNING {
                 let do_log = last_log.read().await.elapsed() > Duration::from_secs(10);
                 if do_log {
                     tracing::error!(
@@ -53,6 +57,9 @@ pub async fn log_channel<S: AsRef<str>, P: Send + 'static>(tx: Sender<P>, name: 
                     let mut log = last_log.write().await;
                     *log = Instant::now();
                     overwhelmed.store(true, Ordering::Relaxed);
+                }
+                if let Some(tx) = &control_tx {
+                    tx.send(len as u64).unwrap();
                 }
             } else if overwhelmed.load(Ordering::Relaxed) {
                 info!(
