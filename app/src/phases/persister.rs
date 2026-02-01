@@ -3,18 +3,17 @@ use crate::management::catalog::Catalog;
 use crate::phases::wal::WalManager;
 use crate::phases::{timer, wal};
 use engine::engine::Engine;
-use flume::{Receiver, RecvError, Sender, unbounded};
+use flume::{Receiver, unbounded};
 use std::collections::HashMap;
 use std::error::Error;
 use std::thread;
-use std::thread::JoinHandle;
 use std::time::Duration;
 use tokio::runtime::Builder;
 use tokio::task::JoinSet;
 use tokio::time::{Instant, sleep};
 use tracing::{debug, error};
 use util::definition::{Definition, Stage};
-use util::{DefinitionId, Event, InitialMeta, PlainRecord, SegmentedLog, TargetedMeta, TimedMeta};
+use util::{DefinitionId, Event, InitialMeta, PlainRecord, TargetedMeta, TimedMeta, log_channel};
 use value::Value;
 
 pub struct Persister {
