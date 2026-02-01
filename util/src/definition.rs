@@ -39,7 +39,7 @@ impl Definition {
 
         log_channel(
             tx.clone(),
-            format!("Definition {} - {}", id.0, name.as_ref()),
+            format!("Definition {} - {} to Engine", id.0, name.as_ref()),
             None,
         )
         .await;

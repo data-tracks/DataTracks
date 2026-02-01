@@ -1,6 +1,5 @@
 use crate::management::Runtimes;
 use crate::management::catalog::Catalog;
-use crate::phases::wal::WalManager;
 use crate::phases::{timer, wal};
 use engine::engine::Engine;
 use flume::{Receiver, unbounded};
@@ -13,7 +12,7 @@ use tokio::task::JoinSet;
 use tokio::time::{Instant, sleep};
 use tracing::{debug, error};
 use util::definition::{Definition, Stage};
-use util::{DefinitionId, Event, InitialMeta, PlainRecord, TargetedMeta, TimedMeta, log_channel};
+use util::{DefinitionId, Event, InitialMeta, PlainRecord, TargetedMeta, TimedMeta};
 use value::Value;
 
 pub struct Persister {
