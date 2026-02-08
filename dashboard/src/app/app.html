@@ -35,6 +35,12 @@
                 <span [class.badge-primary]="activeTab === Tab.Queues"
                       class="badge badge-xs">{{ service.events().length }}</span>
             </button>
+            <button (click)="activeTab = Tab.Testing" [class.tab-active]="activeTab === Tab.Testing"
+                    class="tab tab-sm gap-2">
+                Roundtrip
+                <span [class.badge-primary]="activeTab === Tab.Testing"
+                      class="badge badge-xs">{{ service.events().length }}</span>
+            </button>
         </div>
 
         <div class="hidden lg:flex ml-auto items-center gap-4 pr-4">
@@ -60,6 +66,9 @@
                 <app-statistics [inputs]="service.statistics()"/>
             </div>
 
+            <div [class.active-tab]="activeTab === Tab.Testing" class="tab-pane">
+                <app-testing/>
+            </div>
         </div>
     </div>
 </main>

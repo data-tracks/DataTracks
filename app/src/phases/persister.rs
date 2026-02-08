@@ -19,6 +19,8 @@ pub struct Persister {
     catalog: Catalog,
 }
 
+const BATCH_SIZE: i32 = 100_000;
+
 impl Persister {
     pub fn new(catalog: Catalog) -> anyhow::Result<Self> {
         Ok(Persister { catalog })
@@ -50,7 +52,7 @@ impl Persister {
 
         let control_rx = timer::handle_initial_time_annotation(incoming, &rt, sender, control_rx);
 
-        let (wal_rx, control_rx) = wal::handle_wal_to_engines(&rt, receiver, control_rx);
+        let (wal_rx, _) = wal::handle_wal_to_engines(&rt, receiver, control_rx);
 
         let storer = thread::spawn(move || {
             let rt_storer = Builder::new_current_thread()
@@ -138,7 +140,7 @@ impl Persister {
                 let engine_id = engine.id;
 
                 loop {
-                    if first_ts.elapsed().as_millis() > 200 || count > 1_000_000 {
+                    if first_ts.elapsed().as_millis() > 200 || count > BATCH_SIZE {
                         // try to drain the "buffer"
 
                         for (id, records) in buckets.drain() {

@@ -1,31 +1,57 @@
+use std::ops::{AddAssign};
 use flume::{Sender};
 use std::time::Duration;
 use tracing::error;
 use util::InitialMeta;
 use value::Value;
 
-pub struct DummySink {
-    value: Value,
-    interval: Duration,
+pub enum DummySink {
+    Interval{
+        value: Value,
+        interval: Duration,
+    },
+    Ramping{
+        value: Value,
+        interval: Duration,
+        delta: Duration,
+    }
 }
 
 impl DummySink {
-    pub fn new(value: Value, interval: Duration) -> Self {
-        DummySink { value, interval }
+    pub fn interval(value: Value, interval: Duration) -> Self {
+        DummySink::Interval { value, interval }
     }
 
     pub async fn start(&mut self, name: String, sender: Sender<(Value, InitialMeta)>) {
-        let duration = self.interval;
-        let value = self.value.clone();
-        loop {
-            match sender
-                .send((value.clone(), InitialMeta::new(Some(name.clone())))) {
-                Ok(_) => {}
-                Err(err) => {
-                    error!("Could not sink: {}", err)
+        match self {
+            DummySink::Interval{value,interval} => {
+                loop {
+                    match sender
+                        .send((value.clone(), InitialMeta::new(Some(name.clone())))) {
+                        Ok(_) => {}
+                        Err(err) => {
+                            error!("Could not sink: {}", err)
+                        }
+                    }
+                    tokio::time::sleep(*interval).await;
                 }
             }
-            tokio::time::sleep(duration).await;
+            DummySink::Ramping { value, interval, delta } => {
+
+                let mut interval = interval.clone();
+                let delta = delta.clone();
+                loop {
+                    match sender
+                        .send((value.clone(), InitialMeta::new(Some(name.clone())))) {
+                        Ok(_) => {}
+                        Err(err) => {
+                            error!("Could not sink: {}", err)
+                        }
+                    }
+                    tokio::time::sleep(interval).await;
+                    interval.add_assign(delta);
+                }
+            }
         }
     }
 }

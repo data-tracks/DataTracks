@@ -3,10 +3,11 @@ import {EventsComponent} from "./events/events.component";
 import {EventsService} from "./events.service";
 import {QueuesComponent} from "./queues/queues.component";
 import {StatisticsComponent} from "./statistics/statistics.component";
+import {TestingComponent} from "./testing/testing.component";
 
 @Component({
   selector: 'app-root',
-  imports: [EventsComponent, QueuesComponent, StatisticsComponent],
+  imports: [EventsComponent, QueuesComponent, StatisticsComponent, TestingComponent],
   templateUrl: './app.html',
   styleUrl: './app.css'
 })
@@ -21,5 +22,6 @@ export class App {
 export enum Tab {
   Events,
   Queues,
-  Stats
+  Stats,
+  Testing
 }

@@ -3,10 +3,7 @@ use crate::phases::Persister;
 use crate::phases::mapper::Nativer;
 use engine::EngineKind;
 use flume::{Sender, unbounded};
-use sink::dummy::DummySink;
-use sink::kafka::Kafka;
 use std::thread;
-use std::time::Duration;
 use tokio::runtime::Builder;
 use tokio::task::JoinSet;
 use tracing::{error, info};
@@ -45,7 +42,7 @@ impl Manager {
         }
     }
 
-    pub fn start(mut self) -> anyhow::Result<()> {
+    pub fn start(mut self, sink_runner: fn(&mut JoinSet<()>, Sender<(Value, InitialMeta)>)) -> anyhow::Result<()> {
         let ctrl_c_signal = tokio::signal::ctrl_c();
 
         let main_rt = Builder::new_multi_thread()
@@ -78,7 +75,10 @@ impl Manager {
 
             persister.start_distributor(&mut self.joins).await;
 
-            let kafka = self.start_sinks(persister, rt).await?;
+            let sink = self.start_sinks(persister, rt).await?;
+            //let kafka = sink::kafka::start(&mut self.joins, tx.clone()).await?;
+
+            sink_runner(&mut self.joins, sink);
 
             nativer.start(&mut self.joins).await;
 
@@ -93,8 +93,8 @@ impl Manager {
                     }
             }
 
-            info!("Stopping kafka...");
-            kafka.stop().await?;
+            //info!("Stopping kafka...");
+            //kafka.stop().await?;
 
             info!("Stopping engines...");
             self.catalog.stop().await?;
@@ -191,90 +191,16 @@ impl Manager {
         Ok(())
     }
 
-    async fn start_sinks(&mut self, persister: Persister, rt: Runtimes) -> anyhow::Result<Kafka> {
+    async fn start_sinks(&mut self, persister: Persister, rt: Runtimes) -> anyhow::Result<Sender<(Value, InitialMeta)>> {
         let (tx, rx) = unbounded();
 
         let (control_tx, control_rx) = unbounded();
 
         log_channel(tx.clone(), "Sink Input", Some(control_tx)).await;
 
-        let kafka = sink::kafka::start(&mut self.joins, tx.clone()).await?;
-
         persister.start(rx, rt, control_rx);
 
-        self.build_dummy(tx, &kafka);
 
-        Ok(kafka)
-    }
-
-    fn build_dummy(&mut self, tx: Sender<(Value, InitialMeta)>, _: &Kafka) {
-        let amount = 2_00;
-
-        /*let clone_graph = kafka.clone();
-        self.joins.spawn(async move {
-            loop {
-                clone_graph.send_value_graph().await.unwrap();
-                sleep(Duration::from_nanos(100)).await;
-            }
-        });*/
-
-        for _ in 0..amount {
-            let tx = tx.clone();
-            self.joins.spawn(async {
-                let mut dummy = DummySink::new(
-                    Value::array(vec![Value::text("David"), Value::int(31)]),
-                    Duration::from_millis(10),
-                );
-                dummy.start(String::from("relational"), tx).await;
-            });
-        }
-
-        /*let clone_rel = kafka.clone();
-        self.joins.spawn(async move {
-            loop {
-                clone_rel.send_value_relational().await.unwrap();
-                sleep(Duration::from_secs(10)).await;
-            }
-        });*/
-
-        for _ in 0..amount {
-            let tx = tx.clone();
-            self.joins.spawn(async {
-                let mut dummy = DummySink::new(
-                    Value::dict_from_pairs(vec![
-                        ("test", Value::text("test")),
-                        ("key2", Value::text("test2")),
-                    ]),
-                    Duration::from_millis(10),
-                );
-                dummy.start(String::from("doc"), tx).await;
-            });
-        }
-
-        /*let clone_doc = kafka.clone();
-        self.joins.spawn(async move {
-            loop {
-                clone_doc.send_value_doc().await.unwrap();
-                sleep(Duration::from_secs(10)).await;
-            }
-        });*/
-
-        for _ in 0..amount {
-            let tx = tx.clone();
-            self.joins.spawn(async {
-                let mut dummy = DummySink::new(
-                    Value::dict_from_pairs(vec![
-                        ("id", Value::text("test")),
-                        ("label", Value::text("test2")),
-                        (
-                            "properties",
-                            Value::dict_from_pairs(vec![("test", Value::text("text"))]),
-                        ),
-                    ]),
-                    Duration::from_millis(10),
-                );
-                dummy.start(String::from("graph"), tx).await;
-            });
-        }
+        Ok(tx)
     }
 }

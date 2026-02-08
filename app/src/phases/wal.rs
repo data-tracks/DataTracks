@@ -95,7 +95,7 @@ pub fn handle_wal_to_engines(
     let (wal_tx, wal_rx) = unbounded();
     let wal_tx_clone = wal_tx.clone();
 
-    let (control_tx_wal, control_rx_wal) = unbounded();
+    let (_, control_rx_wal) = unbounded();
 
     rt.attach_runtime(&0, async move {
         log_channel(wal_tx_clone, "WAL -> Engines", None).await;
