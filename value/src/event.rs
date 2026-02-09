@@ -1,9 +1,10 @@
-use crate::Value;
+
 use mongodb::bson::Document;
 use mongodb::change_stream::event::{ChangeStreamEvent, OperationType};
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 use std::collections::BTreeMap;
+use crate::value::Value;
 
 #[derive(Debug, Clone, Deserialize, Serialize, Writable, Readable)]
 pub enum Event {

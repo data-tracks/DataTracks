@@ -539,6 +539,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "capnp"
+version = "0.25.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fe8af2e2d255489928e31504fa51d86a41d040179098a8ad6828e0d11c54dcd6"
+dependencies = [
+ "embedded-io",
+]
+
+[[package]]
+name = "capnpc"
+version = "0.25.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6cdfa6b0df161a71201367910265b97180541ecdb48bd08e05ef8694c295d1f"
+dependencies = [
+ "capnp",
+]
+
+[[package]]
 name = "cast"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1189,6 +1207,12 @@ name = "either"
 version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "48c757948c5ede0e46177b7add2e67155f70e33c07fea8284df6576da70b3719"
+
+[[package]]
+name = "embedded-io"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9eb1aa714776b75c7e67e1da744b81a129b3ff919c8712b5e1b32252c1f07cc7"
 
 [[package]]
 name = "encoding_rs"
@@ -4797,9 +4821,10 @@ version = "0.6.0"
 dependencies = [
  "anyhow",
  "bytes",
+ "capnp",
+ "capnpc",
  "chrono",
  "criterion",
- "flatbuffers",
  "json",
  "mongodb",
  "neo4rs",

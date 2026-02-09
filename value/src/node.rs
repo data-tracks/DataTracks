@@ -1,8 +1,9 @@
-use crate::{Int, Text, Value};
+use crate::{Int, Text};
 use serde::{Deserialize, Serialize};
 use speedy::Readable;
 use speedy::Writable;
 use std::collections::BTreeMap;
+use crate::value::Value;
 
 #[derive(
     Eq,

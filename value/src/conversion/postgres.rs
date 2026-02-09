@@ -2,7 +2,8 @@ use std::error::Error;
 use bytes::{BufMut, BytesMut};
 use postgres::types::{IsNull, Type};
 use speedy::Writable;
-use crate::{bool, Value};
+use crate::{bool};
+use crate::value::Value;
 
 impl<'a> postgres::types::FromSql<'a> for Value {
     fn from_sql(ty: &Type, raw: &'a [u8]) -> Result<Self, Box<dyn Error + Sync + Send>> {

@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 use redb::{Key, TypeName};
 use speedy::{Readable, Writable};
-use crate::Value;
+use crate::value::Value;
 
 impl redb::Value for Value {
     type SelfType<'a>

@@ -1,11 +1,12 @@
 use crate::event::Event;
-use crate::{Time, Value};
+use crate::{Time};
 use core::fmt::{Display, Formatter};
 use redb::TypeName;
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 use std::collections::BTreeMap;
 use std::{ops, vec};
+use crate::value::Value;
 
 #[derive(
     Clone,

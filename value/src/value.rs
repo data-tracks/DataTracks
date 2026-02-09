@@ -10,13 +10,14 @@ use crate::{bool, Bool, Float, Int};
 use core::fmt::Pointer;
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
-use std::cmp::{PartialEq};
-use std::collections::{BTreeMap};
+use std::cmp::PartialEq;
+use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::str;
 use anyhow::{anyhow, bail};
-use tracing::{debug};
+use tracing::debug;
+
 
 #[derive(Clone, Debug, Serialize, Deserialize, Ord, PartialOrd, Readable, Writable, Default)]
 pub enum Value {
@@ -33,6 +34,7 @@ pub enum Value {
     #[default]
     Null,
 }
+
 
 impl Value {
     pub fn text(string: &str) -> Value {

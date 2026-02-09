@@ -52,6 +52,8 @@ memmap2 = "0.9.9"
 axum = { version = "0.8.8", features = ["ws"] }
 tower-http = { version = "0.6.8", features = ["full"] }
 anyhow = "1.0.101"
+capnp = "0.25"
+capnpc = "0.25.0"
 
 # The profile that 'cargo dist' will build with
 [profile.dist]

@@ -1,6 +1,6 @@
 use rusqlite::types::{FromSqlResult, ToSqlOutput, ValueRef};
 use speedy::Writable;
-use crate::Value;
+use crate::value::Value;
 
 impl TryFrom<(&rusqlite::Row<'_>, usize)> for Value {
     type Error = rusqlite::Error;

@@ -1,0 +1,61 @@
+namespace DataModel;
+
+// FlatBuffers Type Mapping:
+// i64   -> long
+// i32   -> int
+// u32   -> uint
+// u8    -> uint8 / byte
+
+table Int { value: long; }
+table Float { number: long; shift: uint8; }
+table Bool { value: bool; }
+table Text { value: string; }
+table Time { ms: long; ns: uint; }
+table Date { days: long; }
+
+// Recursive Types
+table Array {
+  values: [Value];
+}
+
+table DictEntry {
+  key: string;
+  value: Value;
+}
+
+table Dict {
+  entries: [DictEntry];
+}
+
+table Node {
+  id: long;
+  labels: [string];
+  properties: [DictEntry];
+}
+
+table Edge {
+  label: string;
+  start_id: long;
+  end_id: long;
+  properties: [DictEntry];
+}
+
+// The Union
+union ValueData {
+  Int,
+  Float,
+  Bool,
+  Text,
+  Time,
+  Date,
+  Array,
+  Dict,
+  Node,
+  Edge
+}
+
+table Value {
+  data: ValueData;
+}
+
+root_type Value;

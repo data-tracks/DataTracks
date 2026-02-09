@@ -1,6 +1,12 @@
 extern crate alloc;
 extern crate core;
 
+pub mod value_capnp {
+    include!(concat!(env!("OUT_DIR"), "/capnp/value_capnp.rs"));
+}
+
+pub use value_capnp::value as valuecp; // Now you can use it!
+
 pub use array::Array;
 pub use bool::Bool;
 pub use dict::Dict;
@@ -25,7 +31,7 @@ mod time;
 pub mod timeunit;
 pub mod train;
 mod r#type;
-pub(crate) mod value;
 pub mod wagon;
 mod conversion;
 mod math;
+pub(crate) mod value;

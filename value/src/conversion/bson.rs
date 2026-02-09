@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 use mongodb::bson::{to_bson, Bson, DateTime, Document, Timestamp};
-use crate::Value;
+use crate::value::Value;
 
 impl From<&Bson> for Value {
     fn from(bson: &Bson) -> Self {

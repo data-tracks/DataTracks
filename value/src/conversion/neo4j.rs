@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use neo4rs::{BoltBoolean, BoltFloat, BoltInteger, BoltList, BoltMap, BoltNull, BoltString, BoltType, Row};
-use crate::{Int, Text, Value};
+use crate::{Int, Text};
+use crate::value::Value;
 
 impl From<Value> for BoltType {
     fn from(value: Value) -> Self {

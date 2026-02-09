@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use json::JsonValue;
-use crate::{Dict, Value};
+use crate::{Dict};
+use crate::value::Value;
 
 impl From<&serde_json::Map<String, serde_json::Value>> for Value {
     fn from(value: &serde_json::Map<String, serde_json::Value>) -> Self {
