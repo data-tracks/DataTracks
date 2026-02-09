@@ -7,33 +7,16 @@ use crate::r#type::ValType;
 use crate::text::Text;
 use crate::time::Time;
 use crate::{bool, Bool, Float, Int};
-use bytes::{BufMut, BytesMut};
 use core::fmt::Pointer;
-use flatbuffers::{FlatBufferBuilder, ForwardsUOffset, Vector, WIPOffset};
-use json::JsonValue;
-use mongodb::bson::{to_bson, Bson, DateTime, Document, Timestamp};
-use neo4rs::{
-    BoltBoolean, BoltFloat, BoltInteger, BoltList, BoltMap, BoltNull, BoltString, BoltType, Row,
-};
-use postgres::types::{IsNull, Type};
-use redb::{Key, TypeName};
-use rumqttc::{Event, Incoming};
-use rumqttd::protocol::Publish;
-use rumqttd::Notification;
-use rusqlite::types::{FromSqlResult, ToSqlOutput, ValueRef};
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
-use std::cmp::{Ordering, PartialEq};
-use std::collections::{BTreeMap, HashMap};
-use std::error::Error;
+use std::cmp::{PartialEq};
+use std::collections::{BTreeMap};
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
-use std::ops::{Add, AddAssign, Div, Mul, Sub};
 use std::str;
-use tracing::{debug, error};
-use track_rails::message_generated::protocol::{
-    Null as FlatNull, NullArgs, Value as FlatValue, ValueWrapper, ValueWrapperArgs,
-};
+use anyhow::{anyhow, bail};
+use tracing::{debug};
 
 #[derive(Clone, Debug, Serialize, Deserialize, Ord, PartialOrd, Readable, Writable, Default)]
 pub enum Value {
@@ -91,45 +74,6 @@ impl Value {
         Value::Array(Array::new(tuple))
     }
 
-    pub fn flatternize<'bldr>(
-        &self,
-        builder: &mut FlatBufferBuilder<'bldr>,
-    ) -> WIPOffset<ValueWrapper<'bldr>> {
-        let data_type = self.get_flat_type();
-
-        let data = match self {
-            Value::Int(i) => Some(i.flatternize(builder).as_union_value()),
-            Value::Float(i) => Some(i.flatternize(builder).as_union_value()),
-            Value::Bool(i) => Some(i.flatternize(builder).as_union_value()),
-            Value::Text(i) => Some(i.flatternize(builder).as_union_value()),
-            Value::Time(i) => Some(i.flatternize(builder).as_union_value()),
-            Value::Date(_) => todo!("remove"),
-            Value::Array(i) => Some(i.flatternize(builder).as_union_value()),
-            Value::Dict(i) => Some(i.flatternize(builder).as_union_value()),
-            Value::Null => Some(FlatNull::create(builder, &NullArgs {}).as_union_value()),
-            Value::Node(_) => todo!(),
-            Value::Edge(_) => todo!(),
-        };
-
-        ValueWrapper::create(builder, &ValueWrapperArgs { data_type, data })
-    }
-
-    pub(crate) fn get_flat_type(&self) -> FlatValue {
-        match self {
-            Value::Int(_) => FlatValue::Integer,
-            Value::Float(_) => FlatValue::Float,
-            Value::Bool(_) => FlatValue::Bool,
-            Value::Text(_) => FlatValue::Text,
-            Value::Time(_) => FlatValue::Time,
-            Value::Date(_) => todo!("remove"),
-            Value::Array(_) => FlatValue::List,
-            Value::Dict(_) => FlatValue::Document,
-            Value::Null => FlatValue::Null,
-            Value::Node(_) => todo!(),
-            Value::Edge(_) => todo!(),
-        }
-    }
-
     pub fn dict(values: BTreeMap<String, Value>) -> Value {
         let mut map = BTreeMap::new();
 
@@ -181,23 +125,23 @@ impl Value {
         }
     }
 
-    pub fn as_int(&self) -> Result<Int, String> {
+    pub fn as_int(&self) -> anyhow::Result<Int> {
         match self {
             Value::Int(i) => Ok(*i),
             Value::Float(f) => Ok(Int(f.as_f64() as i64)),
             Value::Bool(b) => Ok(if b.0 { Int(1) } else { Int(0) }),
-            Value::Text(t) => t.0.parse::<i64>().map(Int).map_err(|err| err.to_string()),
-            Value::Array(_) => Err(String::from("Array cannot be converted")),
-            Value::Dict(_) => Err(String::from("Dict cannot be converted")),
-            Value::Null => Err(String::from("Null cannot be converted")),
+            Value::Text(t) => t.0.parse::<i64>().map(Int).map_err(|e| anyhow!(e)),
+            Value::Array(_) => bail!("Array cannot be converted"),
+            Value::Dict(_) => bail!("Dict cannot be converted"),
+            Value::Null => bail!("Null cannot be converted"),
             Value::Time(t) => Ok(Int(t.ms)),
             Value::Date(d) => Ok(Int::new(d.as_epoch())),
-            Value::Node(_) => Err(String::from("Node cannot be converted")),
-            Value::Edge(_) => Err(String::from("Edge cannot be converted")),
+            Value::Node(_) => bail!("Node cannot be converted"),
+            Value::Edge(_) => bail!("Edge cannot be converted"),
         }
     }
 
-    pub fn as_float(&self) -> Result<Float, String> {
+    pub fn as_float(&self) -> anyhow::Result<Float> {
         match self {
             Value::Int(i) => Ok(Float::new(i.0 as f64)),
             Value::Float(f) => Ok(*f),
@@ -209,37 +153,37 @@ impl Value {
             Value::Text(t) => {
                 t.0.parse::<f64>()
                     .map(Float::new)
-                    .map_err(|e| e.to_string())
+                    .map_err(|err| anyhow!(err))
             }
-            Value::Array(_) => Err(String::from("Array cannot be converted")),
-            Value::Dict(_) => Err(String::from("Dict cannot be converted")),
-            Value::Null => Err(String::from("Null cannot be converted")),
+            Value::Array(_) => bail!("Array cannot be converted"),
+            Value::Dict(_) => bail!("Dict cannot be converted"),
+            Value::Null => bail!("Null cannot be converted"),
             Value::Time(t) => Ok(if t.ns != 0 {
                 Float::new(t.ms as f64 + t.ns as f64 / 1e6)
             } else {
                 Float::new(t.ms as f64)
             }),
             Value::Date(d) => Ok(Float::new(d.as_epoch() as f64)),
-            Value::Node(_) => Err(String::from("Node cannot be converted")),
-            Value::Edge(_) => Err(String::from("Edge cannot be converted")),
+            Value::Node(_) => bail!("Node cannot be converted"),
+            Value::Edge(_) => bail!("Edge cannot be converted"),
         }
     }
 
-    pub fn as_node(&self) -> Result<&Box<Node>, String> {
+    pub fn as_node(&self) -> anyhow::Result<&Node> {
         match self {
             Value::Node(n) => Ok(n),
-            _ => Err(String::from("Cannot convert to Node")),
+            _ => bail!("Cannot convert to Node"),
         }
     }
 
-    pub(crate) fn as_edge(&self) -> Result<&Box<Edge>, String> {
+    pub(crate) fn as_edge(&self) -> anyhow::Result<&Edge> {
         match self {
             Value::Edge(e) => Ok(e),
-            _ => Err(String::from("Cannot convert to Edge")),
+            _ => bail!("Cannot convert to Edge"),
         }
     }
 
-    pub fn as_time(&self) -> Result<Time, String> {
+    pub fn as_time(&self) -> anyhow::Result<Time> {
         match self {
             Value::Int(i) => Ok(Time::new(i.0, 0)),
             Value::Float(f) => {
@@ -251,32 +195,32 @@ impl Value {
             Value::Bool(b) => Ok(Time::new(b.0 as i64, 0)),
             Value::Text(t) => Ok(Time::from(t.clone())),
             Value::Time(t) => Ok(*t),
-            Value::Array(_) => Err(String::from("Array cannot be converted")),
-            Value::Dict(_) => Err(String::from("Dict cannot be converted")),
-            Value::Null => Err(String::from("Null cannot be converted")),
+            Value::Array(_) => bail!("Array cannot be converted"),
+            Value::Dict(_) => bail!("Dict cannot be converted"),
+            Value::Null => bail!("Null cannot be converted"),
             Value::Date(_) => Ok(Time::new(0, 0)),
-            Value::Node(_) => Err(String::from("Node cannot be converted")),
-            Value::Edge(_) => Err(String::from("Edge cannot be converted")),
+            Value::Node(_) => bail!("Node cannot be converted"),
+            Value::Edge(_) => bail!("Edge cannot be converted"),
         }
     }
 
-    pub fn as_date(&self) -> Result<Date, String> {
+    pub fn as_date(&self) -> anyhow::Result<Date> {
         match self {
             Value::Int(i) => Ok(Date::new(i.0)),
             Value::Float(f) => Ok(Date::new(f.as_f64() as i64)),
             Value::Bool(b) => Ok(Date::new(b.0 as i64)),
             Value::Text(t) => Ok(Date::from(t.0.clone())),
-            Value::Time(_) => Err(String::from("Time cannot be converted")),
+            Value::Time(_) => bail!("Time cannot be converted"),
             Value::Date(d) => Ok(d.clone()),
-            Value::Array(_) => Err(String::from("Array cannot be converted")),
-            Value::Dict(_) => Err(String::from("Dict cannot be converted")),
-            Value::Null => Err(String::from("Null cannot be converted")),
-            Value::Node(_) => Err(String::from("Node cannot be converted")),
-            Value::Edge(_) => Err(String::from("Edge cannot be converted")),
+            Value::Array(_) => bail!("Array cannot be converted"),
+            Value::Dict(_) => bail!("Dict cannot be converted"),
+            Value::Null => bail!("Null cannot be converted"),
+            Value::Node(_) => bail!("Node cannot be converted"),
+            Value::Edge(_) => bail!("Edge cannot be converted"),
         }
     }
 
-    pub fn as_dict(&self) -> Result<Dict, String> {
+    pub fn as_dict(&self) -> anyhow::Result<Dict> {
         match self {
             Value::Time(_)
             | Value::Int(_)
@@ -287,12 +231,12 @@ impl Value {
             | Value::Date(_)
             | Value::Node(_)
             | Value::Edge(_)
-            | Value::Null => Err(String::from("Dict cannot be converted")),
+            | Value::Null => bail!("Dict cannot be converted"),
             Value::Dict(d) => Ok(d.clone()),
         }
     }
 
-    pub fn as_array(&self) -> Result<Array, String> {
+    pub fn as_array(&self) -> anyhow::Result<Array> {
         match self {
             Value::Time(_)
             | Value::Int(_)
@@ -303,11 +247,11 @@ impl Value {
             | Value::Dict(_)
             | Value::Node(_)
             | Value::Edge(_)
-            | Value::Null => Err(String::from("Array cannot be converted")),
+            | Value::Null => bail!("Array cannot be converted"),
             Value::Array(a) => Ok(a.clone()),
         }
     }
-    pub fn as_bool(&self) -> Result<Bool, String> {
+    pub fn as_bool(&self) -> anyhow::Result<Bool> {
         match self {
             Value::Int(i) => Ok(if i.0 > 0 { Bool(true) } else { Bool(false) }),
             Value::Float(f) => Ok(if f.number <= 0 {
@@ -325,12 +269,12 @@ impl Value {
             Value::Dict(d) => Ok(Bool(!d.is_empty())),
             Value::Null => Ok(Bool(false)),
             Value::Date(d) => Ok(Bool::new(d.days > 0)),
-            Value::Node(_) => Err(String::from("Node cannot be converted")),
-            Value::Edge(_) => Err(String::from("Edge cannot be converted")),
+            Value::Node(_) => bail!("Node cannot be converted"),
+            Value::Edge(_) => bail!("Edge cannot be converted"),
         }
     }
 
-    pub fn as_text(&self) -> Result<Text, String> {
+    pub fn as_text(&self) -> anyhow::Result<Text> {
         match self {
             Value::Int(i) => Ok(Text(i.0.to_string())),
             Value::Float(f) => Ok(Text(f.as_f64().to_string())),
@@ -354,133 +298,8 @@ impl Value {
             Value::Null => Ok(Text("null".to_owned())),
             Value::Time(t) => Ok(Text(t.to_string())),
             Value::Date(d) => Ok(Text(d.to_string())),
-            Value::Node(_) => Err(String::from("Node cannot be converted")),
-            Value::Edge(_) => Err(String::from("Edge cannot be converted")),
-        }
-    }
-}
-
-impl TryFrom<&Vector<'_, ForwardsUOffset<ValueWrapper<'_>>>> for Value {
-    type Error = String;
-
-    fn try_from(
-        _value: &Vector<'_, ForwardsUOffset<ValueWrapper<'_>>>,
-    ) -> Result<Self, Self::Error> {
-        todo!()
-    }
-}
-
-impl From<Value> for BoltType {
-    fn from(value: Value) -> Self {
-        match value {
-            Value::Int(i) => BoltType::Integer(BoltInteger::new(i.0)),
-            Value::Float(f) => BoltType::Float(BoltFloat::new(f.as_f64())),
-            Value::Bool(b) => BoltType::Boolean(BoltBoolean::new(b.0)),
-            Value::Text(t) => BoltType::String(BoltString::new(&t.0)),
-            Value::Node(n) => {
-                let mut map = HashMap::<BoltString, BoltType>::new();
-                map.insert(
-                    BoltString::new("id"),
-                    BoltType::Integer(BoltInteger::new(n.id.0)),
-                );
-                map.insert(
-                    BoltString::new("labels"),
-                    BoltType::List(BoltList {
-                        value: n
-                            .labels
-                            .into_iter()
-                            .map(|l| BoltType::String(BoltString::new(&l.0)))
-                            .collect(),
-                    }),
-                );
-                map.insert(
-                    BoltString::new("props"),
-                    BoltType::Map(BoltMap {
-                        value: n
-                            .properties
-                            .into_iter()
-                            .map(|(k, v)| (BoltString::new(k.as_str()), BoltType::from(v)))
-                            .collect::<HashMap<_, _>>(),
-                    }),
-                );
-
-                BoltType::Map(BoltMap { value: map })
-            }
-            Value::Dict(d) => BoltType::Map(BoltMap {
-                value: d
-                    .values
-                    .into_iter()
-                    .map(|(k, v)| (BoltString::new(k.as_str()), BoltType::from(v)))
-                    .collect(),
-            }),
-            Value::Null => BoltType::Null(BoltNull),
-            Value::Array(a) => BoltType::List(BoltList {
-                value: a.values.into_iter().map(|v| v.into()).collect(),
-            }),
-            v => todo!("{}", v),
-        }
-    }
-}
-
-impl From<Text> for BoltType {
-    fn from(value: Text) -> Self {
-        BoltType::String(BoltString::new(&value.0))
-    }
-}
-
-impl From<Int> for BoltType {
-    fn from(value: Int) -> Self {
-        BoltType::Integer(BoltInteger::new(value.0))
-    }
-}
-
-impl From<Row> for Value {
-    fn from(row: Row) -> Self {
-        let mut values = vec![];
-        for key in row.keys() {
-            values.push(row.get::<Value>(&key.value).unwrap())
-        }
-        Value::array(values)
-    }
-}
-
-impl TryFrom<ValueWrapper<'_>> for Value {
-    type Error = String;
-
-    fn try_from(value: ValueWrapper) -> Result<Self, Self::Error> {
-        match value.data_type() {
-            FlatValue::Time => {
-                let time = value.data_as_time().ok_or("Could not find time")?;
-                Ok(Value::time(time.data(), 0))
-            }
-            FlatValue::Text => {
-                let string = value.data_as_text().ok_or("Could not find string")?;
-                let data: &str = string.data();
-                let string = data.into();
-                Ok(string)
-            }
-            FlatValue::Float => {
-                let float = value.data_as_float().ok_or("Could not find float")?;
-                Ok(Value::float(float.data() as _))
-            }
-            FlatValue::Null => Ok(Value::null()),
-            FlatValue::Integer => {
-                let integer = value.data_as_integer().ok_or("Could not find integer")?;
-                Ok(Value::int(integer.data()))
-            }
-            FlatValue::List => {
-                let list = value.data_as_list().ok_or("Could not find list")?;
-                let list = list.data();
-                Ok(Value::array(
-                    list.iter()
-                        .map(|v| v.try_into())
-                        .collect::<Result<_, _>>()?,
-                ))
-            }
-            FlatValue::Document => {
-                todo!()
-            }
-            t => Err(format!("Unsupported type {t:?}")),
+            Value::Node(_) => bail!("Node cannot be converted"),
+            Value::Edge(_) => bail!("Edge cannot be converted"),
         }
     }
 }
@@ -580,8 +399,8 @@ impl PartialEq for Value {
             (Value::Date(d), _) => d == &other.as_date().unwrap(),
             (Value::Node(n1), Value::Node(n2)) => n1 == n2,
             (Value::Edge(n1), Value::Edge(n2)) => n1 == n2,
-            (Value::Node(n), o) => n == o.as_node().unwrap(),
-            (Value::Edge(e), o) => e == o.as_edge().unwrap(),
+            (Value::Node(n), o) => o.as_node().map(|node| n.as_ref() == node).unwrap_or(false),
+            (Value::Edge(e), o) => o.as_edge().map(|edge| e.as_ref() == edge).unwrap_or(false),
         }
     }
 }
@@ -608,7 +427,7 @@ impl Hash for Value {
                 }
             }
             Value::Dict(d) => {
-                for (k, v) in d.clone() {
+                for (k, v) in &d.values {
                     k.hash(state);
                     v.hash(state);
                 }
@@ -688,502 +507,6 @@ impl From<bool> for Value {
 impl From<Dict> for Value {
     fn from(value: Dict) -> Self {
         Value::Dict(value)
-    }
-}
-
-impl Into<Bson> for Value {
-    fn into(self) -> Bson {
-        match self {
-            Value::Int(i) => Bson::Int32(i.0 as i32),
-            Value::Float(f) => Bson::Double(f.as_f64()),
-            Value::Bool(b) => Bson::Boolean(b.0),
-            Value::Text(t) => Bson::String(t.0),
-            Value::Time(t) => Bson::Timestamp(Timestamp {
-                time: t.ms as u32,
-                increment: 0,
-            }),
-            Value::Date(d) => Bson::DateTime(DateTime::from_millis(d.as_epoch())),
-            Value::Array(a) => Bson::Array(a.values.into_iter().map(|v| v.into()).collect()),
-            Value::Dict(d) => to_bson(
-                &d.into_iter()
-                    .map(|(k, v)| (k, v.into()))
-                    .collect::<HashMap<String, Bson>>(),
-            )
-            .unwrap(),
-            Value::Node(_) => todo!(),
-            Value::Edge(_) => todo!(),
-            Value::Null => Bson::Null,
-        }
-    }
-}
-
-impl From<&JsonValue> for Value {
-    fn from(value: &JsonValue) -> Self {
-        match value {
-            JsonValue::Null => Value::null(),
-            JsonValue::Short(a) => Value::text(a.as_str()),
-            JsonValue::String(a) => Value::text(a),
-            JsonValue::Number(a) => Value::int(a.as_fixed_point_i64(0).unwrap()),
-            JsonValue::Boolean(a) => Value::bool(*a),
-            JsonValue::Object(elements) => Value::dict(
-                elements
-                    .iter()
-                    .map(|(k, v)| (k.to_string(), v.into()))
-                    .collect(),
-            ),
-            JsonValue::Array(elements) => Value::array(
-                elements
-                    .iter()
-                    .map(|arg0: &JsonValue| arg0.into())
-                    .collect(),
-            ),
-        }
-    }
-}
-
-impl From<serde_json::Value> for Value {
-    fn from(value: serde_json::Value) -> Self {
-        (&value).into()
-    }
-}
-
-impl From<&serde_json::Value> for Value {
-    fn from(value: &serde_json::Value) -> Self {
-        match value {
-            serde_json::Value::Null => Value::null(),
-            serde_json::Value::Bool(b) => Value::bool(*b),
-            serde_json::Value::Number(n) => {
-                if n.is_f64() {
-                    Value::float(n.as_f64().unwrap())
-                } else {
-                    Value::int(n.as_i64().unwrap())
-                }
-            }
-            serde_json::Value::String(s) => Value::text(s),
-            serde_json::Value::Array(a) => {
-                let mut values = vec![];
-                for value in a {
-                    values.push(value.into());
-                }
-                Value::array(values)
-            }
-            serde_json::Value::Object(o) => o.into(),
-        }
-    }
-}
-
-impl From<&serde_json::Map<String, serde_json::Value>> for Value {
-    fn from(value: &serde_json::Map<String, serde_json::Value>) -> Self {
-        Value::Dict(value.into())
-    }
-}
-
-impl From<&serde_json::Map<String, serde_json::Value>> for Dict {
-    fn from(value: &serde_json::Map<String, serde_json::Value>) -> Self {
-        let mut map = BTreeMap::new();
-        for (key, value) in value {
-            map.insert(key.clone(), value.into());
-        }
-        Dict::new(map)
-    }
-}
-
-impl TryFrom<Notification> for Dict {
-    type Error = String;
-
-    fn try_from(value: Notification) -> Result<Self, Self::Error> {
-        match value {
-            Notification::Forward(f) => f.publish.try_into(),
-            _ => Err(format!("Unexpected notification {value:?}"))?,
-        }
-    }
-}
-
-impl TryFrom<Publish> for Dict {
-    type Error = String;
-
-    fn try_from(publish: Publish) -> Result<Self, Self::Error> {
-        let mut dict = BTreeMap::new();
-        let value = str::from_utf8(&publish.payload)
-            .map_err(|e| e.to_string())?
-            .into();
-        let topic = str::from_utf8(&publish.topic)
-            .map_err(|e| e.to_string())?
-            .into();
-        dict.insert("$".to_string(), value);
-        dict.insert("$topic".to_string(), topic);
-        Ok(Value::dict(dict).into())
-    }
-}
-
-impl redb::Value for Value {
-    type SelfType<'a>
-        = Value
-    where
-        Self: 'a;
-    type AsBytes<'a>
-        = Vec<u8>
-    where
-        Self: 'a;
-
-    fn fixed_width() -> Option<usize> {
-        None
-    }
-
-    fn from_bytes<'a>(data: &'a [u8]) -> Self::SelfType<'a>
-    where
-        Self: 'a,
-    {
-        Value::read_from_buffer(data).expect("Failed to deserialize Value")
-    }
-
-    fn as_bytes<'a, 'b: 'a>(value: &'a Self::SelfType<'b>) -> Self::AsBytes<'a>
-    where
-        Self: 'b,
-    {
-        value.write_to_vec().expect("Failed to serialize Value")
-    }
-
-    fn type_name() -> TypeName {
-        TypeName::new("value")
-    }
-}
-
-impl Key for Value {
-    fn compare(data1: &[u8], data2: &[u8]) -> Ordering {
-        let val1: Value = Value::read_from_buffer(data1).expect("Failed to deserialize Value");
-        let val2: Value = Value::read_from_buffer(data2).expect("Failed to deserialize Value");
-        val1.cmp(&val2)
-    }
-}
-
-impl TryFrom<Event> for Dict {
-    type Error = String;
-
-    fn try_from(value: Event) -> Result<Self, Self::Error> {
-        match value {
-            Event::Incoming(i) => match i {
-                Incoming::Publish(p) => {
-                    let mut map = BTreeMap::new();
-                    map.insert(
-                        "$".to_string(),
-                        Value::text(str::from_utf8(&p.payload).map_err(|e| e.to_string())?),
-                    );
-                    map.insert("$topic".to_string(), Value::text(&p.topic));
-                    Ok(Value::dict(map).as_dict()?)
-                }
-                _ => Err(format!("Unexpected Incoming publish {i:?}"))?,
-            },
-            Event::Outgoing(_) => Err(String::from("Unexpected Outgoing publish")),
-        }
-    }
-}
-
-impl Add for &Value {
-    type Output = Value;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        match (self, rhs) {
-            // Case where both are integers
-            (Value::Int(a), Value::Int(b)) => Value::Int(*a + *b),
-
-            // Mixing Integer and Float, ensure the result is a Float
-            (Value::Int(a), Value::Float(b)) | (Value::Float(b), Value::Int(a)) => {
-                Value::Float(*a + *b)
-            }
-            (Value::Float(a), Value::Float(b)) => Value::Float(*a + *b),
-            // text
-            (Value::Text(a), b) => {
-                let b = b.as_text().unwrap();
-                Value::text(&format!("{}{}", a.0, b.0))
-            }
-            // time
-            (Value::Time(a), b) => {
-                let ms = a.ms + b.as_time().unwrap().ms;
-                let ns = a.ns + b.as_time().unwrap().ns;
-                Value::time(ms, ns)
-            }
-            (Value::Date(a), b) => Value::date(a.days + b.as_date().unwrap().days),
-            // array
-            (Value::Array(a), b) => {
-                let mut a = a.clone();
-                a.values.push(b.clone());
-                Value::Array(a)
-            }
-
-            // Panic on unsupported types
-            (lhs, rhs) => panic!("Cannot add {lhs:?} with {rhs:?}."),
-        }
-    }
-}
-
-impl AddAssign for Value {
-    fn add_assign(&mut self, rhs: Self) {
-        match self {
-            Value::Int(i) => {
-                i.0 += rhs.as_int().unwrap().0;
-            }
-            Value::Float(f) => {
-                let rhs = rhs.as_float().unwrap();
-                let diff = f.shift.abs_diff(rhs.shift);
-                match (f, rhs) {
-                    (l, r) if l.shift > r.shift => {
-                        l.number += r.number * (10 ^ diff) as i64;
-                    }
-                    (l, r) if l.shift < r.shift => {
-                        l.number = l.number * (10 ^ diff) as i64 + r.number;
-                        l.shift = r.shift;
-                    }
-                    (l, r) => {
-                        l.number += r.number;
-                    }
-                }
-            }
-            Value::Bool(b) => b.0 = b.0 && rhs.as_bool().unwrap().0,
-            Value::Text(t) => t.0 += &rhs.as_text().unwrap().0,
-            Value::Array(a) => a.values.push(rhs),
-            Value::Dict(d) => d.append(&mut rhs.as_dict().unwrap()),
-            Value::Null => {}
-            Value::Time(t) => {
-                let time = rhs.as_time().unwrap();
-                t.ms += time.ms;
-                t.ns += time.ns;
-            }
-            Value::Date(d) => {
-                d.days += rhs.as_date().unwrap().days;
-            }
-            Value::Node(_) => {
-                error!("Cannot add Node");
-            }
-            Value::Edge(_) => {
-                error!("Cannot add Edge");
-            }
-        }
-    }
-}
-
-impl Sub for &Value {
-    type Output = Value;
-
-    fn sub(self, rhs: Self) -> Self::Output {
-        match (self, rhs) {
-            (Value::Int(a), Value::Int(b)) => Value::int(a.0 - b.0),
-            (Value::Int(_), Value::Float(b)) => {
-                let right = Value::float_parts(-b.number, b.shift);
-                right.add(self)
-            }
-            (Value::Float(_), Value::Int(b)) => Value::int(-b.0).add(self),
-            (lhs, rhs) => panic!("Cannot subtract {:?} from {:?}.", lhs, rhs),
-        }
-    }
-}
-
-impl Mul for &Value {
-    type Output = Value;
-
-    fn mul(self, rhs: Self) -> Self::Output {
-        match (self, rhs) {
-            (Value::Int(a), Value::Int(b)) => Value::int(a.0 * b.0),
-            (Value::Int(a), Value::Float(b)) | (Value::Float(b), Value::Int(a)) => {
-                Value::float_parts(a.0 * b.number, b.shift)
-            }
-            (Value::Float(a), Value::Float(b)) => {
-                let max = a.shift.max(b.shift);
-                let shift_diff = a.shift.abs_diff(b.shift) as i64;
-                Value::float_parts(a.number * b.number * (10 ^ shift_diff), max)
-            }
-            (Value::Text(text), Value::Int(b)) => Value::text(&text.0.repeat(b.0 as usize)),
-            (lhs, rhs) => panic!("Cannot multiply {:?} with {:?}.", lhs, rhs),
-        }
-    }
-}
-
-impl Div for &Value {
-    type Output = Value;
-
-    fn div(self, rhs: Self) -> Self::Output {
-        match (self, rhs) {
-            (Value::Int(a), Value::Int(b)) => Value::float(a.0 as f64 / b.0 as f64),
-            (Value::Int(a), Value::Float(b)) => Value::float(a.0 as f64 / b.as_f64()),
-            (Value::Float(a), Value::Int(b)) => Value::float(a.as_f64() / b.0 as f64),
-            (Value::Float(a), Value::Float(b)) => Value::float(a.as_f64() / b.as_f64()),
-            _ => panic!("Cannot divide {:?} with {:?}.", self, rhs),
-        }
-    }
-}
-
-impl From<postgres::Row> for Value {
-    fn from(row: postgres::Row) -> Self {
-        let len = row.len();
-        let mut values = Vec::with_capacity(len);
-        for i in 0..len {
-            values.push(row.get::<usize, Value>(i));
-        }
-        if values.len() == 1 {
-            values.pop().unwrap()
-        } else {
-            Value::array(values)
-        }
-    }
-}
-
-impl From<Document> for Value {
-    fn from(doc: Document) -> Self {
-        (&doc).into()
-    }
-}
-
-impl From<&Document> for Value {
-    fn from(doc: &Document) -> Self {
-        let mut map: BTreeMap<String, Value> = BTreeMap::new();
-        doc.iter().for_each(|(k, v)| {
-            map.insert(k.to_string(), v.clone().into());
-        });
-
-        Value::dict(map)
-    }
-}
-
-impl From<&Bson> for Value {
-    fn from(bson: &Bson) -> Self {
-        match bson {
-            Bson::Double(d) => Value::float(*d),
-            Bson::String(s) => Value::text(s.as_str()),
-            Bson::Document(d) => d.into(),
-            Bson::Boolean(b) => Value::bool(*b),
-            Bson::Null => Value::null(),
-            Bson::Int32(i) => Value::int(*i as i64),
-            Bson::Int64(i) => Value::int(*i),
-            Bson::Undefined => Value::null(),
-            Bson::ObjectId(id) => Value::text(&id.to_string()),
-            _ => todo!(),
-        }
-    }
-}
-
-impl From<Bson> for Value {
-    fn from(bson: Bson) -> Self {
-        (&bson).into()
-    }
-}
-
-impl<'a> postgres::types::FromSql<'a> for Value {
-    fn from_sql(ty: &Type, raw: &'a [u8]) -> Result<Self, Box<dyn Error + Sync + Send>> {
-        match *ty {
-            Type::BOOL => Ok(Value::bool(postgres::types::FromSql::from_sql(ty, raw)?)),
-            Type::TEXT | Type::CHAR => {
-                Ok(Value::text(postgres::types::FromSql::from_sql(ty, raw)?))
-            }
-            Type::INT2 | Type::INT4 | Type::INT8 => {
-                Ok(Value::int(postgres::types::FromSql::from_sql(ty, raw)?))
-            }
-            Type::FLOAT4 | Type::FLOAT8 => {
-                Ok(Value::float(postgres::types::FromSql::from_sql(ty, raw)?))
-            }
-            _ => Err(format!("Unrecognized value type: {}", ty).into()),
-        }
-    }
-
-    fn accepts(ty: &Type) -> bool {
-        matches!(
-            *ty,
-            Type::TEXT
-                | Type::CHAR
-                | Type::BOOL
-                | Type::INT2
-                | Type::INT8
-                | Type::INT4
-                | Type::FLOAT4
-                | Type::FLOAT8
-        )
-    }
-}
-
-impl TryFrom<(&rusqlite::Row<'_>, usize)> for Value {
-    type Error = rusqlite::Error;
-
-    fn try_from(pair: (&rusqlite::Row<'_>, usize)) -> Result<Self, Self::Error> {
-        let row = pair.0;
-        let mut values = Vec::with_capacity(pair.1);
-        for i in 0..pair.1 {
-            let value_ref = row.get_ref(i)?;
-            values.push(rusqlite::types::FromSql::column_result(value_ref)?);
-        }
-        if values.len() == 1 {
-            Ok(values.pop().unwrap())
-        } else {
-            Ok(Value::array(values))
-        }
-    }
-}
-
-impl postgres::types::ToSql for Value {
-    fn to_sql(&self, _ty: &Type, out: &mut BytesMut) -> Result<IsNull, Box<dyn Error + Sync + Send>>
-    where
-        Self: Sized,
-    {
-        match self {
-            Value::Int(i) => out.put_i32(i.0 as i32),
-            Value::Float(f) => out.put_f64(f.as_f64()),
-            Value::Bool(b) => out.extend_from_slice(&[b.0 as u8]),
-            Value::Text(t) => out.extend_from_slice(t.0.as_bytes()),
-            Value::Array(_) => return Err("Array not supported".into()),
-            Value::Dict(_) => return Err("Dict not supported".into()),
-            Value::Null => return Ok(IsNull::Yes),
-            Value::Time(t) => out.put_i128(t.ms as i128),
-            Value::Date(d) => out.put_i64(d.days),
-            Value::Node(n) => out.extend_from_slice(n.write_to_vec()?.as_slice()),
-            Value::Edge(e) => out.extend_from_slice(e.write_to_vec()?.as_slice()),
-        }
-        Ok(IsNull::No)
-    }
-
-    fn accepts(ty: &Type) -> bool
-    where
-        Self: Sized,
-    {
-        matches!(
-            *ty,
-            Type::TEXT
-                | Type::BOOL
-                | Type::INT8
-                | Type::INT4
-                | Type::INT2
-                | Type::FLOAT4
-                | Type::FLOAT8
-        )
-    }
-
-    postgres::types::to_sql_checked!();
-}
-
-impl rusqlite::types::FromSql for Value {
-    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
-        match value.data_type() {
-            rusqlite::types::Type::Null => Ok(Value::null()),
-            rusqlite::types::Type::Integer => Ok(Value::int(value.as_i64()?)),
-            rusqlite::types::Type::Real => Ok(Value::float(value.as_f64()?)),
-            rusqlite::types::Type::Text => Ok(Value::text(value.as_str()?)),
-            rusqlite::types::Type::Blob => Err(rusqlite::types::FromSqlError::InvalidType),
-        }
-    }
-}
-
-impl rusqlite::types::ToSql for Value {
-    fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
-        match self {
-            Value::Int(i) => Ok(ToSqlOutput::from(i.0)),
-            Value::Float(f) => Ok(ToSqlOutput::from(f.as_f64())),
-            Value::Bool(b) => Ok(ToSqlOutput::from(b.0)),
-            Value::Text(t) => Ok(ToSqlOutput::from(t.0.clone())),
-            Value::Time(t) => Ok(ToSqlOutput::from(t.ms)),
-            Value::Array(_) => Err(rusqlite::Error::InvalidQuery),
-            Value::Dict(_) => Err(rusqlite::Error::InvalidQuery),
-            Value::Null => Ok(ToSqlOutput::from(rusqlite::types::Null)),
-            Value::Date(d) => Ok(ToSqlOutput::from(d.days)),
-            Value::Node(n) => Ok(ToSqlOutput::from(n.write_to_vec().unwrap())),
-            Value::Edge(e) => Ok(ToSqlOutput::from(e.write_to_vec().unwrap())),
-        }
     }
 }
 

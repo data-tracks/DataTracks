@@ -1,7 +1,5 @@
 use crate::int::Int;
 use crate::{Bool, Text};
-use flatbuffers::{FlatBufferBuilder, WIPOffset};
-use track_rails::message_generated::protocol::{Float as FlatFloat, FloatArgs};
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 use std::cmp::min;
@@ -47,18 +45,6 @@ impl Float {
                 shift: (number.len() - i) as u8,
             },
         }
-    }
-
-    pub(crate) fn flatternize<'bldr>(
-        &self,
-        builder: &mut FlatBufferBuilder<'bldr>,
-    ) -> WIPOffset<FlatFloat<'bldr>> {
-        FlatFloat::create(
-            builder,
-            &FloatArgs {
-                data: self.as_f64() as f32,
-            },
-        )
     }
 
     pub(crate) fn normalize(&self) -> Self {

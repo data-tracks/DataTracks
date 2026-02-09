@@ -1,6 +1,5 @@
 use crate::{Text, Value};
 use chrono::{DateTime, Duration, TimeZone, Timelike, Utc};
-use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 use std::cmp::Ordering;
@@ -8,7 +7,6 @@ use std::fmt::Formatter;
 use std::ops;
 use std::ops::Sub;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
-use track_rails::message_generated::protocol::{Time as FlatTime, TimeArgs};
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize, Readable, Writable, Copy)]
 pub struct Time {
@@ -34,13 +32,6 @@ impl Time {
 
     pub fn duration_since(&self, other: Time) -> Time {
         Time::new(self.ms - other.ms, self.ns - other.ns)
-    }
-
-    pub(crate) fn flatternize<'bldr>(
-        &self,
-        builder: &mut FlatBufferBuilder<'bldr>,
-    ) -> WIPOffset<FlatTime<'bldr>> {
-        FlatTime::create(builder, &TimeArgs { data: self.ms })
     }
 
     pub fn now() -> Time {

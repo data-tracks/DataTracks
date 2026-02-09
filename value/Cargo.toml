@@ -7,14 +7,9 @@ license.workspace = true
 repository.workspace = true
 description.workspace = true
 
-[dependencies.track-rails]
-git = "https://github.com/data-tracks/TrackRails.git"
-branch = "generated"
-
 [dependencies]
 speedy = { workspace = true }
 serde = { workspace = true }
-flatbuffers = { workspace = true }
 chrono = { workspace = true }
 tracing = { workspace = true }
 serde_json = { workspace = true }
@@ -28,7 +23,7 @@ redb = { workspace = true }
 criterion = { workspace = true }
 mongodb = { workspace = true }
 neo4rs = { workspace = true }
-crossbeam = { workspace = true }
+anyhow = { workspace = true }
 
 [[bench]]
 name = "value_bench"

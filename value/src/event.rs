@@ -1,11 +1,9 @@
 use crate::Value;
-use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use mongodb::bson::Document;
 use mongodb::change_stream::event::{ChangeStreamEvent, OperationType};
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 use std::collections::BTreeMap;
-use track_rails::message_generated::protocol::{Event as FlatEvent, EventWrapper, EventWrapperArgs, Insert as FlatInsert, Update as FlatUpdate, Delete as FlatDelete, InsertArgs, UpdateArgs, DeleteArgs};
 
 #[derive(Debug, Clone, Deserialize, Serialize, Writable, Readable)]
 pub enum Event {
@@ -17,39 +15,6 @@ pub enum Event {
     Other,
 }
 
-impl Event {
-    pub(crate) fn flatternize<'bldr>(
-        &self,
-        builder: &mut FlatBufferBuilder<'bldr>,
-    ) -> WIPOffset<EventWrapper<'bldr>> {
-        let event = match self {
-            Event::Insert(i) => {
-                let value = i.value.flatternize(builder);
-                (FlatEvent::Insert, FlatInsert::create(builder, &InsertArgs{ value: Some(value) }).as_union_value())
-            }
-            Event::Update(u) => {
-                let value = u.value.flatternize(builder);
-                let identity = u.identity.flatternize(builder);
-                (FlatEvent::Update, FlatUpdate::create(builder, &UpdateArgs{ value: Some(value), identity: Some(identity) }).as_union_value())
-            }
-            Event::Delete(d) => {
-                let identity = d.identity.flatternize(builder);
-                (FlatEvent::Delete, FlatDelete::create(builder, &DeleteArgs{ identity: Some(identity) }).as_union_value())
-            }
-            Event::Begin => {
-                todo!()
-            }
-            Event::End => {
-                todo!()
-            }
-            Event::Other => {
-                todo!()
-            }
-        };
-
-        EventWrapper::create(builder, &EventWrapperArgs{ event_type: event.0, event: Some(event.1) })
-    }
-}
 
 impl From<Event> for Value {
     fn from(event: Event) -> Self {
@@ -80,37 +45,6 @@ impl From<Event> for Value {
     }
 }
 
-impl TryFrom<EventWrapper<'_>> for Event {
-    type Error = String;
-
-    fn try_from(event: EventWrapper<'_>) -> Result<Self, Self::Error> {
-        match event.event_type() {
-            FlatEvent::Insert => {
-                let insert = event
-                    .event_as_insert()
-                    .ok_or("Empty insert event".to_string())?;
-                let values = insert.value().ok_or("No Insert values")?.try_into()?;
-                Ok(Self::Insert(InsertEvent { value: values }))
-            }
-            FlatEvent::Update => {
-                let update = event
-                    .event_as_update()
-                    .ok_or("Empty update event".to_string())?;
-                let value = update.value().ok_or("No Update value")?.try_into()?;
-                let identity = update.identity().ok_or("No Identity")?.try_into()?;
-                Ok(Self::Update(UpdateEvent { identity, value }))
-            }
-            FlatEvent::Delete => {
-                let delete = event
-                    .event_as_delete()
-                    .ok_or("Empty delete event".to_string())?;
-                let identity = delete.identity().ok_or("No Identity")?.try_into()?;
-                Ok(Self::Delete(DeleteEvent { identity }))
-            }
-            _ => Err("Unexpected event type".to_string()),
-        }
-    }
-}
 
 impl From<ChangeStreamEvent<Document>> for Event {
     fn from(event: ChangeStreamEvent<Document>) -> Self {

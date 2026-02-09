@@ -1,6 +1,4 @@
 use crate::value::Value;
-use flatbuffers::{FlatBufferBuilder, WIPOffset};
-use track_rails::message_generated::protocol::{List, ListArgs};
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 use std::fmt::Formatter;
@@ -17,18 +15,6 @@ impl Array {
         Array { values }
     }
 
-    pub(crate) fn flatternize<'bldr>(
-        &self,
-        builder: &mut FlatBufferBuilder<'bldr>,
-    ) -> WIPOffset<List<'bldr>> {
-        let values = &self
-            .values
-            .iter()
-            .map(|v| v.flatternize(builder))
-            .collect::<Vec<_>>();
-        let values = builder.create_vector(values);
-        List::create(builder, &ListArgs { data: Some(values) })
-    }
 }
 
 impl From<Vec<Value>> for Value {

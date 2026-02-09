@@ -1,7 +1,5 @@
 use crate::value_display;
 use crate::{Bool, Float, Text};
-use flatbuffers::{FlatBufferBuilder, WIPOffset};
-use track_rails::message_generated::protocol::{Integer, IntegerArgs};
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 use std::fmt::{Debug, Formatter};
@@ -28,12 +26,6 @@ impl Int {
         Int(value)
     }
 
-    pub(crate) fn flatternize<'bldr>(
-        &self,
-        builder: &mut FlatBufferBuilder<'bldr>,
-    ) -> WIPOffset<Integer<'bldr>> {
-        Integer::create(builder, &IntegerArgs { data: self.0 })
-    }
 }
 
 impl Add for Int {

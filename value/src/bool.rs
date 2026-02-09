@@ -1,7 +1,5 @@
 use crate::value_display;
 use crate::{Float, Int, Text};
-use flatbuffers::{FlatBufferBuilder, WIPOffset};
-use track_rails::message_generated::protocol::{Bool as FlatBool, BoolArgs};
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 use std::fmt::Formatter;
@@ -16,12 +14,6 @@ impl Bool {
         Bool(bool)
     }
 
-    pub(crate) fn flatternize<'bldr>(
-        &self,
-        builder: &mut FlatBufferBuilder<'bldr>,
-    ) -> WIPOffset<FlatBool<'bldr>> {
-        FlatBool::create(builder, &BoolArgs { data: self.0 })
-    }
 }
 
 impl PartialEq<&Int> for &Bool {

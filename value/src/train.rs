@@ -1,17 +1,11 @@
 use crate::event::Event;
 use crate::{Time, Value};
 use core::fmt::{Display, Formatter};
-use flatbuffers::FlatBufferBuilder;
 use redb::TypeName;
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 use std::collections::BTreeMap;
 use std::{ops, vec};
-use track_rails::message_generated::protocol::{
-    Events, EventsArgs, Message, MessageArgs, OkStatus, OkStatusArgs, Payload, Status,
-    Train as FlatTrain, TrainArgs, TrainContent as FlatTrainContent, TrainContentArgs, Values,
-    ValuesArgs, ValuesOrEvents,
-};
 
 #[derive(
     Clone,
@@ -153,127 +147,6 @@ impl ops::Add<Train> for Train {
 
     fn add(self, rhs: Train) -> Self::Output {
         self.merge(rhs)
-    }
-}
-
-impl From<Train> for Vec<u8> {
-    fn from(value: Train) -> Self {
-        let mut builder = FlatBufferBuilder::new();
-
-        let args = match value.content {
-            TrainContent::Values(v) => {
-                let values = v
-                    .iter()
-                    .map(|e| e.flatternize(&mut builder))
-                    .collect::<Vec<_>>();
-                let values = builder.create_vector(values.as_slice());
-                let values = Values::create(
-                    &mut builder,
-                    &ValuesArgs {
-                        values: Some(values),
-                    },
-                )
-                .as_union_value();
-
-                FlatTrainContent::create(
-                    &mut builder,
-                    &TrainContentArgs {
-                        data_type: ValuesOrEvents::Values,
-                        data: Some(values),
-                    },
-                )
-            }
-            TrainContent::Events(v) => {
-                let events = v
-                    .iter()
-                    .map(|e| e.flatternize(&mut builder))
-                    .collect::<Vec<_>>();
-                let events = builder.create_vector(events.as_slice());
-                let events = Events::create(
-                    &mut builder,
-                    &EventsArgs {
-                        events: Some(events),
-                    },
-                )
-                .as_union_value();
-
-                FlatTrainContent::create(
-                    &mut builder,
-                    &TrainContentArgs {
-                        data_type: ValuesOrEvents::Values,
-                        data: Some(events),
-                    },
-                )
-            }
-        };
-
-        let event_time = value.event_time.flatternize(&mut builder);
-
-        let args = TrainArgs {
-            content: Some(args),
-            topic: None,
-            event_time: Some(event_time),
-        };
-        let data = FlatTrain::create(&mut builder, &args);
-
-        let status = OkStatus::create(&mut builder, &OkStatusArgs {}).as_union_value();
-
-        let message = Message::create(
-            &mut builder,
-            &MessageArgs {
-                data_type: Payload::Train,
-                data: Some(data.as_union_value()),
-                status_type: Status::OkStatus,
-                status: Some(status),
-            },
-        );
-
-        builder.finish(message, None);
-        let train = builder.finished_data();
-
-        train.to_vec()
-    }
-}
-
-impl TryFrom<track_rails::message_generated::protocol::Train<'_>> for Train {
-    type Error = String;
-
-    fn try_from(
-        value: track_rails::message_generated::protocol::Train<'_>,
-    ) -> Result<Self, Self::Error> {
-        let _topic = value.topic();
-
-        let content = match value.content().data_type() {
-            ValuesOrEvents::Events => {
-                let events = value
-                    .content()
-                    .data_as_events()
-                    .ok_or("No events present".to_string())?;
-                let events = events
-                    .events()
-                    .iter()
-                    .map(|v| v.try_into())
-                    .collect::<Result<Vec<Event>, _>>()?;
-                TrainContent::Events(events)
-            }
-            ValuesOrEvents::Values => {
-                let values = value
-                    .content()
-                    .data_as_values()
-                    .ok_or("No values present".to_string())?;
-                let values = values
-                    .values()
-                    .iter()
-                    .map(|v| v.try_into())
-                    .collect::<Result<Vec<Value>, _>>()?;
-                TrainContent::Values(values)
-            }
-            ValuesOrEvents(0_u8) | ValuesOrEvents(3_u8..=u8::MAX) => {
-                return Err("Too many values specified".to_string());
-            }
-        };
-
-        Ok(Train::new(content, 0, 0))
     }
 }
 
