@@ -1,10 +1,10 @@
-use anyhow::{anyhow, Context};
+use anyhow::{anyhow};
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use crate::{flatbuf as fb, Value};
 
 pub struct Message {
     pub topics: Vec<String>,
-    pub payload: Value,
+    pub payload: Vec<Value>,
     pub timestamp: i64,
 }
 
@@ -14,7 +14,8 @@ impl Message {
         let mut fbb = FlatBufferBuilder::with_capacity(1024);
 
         // 1. Build the recursive Value payload first
-        let payload_offset = self.payload.to_fb_offset(&mut fbb);
+        let payload_offsets: Vec<WIPOffset<fb::Value>> = self.payload.iter().map(|v| v.to_fb_offset(&mut fbb)).collect();
+        let payloads_vec = fbb.create_vector(&payload_offsets);
 
         // 2. Build the topics vector
         let topic_offsets: Vec<WIPOffset<&str>> = self.topics
@@ -26,7 +27,7 @@ impl Message {
         // 3. Create the Message table
         let root = fb::Message::create(&mut fbb, &fb::MessageArgs {
             topics: Some(topics_vec),
-            payload: Some(payload_offset),
+            payload: Some(payloads_vec),
             timestamp: self.timestamp,
         });
 
@@ -48,7 +49,13 @@ impl Message {
         }
 
         // Extract Payload
-        let payload = Value::try_from(fb_msg.payload().context("Missing payload")?)?;
+        let mut payload = Vec::new();
+        if let Some(pl) = fb_msg.payload() {
+            for v in pl.iter() {
+                payload.push(Value::try_from(v)?);
+            }
+        }
+
 
         Ok(Message {
             topics,

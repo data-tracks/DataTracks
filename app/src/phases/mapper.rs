@@ -1,16 +1,18 @@
+use tokio::sync::broadcast::Sender;
 use crate::management::catalog::Catalog;
 use engine::engine::Engine;
 use tokio::task::JoinSet;
 use tracing::{debug, error};
 use util::definition::Stage;
-use util::{Event};
+use util::{Event, TargetedMeta};
+use value::Value;
 
 pub struct Nativer {
     catalog: Catalog,
 }
 
 impl Nativer {
-    pub(crate) async fn start(&self, join_set: &mut JoinSet<()>) {
+    pub(crate) async fn start(&self, join_set: &mut JoinSet<()>, output: Sender<Vec<(Value, TargetedMeta)>>) {
         //let catalog = self.catalog.clone();
         for definition in self.catalog.definitions().await {
             let engines = self
@@ -21,9 +23,10 @@ impl Nativer {
                 .filter(|e| e.model() == definition.model)
                 .collect::<Vec<Engine>>();
 
-            for _ in 0..2 {
+            for _ in 0..5 {
                 let definition = definition.clone();
                 let engines = engines.clone();
+                let output = output.clone();
 
                 join_set.spawn(async move {
                     let rx = definition.native.1;
@@ -41,6 +44,7 @@ impl Nativer {
                                     entity.mapped.clone(),
                                     record
                                         .values
+                                        .clone()
                                         .into_iter()
                                         .map(|(v, m)| (mapper(v), m))
                                         .collect(),
@@ -57,6 +61,9 @@ impl Nativer {
                                             Stage::Mapped,
                                         ))
                                         .unwrap();
+
+                                    let _ = output.send(record.values);
+
                                     debug!("mapped")
                                 }
                                 Err(err) => {

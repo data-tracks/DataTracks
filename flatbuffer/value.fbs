@@ -62,7 +62,7 @@ table Value {
 // --- Updated Wrapper Message with Multiple Topics ---
 table Message {
   topics: [string];
-  payload: Value;
+  payload: [Value];
   timestamp: long;
 }
 

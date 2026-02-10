@@ -5,16 +5,14 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread::spawn;
 use std::time::Duration;
 use tokio::runtime::{Builder, Handle};
-use tokio::select;
+use tokio::{select};
 use tokio::sync::broadcast;
 use tokio::time::{interval, sleep};
 use tracing::log::debug;
 use util::Event::Runtime;
 use util::definition::{Definition, Stage};
-use util::{
-    DefinitionId, EngineEvent, EngineId, Event, RuntimeEvent, Runtimes, StatisticEvent,
-    log_channel, set_statistic_sender,
-};
+use util::{DefinitionId, EngineEvent, EngineId, Event, RuntimeEvent, Runtimes, StatisticEvent, log_channel, set_statistic_sender, TargetedMeta};
+use value::Value;
 
 pub struct Statistics {
     engines: HashMap<EngineId, EngineStatistic>,
@@ -80,7 +78,7 @@ impl Statistics {
     }
 }
 
-pub fn start(rt: Runtimes, tx: Sender<Event>, rx: Receiver<Event>) -> Sender<Event> {
+pub fn start(rt: Runtimes, tx: Sender<Event>, rx: Receiver<Event>, output: broadcast::Sender<Vec<(Value, TargetedMeta)>>) -> Sender<Event> {
     set_statistic_sender(tx.clone());
 
     let (status_tx, status_rx) = unbounded();
@@ -120,7 +118,7 @@ pub fn start(rt: Runtimes, tx: Sender<Event>, rx: Receiver<Event>) -> Sender<Eve
                 }
             }
         });
-        web::start(&mut rt, bc_tx);
+        web::start(&mut rt, bc_tx, output);
 
         let statistic_tx = tx.clone();
 

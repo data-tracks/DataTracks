@@ -1,21 +1,25 @@
 use axum::Router;
 use axum::extract::ws::{Message, Utf8Bytes, WebSocket};
-use axum::extract::{State, WebSocketUpgrade};
+use axum::extract::{Path, State, WebSocketUpgrade};
 use axum::response::IntoResponse;
 use axum::routing::get;
 use std::sync::Arc;
+use axum::extract::ws::Message::Binary;
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
+use tokio::sync::broadcast;
 use tokio::sync::broadcast::Sender;
 use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
 use tracing::{debug, error, info};
-use util::{Event, StatisticEvent};
+use util::{Event, StatisticEvent, TargetedMeta};
+use value::Value;
 
 struct EventState {
     sender: Arc<Sender<Event>>,
+    output: Arc<Sender<Vec<(Value, TargetedMeta)>>>,
 }
-pub fn start(rt: &mut Runtime, tx: Sender<Event>) {
+pub fn start(rt: &mut Runtime, tx: Sender<Event>, output: broadcast::Sender<Vec<(Value, TargetedMeta)>>) {
     rt.spawn(async move {
         let root_dir = std::env::current_dir().unwrap();
         let dist_path = root_dir
@@ -26,12 +30,14 @@ pub fn start(rt: &mut Runtime, tx: Sender<Event>) {
 
         let shared_state = Arc::new(EventState {
             sender: Arc::new(tx),
+            output: Arc::new(output)
         });
 
         let app = Router::new()
             .route("/events", get(ws_event_handler))
             .route("/queues", get(ws_queue_handler))
             .route("/statistics", get(ws_statistics_handler))
+            .route("/channel/{topic}", get(ws_channel_handler))
             .layer(CorsLayer::permissive())
             .with_state(shared_state)
             .fallback_service(ServeDir::new(dist_path));
@@ -195,4 +201,36 @@ async fn handle_statistics_socket(mut socket: WebSocket, state: Arc<EventState>)
             }
         }
     }
+}
+
+async fn ws_channel_handler(
+    Path(id): Path<String>,                  // Extracts the ":id" from the URL
+    ws: WebSocketUpgrade,
+    State(state): State<Arc<EventState>>,       // Your existing state
+) -> impl IntoResponse {
+    // You can now use the 'id' to filter topics or join specific rooms
+    info!("New connection to channel: {}", id);
+
+    ws.on_upgrade(move |socket| handle_socket(socket, id, state))
+}
+
+async fn handle_socket(mut socket: WebSocket, topic: String, state: Arc<EventState>) {
+    let mut recv = state.output.subscribe();
+
+    match recv.recv().await {
+        Ok(msg) => {
+            let values = msg.into_iter().map(|msg| msg.0).collect::<Vec<_>>();
+            let msg = value::message::Message{ topics: vec![], payload: values, timestamp: 0 };
+            if (socket)
+                .send(Binary(msg.pack().into()))
+                .await
+                .is_err()
+            {
+                // Client disconnected
+                error!("disconnected queue");
+                return;
+            }
+        }
+        Err(_) => {}
+    };
 }

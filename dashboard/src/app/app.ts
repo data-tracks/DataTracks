@@ -3,11 +3,11 @@ import {EventsComponent} from "./events/events.component";
 import {EventsService} from "./events.service";
 import {QueuesComponent} from "./queues/queues.component";
 import {StatisticsComponent} from "./statistics/statistics.component";
-import {TestingComponent} from "./testing/testing.component";
+import {RoundtripComponent} from "./roundtrip/roundtrip.component";
 
 @Component({
   selector: 'app-root',
-  imports: [EventsComponent, QueuesComponent, StatisticsComponent, TestingComponent],
+  imports: [EventsComponent, QueuesComponent, StatisticsComponent, RoundtripComponent],
   templateUrl: './app.html',
   styleUrl: './app.css'
 })

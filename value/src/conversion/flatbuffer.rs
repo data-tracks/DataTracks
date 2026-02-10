@@ -235,6 +235,7 @@ mod tests {
     use super::*;
     use crate::message::Message;
     use std::collections::BTreeMap;
+    use std::vec;
 
     #[test]
     fn test_message_round_trip() {
@@ -256,7 +257,7 @@ mod tests {
         // 2. Wrap it in a Message with multiple topics
         let original_msg = Message {
             topics: vec!["system.events".to_string(), "user.profile.update".to_string()],
-            payload: original_node,
+            payload: vec![original_node],
             timestamp: 1700000000,
         };
 
@@ -270,7 +271,7 @@ mod tests {
         assert_eq!(original_msg.payload, decoded_msg.payload);
 
         // 5. Manual check for specific fields in the payload
-        if let Value::Node(n) = decoded_msg.payload {
+        if let Value::Node(n) = &decoded_msg.payload[0] {
             assert_eq!(n.id.0, 42);
             assert_eq!(n.labels[0].0, "User");
 
@@ -285,7 +286,7 @@ mod tests {
     fn test_null_payload_with_topics() {
         let original_msg = Message {
             topics: vec!["heartbeat".to_string()],
-            payload: Value::Null,
+            payload: vec![Value::Null],
             timestamp: 123456789,
         };
 
@@ -294,6 +295,6 @@ mod tests {
 
         assert_eq!(decoded_msg.topics.len(), 1);
         assert_eq!(decoded_msg.topics[0], "heartbeat");
-        assert_eq!(decoded_msg.payload, Value::Null);
+        assert_eq!(decoded_msg.payload[0], Value::Null);
     }
 }

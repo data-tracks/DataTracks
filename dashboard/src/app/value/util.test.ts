@@ -25,12 +25,12 @@ describe('ValueMapper Round-trip Tests', () => {
         };
 
         // 1. Pack
-        const buffer = ValueMapper.pack(originalNode);
+        const buffer = ValueMapper.pack([originalNode]);
         expect(buffer).toBeInstanceOf(Uint8Array);
         expect(buffer.length).toBeGreaterThan(0);
 
         // 2. Unpack
-        const decoded = ValueMapper.unpack(buffer);
+        const decoded = ValueMapper.unpack(buffer)[0];
 
         // 3. Assertions
         expect(decoded).toEqual(originalNode);
@@ -44,8 +44,8 @@ describe('ValueMapper Round-trip Tests', () => {
 
     test('should handle Null values', () => {
         const original: Value = { type: 'Null' };
-        const buffer = ValueMapper.pack(original);
-        const decoded = ValueMapper.unpack(buffer);
+        const buffer = ValueMapper.pack([original]);
+        const decoded = ValueMapper.unpack(buffer)[0];
 
         expect(decoded).toEqual(original);
     });
@@ -62,8 +62,8 @@ describe('ValueMapper Round-trip Tests', () => {
             }
         };
 
-        const buffer = ValueMapper.pack(originalEdge);
-        const decoded = ValueMapper.unpack(buffer);
+        const buffer = ValueMapper.pack([originalEdge]);
+        const decoded = ValueMapper.unpack(buffer)[0];
 
         expect(decoded).toEqual(originalEdge);
     });

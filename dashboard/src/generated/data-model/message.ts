@@ -37,9 +37,14 @@ topicsLength():number {
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
 
-payload(obj?:Value):Value|null {
+payload(index: number, obj?:Value):Value|null {
   const offset = this.bb!.__offset(this.bb_pos, 6);
-  return offset ? (obj || new Value()).__init(this.bb!.__indirect(this.bb_pos + offset), this.bb!) : null;
+  return offset ? (obj || new Value()).__init(this.bb!.__indirect(this.bb!.__vector(this.bb_pos + offset) + index * 4), this.bb!) : null;
+}
+
+payloadLength():number {
+  const offset = this.bb!.__offset(this.bb_pos, 6);
+  return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
 
 timestamp():bigint {
@@ -71,6 +76,18 @@ static addPayload(builder:flatbuffers.Builder, payloadOffset:flatbuffers.Offset)
   builder.addFieldOffset(1, payloadOffset, 0);
 }
 
+static createPayloadVector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
+  builder.startVector(4, data.length, 4);
+  for (let i = data.length - 1; i >= 0; i--) {
+    builder.addOffset(data[i]!);
+  }
+  return builder.endVector();
+}
+
+static startPayloadVector(builder:flatbuffers.Builder, numElems:number) {
+  builder.startVector(4, numElems, 4);
+}
+
 static addTimestamp(builder:flatbuffers.Builder, timestamp:bigint) {
   builder.addFieldInt64(2, timestamp, BigInt('0'));
 }
@@ -88,4 +105,11 @@ static finishSizePrefixedMessageBuffer(builder:flatbuffers.Builder, offset:flatb
   builder.finish(offset, undefined, true);
 }
 
+static createMessage(builder:flatbuffers.Builder, topicsOffset:flatbuffers.Offset, payloadOffset:flatbuffers.Offset, timestamp:bigint):flatbuffers.Offset {
+  Message.startMessage(builder);
+  Message.addTopics(builder, topicsOffset);
+  Message.addPayload(builder, payloadOffset);
+  Message.addTimestamp(builder, timestamp);
+  return Message.endMessage(builder);
+}
 }

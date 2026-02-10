@@ -35,4 +35,4 @@ pub mod wagon;
 mod conversion;
 mod math;
 pub(crate) mod value;
-mod message;
+pub mod message;

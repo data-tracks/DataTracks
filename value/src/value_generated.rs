@@ -1735,11 +1735,11 @@ impl<'a> Message<'a> {
     unsafe { self._tab.get::<::flatbuffers::ForwardsUOffset<::flatbuffers::Vector<'a, ::flatbuffers::ForwardsUOffset<&'a str>>>>(Message::VT_TOPICS, None)}
   }
   #[inline]
-  pub fn payload(&self) -> Option<Value<'a>> {
+  pub fn payload(&self) -> Option<::flatbuffers::Vector<'a, ::flatbuffers::ForwardsUOffset<Value<'a>>>> {
     // Safety:
     // Created from valid Table for this object
     // which contains a valid value in this slot
-    unsafe { self._tab.get::<::flatbuffers::ForwardsUOffset<Value>>(Message::VT_PAYLOAD, None)}
+    unsafe { self._tab.get::<::flatbuffers::ForwardsUOffset<::flatbuffers::Vector<'a, ::flatbuffers::ForwardsUOffset<Value>>>>(Message::VT_PAYLOAD, None)}
   }
   #[inline]
   pub fn timestamp(&self) -> i64 {
@@ -1757,7 +1757,7 @@ impl ::flatbuffers::Verifiable for Message<'_> {
   ) -> Result<(), ::flatbuffers::InvalidFlatbuffer> {
     v.visit_table(pos)?
      .visit_field::<::flatbuffers::ForwardsUOffset<::flatbuffers::Vector<'_, ::flatbuffers::ForwardsUOffset<&'_ str>>>>("topics", Self::VT_TOPICS, false)?
-     .visit_field::<::flatbuffers::ForwardsUOffset<Value>>("payload", Self::VT_PAYLOAD, false)?
+     .visit_field::<::flatbuffers::ForwardsUOffset<::flatbuffers::Vector<'_, ::flatbuffers::ForwardsUOffset<Value>>>>("payload", Self::VT_PAYLOAD, false)?
      .visit_field::<i64>("timestamp", Self::VT_TIMESTAMP, false)?
      .finish();
     Ok(())
@@ -1765,7 +1765,7 @@ impl ::flatbuffers::Verifiable for Message<'_> {
 }
 pub struct MessageArgs<'a> {
     pub topics: Option<::flatbuffers::WIPOffset<::flatbuffers::Vector<'a, ::flatbuffers::ForwardsUOffset<&'a str>>>>,
-    pub payload: Option<::flatbuffers::WIPOffset<Value<'a>>>,
+    pub payload: Option<::flatbuffers::WIPOffset<::flatbuffers::Vector<'a, ::flatbuffers::ForwardsUOffset<Value<'a>>>>>,
     pub timestamp: i64,
 }
 impl<'a> Default for MessageArgs<'a> {
@@ -1789,8 +1789,8 @@ impl<'a: 'b, 'b, A: ::flatbuffers::Allocator + 'a> MessageBuilder<'a, 'b, A> {
     self.fbb_.push_slot_always::<::flatbuffers::WIPOffset<_>>(Message::VT_TOPICS, topics);
   }
   #[inline]
-  pub fn add_payload(&mut self, payload: ::flatbuffers::WIPOffset<Value<'b >>) {
-    self.fbb_.push_slot_always::<::flatbuffers::WIPOffset<Value>>(Message::VT_PAYLOAD, payload);
+  pub fn add_payload(&mut self, payload: ::flatbuffers::WIPOffset<::flatbuffers::Vector<'b , ::flatbuffers::ForwardsUOffset<Value<'b >>>>) {
+    self.fbb_.push_slot_always::<::flatbuffers::WIPOffset<_>>(Message::VT_PAYLOAD, payload);
   }
   #[inline]
   pub fn add_timestamp(&mut self, timestamp: i64) {

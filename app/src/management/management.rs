@@ -5,11 +5,12 @@ use engine::EngineKind;
 use flume::{Sender, unbounded};
 use std::thread;
 use tokio::runtime::Builder;
+use tokio::sync;
 use tokio::task::JoinSet;
 use tracing::{error, info};
 use util::definition::{Definition, DefinitionFilter, Model};
 use util::runtimes::Runtimes;
-use util::{DefinitionMapping, Event, InitialMeta, RelationalType, log_channel};
+use util::{DefinitionMapping, Event, InitialMeta, RelationalType, log_channel, TargetedMeta};
 use value::Value;
 
 pub struct Manager {
@@ -17,6 +18,7 @@ pub struct Manager {
     joins: JoinSet<()>,
     runtimes: Runtimes,
     statistic_tx: Sender<Event>,
+    output: sync::broadcast::Sender<Vec<(Value, TargetedMeta)>>,
 }
 
 impl Default for Manager {
@@ -32,13 +34,16 @@ impl Manager {
 
         let rt = runtimes.clone();
 
-        let statistic_tx = statistics::start(rt, tx, rx);
+        let output = sync::broadcast::channel(1).0;
+
+        let statistic_tx = statistics::start(rt, tx, rx, output.clone());
 
         Self {
             joins: JoinSet::new(),
             catalog: Catalog::new(statistic_tx.clone()),
             runtimes: Runtimes::new(),
             statistic_tx,
+            output
         }
     }
 
@@ -68,6 +73,9 @@ impl Manager {
 
         let statistic_tx = self.statistic_tx.clone();
 
+
+        let output = self.output.clone();
+
         main_rt.block_on(async move {
             let mut joins: JoinSet<()> = JoinSet::new();
 
@@ -80,7 +88,7 @@ impl Manager {
 
             sink_runner(&mut self.joins, sink);
 
-            nativer.start(&mut self.joins).await;
+            nativer.start(&mut self.joins, output).await;
 
             tokio::select! {
                     _ = ctrl_c_signal => {

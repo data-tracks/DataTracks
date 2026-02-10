@@ -1,21 +1,21 @@
 <div class="p-4 flex flex-col gap-4">
     @for (msg of messages(); track msg) {
         <div class="chat chat-start">
-            <div class="chat-bubble">
+            <div class="chat-bubble chat-bubble-primary">
                 <div class="text-[10px] uppercase font-bold opacity-50 mb-1">Topic: {{msg.topic}}</div>
                 <div class="flex items-center gap-2">
-                    <span class="badge badge-sm badge-outline">{{msg.value.type}}</span>
+                    <span class="badge badge-sm badge-outline">{{msg.values[0].type}}</span>
 
-                    @switch (msg.value.type) {
-                        @case ('Text') { <span>{{msg.value.value}}</span> }
-                        @case ('Int') { <span class="font-mono text-info">{{msg.value.value}}</span> }
+                    @switch (msg.values[0].type) {
+                        @case ('Text') { <span>{{msg.values[0].value}}</span> }
+                        @case ('Int') { <span class="font-mono text-info">{{msg.values[0].value}}</span> }
                         @case ('Bool') {
-                            <div class="badge" [class.badge-success]="msg.value.value" [class.badge-error]="!msg.value.value">
-                                {{msg.value.value}}
+                            <div class="badge" [class.badge-success]="msg.values[0].value" [class.badge-error]="!msg.values[0].value">
+                                {{msg.values[0].value}}
                             </div>
                         }
                         @case ('Node') {
-                            <span class="text-sm">ID: {{msg.value.id}}</span>
+                            <span class="text-sm">ID: {{msg.values[0].id}}</span>
                         }
                     }
                 </div>
@@ -24,9 +24,9 @@
     }
 
     <div class="chat chat-start">
-        <div class="chat-bubble flex flex-col gap-3 max-w-md bg-base-200 text-base-content border border-base-300">
+        <div class="chat-bubble chat-bubble-primary flex flex-col gap-3 max-w-md text-base-content">
             <label class="input input-sm input-bordered flex items-center gap-2">
-                <input type="text" class="grow" [value]="topic()" (input)="topic.set($any($event.target).value)" placeholder="Topic" />
+                <input type="text" class="grow" [value]="sendTopic()" (input)="sendTopic.set($any($event.target).value)" placeholder="Topic" />
             </label>
 
             <div class="join">
@@ -64,14 +64,23 @@
             </div>
 
             <div class="flex w-full justify-end">
-                <button class="btn btn-sm btn-info" [disabled]="!topic()" (click)="send()">Send</button>
+                <button class="btn btn-sm" [disabled]="!sendTopic()" (click)="send()">Send</button>
             </div>
         </div>
     </div>
 </div>
 
 <div class="chat chat-end">
-    <div class="chat-bubble">
-        <div class="uppercase opacity-50 mb-1">Empty</div>
+    <div class="chat-bubble chat-bubble-primary flex flex-col gap-3 max-w-md text-base-content">
+        <label class="input input-sm input-bordered flex items-center gap-2">
+            <input type="text" class="grow" [value]="recTopic()" (input)="recTopic.set($any($event.target).value)" placeholder="Topic" />
+        </label>
+        <div class="flex w-full justify-end">
+            @if (listening()) {
+                <button class="btn btn-sm" (click)="stopListen()">Listen</button>
+            } @else {
+                <button class="btn btn-sm" [disabled]="!recTopic()" (click)="listen()">Listen</button>
+            }
+        </div>
     </div>
 </div>

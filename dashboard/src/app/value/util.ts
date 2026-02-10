@@ -35,11 +35,16 @@ export class ValueMapper {
      * SERIALIZE:
      * TS Object -> FlatBuffers Bytes
      */
-    static pack(val: Value, topics: string[] = [], timestamp: number = Date.now()): Uint8Array {
+    static pack(vals: Value[], topics: string[] = [], timestamp: number = Date.now()): Uint8Array {
         const builder = new flatbuffers.Builder(1024);
 
         // 1. Prepare the payload (the recursive Value)
-        const payloadOffset = ValueMapper.toOffset(builder, val);
+        let payloadOffset = 0;
+        if (vals.length > 0) {
+            const payloads = vals.map(v => ValueMapper.toOffset(builder, v))
+            payloadOffset = fb.Message.createPayloadVector(builder, payloads);
+        }
+
 
         // 2. Prepare the topics vector (strings must be created first)
         let topicsOffset = 0;
@@ -178,16 +183,18 @@ export class ValueMapper {
     /**
      * DESERIALIZE: FlatBuffers Bytes -> TS Value Object
      */
-    static unpack(bytes: Uint8Array): Value {
+    static unpack(bytes: Uint8Array): Value[] {
         const buf = new flatbuffers.ByteBuffer(bytes);
         const fbMsg = fb.Message.getRootAsMessage(buf);
         //const fbVal = fb.Value.getRootAsValue(buf);
-        const fbVal = fbMsg.payload();
-        if (fbVal){
-            return ValueMapper.fromFB(fbVal);
+        const values: Value[] = [];
+        for (let i = 0; i < fbMsg.payloadLength(); i++) {
+            const entry = fbMsg.payload(i);
+            if (entry) {
+                values.push(ValueMapper.fromFB(entry))
+            }
         }
-        return { type: 'Null' }
-
+        return values
     }
 
     private static fromFB(fbVal: fb.Value): Value {
