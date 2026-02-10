@@ -1,12 +1,6 @@
 extern crate alloc;
 extern crate core;
 
-pub mod value_capnp {
-    include!(concat!(env!("OUT_DIR"), "/capnp/value_capnp.rs"));
-}
-
-pub use value_capnp::value as valuecp; // Now you can use it!
-
 pub use array::Array;
 pub use bool::Bool;
 pub use dict::Dict;

@@ -72,6 +72,16 @@ impl Value {
         }))
     }
 
+    pub(crate) fn edge(id: Int, label: Option<Text>, start: u64, end: u64, properties: BTreeMap<String, Value>) -> Value {
+        Value::Edge(Box::new(Edge{
+            id,
+            label,
+            start,
+            end,
+            properties
+        }))
+    }
+
     pub fn array(tuple: Vec<Value>) -> Value {
         Value::Array(Array::new(tuple))
     }

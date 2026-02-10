@@ -34,9 +34,10 @@ table Node {
 }
 
 table Edge {
+  id: long;
   label: string;
-  start_id: long;
-  end_id: long;
+  start_id: ulong;
+  end_id: ulong;
   properties: [DictEntry];
 }
 

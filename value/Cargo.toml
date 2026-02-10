@@ -25,6 +25,7 @@ mongodb = { workspace = true }
 neo4rs = { workspace = true }
 anyhow = { workspace = true }
 capnp = { workspace = true }
+flatbuffers = {workspace = true}
 
 [build-dependencies]
 capnpc = { workspace = true }

@@ -6,7 +6,8 @@
     "start": "ng serve",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
-    "test": "ng test"
+    "test": "jest",
+    "build:capnp": "capnp compile -o ts ../capnp/value.capnp"
   },
   "prettier": {
     "printWidth": 100,
@@ -29,7 +30,9 @@
     "@angular/forms": "^21.0.0",
     "@angular/platform-browser": "^21.0.0",
     "@angular/router": "^21.0.0",
+    "capnp-ts": "^0.7.0",
     "daisyui": "^5.5.14",
+    "flatbuffers": "^25.9.23",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0"
   },
@@ -38,9 +41,12 @@
     "@angular/cli": "^21.0.4",
     "@angular/compiler-cli": "^21.0.0",
     "@tailwindcss/postcss": "^4.1.12",
+    "@types/jest": "^30.0.0",
+    "jest": "^30.2.0",
     "jsdom": "^27.1.0",
     "postcss": "^8.5.3",
     "tailwindcss": "^4.1.12",
+    "ts-jest": "^29.4.6",
     "typescript": "~5.9.2",
     "vitest": "^4.0.8"
   }

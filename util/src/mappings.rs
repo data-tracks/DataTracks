@@ -192,19 +192,21 @@ impl DefinitionMapping {
 
                 Box::new(move |value: &Value| {
                     Some(Value::Edge(Box::new(Edge {
-                        id: id(&value).unwrap_or_default(),
+                        id: id(&value)
+                            .map(|i| i.as_int().ok().unwrap_or_default())
+                            .unwrap_or_default(),
                         start: start(&value)
                             .map(|v| v.as_int())
-                            .map(|i| i.ok().map(|v| v.0).unwrap_or_default())
-                            .unwrap_or_default() as usize,
-                        label: Some(label(&value).unwrap_or_default()),
+                            .map(|i| i.ok().map(|v| v.0 as u64).unwrap_or_default())
+                            .unwrap_or_default(),
+                        label: Some(label(&value).unwrap_or_default().as_text().unwrap()),
                         properties: properties(&value)
                             .map(|v| v.as_dict().ok().map(|m| m.values).unwrap_or_default())
                             .unwrap_or_default(),
                         end: end(&value)
                             .map(|v| v.as_int())
-                            .map(|i| i.ok().map(|v| v.0).unwrap_or_default())
-                            .unwrap_or_default() as usize,
+                            .map(|i| i.ok().map(|v| v.0 as u64).unwrap_or_default())
+                            .unwrap_or_default(),
                     })))
                 })
             }

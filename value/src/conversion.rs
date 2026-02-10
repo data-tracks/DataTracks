@@ -5,4 +5,4 @@ mod bson;
 mod json;
 mod postgres;
 mod mqtt;
-mod capnp;
+mod flatbuffer;

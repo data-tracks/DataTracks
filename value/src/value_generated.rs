@@ -1191,10 +1191,11 @@ impl<'a> ::flatbuffers::Follow<'a> for Edge<'a> {
 }
 
 impl<'a> Edge<'a> {
-  pub const VT_LABEL: ::flatbuffers::VOffsetT = 4;
-  pub const VT_START_ID: ::flatbuffers::VOffsetT = 6;
-  pub const VT_END_ID: ::flatbuffers::VOffsetT = 8;
-  pub const VT_PROPERTIES: ::flatbuffers::VOffsetT = 10;
+  pub const VT_ID: ::flatbuffers::VOffsetT = 4;
+  pub const VT_LABEL: ::flatbuffers::VOffsetT = 6;
+  pub const VT_START_ID: ::flatbuffers::VOffsetT = 8;
+  pub const VT_END_ID: ::flatbuffers::VOffsetT = 10;
+  pub const VT_PROPERTIES: ::flatbuffers::VOffsetT = 12;
 
   #[inline]
   pub unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
@@ -1208,12 +1209,20 @@ impl<'a> Edge<'a> {
     let mut builder = EdgeBuilder::new(_fbb);
     builder.add_end_id(args.end_id);
     builder.add_start_id(args.start_id);
+    builder.add_id(args.id);
     if let Some(x) = args.properties { builder.add_properties(x); }
     if let Some(x) = args.label { builder.add_label(x); }
     builder.finish()
   }
 
 
+  #[inline]
+  pub fn id(&self) -> i64 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<i64>(Edge::VT_ID, Some(0)).unwrap()}
+  }
   #[inline]
   pub fn label(&self) -> Option<&'a str> {
     // Safety:
@@ -1222,18 +1231,18 @@ impl<'a> Edge<'a> {
     unsafe { self._tab.get::<::flatbuffers::ForwardsUOffset<&str>>(Edge::VT_LABEL, None)}
   }
   #[inline]
-  pub fn start_id(&self) -> i64 {
+  pub fn start_id(&self) -> u64 {
     // Safety:
     // Created from valid Table for this object
     // which contains a valid value in this slot
-    unsafe { self._tab.get::<i64>(Edge::VT_START_ID, Some(0)).unwrap()}
+    unsafe { self._tab.get::<u64>(Edge::VT_START_ID, Some(0)).unwrap()}
   }
   #[inline]
-  pub fn end_id(&self) -> i64 {
+  pub fn end_id(&self) -> u64 {
     // Safety:
     // Created from valid Table for this object
     // which contains a valid value in this slot
-    unsafe { self._tab.get::<i64>(Edge::VT_END_ID, Some(0)).unwrap()}
+    unsafe { self._tab.get::<u64>(Edge::VT_END_ID, Some(0)).unwrap()}
   }
   #[inline]
   pub fn properties(&self) -> Option<::flatbuffers::Vector<'a, ::flatbuffers::ForwardsUOffset<DictEntry<'a>>>> {
@@ -1250,24 +1259,27 @@ impl ::flatbuffers::Verifiable for Edge<'_> {
     v: &mut ::flatbuffers::Verifier, pos: usize
   ) -> Result<(), ::flatbuffers::InvalidFlatbuffer> {
     v.visit_table(pos)?
+     .visit_field::<i64>("id", Self::VT_ID, false)?
      .visit_field::<::flatbuffers::ForwardsUOffset<&str>>("label", Self::VT_LABEL, false)?
-     .visit_field::<i64>("start_id", Self::VT_START_ID, false)?
-     .visit_field::<i64>("end_id", Self::VT_END_ID, false)?
+     .visit_field::<u64>("start_id", Self::VT_START_ID, false)?
+     .visit_field::<u64>("end_id", Self::VT_END_ID, false)?
      .visit_field::<::flatbuffers::ForwardsUOffset<::flatbuffers::Vector<'_, ::flatbuffers::ForwardsUOffset<DictEntry>>>>("properties", Self::VT_PROPERTIES, false)?
      .finish();
     Ok(())
   }
 }
 pub struct EdgeArgs<'a> {
+    pub id: i64,
     pub label: Option<::flatbuffers::WIPOffset<&'a str>>,
-    pub start_id: i64,
-    pub end_id: i64,
+    pub start_id: u64,
+    pub end_id: u64,
     pub properties: Option<::flatbuffers::WIPOffset<::flatbuffers::Vector<'a, ::flatbuffers::ForwardsUOffset<DictEntry<'a>>>>>,
 }
 impl<'a> Default for EdgeArgs<'a> {
   #[inline]
   fn default() -> Self {
     EdgeArgs {
+      id: 0,
       label: None,
       start_id: 0,
       end_id: 0,
@@ -1282,16 +1294,20 @@ pub struct EdgeBuilder<'a: 'b, 'b, A: ::flatbuffers::Allocator + 'a> {
 }
 impl<'a: 'b, 'b, A: ::flatbuffers::Allocator + 'a> EdgeBuilder<'a, 'b, A> {
   #[inline]
+  pub fn add_id(&mut self, id: i64) {
+    self.fbb_.push_slot::<i64>(Edge::VT_ID, id, 0);
+  }
+  #[inline]
   pub fn add_label(&mut self, label: ::flatbuffers::WIPOffset<&'b  str>) {
     self.fbb_.push_slot_always::<::flatbuffers::WIPOffset<_>>(Edge::VT_LABEL, label);
   }
   #[inline]
-  pub fn add_start_id(&mut self, start_id: i64) {
-    self.fbb_.push_slot::<i64>(Edge::VT_START_ID, start_id, 0);
+  pub fn add_start_id(&mut self, start_id: u64) {
+    self.fbb_.push_slot::<u64>(Edge::VT_START_ID, start_id, 0);
   }
   #[inline]
-  pub fn add_end_id(&mut self, end_id: i64) {
-    self.fbb_.push_slot::<i64>(Edge::VT_END_ID, end_id, 0);
+  pub fn add_end_id(&mut self, end_id: u64) {
+    self.fbb_.push_slot::<u64>(Edge::VT_END_ID, end_id, 0);
   }
   #[inline]
   pub fn add_properties(&mut self, properties: ::flatbuffers::WIPOffset<::flatbuffers::Vector<'b , ::flatbuffers::ForwardsUOffset<DictEntry<'b >>>>) {
@@ -1315,6 +1331,7 @@ impl<'a: 'b, 'b, A: ::flatbuffers::Allocator + 'a> EdgeBuilder<'a, 'b, A> {
 impl ::core::fmt::Debug for Edge<'_> {
   fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
     let mut ds = f.debug_struct("Edge");
+      ds.field("id", &self.id());
       ds.field("label", &self.label());
       ds.field("start_id", &self.start_id());
       ds.field("end_id", &self.end_id());
