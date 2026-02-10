@@ -1,34 +1,13 @@
-#[allow(dead_code, unused_imports)]
-#[path = "../value_generated.rs"]
-mod value_generated;
 
-use std::collections::BTreeMap;
-use crate::{Array, Bool, Int, Text, Value};
-use anyhow::{anyhow, bail, Context};
+use crate::{flatbuf as fb, Array, Bool, Int, Text, Value};
+use anyhow::{bail, Context};
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
-use value_generated::data_model as fb;
+use std::collections::BTreeMap;
 
 impl Value {
-    /// SERIALIZE
-    /// Convert Rust Enum -> FlatBuffers Bytes
-    pub fn pack(&self) -> Vec<u8> {
-        let mut fbb = FlatBufferBuilder::with_capacity(1024);
-        let root = self.to_fb_offset(&mut fbb);
-        fbb.finish(root, None);
-        fbb.finished_data().to_vec()
-    }
-
-    /// DESERIALIZE
-    /// Convert FlatBuffers Bytes -> Rust Enum
-    pub fn unpack(buffer: &[u8]) -> anyhow::Result<Self> {
-        let fb_val = fb::root_as_value(buffer)
-            .map_err(|e| anyhow!("FlatBuffers verification failed: {:?}", e))?;
-
-        Value::try_from(fb_val)
-    }
 
     /// Internal recursive helper for bottom-up building
-    fn to_fb_offset<'a>(&self, fbb: &mut FlatBufferBuilder<'a>) -> WIPOffset<fb::Value<'a>> {
+    pub(crate) fn to_fb_offset<'a>(&self, fbb: &mut FlatBufferBuilder<'a>) -> WIPOffset<fb::Value<'a>> {
         let (union_type, union_offset) = match self {
             Value::Int(i) => (
                 fb::ValueData::Int,
@@ -254,15 +233,15 @@ impl<'a> TryFrom<fb::Value<'a>> for Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::message::Message;
     use std::collections::BTreeMap;
 
     #[test]
-    fn test_value_round_trip() {
-        // 1. Create a complex Node structure using your high-level Value enum
+    fn test_message_round_trip() {
+        // 1. Create a complex Node structure (the payload)
         let mut properties = BTreeMap::new();
         properties.insert("email".to_string(), Value::text("alice@example.com"));
         properties.insert("active".to_string(), Value::bool(true));
-
         properties.insert("scores".to_string(), Value::array(vec![
             Value::int(10),
             Value::int(20)
@@ -274,31 +253,47 @@ mod tests {
             properties,
         );
 
-        let buffer = original_node.pack();
+        // 2. Wrap it in a Message with multiple topics
+        let original_msg = Message {
+            topics: vec!["system.events".to_string(), "user.profile.update".to_string()],
+            payload: original_node,
+            timestamp: 1700000000,
+        };
 
-        let decoded_value = Value::unpack(&buffer).unwrap();
+        // 3. Serialize and Deserialize
+        let buffer = original_msg.pack();
+        let decoded_msg = Message::unpack(&buffer).expect("Failed to unpack message");
 
-        assert_eq!(original_node, decoded_value);
+        // 4. Global Equality Check
+        assert_eq!(original_msg.topics, decoded_msg.topics);
+        assert_eq!(original_msg.timestamp, decoded_msg.timestamp);
+        assert_eq!(original_msg.payload, decoded_msg.payload);
 
-        // Manual check for specific fields
-        if let Value::Node(n) = decoded_value {
+        // 5. Manual check for specific fields in the payload
+        if let Value::Node(n) = decoded_msg.payload {
             assert_eq!(n.id.0, 42);
             assert_eq!(n.labels[0].0, "User");
 
             let email = n.properties.get("email").unwrap().as_text().unwrap();
             assert_eq!(email.0, "alice@example.com");
         } else {
-            panic!("Decoded value was not a Node");
+            panic!("Decoded payload was not a Node");
         }
     }
 
     #[test]
-    fn test_null_value() {
-        let original = Value::Null;
-        let buffer = original.pack();
+    fn test_null_payload_with_topics() {
+        let original_msg = Message {
+            topics: vec!["heartbeat".to_string()],
+            payload: Value::Null,
+            timestamp: 123456789,
+        };
 
-        let decoded = Value::unpack(&buffer).unwrap();
+        let buffer = original_msg.pack();
+        let decoded_msg = Message::unpack(&buffer).expect("Failed to unpack message");
 
-        assert_eq!(original, decoded);
+        assert_eq!(decoded_msg.topics.len(), 1);
+        assert_eq!(decoded_msg.topics[0], "heartbeat");
+        assert_eq!(decoded_msg.payload, Value::Null);
     }
 }

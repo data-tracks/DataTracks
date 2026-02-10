@@ -10,6 +10,7 @@ export { DictEntry } from './data-model/dict-entry.js';
 export { Edge } from './data-model/edge.js';
 export { Float } from './data-model/float.js';
 export { Int } from './data-model/int.js';
+export { Message } from './data-model/message.js';
 export { Node } from './data-model/node.js';
 export { Text } from './data-model/text.js';
 export { Time } from './data-model/time.js';

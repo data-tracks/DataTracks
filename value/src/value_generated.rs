@@ -1690,75 +1690,205 @@ impl ::core::fmt::Debug for Value<'_> {
       ds.finish()
   }
 }
+pub enum MessageOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct Message<'a> {
+  pub _tab: ::flatbuffers::Table<'a>,
+}
+
+impl<'a> ::flatbuffers::Follow<'a> for Message<'a> {
+  type Inner = Message<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: unsafe { ::flatbuffers::Table::new(buf, loc) } }
+  }
+}
+
+impl<'a> Message<'a> {
+  pub const VT_TOPICS: ::flatbuffers::VOffsetT = 4;
+  pub const VT_PAYLOAD: ::flatbuffers::VOffsetT = 6;
+  pub const VT_TIMESTAMP: ::flatbuffers::VOffsetT = 8;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
+    Message { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr, A: ::flatbuffers::Allocator + 'bldr>(
+    _fbb: &'mut_bldr mut ::flatbuffers::FlatBufferBuilder<'bldr, A>,
+    args: &'args MessageArgs<'args>
+  ) -> ::flatbuffers::WIPOffset<Message<'bldr>> {
+    let mut builder = MessageBuilder::new(_fbb);
+    builder.add_timestamp(args.timestamp);
+    if let Some(x) = args.payload { builder.add_payload(x); }
+    if let Some(x) = args.topics { builder.add_topics(x); }
+    builder.finish()
+  }
+
+
+  #[inline]
+  pub fn topics(&self) -> Option<::flatbuffers::Vector<'a, ::flatbuffers::ForwardsUOffset<&'a str>>> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<::flatbuffers::ForwardsUOffset<::flatbuffers::Vector<'a, ::flatbuffers::ForwardsUOffset<&'a str>>>>(Message::VT_TOPICS, None)}
+  }
+  #[inline]
+  pub fn payload(&self) -> Option<Value<'a>> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<::flatbuffers::ForwardsUOffset<Value>>(Message::VT_PAYLOAD, None)}
+  }
+  #[inline]
+  pub fn timestamp(&self) -> i64 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<i64>(Message::VT_TIMESTAMP, Some(0)).unwrap()}
+  }
+}
+
+impl ::flatbuffers::Verifiable for Message<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut ::flatbuffers::Verifier, pos: usize
+  ) -> Result<(), ::flatbuffers::InvalidFlatbuffer> {
+    v.visit_table(pos)?
+     .visit_field::<::flatbuffers::ForwardsUOffset<::flatbuffers::Vector<'_, ::flatbuffers::ForwardsUOffset<&'_ str>>>>("topics", Self::VT_TOPICS, false)?
+     .visit_field::<::flatbuffers::ForwardsUOffset<Value>>("payload", Self::VT_PAYLOAD, false)?
+     .visit_field::<i64>("timestamp", Self::VT_TIMESTAMP, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct MessageArgs<'a> {
+    pub topics: Option<::flatbuffers::WIPOffset<::flatbuffers::Vector<'a, ::flatbuffers::ForwardsUOffset<&'a str>>>>,
+    pub payload: Option<::flatbuffers::WIPOffset<Value<'a>>>,
+    pub timestamp: i64,
+}
+impl<'a> Default for MessageArgs<'a> {
+  #[inline]
+  fn default() -> Self {
+    MessageArgs {
+      topics: None,
+      payload: None,
+      timestamp: 0,
+    }
+  }
+}
+
+pub struct MessageBuilder<'a: 'b, 'b, A: ::flatbuffers::Allocator + 'a> {
+  fbb_: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>,
+  start_: ::flatbuffers::WIPOffset<::flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b, A: ::flatbuffers::Allocator + 'a> MessageBuilder<'a, 'b, A> {
+  #[inline]
+  pub fn add_topics(&mut self, topics: ::flatbuffers::WIPOffset<::flatbuffers::Vector<'b , ::flatbuffers::ForwardsUOffset<&'b  str>>>) {
+    self.fbb_.push_slot_always::<::flatbuffers::WIPOffset<_>>(Message::VT_TOPICS, topics);
+  }
+  #[inline]
+  pub fn add_payload(&mut self, payload: ::flatbuffers::WIPOffset<Value<'b >>) {
+    self.fbb_.push_slot_always::<::flatbuffers::WIPOffset<Value>>(Message::VT_PAYLOAD, payload);
+  }
+  #[inline]
+  pub fn add_timestamp(&mut self, timestamp: i64) {
+    self.fbb_.push_slot::<i64>(Message::VT_TIMESTAMP, timestamp, 0);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>) -> MessageBuilder<'a, 'b, A> {
+    let start = _fbb.start_table();
+    MessageBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> ::flatbuffers::WIPOffset<Message<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    ::flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl ::core::fmt::Debug for Message<'_> {
+  fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+    let mut ds = f.debug_struct("Message");
+      ds.field("topics", &self.topics());
+      ds.field("payload", &self.payload());
+      ds.field("timestamp", &self.timestamp());
+      ds.finish()
+  }
+}
 #[inline]
-/// Verifies that a buffer of bytes contains a `Value`
+/// Verifies that a buffer of bytes contains a `Message`
 /// and returns it.
 /// Note that verification is still experimental and may not
 /// catch every error, or be maximally performant. For the
 /// previous, unchecked, behavior use
-/// `root_as_value_unchecked`.
-pub fn root_as_value(buf: &[u8]) -> Result<Value<'_>, ::flatbuffers::InvalidFlatbuffer> {
-  ::flatbuffers::root::<Value>(buf)
+/// `root_as_message_unchecked`.
+pub fn root_as_message(buf: &[u8]) -> Result<Message<'_>, ::flatbuffers::InvalidFlatbuffer> {
+  ::flatbuffers::root::<Message>(buf)
 }
 #[inline]
 /// Verifies that a buffer of bytes contains a size prefixed
-/// `Value` and returns it.
+/// `Message` and returns it.
 /// Note that verification is still experimental and may not
 /// catch every error, or be maximally performant. For the
 /// previous, unchecked, behavior use
-/// `size_prefixed_root_as_value_unchecked`.
-pub fn size_prefixed_root_as_value(buf: &[u8]) -> Result<Value<'_>, ::flatbuffers::InvalidFlatbuffer> {
-  ::flatbuffers::size_prefixed_root::<Value>(buf)
+/// `size_prefixed_root_as_message_unchecked`.
+pub fn size_prefixed_root_as_message(buf: &[u8]) -> Result<Message<'_>, ::flatbuffers::InvalidFlatbuffer> {
+  ::flatbuffers::size_prefixed_root::<Message>(buf)
 }
 #[inline]
 /// Verifies, with the given options, that a buffer of bytes
-/// contains a `Value` and returns it.
+/// contains a `Message` and returns it.
 /// Note that verification is still experimental and may not
 /// catch every error, or be maximally performant. For the
 /// previous, unchecked, behavior use
-/// `root_as_value_unchecked`.
-pub fn root_as_value_with_opts<'b, 'o>(
+/// `root_as_message_unchecked`.
+pub fn root_as_message_with_opts<'b, 'o>(
   opts: &'o ::flatbuffers::VerifierOptions,
   buf: &'b [u8],
-) -> Result<Value<'b>, ::flatbuffers::InvalidFlatbuffer> {
-  ::flatbuffers::root_with_opts::<Value<'b>>(opts, buf)
+) -> Result<Message<'b>, ::flatbuffers::InvalidFlatbuffer> {
+  ::flatbuffers::root_with_opts::<Message<'b>>(opts, buf)
 }
 #[inline]
 /// Verifies, with the given verifier options, that a buffer of
-/// bytes contains a size prefixed `Value` and returns
+/// bytes contains a size prefixed `Message` and returns
 /// it. Note that verification is still experimental and may not
 /// catch every error, or be maximally performant. For the
 /// previous, unchecked, behavior use
-/// `root_as_value_unchecked`.
-pub fn size_prefixed_root_as_value_with_opts<'b, 'o>(
+/// `root_as_message_unchecked`.
+pub fn size_prefixed_root_as_message_with_opts<'b, 'o>(
   opts: &'o ::flatbuffers::VerifierOptions,
   buf: &'b [u8],
-) -> Result<Value<'b>, ::flatbuffers::InvalidFlatbuffer> {
-  ::flatbuffers::size_prefixed_root_with_opts::<Value<'b>>(opts, buf)
+) -> Result<Message<'b>, ::flatbuffers::InvalidFlatbuffer> {
+  ::flatbuffers::size_prefixed_root_with_opts::<Message<'b>>(opts, buf)
 }
 #[inline]
-/// Assumes, without verification, that a buffer of bytes contains a Value and returns it.
+/// Assumes, without verification, that a buffer of bytes contains a Message and returns it.
 /// # Safety
-/// Callers must trust the given bytes do indeed contain a valid `Value`.
-pub unsafe fn root_as_value_unchecked(buf: &[u8]) -> Value<'_> {
-  unsafe { ::flatbuffers::root_unchecked::<Value>(buf) }
+/// Callers must trust the given bytes do indeed contain a valid `Message`.
+pub unsafe fn root_as_message_unchecked(buf: &[u8]) -> Message<'_> {
+  unsafe { ::flatbuffers::root_unchecked::<Message>(buf) }
 }
 #[inline]
-/// Assumes, without verification, that a buffer of bytes contains a size prefixed Value and returns it.
+/// Assumes, without verification, that a buffer of bytes contains a size prefixed Message and returns it.
 /// # Safety
-/// Callers must trust the given bytes do indeed contain a valid size prefixed `Value`.
-pub unsafe fn size_prefixed_root_as_value_unchecked(buf: &[u8]) -> Value<'_> {
-  unsafe { ::flatbuffers::size_prefixed_root_unchecked::<Value>(buf) }
+/// Callers must trust the given bytes do indeed contain a valid size prefixed `Message`.
+pub unsafe fn size_prefixed_root_as_message_unchecked(buf: &[u8]) -> Message<'_> {
+  unsafe { ::flatbuffers::size_prefixed_root_unchecked::<Message>(buf) }
 }
 #[inline]
-pub fn finish_value_buffer<'a, 'b, A: ::flatbuffers::Allocator + 'a>(
+pub fn finish_message_buffer<'a, 'b, A: ::flatbuffers::Allocator + 'a>(
     fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>,
-    root: ::flatbuffers::WIPOffset<Value<'a>>) {
+    root: ::flatbuffers::WIPOffset<Message<'a>>) {
   fbb.finish(root, None);
 }
 
 #[inline]
-pub fn finish_size_prefixed_value_buffer<'a, 'b, A: ::flatbuffers::Allocator + 'a>(fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>, root: ::flatbuffers::WIPOffset<Value<'a>>) {
+pub fn finish_size_prefixed_message_buffer<'a, 'b, A: ::flatbuffers::Allocator + 'a>(fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>, root: ::flatbuffers::WIPOffset<Message<'a>>) {
   fbb.finish_size_prefixed(root, None);
 }
 }  // pub mod DataModel

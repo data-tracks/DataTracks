@@ -1,42 +1,77 @@
-<div>
-    @for (msg of messages(); track msg){
+<div class="p-4 flex flex-col gap-4">
+    @for (msg of messages(); track msg) {
         <div class="chat chat-start">
             <div class="chat-bubble">
-                Topic: {{msg.topic}}
-                <br>
-                Value: {{msg.value}}
+                <div class="text-[10px] uppercase font-bold opacity-50 mb-1">Topic: {{msg.topic}}</div>
+                <div class="flex items-center gap-2">
+                    <span class="badge badge-sm badge-outline">{{msg.value.type}}</span>
+
+                    @switch (msg.value.type) {
+                        @case ('Text') { <span>{{msg.value.value}}</span> }
+                        @case ('Int') { <span class="font-mono text-info">{{msg.value.value}}</span> }
+                        @case ('Bool') {
+                            <div class="badge" [class.badge-success]="msg.value.value" [class.badge-error]="!msg.value.value">
+                                {{msg.value.value}}
+                            </div>
+                        }
+                        @case ('Node') {
+                            <span class="text-sm">ID: {{msg.value.id}}</span>
+                        }
+                    }
+                </div>
             </div>
         </div>
     }
 
     <div class="chat chat-start">
-        <div class="chat-bubble flex flex-col gap-2">
-            <label class="input">
-                <svg class="h-[1em] opacity-50" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                    <g
-                            stroke-linejoin="round"
-                            stroke-linecap="round"
-                            stroke-width="2.5"
-                            fill="none"
-                            stroke="currentColor"
-                    >
-                        <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path>
-                        <path d="M14 2v4a2 2 0 0 0 2 2h4"></path>
-                    </g>
-                </svg>
-                <input type="text" class="grow" [(ngModel)]="topic" placeholder="Topic" />
-                <kbd class="kbd kbd-sm">⌘</kbd>
-                <kbd class="kbd kbd-sm">K</kbd>
+        <div class="chat-bubble flex flex-col gap-3 max-w-md bg-base-200 text-base-content border border-base-300">
+            <label class="input input-sm input-bordered flex items-center gap-2">
+                <input type="text" class="grow" [value]="topic()" (input)="topic.set($any($event.target).value)" placeholder="Topic" />
             </label>
-            <textarea class="textarea" placeholder="Value" [(ngModel)]="value"></textarea>
-            <div class="flex justify-end">
-                <button class="btn btn-info" (click)="send()">Send</button>
+
+            <div class="join">
+                <select class="select select-sm select-bordered join-item"
+                        [value]="selectedType()"
+                        (change)="selectedType.set($any($event.target).value)">
+                    <option value="Text">Text</option>
+                    <option value="Int">Int</option>
+                    <option value="Bool">Bool</option>
+                    <option value="Node">Node</option>
+                </select>
+
+                @switch (selectedType()) {
+                    @case ('Bool') {
+                        <div class="join-item grow bg-base-100 border border-base-300 flex items-center px-4">
+                            <input type="checkbox" class="toggle toggle-info toggle-xs"
+                                   [checked]="boolValue()" (change)="boolValue.set(!boolValue())" />
+                        </div>
+                    }
+                    @case ('Int') {
+                        <input type="number" class="input input-sm input-bordered join-item grow"
+                               [value]="intValue()" (input)="intValue.set($any($event.target).value)" placeholder="Number" />
+                    }
+                    @case ('Node') {
+                        <input type="number" class="input input-sm input-bordered join-item w-16"
+                               [value]="nodeId()" (input)="nodeId.set($any($event.target).value)" placeholder="ID" />
+                        <input type="text" class="input input-sm input-bordered join-item grow"
+                               [value]="nodeLabels()" (input)="nodeLabels.set($any($event.target).value)" placeholder="Labels..." />
+                    }
+                    @default {
+                        <input type="text" class="input input-sm input-bordered join-item grow"
+                               [value]="textValue()" (input)="textValue.set($any($event.target).value)" placeholder="Value" />
+                    }
+                }
+            </div>
+
+            <div class="flex w-full justify-end">
+                <button class="btn btn-sm btn-info" [disabled]="!topic()" (click)="send()">Send</button>
             </div>
         </div>
     </div>
-    <div class="chat chat-end">
-        <div class="chat-bubble chat-bubble-info">
-            Empy
-        </div>
+</div>
+
+<div class="chat chat-end">
+    <div class="chat-bubble">
+        <div class="uppercase opacity-50 mb-1">Empty</div>
     </div>
 </div>

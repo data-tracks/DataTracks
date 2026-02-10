@@ -52,14 +52,6 @@ static endValue(builder:flatbuffers.Builder):flatbuffers.Offset {
   return offset;
 }
 
-static finishValueBuffer(builder:flatbuffers.Builder, offset:flatbuffers.Offset) {
-  builder.finish(offset);
-}
-
-static finishSizePrefixedValueBuffer(builder:flatbuffers.Builder, offset:flatbuffers.Offset) {
-  builder.finish(offset, undefined, true);
-}
-
 static createValue(builder:flatbuffers.Builder, dataType:ValueData, dataOffset:flatbuffers.Offset):flatbuffers.Offset {
   Value.startValue(builder);
   Value.addDataType(builder, dataType);

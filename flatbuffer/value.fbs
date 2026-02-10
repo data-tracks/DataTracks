@@ -59,4 +59,11 @@ table Value {
   data: ValueData;
 }
 
-root_type Value;
+// --- Updated Wrapper Message with Multiple Topics ---
+table Message {
+  topics: [string];
+  payload: Value;
+  timestamp: long;
+}
+
+root_type Message;

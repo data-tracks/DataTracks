@@ -1,7 +1,5 @@
-import { ByteBuffer } from 'flatbuffers';
-import { DataModel as fb } from '../../generated/value';
-
 import * as flatbuffers from 'flatbuffers';
+import {DataModel as fb} from '../../generated/value';
 
 
 export type Value =
@@ -37,11 +35,38 @@ export class ValueMapper {
      * SERIALIZE:
      * TS Object -> FlatBuffers Bytes
      */
-    static pack(val: Value): Uint8Array {
+    static pack(val: Value, topics: string[] = [], timestamp: number = Date.now()): Uint8Array {
         const builder = new flatbuffers.Builder(1024);
-        const offset = ValueMapper.toOffset(builder, val);
 
-        fb.Value.finishValueBuffer(builder, offset);
+        // 1. Prepare the payload (the recursive Value)
+        const payloadOffset = ValueMapper.toOffset(builder, val);
+
+        // 2. Prepare the topics vector (strings must be created first)
+        let topicsOffset = 0;
+        if (topics.length > 0) {
+            const topicStrings = topics.map(t => builder.createString(t));
+            topicsOffset = fb.Message.createTopicsVector(builder, topicStrings);
+        }
+
+        // 3. Build the Message table
+        fb.Message.startMessage(builder);
+
+        // Add the payload union offset
+        fb.Message.addPayload(builder, payloadOffset);
+
+        // Add the timestamp (longs are handled as BigInt or two 32-bit ints depending on your library version)
+        fb.Message.addTimestamp(builder, BigInt(timestamp));
+
+        // Add the topics vector offset
+        if (topicsOffset !== 0) {
+            fb.Message.addTopics(builder, topicsOffset);
+        }
+
+        const messageOffset = fb.Message.endMessage(builder);
+
+        // 4. Finish the buffer
+        fb.Message.finishMessageBuffer(builder, messageOffset);
+
         return builder.asUint8Array();
     }
 
@@ -155,8 +180,14 @@ export class ValueMapper {
      */
     static unpack(bytes: Uint8Array): Value {
         const buf = new flatbuffers.ByteBuffer(bytes);
-        const fbVal = fb.Value.getRootAsValue(buf);
-        return ValueMapper.fromFB(fbVal);
+        const fbMsg = fb.Message.getRootAsMessage(buf);
+        //const fbVal = fb.Value.getRootAsValue(buf);
+        const fbVal = fbMsg.payload();
+        if (fbVal){
+            return ValueMapper.fromFB(fbVal);
+        }
+        return { type: 'Null' }
+
     }
 
     private static fromFB(fbVal: fb.Value): Value {
@@ -251,8 +282,7 @@ export class ValueMapper {
      */
     private static unpackProperties(prop: (i:number) => any, length: number): Record<string, Value> {
         const properties: Record<string, Value> = {};
-        const len = length; // Generated code handles this for Node/Edge/Dict
-        for (let i = 0; i < len; i++) {
+        for (let i = 0; i < length; i++) {
             const entry = prop(i);
             if (entry && entry.key()) {
                 const val = entry.value();

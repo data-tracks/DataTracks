@@ -13,10 +13,12 @@
     "isolatedModules": true,
     "experimentalDecorators": true,
     "importHelpers": true,
-    "target": "ESNext",
-    "module": "CommonJS",
-    "esModuleInterop": true,
-    "types": ["jest", "node"]
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "node",
+    "types": [
+      "node"
+    ]
   },
   "angularCompilerOptions": {
     "enableI18nLegacyMessageIdFormat": false,

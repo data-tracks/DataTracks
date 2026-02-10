@@ -1,6 +1,12 @@
 extern crate alloc;
 extern crate core;
 
+#[allow(dead_code, unused_imports)]
+#[path = "value_generated.rs"]
+pub mod value_generated;
+
+pub use value_generated::data_model as flatbuf;
+
 pub use array::Array;
 pub use bool::Bool;
 pub use dict::Dict;
@@ -29,3 +35,4 @@ pub mod wagon;
 mod conversion;
 mod math;
 pub(crate) mod value;
+mod message;
