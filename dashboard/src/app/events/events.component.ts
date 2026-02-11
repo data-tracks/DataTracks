@@ -12,7 +12,7 @@ class EventsComponent {
     protected msgs: WritableSignal<any[]> = signal([]);
     protected readonly JSON = JSON;
 
-    protected filters = signal<string[]>([]);
+    protected filters = signal<string[]>(["Insert"]);
     protected activeFilters = signal<string[]>([]);
 
     constructor() {
