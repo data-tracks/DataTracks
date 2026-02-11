@@ -16,6 +16,7 @@ pub enum Event {
     Queue(QueueEvent),
     Startup(bool),
     Statistics(StatisticEvent),
+    Heartbeat(String),
 }
 
 #[derive(Serialize, Clone, Debug)]

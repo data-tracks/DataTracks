@@ -84,3 +84,44 @@
         </div>
     </div>
 </div>
+
+@if (recTopic() != null && recTopic().trim().length != 0) {
+    <div class="flex items-center my-6 gap-4">
+        <div class="flex-grow h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent"></div>
+        <span class="text-[10px] uppercase tracking-widest opacity-40 font-bold">Live Stream: {{recTopic()}}</span>
+        <div class="flex-grow h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent"></div>
+    </div>
+}
+
+
+<div class="flex flex-col-reverse">
+@for (msg of _received(); track msg.values[0]) {
+    <div class="chat chat-end">
+        <div class="chat-bubble chat-bubble-primary">
+            <div class="text-[10px] uppercase font-bold opacity-50 mb-1">Topic: {{msg.topic}}</div>
+            <div class="flex items-center gap-2">
+                <span class="badge badge-sm badge-outline">{{msg.values[0].type}}</span>
+
+                @switch (msg.values[0].type) {
+                    @case ('Text') { <span>{{msg.values[0].value}}</span> }
+                    @case ('Int') { <span class="font-mono text-info">{{msg.values[0].value}}</span> }
+                    @case ('Bool') {
+                        <div class="badge" [class.badge-success]="msg.values[0].value" [class.badge-error]="!msg.values[0].value">
+                            {{msg.values[0].value}}
+                        </div>
+                    }
+                    @case ('Node') {
+                        <span class="text-sm">ID: {{msg.values[0].id}}</span>
+                    }
+                    @case ('Dict') {
+                        <pre class="text-sm overflow-x-auto whitespace-pre-wrap">{{JSON.stringify(msg.values[0])}}</pre>
+                    }
+                    @case ('Array') {
+                        <pre class="text-sm overflow-x-auto whitespace-pre-wrap">{{JSON.stringify(msg.values[0])}}</pre>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+}
+</div>

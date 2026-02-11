@@ -74,35 +74,53 @@ export class RoundtripComponent {
   protected stopListen() {
     this.socket.update(s => {
       if (s != null) {
-        s.close(0, "Force close");
+        s.close(1000, "User requested disconnect");
       }
+      this.recTopic.set("")
       return null;
     })
-    this.listening.set(false);
+    this.connected.set(false);
   }
 
   private initConnection(topic: string) {
+    this._received.set([])
     let socket = new WebSocket(`ws://localhost:3131/channel/${topic}`);
     socket.binaryType = "arraybuffer";
     this.socket.set(socket);
 
+    (BigInt.prototype as any).toJSON = function () {
+      return this.toString();
+    };
+    this.connected.set(true);
     socket.onmessage = (event) => {
       this.zone.run(() => {
-        this.connected.set(true);
-        const values = ValueMapper.unpack(event.data);
+        const uint8Array = new Uint8Array(event.data);
+        const values = ValueMapper.unpack(uint8Array);
 
-        console.log(event.data)
+        this._received.update(mgs => {
+          let init = mgs;
+          if(init.length >= 50){
+            console.log("in")
+            init = mgs.slice(1, 50)
+          }
 
-        this._received.update(mgs => [...mgs, {topic: topic, values: values }]);
+          let updated = [...init, {topic: topic, values: values }];
+          return updated.slice(0, 50);
+        });
       });
     };
 
     socket.onclose = () => {
-      this.connected.set(false);
+      if (!this.connected()) {
+        return
+      }
       console.warn('Disconnected from Rust. Retrying in 2s...');
+      this.connected.set(false);
       setTimeout(() => this.initConnection(topic), 2000);
     };
   }
+
+  protected readonly JSON = JSON;
 }
 
 interface Message{

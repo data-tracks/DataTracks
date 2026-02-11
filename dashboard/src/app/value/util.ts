@@ -186,9 +186,7 @@ export class ValueMapper {
     static unpack(bytes: Uint8Array): Value[] {
         const buf = new flatbuffers.ByteBuffer(bytes);
         const fbMsg = fb.Message.getRootAsMessage(buf);
-        //const fbVal = fb.Value.getRootAsValue(buf);
         const values: Value[] = [];
-        console.log("length:", fbMsg.payloadLength())
         for (let i = 0; i < fbMsg.payloadLength(); i++) {
             const entry = fbMsg.payload(i);
             if (entry) {

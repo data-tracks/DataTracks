@@ -7,7 +7,7 @@ use std::time::Duration;
 use tokio::runtime::{Builder, Handle};
 use tokio::{select};
 use tokio::sync::broadcast;
-use tokio::time::{interval, sleep};
+use tokio::time::{interval, sleep, Instant};
 use tracing::log::debug;
 use util::Event::Runtime;
 use util::definition::{Definition, Stage};
@@ -102,6 +102,10 @@ pub fn start(rt: Runtimes, tx: Sender<Event>, rx: Receiver<Event>, output: broad
 
             let mut timer = interval(Duration::from_secs(20));
 
+            let mut last_time = Instant::now();
+
+            let mut last = statistics.get_summary();
+
             loop {
                 select! {
                     maybe_event = rx.recv_async() => {
@@ -111,9 +115,13 @@ pub fn start(rt: Runtimes, tx: Sender<Event>, rx: Receiver<Event>, output: broad
                         }
                     },
                     _ = timer.tick() => {
-                        if clone_bc_tx.send(statistics.get_summary()).is_err() {
+                        let since = Instant::now().duration_since(last_time);
+                        last = statistics.get_summary();
+
+                        if clone_bc_tx.send(last).is_err() {
                             debug!("Statistic ticks", )
                         }
+                        last_time = Instant::now();
                     }
                 }
             }
