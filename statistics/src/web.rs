@@ -77,7 +77,7 @@ async fn handle_socket_logic(mut socket: WebSocket, state: EventState, path: Str
                         serde_json::to_string(&e).ok()
                     },
                     ("/queues", Event::Queue(q)) => serde_json::to_string(&q).ok(),
-                    ("/statistics", Event::Statistics(s)) => serde_json::to_string(&s).ok(),
+                    ("/statistics", e) if matches!(e, Event::Statistics(_)) || matches!(e, Event::Throughput(_)) => serde_json::to_string(&e).ok(),
                     ("/threads", Event::Heartbeat(h)) => Some(h),
                     _ => None,
                 };

@@ -1,17 +1,17 @@
 use crate::web;
-use flume::{Receiver, Sender, unbounded};
+use flume::{unbounded, Receiver, Sender};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread::spawn;
 use std::time::Duration;
 use tokio::runtime::{Builder, Handle};
-use tokio::{select};
+use tokio::select;
 use tokio::sync::broadcast;
 use tokio::time::{interval, sleep, Instant};
 use tracing::log::debug;
-use util::Event::Runtime;
 use util::definition::{Definition, Stage};
-use util::{DefinitionId, EngineEvent, EngineId, Event, RuntimeEvent, Runtimes, StatisticEvent, log_channel, set_statistic_sender, TargetedMeta};
+use util::Event::Runtime;
+use util::{log_channel, set_statistic_sender, DefinitionId, EngineEvent, EngineId, Event, RuntimeEvent, Runtimes, StatisticEvent, TargetedMeta, ThroughputEvent};
 use value::Value;
 
 pub struct Statistics {
@@ -55,14 +55,14 @@ impl Statistics {
         }
     }
 
-    pub(crate) fn get_summary(&self) -> Event {
+    pub(crate) fn get_summary(&self) -> StatisticEvent {
         let names = &self.engine_names;
         let definition_names = self
             .definitions
             .iter()
             .map(|(id, d)| (id.0, d.name.clone()))
             .collect::<HashMap<_, _>>();
-        Event::Statistics(StatisticEvent {
+        StatisticEvent {
             engines: self
                 .engines
                 .iter()
@@ -74,7 +74,7 @@ impl Statistics {
                     )
                 })
                 .collect(),
-        })
+        }
     }
 }
 
@@ -105,6 +105,7 @@ pub fn start(rt: Runtimes, tx: Sender<Event>, rx: Receiver<Event>, output: broad
             let mut last_time = Instant::now();
 
             let mut last = statistics.get_summary();
+            let mut current = last.clone();
 
             loop {
                 select! {
@@ -116,12 +117,20 @@ pub fn start(rt: Runtimes, tx: Sender<Event>, rx: Receiver<Event>, output: broad
                     },
                     _ = timer.tick() => {
                         let since = Instant::now().duration_since(last_time);
-                        last = statistics.get_summary();
+                        current = statistics.get_summary();
+                        let throughput = calculate_throughput(&current, &last, since);
 
-                        if clone_bc_tx.send(last).is_err() {
+                        if clone_bc_tx.send(Event::Statistics(last.clone())).is_err() {
                             debug!("Statistic ticks", )
                         }
+                        
+                        if clone_bc_tx.send(Event::Throughput(ThroughputEvent{tps: throughput})).is_err() {
+                            debug!("Statistic throughput ticks", )
+                        }
+                        
+                        
                         last_time = Instant::now();
+                        last = current.clone();
                     }
                 }
             }
@@ -153,6 +162,26 @@ pub fn start(rt: Runtimes, tx: Sender<Event>, rx: Receiver<Event>, output: broad
     rt.add_handle(statistic);
 
     tx
+}
+
+fn calculate_throughput(current: &StatisticEvent, last: &StatisticEvent, duration: Duration) -> HashMap<String, f64> {
+    let current_amounts = current.get_amounts();
+    let last_amounts = last.get_amounts();
+
+    let mut tps = HashMap::new();
+
+    for (name, amount) in current_amounts {
+        if let Some(amount_last) = last_amounts.get(&name) {
+            let raw_tps = (amount - amount_last) as f64 / duration.as_secs() as f64;
+
+            // Apply rounding to 3 decimal places
+            let rounded_tps = (raw_tps * 1000.0).round() / 1000.0;
+
+            tps.insert(name.clone(), rounded_tps);
+        }
+    }
+
+    tps
 }
 
 #[derive(Default)]

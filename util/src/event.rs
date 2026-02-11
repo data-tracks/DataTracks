@@ -16,6 +16,7 @@ pub enum Event {
     Queue(QueueEvent),
     Startup(bool),
     Statistics(StatisticEvent),
+    Throughput(ThroughputEvent),
     Heartbeat(String),
 }
 
@@ -28,8 +29,25 @@ pub struct RuntimeEvent {
 }
 
 #[derive(Serialize, Clone, Debug)]
+pub struct ThroughputEvent {
+    pub tps: HashMap<String, f64>,
+}
+
+#[derive(Serialize, Clone, Debug)]
 pub struct StatisticEvent {
     pub engines: HashMap<EngineId, DefinitionMeta>,
+}
+
+impl StatisticEvent {
+    pub fn get_amounts(&self) -> HashMap<String, usize> {
+        let mut map = HashMap::new();
+
+        for def in self.engines.values() {
+            map.insert(def.1.clone().unwrap_or("unnamed".to_string()), def.0.iter().map(|v|v.3).sum());
+        }
+
+        map
+    }
 }
 
 #[derive(Serialize, Clone, Debug)]

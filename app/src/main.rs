@@ -1,13 +1,13 @@
 extern crate core;
 
-use std::time::Duration;
-use flume::Sender;
-use tokio::task::JoinSet;
 use crate::management::Manager;
+use flume::Sender;
+use sink::dummy::DummySink;
+use std::time::Duration;
+use tokio::task::JoinSet;
 use tracing::Level;
 use tracing_subscriber::FmtSubscriber;
-use ::util::{Event, InitialMeta};
-use sink::dummy::DummySink;
+use ::util::InitialMeta;
 use value::Value;
 
 mod management;

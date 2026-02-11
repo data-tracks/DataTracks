@@ -16,6 +16,8 @@ export class StatisticsComponent {
     protected plainStatistics: WritableSignal<Map<string, [number, Stage, string, number][]>> = signal(new Map());
     protected mappedStatistics: WritableSignal<Map<string, [number, Stage, string, number][]>> = signal(new Map());
 
+    protected tps: WritableSignal<Map<string, number>> = signal(new Map())
+
     constructor() {
         effect(() => {
             let data = this.inputs();
@@ -24,9 +26,19 @@ export class StatisticsComponent {
                 return;
             }
 
-            let map: StatisticEvent = data;
-
-            console.log(map)
+            if (data.type == "Throughput"){
+                let tps: ThroughputEvent = data.data;
+                this.tps.update(map => {
+                    let d = new Map(map);
+                    for (let key in tps.tps) {
+                        let value = tps.tps[key];
+                        d.set(key, value)
+                    }
+                    return d
+                })
+                return;
+            }
+            let map: StatisticEvent = data.data;
 
             this.plainStatistics.update(m => {
                 let d = new Map(m);
@@ -67,6 +79,10 @@ export class StatisticsComponent {
         }
         return null
     }
+
+    protected getTp(name: string) {
+        return this.tps().get(name)
+    }
 }
 
 export type DefinitionId = number;
@@ -74,6 +90,10 @@ export type EngineId = number;
 
 export interface StatisticEvent {
     engines: Record<string, [[DefinitionId, Stage, string, number][], string]>;
+}
+
+export interface ThroughputEvent {
+    tps: Record<string, number>;
 }
 
 export enum Stage {
