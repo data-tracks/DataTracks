@@ -139,7 +139,14 @@ impl Persister {
 
                 let engine_id = engine.id;
 
+                let name = format!("Persister {}", engine);
+
                 loop {
+                    engine
+                        .statistic_sender
+                        .send(Event::Heartbeat(name.clone()))
+                        .unwrap();
+
                     if first_ts.elapsed().as_millis() > 200 || count > BATCH_SIZE {
                         // try to drain the "buffer"
 

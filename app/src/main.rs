@@ -6,7 +6,7 @@ use tokio::task::JoinSet;
 use crate::management::Manager;
 use tracing::Level;
 use tracing_subscriber::FmtSubscriber;
-use ::util::InitialMeta;
+use ::util::{Event, InitialMeta};
 use sink::dummy::DummySink;
 use value::Value;
 

@@ -1,3 +1,14 @@
+<div class="flex flex-wrap gap-2 mb-4">
+    @for (filter of filters(); track filter) {
+        <button
+                class="btn btn-sm rounded-full"
+                [class.btn-primary]="activeFilters().includes(filter)"
+                (click)="toggleFilter(filter)">
+            {{ filter }}
+        </button>
+    }
+</div>
+
 <ul class="list bg-base-100 rounded-box shadow-md">
     @for (chan of msgs(); track chan) {
         @if (chan) {

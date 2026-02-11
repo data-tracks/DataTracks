@@ -23,7 +23,7 @@ impl Nativer {
                 .filter(|e| e.model() == definition.model)
                 .collect::<Vec<Engine>>();
 
-            for _ in 0..5 {
+            for i in 0..5 {
                 let definition = definition.clone();
                 let engines = engines.clone();
                 let output = output.clone();
@@ -35,7 +35,14 @@ impl Nativer {
                     let mut engine = engines.into_iter().next().unwrap();
 
                     let mapper = definition.mapping.build();
+
+                    let name = format!("Nativer {}", i);
+
                     loop {
+                        engine
+                            .statistic_sender
+                            .send(Event::Heartbeat(name.clone()))
+                            .unwrap();
                         if let Ok(record) = rx.recv_async().await {
                             let length = record.values.len();
                             match engine

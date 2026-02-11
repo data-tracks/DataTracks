@@ -1,5 +1,5 @@
 import {Component, inject, signal} from '@angular/core';
-import {EventsComponent} from "./events/events.component";
+import EventsComponent from "./events/events.component";
 import {EventsService} from "./events.service";
 import {QueuesComponent} from "./queues/queues.component";
 import {StatisticsComponent} from "./statistics/statistics.component";

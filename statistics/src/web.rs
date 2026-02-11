@@ -1,28 +1,28 @@
 use axum::Router;
 use axum::extract::ws::Message::Binary;
-use axum::extract::ws::{Message, Utf8Bytes, WebSocket};
+use axum::extract::ws::{Message, WebSocket};
 use axum::extract::{Path, State, WebSocketUpgrade};
 use axum::response::IntoResponse;
 use axum::routing::get;
-use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::Sender;
 use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
-use tracing::{debug, error, info};
-use util::{Event, StatisticEvent, TargetedMeta};
+use tracing::{error, info, warn};
+use util::{Event, TargetedMeta};
 use value::Value;
 
+#[derive(Clone)]
 struct EventState {
-    sender: Arc<Sender<Event>>,
-    output: Arc<Sender<Vec<(Value, TargetedMeta)>>>,
+    sender: Sender<Event>,
+    output: Sender<Vec<(Value, TargetedMeta)>>,
 }
 pub fn start(
     rt: &mut Runtime,
     tx: Sender<Event>,
-    output: broadcast::Sender<Vec<(Value, TargetedMeta)>>,
+    output: Sender<Vec<(Value, TargetedMeta)>>,
 ) {
     rt.spawn(async move {
         let root_dir = std::env::current_dir().unwrap();
@@ -32,16 +32,17 @@ pub fn start(
             .join("dashboard")
             .join("browser");
 
-        let shared_state = Arc::new(EventState {
-            sender: Arc::new(tx),
-            output: Arc::new(output),
-        });
+        let shared_state = EventState {
+            sender: tx,
+            output
+        };
 
         let app = Router::new()
-            .route("/events", get(ws_event_handler))
-            .route("/queues", get(ws_queue_handler))
-            .route("/statistics", get(ws_statistics_handler))
+            .route("/events", get(ws_handler))
+            .route("/queues", get(ws_handler))
+            .route("/statistics", get(ws_handler))
             .route("/channel/{topic}", get(ws_channel_handler))
+            .route("/threads", get(ws_handler))
             .layer(CorsLayer::permissive())
             .with_state(shared_state)
             .fallback_service(ServeDir::new(dist_path));
@@ -52,164 +53,53 @@ pub fn start(
     });
 }
 
-async fn ws_event_handler(
+async fn ws_handler(
     ws: WebSocketUpgrade,
-    State(state): State<Arc<EventState>>,
+    path: axum::extract::MatchedPath,
+    State(state): State<EventState>,
 ) -> impl IntoResponse {
-    ws.on_upgrade(|socket| handle_event_socket(socket, state))
+    let path_str = path.as_str().to_string();
+    ws.on_upgrade(move |socket| handle_socket_logic(socket, state, path_str))
 }
 
-async fn handle_event_socket(mut socket: WebSocket, state: Arc<EventState>) {
-    debug!("connected");
+async fn handle_socket_logic(mut socket: WebSocket, state: EventState, path: String) {
     let mut rx = state.sender.subscribe();
 
-    let mut events = vec![];
     loop {
         match rx.recv().await {
             Ok(event) => {
-                events.push(event);
-
-                while let Ok(event) = rx.try_recv() {
-                    events.push(event);
-                }
-
-                for event in events.drain(..) {
-                    match event {
-                        Event::Queue(_) => {}
-                        Event::Insert(..) => {}
-                        e => {
-                            if let Ok(msg) = serde_json::to_string(&e)
-                                && socket
-                                    .send(Message::Text(Utf8Bytes::from(msg)))
-                                    .await
-                                    .is_err()
-                            {
-                                // Client disconnected
-                                error!("disconnected event");
-                                return;
-                            }
+                // Centralized Filtering Logic
+                let msg = match (path.as_str(), event) {
+                    ("/events", e) => {
+                        if matches!(e, Event::Heartbeat(_)){
+                            continue
                         }
-                    }
+                        serde_json::to_string(&e).ok()
+                    },
+                    ("/queues", Event::Queue(q)) => serde_json::to_string(&q).ok(),
+                    ("/statistics", Event::Statistics(s)) => serde_json::to_string(&s).ok(),
+                    ("/threads", Event::Heartbeat(h)) => Some(h),
+                    _ => None,
+                };
+
+                if let Some(text) = msg {
+                    if socket.send(Message::Text(text.into())).await.is_err() { break; }
                 }
             }
-            Err(err) => {
-                debug!("event: {}", err)
+            Err(broadcast::error::RecvError::Lagged(n)) => {
+                warn!("Client lagged by {} messages", n);
+                continue; // Keep going, but we missed some data
             }
+            Err(_) => break,
         }
     }
 }
 
-async fn ws_queue_handler(
-    ws: WebSocketUpgrade,
-    State(state): State<Arc<EventState>>,
-) -> impl IntoResponse {
-    ws.on_upgrade(|socket| handle_queue_socket(socket, state))
-}
-
-async fn handle_queue_socket(mut socket: WebSocket, state: Arc<EventState>) {
-    debug!("connected");
-    let mut rx = state.sender.subscribe();
-
-    let mut events = vec![];
-    loop {
-        match rx.recv().await {
-            Ok(event) => {
-                events.push(event);
-                while let Ok(event) = rx.try_recv() {
-                    events.push(event)
-                }
-
-                for event in events.drain(..) {
-                    if let Event::Queue(q) = event
-                        && let Ok(msg) = serde_json::to_string(&q)
-                    {
-                        if (socket)
-                            .send(Message::Text(Utf8Bytes::from(msg)))
-                            .await
-                            .is_err()
-                        {
-                            // Client disconnected
-                            error!("disconnected queue");
-                            return;
-                        }
-                    } else {
-                        // we ignore others
-                    }
-                }
-            }
-            Err(err) => {
-                debug!("error: {}", err)
-            }
-        }
-    }
-}
-
-async fn ws_statistics_handler(
-    ws: WebSocketUpgrade,
-    State(state): State<Arc<EventState>>,
-) -> impl IntoResponse {
-    ws.on_upgrade(|socket| handle_statistics_socket(socket, state))
-}
-
-async fn handle_statistics_socket(mut socket: WebSocket, state: Arc<EventState>) {
-    debug!("connected");
-    let mut rx = state.sender.subscribe();
-
-    // send first empty statistics
-    if let Ok(msg) = serde_json::to_string(&StatisticEvent {
-        engines: Default::default(),
-    }) {
-        if (socket)
-            .send(Message::Text(Utf8Bytes::from(msg)))
-            .await
-            .is_err()
-        {
-            // Client disconnected
-            error!("disconnected queue");
-            return;
-        }
-    } else {
-        // we ignore others
-    }
-
-    let mut events = vec![];
-    loop {
-        match rx.recv().await {
-            Ok(event) => {
-                events.push(event);
-                while let Ok(event) = rx.try_recv() {
-                    events.push(event)
-                }
-
-                for event in events.drain(..) {
-                    if let Event::Statistics(q) = event
-                        && let Ok(msg) = serde_json::to_string(&q)
-                    {
-                        if (socket)
-                            .send(Message::Text(Utf8Bytes::from(msg)))
-                            .await
-                            .is_err()
-                        {
-                            // Client disconnected
-                            error!("disconnected queue");
-                            return;
-                        }
-                    } else {
-                        // we ignore others
-                    }
-                }
-            }
-            Err(err) => {
-                debug!("error: {}", err)
-            }
-        }
-    }
-}
 
 async fn ws_channel_handler(
     Path(id): Path<String>, // Extracts the ":id" from the URL
     ws: WebSocketUpgrade,
-    State(state): State<Arc<EventState>>, // Your existing state
+    State(state): State<EventState>, // Your existing state
 ) -> impl IntoResponse {
     // You can now use the 'id' to filter topics or join specific rooms
     info!("New connection to channel: {}", id);
@@ -217,7 +107,7 @@ async fn ws_channel_handler(
     ws.on_upgrade(move |socket| handle_socket(socket, id, state))
 }
 
-async fn handle_socket(mut socket: WebSocket, topic: String, state: Arc<EventState>) {
+async fn handle_socket(mut socket: WebSocket, topic: String, state: EventState) {
     let mut recv = state.output.subscribe();
     loop {
         if let Ok(msg) = recv.recv().await {
