@@ -69,14 +69,29 @@ export class RoundtripComponent {
     this.listening.set(true);
   }
 
+  protected readonly console = console;
+
+  protected stopListen() {
+    this.socket.update(s => {
+      if (s != null) {
+        s.close(0, "Force close");
+      }
+      return null;
+    })
+    this.listening.set(false);
+  }
+
   private initConnection(topic: string) {
     let socket = new WebSocket(`ws://localhost:3131/channel/${topic}`);
+    socket.binaryType = "arraybuffer";
     this.socket.set(socket);
 
     socket.onmessage = (event) => {
       this.zone.run(() => {
         this.connected.set(true);
         const values = ValueMapper.unpack(event.data);
+
+        console.log(event.data)
 
         this._received.update(mgs => [...mgs, {topic: topic, values: values }]);
       });
@@ -87,16 +102,6 @@ export class RoundtripComponent {
       console.warn('Disconnected from Rust. Retrying in 2s...');
       setTimeout(() => this.initConnection(topic), 2000);
     };
-  }
-
-  protected stopListen() {
-    this.socket.update(s => {
-      if (s != null) {
-        s.close(0, "Force close");
-      }
-      return null;
-    })
-    this.listening.set(false);
   }
 }
 

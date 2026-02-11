@@ -1,10 +1,10 @@
 use axum::Router;
+use axum::extract::ws::Message::Binary;
 use axum::extract::ws::{Message, Utf8Bytes, WebSocket};
 use axum::extract::{Path, State, WebSocketUpgrade};
 use axum::response::IntoResponse;
 use axum::routing::get;
 use std::sync::Arc;
-use axum::extract::ws::Message::Binary;
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
 use tokio::sync::broadcast;
@@ -19,7 +19,11 @@ struct EventState {
     sender: Arc<Sender<Event>>,
     output: Arc<Sender<Vec<(Value, TargetedMeta)>>>,
 }
-pub fn start(rt: &mut Runtime, tx: Sender<Event>, output: broadcast::Sender<Vec<(Value, TargetedMeta)>>) {
+pub fn start(
+    rt: &mut Runtime,
+    tx: Sender<Event>,
+    output: broadcast::Sender<Vec<(Value, TargetedMeta)>>,
+) {
     rt.spawn(async move {
         let root_dir = std::env::current_dir().unwrap();
         let dist_path = root_dir
@@ -30,7 +34,7 @@ pub fn start(rt: &mut Runtime, tx: Sender<Event>, output: broadcast::Sender<Vec<
 
         let shared_state = Arc::new(EventState {
             sender: Arc::new(tx),
-            output: Arc::new(output)
+            output: Arc::new(output),
         });
 
         let app = Router::new()
@@ -140,7 +144,6 @@ async fn handle_queue_socket(mut socket: WebSocket, state: Arc<EventState>) {
     }
 }
 
-
 async fn ws_statistics_handler(
     ws: WebSocketUpgrade,
     State(state): State<Arc<EventState>>,
@@ -153,8 +156,9 @@ async fn handle_statistics_socket(mut socket: WebSocket, state: Arc<EventState>)
     let mut rx = state.sender.subscribe();
 
     // send first empty statistics
-    if let Ok(msg) = serde_json::to_string(&StatisticEvent{ engines: Default::default() })
-    {
+    if let Ok(msg) = serde_json::to_string(&StatisticEvent {
+        engines: Default::default(),
+    }) {
         if (socket)
             .send(Message::Text(Utf8Bytes::from(msg)))
             .await
@@ -167,7 +171,6 @@ async fn handle_statistics_socket(mut socket: WebSocket, state: Arc<EventState>)
     } else {
         // we ignore others
     }
-
 
     let mut events = vec![];
     loop {
@@ -204,9 +207,9 @@ async fn handle_statistics_socket(mut socket: WebSocket, state: Arc<EventState>)
 }
 
 async fn ws_channel_handler(
-    Path(id): Path<String>,                  // Extracts the ":id" from the URL
+    Path(id): Path<String>, // Extracts the ":id" from the URL
     ws: WebSocketUpgrade,
-    State(state): State<Arc<EventState>>,       // Your existing state
+    State(state): State<Arc<EventState>>, // Your existing state
 ) -> impl IntoResponse {
     // You can now use the 'id' to filter topics or join specific rooms
     info!("New connection to channel: {}", id);
@@ -216,21 +219,19 @@ async fn ws_channel_handler(
 
 async fn handle_socket(mut socket: WebSocket, topic: String, state: Arc<EventState>) {
     let mut recv = state.output.subscribe();
-
-    match recv.recv().await {
-        Ok(msg) => {
+    loop {
+        if let Ok(msg) = recv.recv().await {
             let values = msg.into_iter().map(|msg| msg.0).collect::<Vec<_>>();
-            let msg = value::message::Message{ topics: vec![], payload: values, timestamp: 0 };
-            if (socket)
-                .send(Binary(msg.pack().into()))
-                .await
-                .is_err()
-            {
+            let msg = value::message::Message {
+                topics: vec![],
+                payload: values,
+                timestamp: 0,
+            };
+            if (socket).send(Binary(msg.pack().into())).await.is_err() {
                 // Client disconnected
                 error!("disconnected queue");
                 return;
             }
-        }
-        Err(_) => {}
-    };
+        };
+    }
 }

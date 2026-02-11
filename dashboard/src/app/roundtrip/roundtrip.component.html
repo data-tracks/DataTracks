@@ -76,8 +76,8 @@
             <input type="text" class="grow" [value]="recTopic()" (input)="recTopic.set($any($event.target).value)" placeholder="Topic" />
         </label>
         <div class="flex w-full justify-end">
-            @if (listening()) {
-                <button class="btn btn-sm" (click)="stopListen()">Listen</button>
+            @if (connected()) {
+                <button (click)="stopListen()" class="btn btn-sm">Stop</button>
             } @else {
                 <button class="btn btn-sm" [disabled]="!recTopic()" (click)="listen()">Listen</button>
             }
