@@ -40,6 +40,7 @@ jobs:
           
           # Build all enabled targets
           make -j$(nproc)
+          flatc --version
 
       - name: Build documentation
         run: |

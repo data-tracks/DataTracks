@@ -32,6 +32,7 @@ jobs:
           
           # Build all enabled targets
           make -j$(nproc)
+          flatc --version
 
       - uses: actions-rs/toolchain@v1
         with:
