@@ -32,11 +32,14 @@ jobs:
 
       - name: 🛠️ Install flatc
         run: |
-          # We download the pre-compiled Linux binary from the release assets
-          sudo apt update
-          sudo apt install snapd
-          sudo snap install flatbuffers
-          flatc --version
+          git clone https://github.com/google/flatbuffers.git
+          cd flatbuffers
+          
+          # Configure with CMake
+          cmake -DCMAKE_BUILD_TYPE=Release .
+          
+          # Build all enabled targets
+          make -j$(nproc)
 
       - name: Build documentation
         run: |
