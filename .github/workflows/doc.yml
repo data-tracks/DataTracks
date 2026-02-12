@@ -30,6 +30,12 @@ jobs:
         with:
           toolchain: stable
 
+      - name: 🛠️ Install flatc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatbuffers-compiler
+          flatc --version 
+
       - name: Build documentation
         run: |
           cargo doc --no-deps
