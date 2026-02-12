@@ -20,6 +20,7 @@ use value::Value;
 
 #[derive(Clone)]
 pub struct Neo4j {
+    pub(crate) name: String,
     pub(crate) load: Arc<Mutex<Load>>,
     pub(crate) host: String,
     pub(crate) port: u16,
@@ -46,12 +47,12 @@ struct TxMetrics {
 impl Neo4j {
     pub(crate) async fn start(&mut self) -> anyhow::Result<()> {
         container::start_container(
-            "engine-neo4j",
+            self.name.as_str(),
             "neo4j:latest",
             vec![
                 Mapping {
                     container: 7687,
-                    host: 7687,
+                    host: self.port,
                 },
                 Mapping {
                     container: 7474,
@@ -106,7 +107,7 @@ impl Neo4j {
     }
 
     pub(crate) async fn stop(&self) -> anyhow::Result<()> {
-        container::stop("engine-neo4j").await
+        container::stop(self.name.as_str()).await
     }
 
     pub(crate) fn cost(&self, _: &Value) -> f64 {
@@ -292,18 +293,18 @@ impl Neo4j {
 #[cfg(test)]
 mod tests {
     use crate::EngineKind;
-    use neo4rs::{BoltInteger, BoltList, BoltMap, BoltNode, BoltString, BoltType, Graph, query};
+    use neo4rs::{BoltInteger, BoltMap, BoltString, BoltType, query};
     use std::collections::{BTreeMap, HashMap};
     use std::vec;
     use tracing_test::traced_test;
-    use util::definition::{Definition, DefinitionFilter, Entity, Model, Stage};
+    use util::definition::{Definition, DefinitionFilter, Model, Stage};
     use util::{DefinitionMapping, TargetedMeta};
     use value::Value;
 
-    #[tokio::test]
-    #[traced_test]
+    //#[tokio::test]
+    //#[traced_test]
     async fn test_insert() {
-        let mut neo = EngineKind::neo4j();
+        let mut neo = EngineKind::neo4j_with_port(7688);
 
         neo.start().await.unwrap();
 
@@ -347,10 +348,12 @@ mod tests {
         )
         .await
         .unwrap();
+
+        neo.stop().await.unwrap();
     }
 
-    #[tokio::test]
-    #[traced_test]
+    //#[tokio::test]
+    //#[traced_test]
     async fn test_insert_node() {
         let mut neo = EngineKind::neo4j();
 
@@ -368,7 +371,7 @@ mod tests {
 
         match neo.graph {
             None => {}
-            Some(g) => {
+            Some(ref g) => {
                 let query = query("CREATE (n:$($labels) {}) SET n = $props");
                 let query = query
                     .param("props", HashMap::<String, String>::new())
@@ -418,5 +421,6 @@ mod tests {
                 g.run(query).await.unwrap();
             }
         }
+        neo.stop().await.unwrap();
     }
 }

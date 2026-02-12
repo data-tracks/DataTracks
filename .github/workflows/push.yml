@@ -27,8 +27,6 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
-      - name: Create ui folder
-        run: mkdir -p ui/dist
 
 
       - name: 🧪 Run ${{ matrix.module }} Tests

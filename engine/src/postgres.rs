@@ -20,6 +20,7 @@ use value::Value;
 
 #[derive(Clone, Debug)]
 pub struct Postgres {
+    pub(crate) name: String,
     pub(crate) load: Arc<Mutex<Load>>,
     pub(crate) connector: PostgresConnection,
     pub(crate) client: Option<Arc<Client>>,
@@ -38,11 +39,11 @@ impl Postgres {
         join: &mut JoinSet<()>,
     ) -> anyhow::Result<()> {
         container::start_container(
-            "engine-postgres",
+            self.name.as_str(),
             "postgres:latest",
             vec![Mapping {
                 container: 5432,
-                host: 5432,
+                host: self.connector.port,
             }],
             Some(vec![format!("POSTGRES_PASSWORD={}", "postgres")]),
         )
@@ -57,7 +58,7 @@ impl Postgres {
     }
 
     pub(crate) async fn stop(&self) -> anyhow::Result<()> {
-        container::stop("engine-postgres").await
+        container::stop(self.name.as_str()).await
     }
 
     pub(crate) fn cost(&self, _: &Value) -> f64 {
@@ -370,8 +371,7 @@ pub mod tests {
     use tokio::task::JoinSet;
     use tracing_test::traced_test;
     use util::definition::{Entity, Stage};
-    use util::{
-        DefinitionMapping, Mapping, MappingSource, RelationalMapping, RelationalType, TargetedMeta,
+    use util::{Mapping, MappingSource, RelationalMapping, RelationalType, TargetedMeta,
     };
     use value::Value;
 
@@ -391,12 +391,13 @@ pub mod tests {
         )
         .await
         .unwrap();
+        pg.stop().await.unwrap();
     }
 
     #[tokio::test]
     #[traced_test]
     pub async fn test_postgres_mapped() {
-        let mut pg = EngineKind::postgres();
+        let mut pg = EngineKind::postgres_with_port(5433);
         let mut joins = JoinSet::new();
         pg.start(&mut joins).await.unwrap();
 
@@ -428,5 +429,7 @@ pub mod tests {
         )
         .await
         .unwrap();
+
+        pg.stop().await.unwrap();
     }
 }

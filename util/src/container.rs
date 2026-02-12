@@ -233,7 +233,7 @@ pub async fn start_container(
 
         // 2. Create the HostConfig's PortBindings map
         port_bindings.insert(
-            format!("{}/{}", mapping.host.to_string(), "tcp"),
+            format!("{}/{}", mapping.container.to_string(), "tcp"),
             Some(vec![binding]),
         );
 

@@ -7,7 +7,7 @@ use std::thread::spawn;
 use std::time::Duration;
 use tokio::runtime::{Builder, Handle};
 use tokio::select;
-use tokio::sync::{broadcast, watch};
+use tokio::sync::{broadcast};
 use tokio::time::{interval, sleep, Instant};
 use tracing::log::debug;
 use util::definition::{Definition, Stage};

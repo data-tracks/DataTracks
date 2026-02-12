@@ -22,6 +22,7 @@ export class StatisticsComponent {
         effect(() => {
             let data = this.inputs();
 
+            console.log(data)
             if (!data){
                 return;
             }
@@ -41,6 +42,10 @@ export class StatisticsComponent {
                 return;
             }
             let map: StatisticEvent = data.data;
+
+            if (!map) {
+                return;
+            }
 
             this.plainStatistics.update(m => {
                 let d = new Map(m);

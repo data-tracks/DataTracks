@@ -28,3 +28,4 @@ pin-utils = "0.1.0"
 log = "0.4.28"
 tracing-test = { workspace = true }
 anyhow = { workspace = true }
+uuid = { version = "1.20.0", features = ["v4"] }

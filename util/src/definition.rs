@@ -1,7 +1,7 @@
 use crate::definition::DefinitionFilter::AllMatch;
 use crate::mappings::DefinitionMapping;
-use crate::{DefinitionId, EntityId, PlainRecord, TimedMeta, log_channel};
-use flume::{Receiver, Sender, unbounded};
+use crate::{log_channel, DefinitionId, EntityId, PlainRecord, TimedMeta};
+use flume::{unbounded, Receiver, Sender};
 use serde::Serialize;
 use speedy::{Readable, Writable};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -41,8 +41,7 @@ impl Definition {
             tx.clone(),
             format!("Definition {} - {} to Engine", id.0, name.as_ref()),
             None,
-        )
-        .await;
+        ).await;
 
         Definition {
             name: name.as_ref().to_string(),

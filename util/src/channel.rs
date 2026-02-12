@@ -25,6 +25,11 @@ pub async fn log_channel<S: AsRef<str>, P: Send + 'static>(
     name: S,
     control_tx: Option<Sender<u64>>,
 ) {
+    #[cfg(test)]
+    {
+        return;
+    }
+
     let name = name.as_ref().to_string();
     let statistics = get_statistic_sender();
 

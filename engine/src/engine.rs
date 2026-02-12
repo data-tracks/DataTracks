@@ -217,11 +217,16 @@ impl EngineKind {
     }
 
     pub fn postgres() -> Postgres {
+        Self::postgres_with_port(5432)
+    }
+
+    pub fn postgres_with_port(port: u16) -> Postgres {
         Postgres {
+            name: format!("engine-postgres-{}", uuid::Uuid::new_v4()),
             load: Arc::new(Mutex::new(Load::Low)),
             connector: PostgresConnection {
                 url: "localhost".to_string(),
-                port: 5432,
+                port,
                 db: "postgres".to_string(),
                 user: "postgres".to_string(),
                 password: "postgres".to_string(),
@@ -240,10 +245,16 @@ impl EngineKind {
     }
 
     pub(crate) fn neo4j() -> Neo4j {
+        Self::neo4j_with_port(7687)
+    }
+
+
+    pub(crate) fn neo4j_with_port(port: u16) -> Neo4j {
         Neo4j {
+            name: format!("neo4j-engine-{}", uuid::Uuid::new_v4()),
             load: Arc::new(Mutex::new(Load::Low)),
             host: "localhost".to_string(),
-            port: 7687,
+            port,
             user: "neo4j".to_string(),
             password: "neoneoneo".to_string(),
             graph: None,

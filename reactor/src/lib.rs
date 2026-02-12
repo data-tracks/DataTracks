@@ -81,8 +81,6 @@ mod test {
             loop {
                 sleep(Duration::from_secs(5)).await
             }
-
-            Ok(())
         }
 
         fn clone_box(&self) -> Box<dyn Task> {

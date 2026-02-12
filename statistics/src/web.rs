@@ -4,12 +4,11 @@ use axum::extract::ws::{Message, WebSocket};
 use axum::extract::{Path, State, WebSocketUpgrade};
 use axum::response::IntoResponse;
 use axum::routing::get;
-use num_format::Locale::pa;
 use std::sync::{Arc, Mutex};
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
 use tokio::sync::broadcast::Sender;
-use tokio::sync::{broadcast, watch};
+use tokio::sync::{broadcast};
 use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
 use tracing::{error, info, warn};
@@ -72,7 +71,7 @@ async fn handle_socket_logic(mut socket: WebSocket, state: EventState, path: Str
 
     if path.as_str() == "/statistics" {
         let statistics = (*state.last.lock().unwrap()).clone();
-        let msg = serde_json::to_string(&statistics).ok();
+        let msg = serde_json::to_string(&Event::Statistics(statistics)).ok();
         if let Some(text) = msg
             && socket.send(Message::Text(text.into())).await.is_err()
         {
