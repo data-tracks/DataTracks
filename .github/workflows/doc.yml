@@ -32,11 +32,10 @@ jobs:
 
       - name: 🛠️ Install flatc
         run: |
-          # Download a version compatible with modern Rust crates (v23+)
-          curl -LO https://github.com/google/flatbuffers/releases/download/v25.12.19/Linux.flatc.binary.gztar.gz
-          tar -xzvf Linux.flatc.binary.gztar.gz
-          sudo mv flatc /usr/local/bin/
-          flatc --version
+          # We download the pre-compiled Linux binary from the release assets
+          sudo apt update
+          sudo apt install snapd
+          sudo snap install flatbuffers
 
       - name: Build documentation
         run: |
