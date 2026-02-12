@@ -32,6 +32,11 @@ jobs:
           
           # Build all enabled targets
           make -j$(nproc)
+
+          # 3. Ensure it has execution permissions
+          sudo mv flatc /usr/local/bin/
+          
+          # 4. Verify it works
           flatc --version
 
       - uses: actions-rs/toolchain@v1
