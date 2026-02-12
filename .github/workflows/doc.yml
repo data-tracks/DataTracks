@@ -32,11 +32,9 @@ jobs:
 
       - name: 🛠️ Install flatc
         run: |
-          VERSION=24.3.25
-          curl -LO https://github.com/google/flatbuffers/releases/download/v${VERSION}/Linux.flatc.binary.gztar.gz
-          tar -xzvf Linux.flatc.binary.gztar.gz
-          sudo mv flatc /usr/local/bin/
-          flatc --version
+          sudo apt-get update
+          sudo apt-get install -y flatbuffers-compiler
+          flatc --version 
 
       - name: Build documentation
         run: |
