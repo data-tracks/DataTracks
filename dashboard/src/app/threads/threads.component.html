@@ -1,0 +1,46 @@
+<div class="space-y-4">
+    @for (group of groupedThreads() | keyvalue; track group.key) {
+        <div class="collapse collapse-arrow bg-base-200 border border-base-300">
+            <input checked type="checkbox"/>
+
+            <div class="collapse-title flex items-center gap-4">
+                <span class="badge badge-primary font-bold uppercase">{{ group.key }}</span>
+                <span class="text-xs opacity-50">{{ group.value.length }} Threads</span>
+            </div>
+
+            <div class="collapse-content">
+                <div class="grid grid-cols-1 gap-2">
+                    @for (thread of group.value; track $index) {
+                        <div
+                                [ngClass]="thread.isStale ? 'bg-error/10 opacity-60' : 'bg-base-100 shadow-sm'"
+                                class="flex justify-between items-center p-3 rounded-lg transition-all duration-500"
+                        >
+                            <div class="flex flex-col">
+                                <span [class.line-through]="thread.isStale" class="font-mono text-sm">
+                                  {{ thread.id }}
+                                </span>
+                                <span class="text-[10px] opacity-40">
+                                  Delay: {{ thread.elapsed }}ms
+                                </span>
+                            </div>
+
+                            <div class="flex items-center gap-3">
+                                <span class="text-[10px] opacity-50 font-mono">
+                                  {{ thread.timestamp | date:'mm:ss.SSS' }}
+                                </span>
+
+                                @if (thread.isStale) {
+                                    <div class="badge badge-error badge-xs outline outline-1 outline-error animate-pulse">
+                                        STALE
+                                    </div>
+                                } @else {
+                                    <div class="w-2 h-2 rounded-full bg-success animate-pulse"></div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>

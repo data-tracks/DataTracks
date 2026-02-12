@@ -11,9 +11,12 @@ export class EventsService {
   private _queues = signal<any>(null);
   public queues = this._queues.asReadonly();
 
-  public connectedStatistics = signal<boolean>(false);
-  public connected = computed(() => this.connectedQueues() && this.connectedEvents() && this.connectedStatistics)
+  public connectedThreads = signal<boolean>(false);
+  public connected = computed(() => this.connectedQueues() && this.connectedEvents() && this.connectedStatistics() && this.connectedThreads())
+  private _threads = signal<any>(null);
+  public threads = this._threads.asReadonly();
 
+  public connectedStatistics = signal<boolean>(false);
   public connectedEvents = signal<boolean>(false);
   public connectedQueues = signal<boolean>(false);
   private _statistics = signal<any>(null);
@@ -23,6 +26,7 @@ export class EventsService {
     this.initEventsConnection();
     this.initQueueConnection();
     this.initStatisticsConnection();
+    this.initThreadsConnection()
   }
 
   private initEventsConnection() {
@@ -77,6 +81,24 @@ export class EventsService {
 
     socket.onclose = () => {
       this.connectedStatistics.set(false);
+      console.warn('Disconnected from Rust. Retrying in 2s...');
+      setTimeout(() => this.initStatisticsConnection(), 2000);
+    };
+  }
+
+  private initThreadsConnection() {
+    const socket = new WebSocket('ws://localhost:3131/threads');
+
+    socket.onmessage = (queue) => {
+      this.zone.run(() => {
+        this.connectedThreads.set(true);
+
+        this._threads.set(queue.data);
+      });
+    };
+
+    socket.onclose = () => {
+      this.connectedThreads.set(false);
       console.warn('Disconnected from Rust. Retrying in 2s...');
       setTimeout(() => this.initStatisticsConnection(), 2000);
     };

@@ -19,6 +19,10 @@ class EventsComponent {
         effect(() => {
             let data = this.inputs();
 
+            if (!data) {
+                return;
+            }
+
             if (!this.filters().includes(data.type)){
                 this.filters.update(filters => {
                     return [...filters, data.type];

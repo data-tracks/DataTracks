@@ -9,13 +9,23 @@
                 @if (img) {
                     <div class="avatar shrink-0">
                         <div class="w-8 h-8 rounded bg-black/20 p-1">
-                            <img [ngSrc]="img" alt="" class="logo-outline object-contain" height="32" width="32">
+                            <img [ngSrc]="img" alt="" class="logo-outline object-contain" fill>
                         </div>
                     </div>
                 }
+                @let tp = getTp(entry[0]);
                 <span class="text-sm font-bold truncate uppercase tracking-tight">{{ entry[0] }}</span>
-                <span class="grow-1"></span>
-                <span>Tp/s: {{getTp(entry[0])}}</span>
+                <span class="grow"></span>
+
+                <div class="badge badge-outline badge-secondary gap-2">
+                    <span class="opacity-70 text-[10px]">PLAIN</span>
+                    <span class="font-mono">{{ tp.plain }}</span>
+                </div>
+
+                <div class="badge badge-soft badge-accent gap-2">
+                    <span class="opacity-70 text-[10px]">MAPPED</span>
+                    <span class="font-mono">{{ tp.mapped }}</span>
+                </div>
             </div>
 
             <div class="p-3 flex flex-col gap-4">
@@ -27,7 +37,7 @@
                             <div class="h-px grow bg-primary/10"></div>
                         </div>
                         <div class="grid grid-cols-3 gap-2">
-                            @for (value of plainItems; track $index) {
+                            @for (value of plainItems; track value[0] + value[1]) {
                                 <div class="flex flex-col border-l-2 border-primary/30 pl-2">
                                     <span class="text-[14px] opacity-60 truncate">{{ value[2] }}</span>
                                     <span class="text-xl font-mono font-bold leading-none">{{ value[3] | number }}</span>
@@ -44,12 +54,12 @@
                             <div class="h-px grow bg-accent/10"></div>
                         </div>
                         <div class="grid grid-cols-2 gap-2">
-                            @for (value of mappedItems; track $index) {
+                            @for (value of mappedItems; track value[0] + value[1]) {
                                 <div class="flex flex-col border-l-2 border-accent/30 pl-2">
                                     <span class="text-[14px] opacity-60 truncate">{{ value[2] }}</span>
-                                    @for (v of [value[3]]; track v) {
-                                        <span class="text-xl font-mono font-bold leading-none animate-pop">{{ v | number }}</span>
-                                    }
+                                    <!---@for (v of [value[3]]; track v) {-->
+                                    <span class="text-xl font-mono font-bold leading-none animate-pop">{{ value[3] | number }}</span>
+                                    <!--}-->
                                 </div>
                             }
                         </div>

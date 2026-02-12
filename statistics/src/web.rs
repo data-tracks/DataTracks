@@ -4,25 +4,29 @@ use axum::extract::ws::{Message, WebSocket};
 use axum::extract::{Path, State, WebSocketUpgrade};
 use axum::response::IntoResponse;
 use axum::routing::get;
+use num_format::Locale::pa;
+use std::sync::{Arc, Mutex};
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
-use tokio::sync::broadcast;
 use tokio::sync::broadcast::Sender;
+use tokio::sync::{broadcast, watch};
 use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
 use tracing::{error, info, warn};
-use util::{Event, TargetedMeta};
+use util::{Event, StatisticEvent, TargetedMeta};
 use value::Value;
 
 #[derive(Clone)]
 struct EventState {
     sender: Sender<Event>,
     output: Sender<Vec<(Value, TargetedMeta)>>,
+    last: Arc<Mutex<StatisticEvent>>,
 }
 pub fn start(
     rt: &mut Runtime,
     tx: Sender<Event>,
     output: Sender<Vec<(Value, TargetedMeta)>>,
+    last: Arc<Mutex<StatisticEvent>>,
 ) {
     rt.spawn(async move {
         let root_dir = std::env::current_dir().unwrap();
@@ -34,7 +38,8 @@ pub fn start(
 
         let shared_state = EventState {
             sender: tx,
-            output
+            output,
+            last,
         };
 
         let app = Router::new()
@@ -65,36 +70,52 @@ async fn ws_handler(
 async fn handle_socket_logic(mut socket: WebSocket, state: EventState, path: String) {
     let mut rx = state.sender.subscribe();
 
+    if path.as_str() == "/statistics" {
+        let statistics = (*state.last.lock().unwrap()).clone();
+        let msg = serde_json::to_string(&statistics).ok();
+        if let Some(text) = msg
+            && socket.send(Message::Text(text.into())).await.is_err()
+        {
+            error!("Error sending initial statistic.")
+        }
+    }
+
     loop {
         match rx.recv().await {
             Ok(event) => {
                 // Centralized Filtering Logic
                 let msg = match (path.as_str(), event) {
                     ("/events", e) => {
-                        if matches!(e, Event::Heartbeat(_)){
-                            continue
+                        if matches!(e, Event::Heartbeat(_)) {
+                            continue;
                         }
                         serde_json::to_string(&e).ok()
-                    },
+                    }
                     ("/queues", Event::Queue(q)) => serde_json::to_string(&q).ok(),
-                    ("/statistics", e) if matches!(e, Event::Statistics(_)) || matches!(e, Event::Throughput(_)) => serde_json::to_string(&e).ok(),
+                    ("/statistics", e)
+                        if matches!(e, Event::Statistics(_))
+                            || matches!(e, Event::Throughput(_)) =>
+                    {
+                        serde_json::to_string(&e).ok()
+                    }
                     ("/threads", Event::Heartbeat(h)) => Some(h),
                     _ => None,
                 };
 
-                if let Some(text) = msg {
-                    if socket.send(Message::Text(text.into())).await.is_err() { break; }
+                if let Some(text) = msg
+                    && socket.send(Message::Text(text.into())).await.is_err()
+                {
+                    break;
                 }
             }
             Err(broadcast::error::RecvError::Lagged(n)) => {
                 warn!("Client lagged by {} messages", n);
-                continue; // Keep going, but we missed some data
+                continue;
             }
             Err(_) => break,
         }
     }
 }
-
 
 async fn ws_channel_handler(
     Path(id): Path<String>, // Extracts the ":id" from the URL

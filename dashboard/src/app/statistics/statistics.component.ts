@@ -16,7 +16,7 @@ export class StatisticsComponent {
     protected plainStatistics: WritableSignal<Map<string, [number, Stage, string, number][]>> = signal(new Map());
     protected mappedStatistics: WritableSignal<Map<string, [number, Stage, string, number][]>> = signal(new Map());
 
-    protected tps: WritableSignal<Map<string, number>> = signal(new Map())
+    protected tps: WritableSignal<Map<string, Throughput>> = signal(new Map())
 
     constructor() {
         effect(() => {
@@ -33,7 +33,9 @@ export class StatisticsComponent {
                     for (let key in tps.tps) {
                         let value = tps.tps[key];
                         d.set(key, value)
+
                     }
+
                     return d
                 })
                 return;
@@ -81,7 +83,7 @@ export class StatisticsComponent {
     }
 
     protected getTp(name: string) {
-        return this.tps().get(name)
+        return this.tps().get(name) || {plain: 0, mapped: 0};
     }
 }
 
@@ -93,10 +95,15 @@ export interface StatisticEvent {
 }
 
 export interface ThroughputEvent {
-    tps: Record<string, number>;
+    tps: Record<string, Throughput>;
 }
 
 export enum Stage {
     Plain = "Plain",
     Mapped = "Mapped"
+}
+
+export interface Throughput {
+    plain: number,
+    mapped: number,
 }

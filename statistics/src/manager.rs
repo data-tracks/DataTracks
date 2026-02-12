@@ -2,11 +2,12 @@ use crate::web;
 use flume::{unbounded, Receiver, Sender};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use std::thread::spawn;
 use std::time::Duration;
 use tokio::runtime::{Builder, Handle};
 use tokio::select;
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, watch};
 use tokio::time::{interval, sleep, Instant};
 use tracing::log::debug;
 use util::definition::{Definition, Stage};
@@ -86,6 +87,10 @@ pub fn start(rt: Runtimes, tx: Sender<Event>, rx: Receiver<Event>, output: broad
     let (bc_tx, _) = broadcast::channel(1_000_000);
     let clone_bc_tx = bc_tx.clone();
 
+    let last_shared = Arc::new(Mutex::new(StatisticEvent::default()));
+
+    let last_shared_clone = last_shared.clone();
+
     let tx_clone = tx.clone();
     let statistic = spawn(move || {
         let tx = tx_clone.clone();
@@ -118,24 +123,24 @@ pub fn start(rt: Runtimes, tx: Sender<Event>, rx: Receiver<Event>, output: broad
                     _ = timer.tick() => {
                         let since = Instant::now().duration_since(last_time);
                         current = statistics.get_summary();
-                        let throughput = calculate_throughput(&current, &last, since);
+                        let throughput = current.calculate(last.clone(), since);
 
-                        if clone_bc_tx.send(Event::Statistics(last.clone())).is_err() {
+                        if clone_bc_tx.send(Event::Statistics(last)).is_err() {
                             debug!("Statistic ticks", )
                         }
                         
                         if clone_bc_tx.send(Event::Throughput(ThroughputEvent{tps: throughput})).is_err() {
                             debug!("Statistic throughput ticks", )
                         }
-                        
-                        
+
                         last_time = Instant::now();
                         last = current.clone();
+                        *last_shared_clone.lock().unwrap() = last.clone()
                     }
                 }
             }
         });
-        web::start(&mut rt, bc_tx, output);
+        web::start(&mut rt, bc_tx, output, last_shared);
 
         let statistic_tx = tx.clone();
 
@@ -162,26 +167,6 @@ pub fn start(rt: Runtimes, tx: Sender<Event>, rx: Receiver<Event>, output: broad
     rt.add_handle(statistic);
 
     tx
-}
-
-fn calculate_throughput(current: &StatisticEvent, last: &StatisticEvent, duration: Duration) -> HashMap<String, f64> {
-    let current_amounts = current.get_amounts();
-    let last_amounts = last.get_amounts();
-
-    let mut tps = HashMap::new();
-
-    for (name, amount) in current_amounts {
-        if let Some(amount_last) = last_amounts.get(&name) {
-            let raw_tps = (amount - amount_last) as f64 / duration.as_secs() as f64;
-
-            // Apply rounding to 3 decimal places
-            let rounded_tps = (raw_tps * 1000.0).round() / 1000.0;
-
-            tps.insert(name.clone(), rounded_tps);
-        }
-    }
-
-    tps
 }
 
 #[derive(Default)]

@@ -21,25 +21,31 @@
                     class="tab tab-sm gap-2">
                 Statistics
                 <span [class.badge-primary]="activeTab === Tab.Stats"
-                      class="badge badge-xs">{{ service.events().length }}</span>
+                      class="badge badge-xs"></span>
             </button>
             <button (click)="activeTab = Tab.Events" [class.tab-active]="activeTab === Tab.Events"
                     class="tab tab-sm gap-2">
                 Events
                 <span [class.badge-primary]="activeTab === Tab.Events"
-                      class="badge badge-xs">{{ service.events().length }}</span>
+                      class="badge badge-xs"></span>
             </button>
             <button (click)="activeTab = Tab.Queues" [class.tab-active]="activeTab === Tab.Queues"
                     class="tab tab-sm gap-2">
                 Queues
                 <span [class.badge-primary]="activeTab === Tab.Queues"
-                      class="badge badge-xs">{{ service.events().length }}</span>
+                      class="badge badge-xs"></span>
             </button>
-            <button (click)="activeTab = Tab.Testing" [class.tab-active]="activeTab === Tab.Testing"
+            <button (click)="activeTab = Tab.Threads" [class.tab-active]="activeTab === Tab.Threads"
+                    class="tab tab-sm gap-2">
+                Threads
+                <span [class.badge-primary]="activeTab === Tab.Threads"
+                      class="badge badge-xs"></span>
+            </button>
+            <button (click)="activeTab = Tab.Roundtrip" [class.tab-active]="activeTab === Tab.Roundtrip"
                     class="tab tab-sm gap-2">
                 Roundtrip
-                <span [class.badge-primary]="activeTab === Tab.Testing"
-                      class="badge badge-xs">{{ service.events().length }}</span>
+                <span [class.badge-primary]="activeTab === Tab.Roundtrip"
+                      class="badge badge-xs"></span>
             </button>
         </div>
 
@@ -51,7 +57,7 @@
         </div>
     </header>
 
-    <div class="flex-grow overflow-y-auto custom-scrollbar p-4 lg:p-6 bg-black">
+    <div class="grow overflow-y-auto custom-scrollbar p-4 lg:p-6 bg-black">
         <div class="max-w-7xl mx-auto h-full grid">
 
             <div [class.active-tab]="activeTab === Tab.Events" class="tab-pane">
@@ -66,7 +72,11 @@
                 <app-statistics [inputs]="service.statistics()"/>
             </div>
 
-            <div [class.active-tab]="activeTab === Tab.Testing" class="tab-pane">
+            <div [class.active-tab]="activeTab === Tab.Threads" class="tab-pane">
+                <app-threads [inputs]="service.threads()"/>
+            </div>
+
+            <div [class.active-tab]="activeTab === Tab.Roundtrip" class="tab-pane">
                 <app-roundtrip/>
             </div>
         </div>
