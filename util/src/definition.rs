@@ -1,7 +1,7 @@
 use crate::definition::DefinitionFilter::AllMatch;
 use crate::mappings::DefinitionMapping;
-use crate::{log_channel, DefinitionId, EntityId, PlainRecord, TimedMeta};
-use flume::{unbounded, Receiver, Sender};
+use crate::{DefinitionId, EntityId, TargetedRecord, TimedMeta, log_channel};
+use flume::{Receiver, Sender, unbounded};
 use serde::Serialize;
 use speedy::{Readable, Writable};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -21,7 +21,7 @@ pub struct Definition {
     /// final destination
     pub entity: Entity,
     #[serde(skip)]
-    pub native: (Sender<PlainRecord>, Receiver<PlainRecord>),
+    pub native: (Sender<Vec<TargetedRecord>>, Receiver<Vec<TargetedRecord>>),
     pub mapping: DefinitionMapping,
 }
 
@@ -35,13 +35,14 @@ impl Definition {
     ) -> Self {
         let id = DefinitionId(ID_BUILDER.fetch_add(1, Ordering::Relaxed));
 
-        let (tx, rx) = unbounded::<PlainRecord>();
+        let (tx, rx) = unbounded::<Vec<TargetedRecord>>();
 
         log_channel(
             tx.clone(),
             format!("Definition {} - {} to Engine", id.0, name.as_ref()),
             None,
-        ).await;
+        )
+        .await;
 
         Definition {
             name: name.as_ref().to_string(),

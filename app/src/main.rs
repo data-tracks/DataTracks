@@ -1,7 +1,7 @@
 extern crate core;
 
 use crate::management::Manager;
-use ::util::{Event, InitialMeta};
+use ::util::{Event, InitialRecord};
 use flume::Sender;
 use sink::dummy::DummySink;
 use std::time::Duration;
@@ -31,11 +31,7 @@ fn setup_logging() {
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 }
 
-fn setup_inputs(
-    joins: &mut JoinSet<()>,
-    tx: Sender<(Value, InitialMeta)>,
-    statistics_tx: Sender<Event>,
-) {
+fn setup_inputs(joins: &mut JoinSet<()>, tx: Sender<InitialRecord>, statistics_tx: Sender<Event>) {
     let amount = 2_0;
 
     for i in 0..amount {

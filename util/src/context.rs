@@ -2,8 +2,6 @@ use crate::DefinitionId;
 use chrono::Utc;
 use serde::Serialize;
 use speedy::{Readable, Writable};
-use value::Value;
-
 #[derive(Clone, Debug, Writable, Readable)]
 pub struct InitialMeta {
     pub name: Option<String>,
@@ -46,16 +44,5 @@ impl TargetedMeta {
             timestamp: meta.timestamp,
             definition,
         }
-    }
-}
-
-#[derive(Clone, Debug, Writable, Readable, Serialize, Default)]
-pub struct PlainRecord {
-    pub values: Vec<(Value, TargetedMeta)>,
-}
-
-impl PlainRecord {
-    pub fn new(values: Vec<(Value, TargetedMeta)>) -> Self {
-        Self { values }
     }
 }

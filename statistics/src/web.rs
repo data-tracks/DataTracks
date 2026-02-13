@@ -7,24 +7,23 @@ use axum::routing::get;
 use std::sync::{Arc, Mutex};
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
+use tokio::sync::broadcast;
 use tokio::sync::broadcast::Sender;
-use tokio::sync::{broadcast};
 use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
 use tracing::{error, info, warn};
-use util::{Event, StatisticEvent, TargetedMeta};
-use value::Value;
+use util::{Event, StatisticEvent, TargetedRecord};
 
 #[derive(Clone)]
 struct EventState {
     sender: Sender<Event>,
-    output: Sender<Vec<(Value, TargetedMeta)>>,
+    output: Sender<Vec<TargetedRecord>>,
     last: Arc<Mutex<StatisticEvent>>,
 }
 pub fn start(
     rt: &mut Runtime,
     tx: Sender<Event>,
-    output: Sender<Vec<(Value, TargetedMeta)>>,
+    output: Sender<Vec<TargetedRecord>>,
     last: Arc<Mutex<StatisticEvent>>,
 ) {
     rt.spawn(async move {
@@ -131,7 +130,7 @@ async fn handle_socket(mut socket: WebSocket, topic: String, state: EventState) 
     let mut recv = state.output.subscribe();
     loop {
         if let Ok(msg) = recv.recv().await {
-            let values = msg.into_iter().map(|msg| msg.0).collect::<Vec<_>>();
+            let values = msg.into_iter().map(|msg| msg.value).collect::<Vec<_>>();
             let msg = value::message::Message {
                 topics: vec![],
                 payload: values,

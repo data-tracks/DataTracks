@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["core", "app", "value", "threading", "macro", "engine", "util", "sink", "statistics", "reactor"]
+members = ["core", "app", "value", "threading", "macro", "engine", "util", "sink", "statistics"]
 
 
 [workspace.package]
@@ -12,6 +12,7 @@ repository = "https://github.com/data-tracks/DataTracks"
 description = "DataTracks is an prototype system, which provides easy creation and management of complex data streaming workloads for various degrees of structured and unstructured data."
 
 [workspace.dependencies]
+bollard = "0.20.1"
 speedy = "0.8.7"
 statistics = { path = "./statistics" }
 flume = "0.12.0"
@@ -54,6 +55,7 @@ tower-http = { version = "0.6.8", features = ["full"] }
 anyhow = "1.0.101"
 capnp = "0.25"
 capnpc = "0.25.0"
+
 
 # The profile that 'cargo dist' will build with
 [profile.dist]

@@ -8,8 +8,7 @@ use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 use util::Event::Heartbeat;
-use util::{InitialMeta, Runtimes, TimedMeta, get_statistic_sender, log_channel};
-use value::Value;
+use util::{InitialRecord, Runtimes, TimedMeta, TimedRecord, get_statistic_sender, log_channel};
 
 struct TimerWorker {
     handle: JoinHandle<()>,
@@ -48,11 +47,7 @@ impl TimerManager {
         self.workers.len()
     }
 
-    pub fn add_worker(
-        &mut self,
-        incoming: Receiver<(Value, InitialMeta)>,
-        sender: Sender<(Value, TimedMeta)>,
-    ) {
+    pub fn add_worker(&mut self, incoming: Receiver<InitialRecord>, sender: Sender<TimedRecord>) {
         info!("Added worker: {}", self.workers.len());
         let id = self.next_id;
         let token = CancellationToken::new();
@@ -114,10 +109,10 @@ impl TimerManager {
                                 Err(_) => {
                                     error!("No incoming {}", i);
                                 }
-                                Ok((value, context)) => {
+                                Ok(InitialRecord { value, meta }) => {
                                     let id = available_ids.pop().unwrap(); // can unwrap, check above
-                                    let context = TimedMeta::new(id, context);
-                                    sender.send((value, context)).unwrap();
+                                    let context = TimedMeta::new(id, meta);
+                                    sender.send((value, context).into()).unwrap();
                                 }
                             }
                         }
@@ -151,9 +146,9 @@ impl TimerManager {
 }
 
 pub fn handle_initial_time_annotation(
-    incoming: Receiver<(Value, InitialMeta)>,
+    incoming: Receiver<InitialRecord>,
     rt: &Runtimes,
-    sender: Sender<(Value, TimedMeta)>,
+    sender: Sender<TimedRecord>,
     control_rx: Receiver<u64>,
 ) -> Receiver<u64> {
     let (control_tx_timer, control_rx_timer) = unbounded();

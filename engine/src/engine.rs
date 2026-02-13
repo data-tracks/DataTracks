@@ -14,15 +14,15 @@ use std::time::Duration;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
 use util::definition::{Definition, Model, Stage};
-use util::{DefinitionId, EngineId, Event, TargetedMeta, log_channel};
+use util::{DefinitionId, EngineId, Event, TargetedRecord, log_channel};
 use value::Value;
 
 static ID_BUILDER: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Clone, Debug)]
 pub struct Engine {
-    pub tx: Sender<(Value, TargetedMeta)>,
-    pub rx: Receiver<(Value, TargetedMeta)>,
+    pub tx: Sender<TargetedRecord>,
+    pub rx: Receiver<TargetedRecord>,
     pub ids: Vec<u64>,
     pub statistic_sender: Sender<Event>,
     pub engine_kind: EngineKind,
@@ -44,7 +44,7 @@ impl Display for Engine {
 
 impl Engine {
     pub async fn new(engine_kind: EngineKind, sender: Sender<Event>) -> Self {
-        let (tx, rx) = unbounded::<(Value, TargetedMeta)>();
+        let (tx, rx) = unbounded::<TargetedRecord>();
 
         log_channel(tx.clone(), engine_kind.to_string(), None).await;
 
@@ -103,9 +103,12 @@ impl Engine {
         &mut self,
         stage: Stage,
         entity_name: String,
-        values: Vec<(Value, TargetedMeta)>,
+        values: Vec<TargetedRecord>,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
-        let ids = values.iter().map(|(_v, m)| m.id).collect::<Vec<_>>();
+        let ids = values
+            .iter()
+            .map(|TargetedRecord { value: _, meta }| meta.id)
+            .collect::<Vec<_>>();
         self.ids.extend(ids.clone());
 
         match &self.engine_kind {

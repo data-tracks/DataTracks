@@ -7,13 +7,12 @@ use std::thread::spawn;
 use std::time::Duration;
 use tokio::runtime::{Builder, Handle};
 use tokio::select;
-use tokio::sync::{broadcast};
+use tokio::sync::broadcast;
 use tokio::time::{interval, sleep, Instant};
 use tracing::log::debug;
 use util::definition::{Definition, Stage};
 use util::Event::Runtime;
-use util::{log_channel, set_statistic_sender, DefinitionId, EngineEvent, EngineId, Event, RuntimeEvent, Runtimes, StatisticEvent, TargetedMeta, ThroughputEvent};
-use value::Value;
+use util::{log_channel, set_statistic_sender, DefinitionId, EngineEvent, EngineId, Event, RuntimeEvent, Runtimes, StatisticEvent, TargetedRecord, ThroughputEvent};
 
 pub struct Statistics {
     engines: HashMap<EngineId, EngineStatistic>,
@@ -79,7 +78,7 @@ impl Statistics {
     }
 }
 
-pub fn start(rt: Runtimes, tx: Sender<Event>, rx: Receiver<Event>, output: broadcast::Sender<Vec<(Value, TargetedMeta)>>) -> Sender<Event> {
+pub fn start(rt: Runtimes, tx: Sender<Event>, rx: Receiver<Event>, output: broadcast::Sender<Vec<TargetedRecord>>) -> Sender<Event> {
     set_statistic_sender(tx.clone());
 
     let (status_tx, status_rx) = unbounded();

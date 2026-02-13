@@ -1,6 +1,6 @@
 use crate::engine::Load;
+use anyhow::bail;
 use flume::Sender;
-use log::debug;
 use neo4rs::{Graph, query};
 use reqwest::Client;
 use serde::Deserialize;
@@ -9,13 +9,12 @@ use std::error::Error;
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use anyhow::bail;
 use tokio::time::{Instant, sleep};
-use tracing::info;
+use tracing::{debug, info};
 use util::Event::EngineStatus;
 use util::container::Mapping;
 use util::definition::{Definition, Stage};
-use util::{DefinitionMapping, Event, TargetedMeta, container};
+use util::{DefinitionMapping, Event, TargetedRecord, container};
 use value::Value;
 
 #[derive(Clone)]
@@ -130,7 +129,7 @@ impl Neo4j {
         &self,
         stage: Stage,
         entity: String,
-        values: Vec<(Value, TargetedMeta)>,
+        values: Vec<TargetedRecord>,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
         match &self.graph {
             None => Err(Box::from("No graph")),
@@ -155,22 +154,22 @@ impl Neo4j {
         }
     }
 
-    fn wrap_value_plain(values: Vec<(Value, TargetedMeta)>) -> Vec<Vec<Value>> {
+    fn wrap_value_plain(values: Vec<TargetedRecord>) -> Vec<Vec<Value>> {
         values
             .into_iter()
-            .map(|(v, m)| {
+            .map(|TargetedRecord { value, meta }| {
                 vec![
-                    Value::text(&serde_json::to_string(&v).unwrap()),
-                    Value::int(m.id as i64),
+                    Value::text(&serde_json::to_string(&value).unwrap()),
+                    Value::int(meta.id as i64),
                 ]
             })
             .collect::<Vec<_>>()
     }
 
-    fn wrap_value_mapped(values: Vec<(Value, TargetedMeta)>) -> Vec<Vec<Value>> {
+    fn wrap_value_mapped(values: Vec<TargetedRecord>) -> Vec<Vec<Value>> {
         values
             .into_iter()
-            .map(|(v, m)| vec![v, Value::int(m.id as i64)])
+            .map(|TargetedRecord { value, meta }| vec![value, Value::int(meta.id as i64)])
             .collect::<Vec<_>>()
     }
 
@@ -296,7 +295,6 @@ mod tests {
     use neo4rs::{BoltInteger, BoltMap, BoltString, BoltType, query};
     use std::collections::{BTreeMap, HashMap};
     use std::vec;
-    use tracing_test::traced_test;
     use util::definition::{Definition, DefinitionFilter, Model, Stage};
     use util::{DefinitionMapping, TargetedMeta};
     use value::Value;
@@ -321,7 +319,7 @@ mod tests {
         neo.store(
             Stage::Plain,
             String::from("users"),
-            vec![(Value::text("test"), TargetedMeta::default())],
+            vec![(Value::text("test"), TargetedMeta::default()).into()],
         )
         .await
         .unwrap();
@@ -329,7 +327,7 @@ mod tests {
         neo.store(
             Stage::Plain,
             String::from("users"),
-            vec![(Value::text("test"), TargetedMeta::default())],
+            vec![(Value::text("test"), TargetedMeta::default()).into()],
         )
         .await
         .unwrap();
@@ -337,14 +335,17 @@ mod tests {
         neo.store(
             Stage::Mapped,
             String::from("users"),
-            vec![(
-                Value::node(
-                    Value::int(0).as_int().unwrap(),
-                    vec![Value::text("test").as_text().unwrap()],
-                    BTreeMap::new(),
-                ),
-                TargetedMeta::default(),
-            )],
+            vec![
+                (
+                    Value::node(
+                        Value::int(0).as_int().unwrap(),
+                        vec![Value::text("test").as_text().unwrap()],
+                        BTreeMap::new(),
+                    ),
+                    TargetedMeta::default(),
+                )
+                    .into(),
+            ],
         )
         .await
         .unwrap();

@@ -1,18 +1,21 @@
-use tokio::sync::broadcast::Sender;
 use crate::management::catalog::Catalog;
 use engine::engine::Engine;
+use tokio::sync::broadcast::Sender;
 use tokio::task::JoinSet;
 use tracing::{debug, error};
 use util::definition::Stage;
-use util::{Event, TargetedMeta};
-use value::Value;
+use util::{Event, TargetedRecord};
 
 pub struct Nativer {
     catalog: Catalog,
 }
 
 impl Nativer {
-    pub(crate) async fn start(&self, join_set: &mut JoinSet<()>, output: Sender<Vec<(Value, TargetedMeta)>>) {
+    pub(crate) async fn start(
+        &self,
+        join_set: &mut JoinSet<()>,
+        output: Sender<Vec<TargetedRecord>>,
+    ) {
         //let catalog = self.catalog.clone();
         for definition in self.catalog.definitions().await {
             let engines = self
@@ -43,17 +46,18 @@ impl Nativer {
                             .statistic_sender
                             .send(Event::Heartbeat(name.clone()))
                             .unwrap();
-                        if let Ok(record) = rx.recv_async().await {
-                            let length = record.values.len();
+                        if let Ok(records) = rx.recv_async().await {
+                            let length = records.len();
                             match engine
                                 .store(
                                     Stage::Mapped,
                                     entity.mapped.clone(),
-                                    record
-                                        .values
+                                    records
                                         .clone()
                                         .into_iter()
-                                        .map(|(v, m)| (mapper(v), m))
+                                        .map(|TargetedRecord { value, meta }| {
+                                            (mapper(value), meta).into()
+                                        })
                                         .collect(),
                                 )
                                 .await
@@ -69,7 +73,7 @@ impl Nativer {
                                         ))
                                         .unwrap();
 
-                                    let _ = output.send(record.values);
+                                    let _ = output.send(records);
 
                                     debug!("mapped")
                                 }

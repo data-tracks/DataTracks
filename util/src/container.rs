@@ -219,7 +219,7 @@ pub async fn start_container(
     }
     print!("\r");
 
-    let mut exposed_ports = HashMap::new();
+    let mut exposed_ports = vec![];
     let mut port_bindings = HashMap::new();
 
     for mapping in mappings {
@@ -233,15 +233,12 @@ pub async fn start_container(
 
         // 2. Create the HostConfig's PortBindings map
         port_bindings.insert(
-            format!("{}/{}", mapping.container.to_string(), "tcp"),
+            format!("{}/{}", mapping.container, "tcp"),
             Some(vec![binding]),
         );
 
         // 4. Create the ExposedPorts map for the container config
-        exposed_ports.insert(
-            format!("{}/{}", mapping.container.to_string(), "tcp"),
-            HashMap::new(),
-        );
+        exposed_ports.push(format!("{}/{}", mapping.container, "tcp"));
     }
 
     // 3. Create the HostConfig

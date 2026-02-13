@@ -1,4 +1,5 @@
 use crate::engine::Load;
+use anyhow::bail;
 use flume::Sender;
 use futures_util::StreamExt;
 use mongodb::bson::doc;
@@ -8,13 +9,12 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use anyhow::bail;
 use tokio::time::{sleep, timeout};
 use tracing::{error, info};
+use util::Event::EngineStatus;
 use util::container::Mapping;
 use util::definition::{Definition, Stage};
-use util::{DefinitionMapping, TargetedMeta, container, Event};
-use util::Event::EngineStatus;
+use util::{DefinitionMapping, Event, TargetedRecord, container};
 use value::Value;
 
 #[derive(Clone, Debug)]
@@ -66,7 +66,7 @@ impl MongoDB {
         &self,
         _: Stage,
         entity: String,
-        values: Vec<(Value, TargetedMeta)>,
+        values: Vec<TargetedRecord>,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
         match &self.client {
             None => Err(Box::from("No client")),
@@ -74,8 +74,11 @@ impl MongoDB {
                 client
                     .database("public")
                     .collection(&entity)
-                    .insert_many(values.into_iter().map(|(v, m)| {
-                        Value::dict_from_pairs(vec![("value", v), ("id", Value::int(m.id as i64))])
+                    .insert_many(values.into_iter().map(|TargetedRecord { value, meta }| {
+                        Value::dict_from_pairs(vec![
+                            ("value", value),
+                            ("id", Value::int(meta.id as i64)),
+                        ])
                     }))
                     .bypass_document_validation(true)
                     .await?;
@@ -124,10 +127,7 @@ impl MongoDB {
         }
     }
 
-    pub(crate) async fn init_entity(
-        &self,
-        definition: &Definition,
-    ) -> anyhow::Result<()> {
+    pub(crate) async fn init_entity(&self, definition: &Definition) -> anyhow::Result<()> {
         self.create_collection(&definition.entity.plain).await?;
 
         if let DefinitionMapping::Document(_) = definition.mapping {
@@ -137,10 +137,7 @@ impl MongoDB {
         Ok(())
     }
 
-    pub(crate) async fn create_collection(
-        &self,
-        name: &str,
-    ) -> anyhow::Result<()> {
+    pub(crate) async fn create_collection(&self, name: &str) -> anyhow::Result<()> {
         match &self.client {
             None => bail!("No client"),
             Some(client) => {

@@ -3,8 +3,7 @@ use std::thread;
 use tokio::runtime::Builder;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
-use util::{Runtimes, SegmentedLog, TimedMeta, log_channel};
-use value::Value;
+use util::{Runtimes, SegmentedLog, TimedRecord, log_channel};
 
 struct WalWorker {
     handle: thread::JoinHandle<()>,
@@ -28,7 +27,7 @@ impl WalManager {
         }
     }
 
-    pub fn add_worker(&mut self, rx: Receiver<(Value, TimedMeta)>, tx: Sender<(Value, TimedMeta)>) {
+    pub fn add_worker(&mut self, rx: Receiver<TimedRecord>, tx: Sender<TimedRecord>) {
         info!("Added worker: {}", self.workers.len());
         let id = self.next_id;
         let token = CancellationToken::new();
@@ -89,9 +88,9 @@ impl WalManager {
 
 pub fn handle_wal_to_engines(
     rt: &Runtimes,
-    receiver: Receiver<(Value, TimedMeta)>,
+    receiver: Receiver<TimedRecord>,
     control_rx: Receiver<u64>,
-) -> (Receiver<(Value, TimedMeta)>, Receiver<u64>) {
+) -> (Receiver<TimedRecord>, Receiver<u64>) {
     let (wal_tx, wal_rx) = unbounded();
     let wal_tx_clone = wal_tx.clone();
 

@@ -1,12 +1,11 @@
+use crate::TimedRecord;
 use memmap2::{MmapMut, MmapOptions};
+use speedy::Writable;
 use std::error::Error;
 use std::path::{Path, PathBuf};
-use speedy::Writable;
 use tokio::fs;
 use tokio::fs::OpenOptions;
 use tracing::debug;
-use value::Value;
-use crate::TimedMeta;
 
 pub struct SegmentedLog {
     base_path: PathBuf,
@@ -14,7 +13,7 @@ pub struct SegmentedLog {
     current_segment_id: usize,
     mmap: MmapMut,
     cursor: usize,
-    batch: Vec<u8>
+    batch: Vec<u8>,
 }
 
 impl SegmentedLog {
@@ -58,7 +57,12 @@ impl SegmentedLog {
 
         file.set_len(size).await.expect("Failed to set file size");
         // theoretically other processes could change the file, while we are writing
-        unsafe { MmapOptions::new().populate().map_mut(&file).expect("Failed to mmap") }
+        unsafe {
+            MmapOptions::new()
+                .populate()
+                .map_mut(&file)
+                .expect("Failed to mmap")
+        }
     }
 
     async fn rotate(&mut self) {
@@ -72,7 +76,7 @@ impl SegmentedLog {
         debug!("Rotated to segment {}", self.current_segment_id);
     }
 
-    pub async fn log(&mut self, records: &Vec<(Value, TimedMeta)>) {
+    pub async fn log(&mut self, records: &Vec<TimedRecord>) {
         self.batch.clear();
         for record in records {
             record.write_to_stream(&mut self.batch).unwrap();

@@ -3,7 +3,7 @@ use std::ops::AddAssign;
 use std::time::Duration;
 use tracing::error;
 use util::Event::Heartbeat;
-use util::{Event, InitialMeta};
+use util::{Event, InitialMeta, InitialRecord};
 use value::Value;
 
 pub enum DummySink {
@@ -27,7 +27,7 @@ impl DummySink {
         &mut self,
         id: usize,
         name: String,
-        sender: Sender<(Value, InitialMeta)>,
+        sender: Sender<InitialRecord>,
         statistics_tx: Sender<Event>,
     ) {
         match self {
@@ -35,7 +35,8 @@ impl DummySink {
                 let id = format!("DummyInterval {} {}", name, id);
                 loop {
                     statistics_tx.send(Heartbeat(id.clone())).unwrap();
-                    match sender.send((value.clone(), InitialMeta::new(Some(name.clone())))) {
+                    match sender.send((value.clone(), InitialMeta::new(Some(name.clone()))).into())
+                    {
                         Ok(_) => {}
                         Err(err) => {
                             error!("Could not sink: {}", err)
@@ -54,7 +55,8 @@ impl DummySink {
                 let delta = *delta;
                 loop {
                     statistics_tx.send(Heartbeat(id.clone())).unwrap();
-                    match sender.send((value.clone(), InitialMeta::new(Some(name.clone())))) {
+                    match sender.send((value.clone(), InitialMeta::new(Some(name.clone()))).into())
+                    {
                         Ok(_) => {}
                         Err(err) => {
                             error!("Could not sink: {}", err)

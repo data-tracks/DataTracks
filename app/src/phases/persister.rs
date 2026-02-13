@@ -12,7 +12,7 @@ use tokio::task::JoinSet;
 use tokio::time::{Instant, sleep};
 use tracing::{debug, error};
 use util::definition::{Definition, Stage};
-use util::{DefinitionId, Event, InitialMeta, PlainRecord, TargetedMeta, TimedMeta};
+use util::{DefinitionId, Event, InitialRecord, TargetedMeta, TargetedRecord, TimedRecord};
 use value::Value;
 
 pub struct Persister {
@@ -27,7 +27,7 @@ impl Persister {
     }
 
     pub async fn move_to_engines(
-        record: (Value, TimedMeta),
+        record: TimedRecord,
         engine: &mut [Engine],
         definitions: &mut [Definition],
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -35,17 +35,12 @@ impl Persister {
 
         debug!("store {} - {:?}", engine, value);
 
-        engine.tx.send((value, meta))?;
+        engine.tx.send((value, meta).into())?;
 
         Ok(())
     }
 
-    pub fn start(
-        self,
-        incoming: Receiver<(Value, InitialMeta)>,
-        rt: Runtimes,
-        control_rx: Receiver<u64>,
-    ) {
+    pub fn start(self, incoming: Receiver<InitialRecord>, rt: Runtimes, control_rx: Receiver<u64>) {
         let storer_workers = 4;
 
         let (sender, receiver) = unbounded();
@@ -89,18 +84,18 @@ impl Persister {
     }
 
     async fn select_engines<'a>(
-        record: (Value, TimedMeta),
+        record: TimedRecord,
         engines: &'a mut [Engine],
         definitions: &mut [Definition],
     ) -> Result<(&'a Engine, Value, TargetedMeta), Box<dyn Error + Send + Sync>> {
         let definition = definitions
             .iter_mut()
-            .find(|d| d.matches(&record.0, &record.1))
+            .find(|d| d.matches(&record.value, &record.meta))
             .unwrap();
 
         let costs: Vec<_> = engines
             .iter()
-            .map(|e| (e.cost(&record.0, definition), e))
+            .map(|e| (e.cost(&record.value, definition), e))
             .collect();
 
         debug!(
@@ -115,7 +110,11 @@ impl Persister {
 
         debug!("cost:{:?}", cost.1.engine_kind.to_string());
 
-        Ok((cost.1, record.0, TargetedMeta::new(record.1, definition.id)))
+        Ok((
+            cost.1,
+            record.value,
+            TargetedMeta::new(record.meta, definition.id),
+        ))
     }
 
     pub async fn start_distributor(&mut self, joins: &mut JoinSet<()>) {
@@ -133,7 +132,7 @@ impl Persister {
                 let mut error_count = 0;
                 let mut count = 0;
                 let mut first_ts = Instant::now();
-                let mut buckets: HashMap<DefinitionId, Vec<(Value, TargetedMeta)>> = HashMap::new();
+                let mut buckets: HashMap<DefinitionId, Vec<TargetedRecord>> = HashMap::new();
 
                 let mut last_log = Instant::now();
 
@@ -157,7 +156,7 @@ impl Persister {
                             match clone.store(Stage::Plain, name, records.clone()).await {
                                 Ok(_) => {
                                     engine.statistic_sender.send(Event::Insert(id, length, engine_id, Stage::Plain)).unwrap();
-                                    definition.native.0.send_async(PlainRecord::new(records)).await.unwrap();
+                                    definition.native.0.send_async(records).await.unwrap();
                                     error_count = 0;
                                     count = 0;
                                 }
@@ -170,7 +169,7 @@ impl Persister {
                                             let res = engine
                                                 .tx
                                                 .send(
-                                                    (v.0, v.1)
+                                                    v
                                                 )
                                                 .map_err(|err| format!("{:?}", err));
                                             res.err()
@@ -200,7 +199,7 @@ impl Persister {
                         Ok(record) => {
                             debug!("current {}", engine.rx.len());
 
-                            buckets.entry(record.1.definition).or_default().push(record);
+                            buckets.entry(record.meta.definition).or_default().push(record);
                             count += 1;
 
                             if buckets.is_empty() {
@@ -212,7 +211,7 @@ impl Persister {
                             debug!("current after {}", engine.rx.len());
 
                             for record in values {
-                                buckets.entry(record.1.definition).or_default().push(record);
+                                buckets.entry(record.meta.definition).or_default().push(record);
                                 count += 1;
                             }
 

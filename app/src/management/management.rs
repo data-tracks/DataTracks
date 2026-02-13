@@ -10,15 +10,14 @@ use tokio::task::JoinSet;
 use tracing::{error, info};
 use util::definition::{Definition, DefinitionFilter, Model};
 use util::runtimes::Runtimes;
-use util::{DefinitionMapping, Event, InitialMeta, RelationalType, TargetedMeta, log_channel};
-use value::Value;
+use util::{DefinitionMapping, Event, InitialRecord, RelationalType, TargetedRecord, log_channel};
 
 pub struct Manager {
     catalog: Catalog,
     joins: JoinSet<()>,
     runtimes: Runtimes,
     statistic_tx: Sender<Event>,
-    output: sync::broadcast::Sender<Vec<(Value, TargetedMeta)>>,
+    output: sync::broadcast::Sender<Vec<TargetedRecord>>,
 }
 
 impl Default for Manager {
@@ -27,8 +26,7 @@ impl Default for Manager {
     }
 }
 
-pub type SinkRunner =
-    fn(&mut JoinSet<()>, Sender<(Value, InitialMeta)>, statistic_tx: Sender<Event>);
+pub type SinkRunner = fn(&mut JoinSet<()>, Sender<InitialRecord>, statistic_tx: Sender<Event>);
 
 impl Manager {
     pub fn new() -> Manager {
@@ -37,7 +35,7 @@ impl Manager {
 
         let rt = runtimes.clone();
 
-        let output = sync::broadcast::channel(1).0;
+        let output = sync::broadcast::channel(10_000).0;
 
         let statistic_tx = statistics::start(rt, tx, rx, output.clone());
 
@@ -205,7 +203,7 @@ impl Manager {
         &mut self,
         persister: Persister,
         rt: Runtimes,
-    ) -> anyhow::Result<Sender<(Value, InitialMeta)>> {
+    ) -> anyhow::Result<Sender<InitialRecord>> {
         let (tx, rx) = unbounded();
 
         let (control_tx, control_rx) = unbounded();
