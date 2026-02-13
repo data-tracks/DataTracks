@@ -7,7 +7,8 @@ use tokio::task::JoinSet;
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
-use util::{InitialMeta, Runtimes, TimedMeta, log_channel};
+use util::Event::Heartbeat;
+use util::{InitialMeta, Runtimes, TimedMeta, get_statistic_sender, log_channel};
 use value::Value;
 
 struct TimerWorker {
@@ -83,7 +84,10 @@ impl TimerManager {
 
                     joins.spawn(async move {
                         let mut available_ids = vec![];
+                        let statistics_sender = get_statistic_sender();
+                        let name = format!("Timer {} {}", id, i);
                         loop {
+                            statistics_sender.send(Heartbeat(name.clone())).unwrap();
                             if worker_token.is_cancelled() {
                                 info!("WAL Worker {} shutting down gracefully", id);
                                 return;

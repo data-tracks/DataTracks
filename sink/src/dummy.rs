@@ -1,20 +1,21 @@
-use std::ops::{AddAssign};
-use flume::{Sender};
+use flume::Sender;
+use std::ops::AddAssign;
 use std::time::Duration;
 use tracing::error;
-use util::InitialMeta;
+use util::Event::Heartbeat;
+use util::{Event, InitialMeta};
 use value::Value;
 
 pub enum DummySink {
-    Interval{
+    Interval {
         value: Value,
         interval: Duration,
     },
-    Ramping{
+    Ramping {
         value: Value,
         interval: Duration,
         delta: Duration,
-    }
+    },
 }
 
 impl DummySink {
@@ -22,12 +23,19 @@ impl DummySink {
         DummySink::Interval { value, interval }
     }
 
-    pub async fn start(&mut self, name: String, sender: Sender<(Value, InitialMeta)>) {
+    pub async fn start(
+        &mut self,
+        id: usize,
+        name: String,
+        sender: Sender<(Value, InitialMeta)>,
+        statistics_tx: Sender<Event>,
+    ) {
         match self {
-            DummySink::Interval{value,interval} => {
+            DummySink::Interval { value, interval } => {
+                let id = format!("DummyInterval {} {}", name, id);
                 loop {
-                    match sender
-                        .send((value.clone(), InitialMeta::new(Some(name.clone())))) {
+                    statistics_tx.send(Heartbeat(id.clone())).unwrap();
+                    match sender.send((value.clone(), InitialMeta::new(Some(name.clone())))) {
                         Ok(_) => {}
                         Err(err) => {
                             error!("Could not sink: {}", err)
@@ -36,13 +44,17 @@ impl DummySink {
                     tokio::time::sleep(*interval).await;
                 }
             }
-            DummySink::Ramping { value, interval, delta } => {
-
-                let mut interval = interval.clone();
-                let delta = delta.clone();
+            DummySink::Ramping {
+                value,
+                interval,
+                delta,
+            } => {
+                let id = format!("DummyRamping {} {}", name, id);
+                let mut interval = *interval;
+                let delta = *delta;
                 loop {
-                    match sender
-                        .send((value.clone(), InitialMeta::new(Some(name.clone())))) {
+                    statistics_tx.send(Heartbeat(id.clone())).unwrap();
+                    match sender.send((value.clone(), InitialMeta::new(Some(name.clone())))) {
                         Ok(_) => {}
                         Err(err) => {
                             error!("Could not sink: {}", err)

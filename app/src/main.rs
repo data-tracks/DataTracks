@@ -1,13 +1,13 @@
 extern crate core;
 
 use crate::management::Manager;
+use ::util::{Event, InitialMeta};
 use flume::Sender;
 use sink::dummy::DummySink;
 use std::time::Duration;
 use tokio::task::JoinSet;
 use tracing::Level;
 use tracing_subscriber::FmtSubscriber;
-use ::util::InitialMeta;
 use value::Value;
 
 mod management;
@@ -31,23 +31,31 @@ fn setup_logging() {
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 }
 
-fn setup_inputs(joins: &mut JoinSet<()>, tx: Sender<(Value, InitialMeta)>) {
+fn setup_inputs(
+    joins: &mut JoinSet<()>,
+    tx: Sender<(Value, InitialMeta)>,
+    statistics_tx: Sender<Event>,
+) {
     let amount = 2_0;
 
-    for _ in 0..amount {
+    for i in 0..amount {
         let tx = tx.clone();
-        joins.spawn(async {
+        let statistics = statistics_tx.clone();
+        joins.spawn(async move {
             let mut dummy = DummySink::interval(
                 Value::array(vec![Value::text("David"), Value::int(31)]),
                 Duration::from_millis(10),
             );
-            dummy.start(String::from("relational"), tx).await;
+            dummy
+                .start(i, String::from("relational"), tx, statistics.clone())
+                .await;
         });
     }
 
-    for _ in 0..amount {
+    for i in 0..amount {
         let tx = tx.clone();
-        joins.spawn(async {
+        let statistics = statistics_tx.clone();
+        joins.spawn(async move {
             let mut dummy = DummySink::interval(
                 Value::dict_from_pairs(vec![
                     ("test", Value::text("test")),
@@ -55,13 +63,16 @@ fn setup_inputs(joins: &mut JoinSet<()>, tx: Sender<(Value, InitialMeta)>) {
                 ]),
                 Duration::from_millis(10),
             );
-            dummy.start(String::from("doc"), tx).await;
+            dummy
+                .start(i, String::from("doc"), tx, statistics.clone())
+                .await;
         });
     }
 
-    for _ in 0..amount {
+    for i in 0..amount {
         let tx = tx.clone();
-        joins.spawn(async {
+        let statistics = statistics_tx.clone();
+        joins.spawn(async move {
             let mut dummy = DummySink::interval(
                 Value::dict_from_pairs(vec![
                     ("id", Value::text("test")),
@@ -73,7 +84,9 @@ fn setup_inputs(joins: &mut JoinSet<()>, tx: Sender<(Value, InitialMeta)>) {
                 ]),
                 Duration::from_millis(10),
             );
-            dummy.start(String::from("graph"), tx).await;
+            dummy
+                .start(i, String::from("graph"), tx, statistics.clone())
+                .await;
         });
     }
 }

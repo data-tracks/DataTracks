@@ -10,7 +10,7 @@ use tokio::task::JoinSet;
 use tracing::{error, info};
 use util::definition::{Definition, DefinitionFilter, Model};
 use util::runtimes::Runtimes;
-use util::{DefinitionMapping, Event, InitialMeta, RelationalType, log_channel, TargetedMeta};
+use util::{DefinitionMapping, Event, InitialMeta, RelationalType, TargetedMeta, log_channel};
 use value::Value;
 
 pub struct Manager {
@@ -26,6 +26,9 @@ impl Default for Manager {
         Self::new()
     }
 }
+
+pub type SinkRunner =
+    fn(&mut JoinSet<()>, Sender<(Value, InitialMeta)>, statistic_tx: Sender<Event>);
 
 impl Manager {
     pub fn new() -> Manager {
@@ -43,11 +46,11 @@ impl Manager {
             catalog: Catalog::new(statistic_tx.clone()),
             runtimes: Runtimes::new(),
             statistic_tx,
-            output
+            output,
         }
     }
 
-    pub fn start(mut self, sink_runner: fn(&mut JoinSet<()>, Sender<(Value, InitialMeta)>)) -> anyhow::Result<()> {
+    pub fn start(mut self, sink_runner: SinkRunner) -> anyhow::Result<()> {
         let ctrl_c_signal = tokio::signal::ctrl_c();
 
         let main_rt = Builder::new_multi_thread()
@@ -73,20 +76,19 @@ impl Manager {
 
         let statistic_tx = self.statistic_tx.clone();
 
-
         let output = self.output.clone();
 
         main_rt.block_on(async move {
             let mut joins: JoinSet<()> = JoinSet::new();
 
-            self.init_definitions(statistic_tx).await?;
+            self.init_definitions(statistic_tx.clone()).await?;
 
             persister.start_distributor(&mut self.joins).await;
 
             let sink = self.start_sinks(persister, rt).await?;
             //let kafka = sink::kafka::start(&mut self.joins, tx.clone()).await?;
 
-            sink_runner(&mut self.joins, sink);
+            sink_runner(&mut self.joins, sink, statistic_tx);
 
             nativer.start(&mut self.joins, output).await;
 
@@ -199,7 +201,11 @@ impl Manager {
         Ok(())
     }
 
-    async fn start_sinks(&mut self, persister: Persister, rt: Runtimes) -> anyhow::Result<Sender<(Value, InitialMeta)>> {
+    async fn start_sinks(
+        &mut self,
+        persister: Persister,
+        rt: Runtimes,
+    ) -> anyhow::Result<Sender<(Value, InitialMeta)>> {
         let (tx, rx) = unbounded();
 
         let (control_tx, control_rx) = unbounded();
@@ -207,7 +213,6 @@ impl Manager {
         log_channel(tx.clone(), "Sink Input", Some(control_tx)).await;
 
         persister.start(rx, rt, control_rx);
-
 
         Ok(tx)
     }
