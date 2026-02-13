@@ -15,9 +15,7 @@ use tokio_postgres::{Client, Statement};
 use tracing::{debug, error, info};
 use util::container::Mapping;
 use util::definition::{Definition, Entity, Stage};
-use util::{
-    DefinitionMapping, Event, RelationalMapping, RelationalType, TargetedRecord, container,
-};
+use util::{DefinitionMapping, Event, RelationalMapping, RelationalType, TargetedRecord, container, Batch};
 use value::Value;
 
 #[derive(Clone, Debug)]
@@ -68,7 +66,7 @@ impl Postgres {
         &self,
         stage: Stage,
         entity: String,
-        values: Vec<TargetedRecord>,
+        values: Batch<TargetedRecord>,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
         match &self.client {
             None => return Err(Box::from("Could not create postgres database")),
@@ -281,7 +279,7 @@ impl Postgres {
         stage: Stage,
         client: &Arc<Client>,
         entity: String,
-        values: Vec<TargetedRecord>,
+        values: Batch<TargetedRecord>,
     ) -> Result<usize, Box<dyn Error + Send + Sync>> {
         let rows = values.len();
 
@@ -364,7 +362,7 @@ pub mod tests {
     use tokio::task::JoinSet;
     use tracing_test::traced_test;
     use util::definition::{Entity, Stage};
-    use util::{Mapping, MappingSource, RelationalMapping, RelationalType, TargetedMeta};
+    use util::{batch, target, Mapping, MappingSource, RelationalMapping, RelationalType, TargetedMeta};
     use value::Value;
 
     #[tokio::test]
@@ -379,7 +377,7 @@ pub mod tests {
         pg.store(
             Stage::Plain,
             String::from("users"),
-            vec![(Value::text("test"), TargetedMeta::default()).into()],
+            batch![target!(Value::text("test"), TargetedMeta::default())],
         )
         .await
         .unwrap();
@@ -414,12 +412,11 @@ pub mod tests {
         pg.store(
             Stage::Mapped,
             String::from("users"),
-            vec![
-                (
+            batch![
+                target!(
                     Value::array(vec![Value::text("test"), Value::int(30)]),
-                    TargetedMeta::default(),
+                    TargetedMeta::default()
                 )
-                    .into(),
             ],
         )
         .await

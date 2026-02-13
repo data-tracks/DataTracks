@@ -12,7 +12,7 @@ use tokio::task::JoinSet;
 use tokio::time::{Instant, sleep};
 use tracing::{debug, error};
 use util::definition::{Definition, Stage};
-use util::{DefinitionId, Event, InitialRecord, TargetedMeta, TargetedRecord, TimedRecord};
+use util::{Batch, DefinitionId, Event, InitialRecord, TargetedMeta, TargetedRecord, TimedRecord};
 use value::Value;
 
 pub struct Persister {
@@ -132,7 +132,7 @@ impl Persister {
                 let mut error_count = 0;
                 let mut count = 0;
                 let mut first_ts = Instant::now();
-                let mut buckets: HashMap<DefinitionId, Vec<TargetedRecord>> = HashMap::new();
+                let mut buckets: HashMap<DefinitionId, Batch<TargetedRecord>> = HashMap::new();
 
                 let mut last_log = Instant::now();
 

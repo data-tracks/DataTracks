@@ -12,18 +12,18 @@ use tokio::sync::broadcast::Sender;
 use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
 use tracing::{error, info, warn};
-use util::{Event, StatisticEvent, TargetedRecord};
+use util::{Batch, Event, StatisticEvent, TargetedRecord};
 
 #[derive(Clone)]
 struct EventState {
     sender: Sender<Event>,
-    output: Sender<Vec<TargetedRecord>>,
+    output: Sender<Batch<TargetedRecord>>,
     last: Arc<Mutex<StatisticEvent>>,
 }
 pub fn start(
     rt: &mut Runtime,
     tx: Sender<Event>,
-    output: Sender<Vec<TargetedRecord>>,
+    output: Sender<Batch<TargetedRecord>>,
     last: Arc<Mutex<StatisticEvent>>,
 ) {
     rt.spawn(async move {

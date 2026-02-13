@@ -14,7 +14,7 @@ use std::time::Duration;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
 use util::definition::{Definition, Model, Stage};
-use util::{DefinitionId, EngineId, Event, TargetedRecord, log_channel};
+use util::{DefinitionId, EngineId, Event, TargetedRecord, log_channel, Batch};
 use value::Value;
 
 static ID_BUILDER: AtomicU64 = AtomicU64::new(0);
@@ -103,7 +103,7 @@ impl Engine {
         &mut self,
         stage: Stage,
         entity_name: String,
-        values: Vec<TargetedRecord>,
+        values: Batch<TargetedRecord>,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
         let ids = values
             .iter()

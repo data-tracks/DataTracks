@@ -1,6 +1,6 @@
 mod channel;
 pub mod container;
-mod context;
+mod meta;
 pub mod definition;
 mod event;
 pub mod id;
@@ -13,7 +13,7 @@ mod types;
 
 pub use segment::SegmentedLog;
 
-pub use context::*;
+pub use meta::*;
 
 pub use id::*;
 

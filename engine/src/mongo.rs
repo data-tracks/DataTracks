@@ -14,7 +14,7 @@ use tracing::{error, info};
 use util::Event::EngineStatus;
 use util::container::Mapping;
 use util::definition::{Definition, Stage};
-use util::{DefinitionMapping, Event, TargetedRecord, container};
+use util::{DefinitionMapping, Event, TargetedRecord, container, Batch};
 use value::Value;
 
 #[derive(Clone, Debug)]
@@ -66,7 +66,7 @@ impl MongoDB {
         &self,
         _: Stage,
         entity: String,
-        values: Vec<TargetedRecord>,
+        values: Batch<TargetedRecord>,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
         match &self.client {
             None => Err(Box::from("No client")),

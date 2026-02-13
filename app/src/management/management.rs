@@ -10,14 +10,14 @@ use tokio::task::JoinSet;
 use tracing::{error, info};
 use util::definition::{Definition, DefinitionFilter, Model};
 use util::runtimes::Runtimes;
-use util::{DefinitionMapping, Event, InitialRecord, RelationalType, TargetedRecord, log_channel};
+use util::{DefinitionMapping, Event, InitialRecord, RelationalType, TargetedRecord, log_channel, Batch};
 
 pub struct Manager {
     catalog: Catalog,
     joins: JoinSet<()>,
     runtimes: Runtimes,
     statistic_tx: Sender<Event>,
-    output: sync::broadcast::Sender<Vec<TargetedRecord>>,
+    output: sync::broadcast::Sender<Batch<TargetedRecord>>,
 }
 
 impl Default for Manager {

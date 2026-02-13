@@ -14,7 +14,7 @@ use tracing::{debug, info};
 use util::Event::EngineStatus;
 use util::container::Mapping;
 use util::definition::{Definition, Stage};
-use util::{DefinitionMapping, Event, TargetedRecord, container};
+use util::{DefinitionMapping, Event, TargetedRecord, container, Batch};
 use value::Value;
 
 #[derive(Clone)]
@@ -129,7 +129,7 @@ impl Neo4j {
         &self,
         stage: Stage,
         entity: String,
-        values: Vec<TargetedRecord>,
+        values: Batch<TargetedRecord>,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
         match &self.graph {
             None => Err(Box::from("No graph")),
@@ -154,7 +154,7 @@ impl Neo4j {
         }
     }
 
-    fn wrap_value_plain(values: Vec<TargetedRecord>) -> Vec<Vec<Value>> {
+    fn wrap_value_plain(values: Batch<TargetedRecord>) -> Vec<Vec<Value>> {
         values
             .into_iter()
             .map(|TargetedRecord { value, meta }| {
@@ -166,7 +166,7 @@ impl Neo4j {
             .collect::<Vec<_>>()
     }
 
-    fn wrap_value_mapped(values: Vec<TargetedRecord>) -> Vec<Vec<Value>> {
+    fn wrap_value_mapped(values: Batch<TargetedRecord>) -> Vec<Vec<Value>> {
         values
             .into_iter()
             .map(|TargetedRecord { value, meta }| vec![value, Value::int(meta.id as i64)])
@@ -296,7 +296,7 @@ mod tests {
     use std::collections::{BTreeMap, HashMap};
     use std::vec;
     use util::definition::{Definition, DefinitionFilter, Model, Stage};
-    use util::{DefinitionMapping, TargetedMeta};
+    use util::{batch, target, DefinitionMapping, TargetedMeta};
     use value::Value;
 
     //#[tokio::test]
@@ -319,7 +319,7 @@ mod tests {
         neo.store(
             Stage::Plain,
             String::from("users"),
-            vec![(Value::text("test"), TargetedMeta::default()).into()],
+            batch![target!(Value::text("test"), TargetedMeta::default())],
         )
         .await
         .unwrap();
@@ -327,7 +327,7 @@ mod tests {
         neo.store(
             Stage::Plain,
             String::from("users"),
-            vec![(Value::text("test"), TargetedMeta::default()).into()],
+            batch![target!(Value::text("test"), TargetedMeta::default())],
         )
         .await
         .unwrap();
@@ -335,16 +335,15 @@ mod tests {
         neo.store(
             Stage::Mapped,
             String::from("users"),
-            vec![
-                (
+            batch![
+                target!(
                     Value::node(
                         Value::int(0).as_int().unwrap(),
                         vec![Value::text("test").as_text().unwrap()],
                         BTreeMap::new(),
                     ),
-                    TargetedMeta::default(),
+                    TargetedMeta::default()
                 )
-                    .into(),
             ],
         )
         .await

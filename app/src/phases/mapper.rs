@@ -4,7 +4,7 @@ use tokio::sync::broadcast::Sender;
 use tokio::task::JoinSet;
 use tracing::{debug, error};
 use util::definition::Stage;
-use util::{Event, TargetedRecord};
+use util::{target, Batch, Event, TargetedRecord};
 
 pub struct Nativer {
     catalog: Catalog,
@@ -14,7 +14,7 @@ impl Nativer {
     pub(crate) async fn start(
         &self,
         join_set: &mut JoinSet<()>,
-        output: Sender<Vec<TargetedRecord>>,
+        output: Sender<Batch<TargetedRecord>>,
     ) {
         //let catalog = self.catalog.clone();
         for definition in self.catalog.definitions().await {
@@ -56,7 +56,7 @@ impl Nativer {
                                         .clone()
                                         .into_iter()
                                         .map(|TargetedRecord { value, meta }| {
-                                            (mapper(value), meta).into()
+                                            target!(mapper(value), meta)
                                         })
                                         .collect(),
                                 )
