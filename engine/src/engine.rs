@@ -46,7 +46,8 @@ impl Engine {
     pub async fn new(engine_kind: EngineKind, sender: Sender<Event>) -> Self {
         let (tx, rx) = unbounded::<TargetedRecord>();
 
-        log_channel(tx.clone(), engine_kind.to_string(), None).await;
+        let name = format!("Persister {}", engine_kind);
+        log_channel(tx.clone(), name, None).await;
 
         let id = EngineId(ID_BUILDER.fetch_add(1, Ordering::Relaxed));
         Engine {
@@ -103,7 +104,7 @@ impl Engine {
         &mut self,
         stage: Stage,
         entity_name: String,
-        values: Batch<TargetedRecord>,
+        values: &Batch<TargetedRecord>,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
         let ids = values
             .iter()

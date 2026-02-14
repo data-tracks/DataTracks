@@ -100,7 +100,7 @@ export class EventsService {
     socket.onclose = () => {
       this.connectedThreads.set(false);
       console.warn('Disconnected from Rust. Retrying in 2s...');
-      setTimeout(() => this.initStatisticsConnection(), 2000);
+      setTimeout(() => this.initThreadsConnection(), 2000);
     };
   }
 

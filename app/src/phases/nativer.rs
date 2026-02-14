@@ -2,9 +2,7 @@ use crate::management::catalog::Catalog;
 use engine::engine::Engine;
 use tokio::sync::broadcast::Sender;
 use tokio::task::JoinSet;
-use tracing::{debug, error, info};
-use tracing::log::log;
-use engine::EngineKind;
+use tracing::{debug, error};
 use util::definition::Stage;
 use util::{target, Batch, Event, TargetedRecord};
 
@@ -61,7 +59,7 @@ impl Nativer {
                                 .store(
                                     Stage::Mapped,
                                     entity.mapped.clone(),
-                                    records
+                                    &records
                                         .clone()
                                         .into_iter()
                                         .map(|TargetedRecord { value, meta }| {

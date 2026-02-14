@@ -21,7 +21,9 @@ export class StatisticsComponent {
     constructor() {
         effect(() => {
             let data = this.inputs();
-            
+
+            console.log(data)
+
             if (!data){
                 return;
             }

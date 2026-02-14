@@ -129,7 +129,7 @@ impl Neo4j {
         &self,
         stage: Stage,
         entity: String,
-        values: Batch<TargetedRecord>,
+        values: &Batch<TargetedRecord>,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
         match &self.graph {
             None => Err(Box::from("No graph")),
@@ -154,7 +154,7 @@ impl Neo4j {
         }
     }
 
-    fn wrap_value_plain(values: Batch<TargetedRecord>) -> Vec<Vec<Value>> {
+    fn wrap_value_plain(values: &Batch<TargetedRecord>) -> Vec<Vec<Value>> {
         values
             .into_iter()
             .map(|TargetedRecord { value, meta }| {
@@ -166,10 +166,10 @@ impl Neo4j {
             .collect::<Vec<_>>()
     }
 
-    fn wrap_value_mapped(values: Batch<TargetedRecord>) -> Vec<Vec<Value>> {
+    fn wrap_value_mapped(values: &Batch<TargetedRecord>) -> Vec<Vec<Value>> {
         values
             .into_iter()
-            .map(|TargetedRecord { value, meta }| vec![value, Value::int(meta.id as i64)])
+            .map(|TargetedRecord { value, meta }| vec![value.clone(), Value::int(meta.id as i64)])
             .collect::<Vec<_>>()
     }
 
@@ -319,7 +319,7 @@ mod tests {
         neo.store(
             Stage::Plain,
             String::from("users"),
-            batch![target!(Value::text("test"), TargetedMeta::default())],
+            &batch![target!(Value::text("test"), TargetedMeta::default())],
         )
         .await
         .unwrap();
@@ -327,7 +327,7 @@ mod tests {
         neo.store(
             Stage::Plain,
             String::from("users"),
-            batch![target!(Value::text("test"), TargetedMeta::default())],
+            &batch![target!(Value::text("test"), TargetedMeta::default())],
         )
         .await
         .unwrap();
@@ -335,7 +335,7 @@ mod tests {
         neo.store(
             Stage::Mapped,
             String::from("users"),
-            batch![
+            &batch![
                 target!(
                     Value::node(
                         Value::int(0).as_int().unwrap(),

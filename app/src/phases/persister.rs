@@ -7,10 +7,11 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::thread;
 use std::time::Duration;
+use anyhow::anyhow;
 use tokio::runtime::Builder;
 use tokio::task::JoinSet;
-use tokio::time::{Instant, sleep};
-use tracing::{debug, error};
+use tokio::time::{Instant};
+use tracing::{debug, error, warn};
 use util::definition::{Definition, Stage};
 use util::{Batch, DefinitionId, Event, InitialRecord, TargetedMeta, TargetedRecord, TimedRecord};
 use value::Value;
@@ -129,96 +130,126 @@ impl Persister {
                 .collect::<HashMap<_, _>>();
 
             joins.spawn(async move {
-                let mut error_count = 0;
-                let mut count = 0;
-                let mut first_ts = Instant::now();
                 let mut buckets: HashMap<DefinitionId, Batch<TargetedRecord>> = HashMap::new();
-
-                let mut last_log = Instant::now();
-
-                let source = engine.id;
+                let mut count = 0;
 
                 let name = format!("Persister {}", engine);
 
+                // Create a 200ms ticker for the flush interval
+                let mut flush_interval = tokio::time::interval(Duration::from_millis(200));
+                // don't let ticks pile up if processing is slow
+                flush_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+
+                let mut heartbeat_interval = tokio::time::interval(Duration::from_millis(500));
+                heartbeat_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
                 loop {
-                    engine
-                        .statistic_sender
-                        .send(Event::Heartbeat(name.clone()))
-                        .unwrap();
-
-                    if first_ts.elapsed().as_millis() > 200 || count > BATCH_SIZE {
-                        // try to drain the "buffer"
-
-                        for (id, records) in buckets.drain() {
-                            let size = records.len();
-                            let ids = records.iter().map(|record| record.meta.id).collect::<Vec<_>>();
-                            let definition = definitions.get(&id).unwrap();
-                            let name = definition.entity.plain.clone();
-                            match clone.store(Stage::Plain, name, records.clone()).await {
-                                Ok(_) => {
-                                    engine.statistic_sender.send(Event::Insert{id, size, source, ids, stage: Stage::Plain}).unwrap();
-                                    definition.native.0.send_async(records).await.unwrap();
-                                    error_count = 0;
-                                    count = 0;
-                                }
-                                Err(err) => {
-                                    error!("{:?}", err);
-                                    error_count += 1;
-                                    let errors: Vec<_> = records
-                                        .into_iter()
-                                        .filter_map(|v| {
-                                            let res = engine
-                                                .tx
-                                                .send(
-                                                    v
-                                                )
-                                                .map_err(|err| format!("{:?}", err));
-                                            res.err()
-                                        })
-                                        .collect();
-
-                                    if !errors.is_empty() {
-                                        error!("{:?}", errors.first().unwrap())
-                                    }
-
-                                    if error_count > 1_000 && error_count < 10_000 && last_log.elapsed().as_secs() > 10 {
-                                        error!("Error during distribution to engines over 1'000 tries, {} sleeping longer", err);
-                                        last_log = Instant::now();
-                                        sleep(Duration::from_millis(10)).await;
-                                    } else if error_count > 10_000 {
-                                        error!("Error during distribution to engines over 10'000 tries, {} shut down", err);
-                                        panic!("Over 10'000 retries")
-                                    }
-                                }
+                    tokio::select! {
+                        // Case A: The timer hit 200ms
+                        _ = flush_interval.tick() => {
+                            if !buckets.is_empty() {
+                                flush_buckets(&mut buckets, &mut clone, &definitions).await;
+                                count = 0;
                             }
                         }
-                    }
 
-                    match engine.rx.try_recv() {
-                        Err(_) => sleep(Duration::from_millis(1)).await, // max shift after max timeout for sending finished chunk out
-                        Ok(record) => {
-                            debug!("current {}", engine.rx.len());
-
+                        // Case B: A record arrived
+                        Ok(record) = engine.rx.recv_async() => {
                             buckets.entry(record.meta.definition).or_default().push(record);
                             count += 1;
 
-                            if buckets.is_empty() {
-                                first_ts = Instant::now();
+                            // Immediate flush if we hit the batch size
+                            if count >= BATCH_SIZE {
+                                flush_buckets(&mut buckets, &mut clone, &definitions).await;
+                                count = 0;
+                                flush_interval.reset(); // Reset the timer since we just flushed
                             }
+                        }
 
-                            let values = engine.rx.try_iter().take(999_999).collect::<Vec<_>>();
-
-                            debug!("current after {}", engine.rx.len());
-
-                            for record in values {
-                                buckets.entry(record.meta.definition).or_default().push(record);
-                                count += 1;
-                            }
-
+                        // Case C: Send Heartbeat (maybe on a different interval)
+                        _ = heartbeat_interval.tick() => {
+                             let _ = engine.statistic_sender.send(Event::Heartbeat(name.clone()));
                         }
                     }
                 }
             });
+        }
+    }
+}
+
+async fn flush_buckets(
+    buckets: &mut HashMap<DefinitionId, Batch<TargetedRecord>>,
+    engine: &mut Engine,
+    definitions: &HashMap<DefinitionId, Definition>,
+) {
+    // We use drain() to take ownership of the Vecs without reallocating the HashMap memory
+    for (id, records) in buckets.drain() {
+        let definition = match definitions.get(&id) {
+            Some(d) => d,
+            None => {
+                error!("DefinitionId {:?} not found in catalog", id);
+                continue;
+            }
+        };
+
+        let size = records.len();
+        let source = engine.id;
+        let table_name = definition.entity.plain.clone();
+        let mut error_count = 0u64;
+        let mut last_log = Instant::now();
+
+        let ids: Vec<u64> = records.iter().map(|r| r.meta.id).collect();
+
+        match engine.store(Stage::Plain, table_name, &records).await {
+            Ok(_) => {
+                let _ = engine.statistic_sender.send(Event::Insert {
+                    id,
+                    size,
+                    source,
+                    ids,
+                    stage: Stage::Plain,
+                });
+                definition.native.0.send_async(records).await.unwrap();
+                error_count = 0; // Reset errors on success
+            }
+            Err(err) => {
+                handle_error(anyhow!(err), engine, records, &mut error_count, &mut last_log).await;
+            }
+        }
+    }
+}
+
+async fn handle_error(
+    err: anyhow::Error,
+    engine: &Engine,
+    records: Batch<TargetedRecord>,
+    error_count: &mut u64,
+    last_log: &mut Instant,
+) {
+    error!("Distribution error for engine {:?}: {:?}", engine.id, err);
+    *error_count += 1;
+
+    // 1. Backpressure/Sleep logic based on severity
+    if *error_count > 1_000 && last_log.elapsed().as_secs() > 10 {
+        warn!("High error rate detected ({} tries). Throttling...", error_count);
+        *last_log = Instant::now();
+        // Use a small sleep to prevent "spinning" on a broken connection
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+
+    if *error_count > 10_000 {
+        // Critical failure: the engine is likely gone or the disk is full
+        error!("Fatal: Over 10,000 retries. Shutting down worker.");
+        panic!("Engine {:?} unrecoverable: {}", engine.id, err);
+    }
+
+    // 2. Data Recovery: Try to put records back into the engine's receiver
+    // so they can be retried later.
+    for record in records {
+        if let Err(send_err) = engine.tx.send(record) {
+            // If the internal channel is closed, we truly cannot save this data
+            error!("Data loss: could not re-queue record: {:?}", send_err);
+            break;
         }
     }
 }

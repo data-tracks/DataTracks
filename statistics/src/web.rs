@@ -62,6 +62,7 @@ async fn ws_handler(
     State(state): State<EventState>,
 ) -> impl IntoResponse {
     let path_str = path.as_str().to_string();
+    info!("New connection: {}", path_str);
     ws.on_upgrade(move |socket| handle_socket_logic(socket, state, path_str))
 }
 
@@ -81,7 +82,6 @@ async fn handle_socket_logic(mut socket: WebSocket, state: EventState, path: Str
     loop {
         match rx.recv().await {
             Ok(event) => {
-                // Centralized Filtering Logic
                 let msg = match (path.as_str(), event) {
                     ("/events", e) => {
                         if matches!(e, Event::Heartbeat(_)) {
@@ -110,7 +110,10 @@ async fn handle_socket_logic(mut socket: WebSocket, state: EventState, path: Str
                 warn!("Client lagged by {} messages", n);
                 continue;
             }
-            Err(_) => break,
+            Err(err) => {
+                warn!("Client error: {}", err);
+                break
+            },
         }
     }
 }

@@ -2,16 +2,25 @@
     <header class="flex-none bg-base-100 border-b border-white/10 p-2 flex flex-col md:flex-row items-center gap-4">
         <div class="flex items-center gap-3 px-4">
             <div class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-primary-content font-black">
-                S
+                PS
             </div>
             <div>
                 <h1 class="text-sm font-bold uppercase tracking-widest leading-none">PolyStream</h1>
                 <div class="flex items-center gap-1 mt-1">
-          <span class="relative flex h-2 w-2">
-            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>
-            <span class="relative inline-flex rounded-full h-2 w-2 bg-success"></span>
-          </span>
-                    <span class="text-[10px] opacity-50 font-mono">CONNECTED</span>
+
+                    @if (service.connected()) {
+                        <span class="relative flex h-2 w-2">
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-2 w-2 bg-success"></span>
+                        </span>
+                        <span class="text-[10px] opacity-50 font-mono">CONNECTED</span>
+                    } @else {
+                        <span class="relative flex h-2 w-2">
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-error opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-2 w-2 bg-error"></span>
+                        </span>
+                        <span class="text-[10px] opacity-50 font-mono">DISCONNECTED</span>
+                    }
                 </div>
             </div>
         </div>
@@ -20,32 +29,35 @@
             <button (click)="activeTab = Tab.Stats" [class.tab-active]="activeTab === Tab.Stats"
                     class="tab tab-sm gap-2">
                 Statistics
-                <span [class.badge-primary]="activeTab === Tab.Stats"
-                      class="badge badge-xs"></span>
+                @if (activeTab === Tab.Stats){
+                    <span [class.badge-success]="service.connectedStatistics()" [class.badge-error]="!service.connectedStatistics()" class="badge badge-xs"></span>
+                }
             </button>
             <button (click)="activeTab = Tab.Events" [class.tab-active]="activeTab === Tab.Events"
                     class="tab tab-sm gap-2">
                 Events
-                <span [class.badge-primary]="activeTab === Tab.Events"
-                      class="badge badge-xs"></span>
+                @if (activeTab === Tab.Events){
+                    <span [class.badge-success]="service.connectedEvents()" [class.badge-error]="!service.connectedEvents()" class="badge badge-xs"></span>
+                }
             </button>
             <button (click)="activeTab = Tab.Queues" [class.tab-active]="activeTab === Tab.Queues"
                     class="tab tab-sm gap-2">
                 Queues
-                <span [class.badge-primary]="activeTab === Tab.Queues"
-                      class="badge badge-xs"></span>
+                @if (activeTab === Tab.Queues){
+                    <span [class.badge-success]="service.connectedQueues()" [class.badge-error]="!service.connectedQueues()" class="badge badge-xs"></span>
+                }
             </button>
             <button (click)="activeTab = Tab.Threads" [class.tab-active]="activeTab === Tab.Threads"
                     class="tab tab-sm gap-2">
                 Threads
-                <span [class.badge-primary]="activeTab === Tab.Threads"
-                      class="badge badge-xs"></span>
+                @if (activeTab === Tab.Threads){
+                    <span [class.badge-success]="service.connectedThreads()" [class.badge-error]="!service.connectedThreads()" class="badge badge-xs"></span>
+                }
             </button>
             <button (click)="activeTab = Tab.Roundtrip" [class.tab-active]="activeTab === Tab.Roundtrip"
                     class="tab tab-sm gap-2">
                 Roundtrip
-                <span [class.badge-primary]="activeTab === Tab.Roundtrip"
-                      class="badge badge-xs"></span>
+                <span [class.badge-primary]="activeTab === Tab.Roundtrip" class="badge badge-xs"></span>
             </button>
         </div>
 

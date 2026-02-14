@@ -66,7 +66,7 @@ impl MongoDB {
         &self,
         _: Stage,
         entity: String,
-        values: Batch<TargetedRecord>,
+        values: &Batch<TargetedRecord>,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
         match &self.client {
             None => Err(Box::from("No client")),
@@ -76,7 +76,7 @@ impl MongoDB {
                     .collection(&entity)
                     .insert_many(values.into_iter().map(|TargetedRecord { value, meta }| {
                         Value::dict_from_pairs(vec![
-                            ("value", value),
+                            ("value", value.clone()),
                             ("id", Value::int(meta.id as i64)),
                         ])
                     }))

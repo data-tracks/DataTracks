@@ -66,7 +66,7 @@ impl Postgres {
         &self,
         stage: Stage,
         entity: String,
-        values: Batch<TargetedRecord>,
+        values: &Batch<TargetedRecord>,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
         match &self.client {
             None => return Err(Box::from("Could not create postgres database")),
@@ -279,7 +279,7 @@ impl Postgres {
         stage: Stage,
         client: &Arc<Client>,
         entity: String,
-        values: Batch<TargetedRecord>,
+        values: &Batch<TargetedRecord>,
     ) -> Result<usize, Box<dyn Error + Send + Sync>> {
         let rows = values.len();
 
@@ -377,7 +377,7 @@ pub mod tests {
         pg.store(
             Stage::Plain,
             String::from("users"),
-            batch![target!(Value::text("test"), TargetedMeta::default())],
+            &batch![target!(Value::text("test"), TargetedMeta::default())],
         )
         .await
         .unwrap();
@@ -412,7 +412,7 @@ pub mod tests {
         pg.store(
             Stage::Mapped,
             String::from("users"),
-            batch![
+            &batch![
                 target!(
                     Value::array(vec![Value::text("test"), Value::int(30)]),
                     TargetedMeta::default()
