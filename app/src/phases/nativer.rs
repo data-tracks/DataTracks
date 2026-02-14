@@ -39,7 +39,7 @@ impl Nativer {
 
                     let mapper = definition.mapping.build();
 
-                    let name = format!("Nativer {}", i);
+                    let name = format!("Nativer {} {}", engine.engine_kind, i);
 
                     loop {
                         engine

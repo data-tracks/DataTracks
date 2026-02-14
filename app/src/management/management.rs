@@ -1,6 +1,6 @@
 use crate::management::catalog::Catalog;
 use crate::phases::Persister;
-use crate::phases::mapper::Nativer;
+use crate::phases::nativer::Nativer;
 use engine::EngineKind;
 use flume::{Sender, unbounded};
 use std::thread;

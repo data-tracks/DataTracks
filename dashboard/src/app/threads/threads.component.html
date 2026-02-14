@@ -1,7 +1,7 @@
 <div class="space-y-4">
     @for (group of groupedThreads() | keyvalue; track group.key) {
         <div class="collapse collapse-arrow bg-base-200 border border-base-300">
-            <input checked type="checkbox"/>
+            <input type="checkbox"/>
 
             <div class="collapse-title flex items-center gap-4">
                 <span class="badge badge-primary font-bold uppercase">{{ group.key }}</span>
