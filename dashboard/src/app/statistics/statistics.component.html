@@ -19,12 +19,16 @@
 
                 <div class="badge badge-outline badge-secondary gap-2">
                     <span class="opacity-70 text-[10px]">PLAIN</span>
-                    <span class="font-mono">{{ tp.plain }}</span>
+                    @for (currentValue of [tp.plain]; track currentValue) {
+                        <span class="font-mono animate-update">{{ currentValue }} IDs/sec</span>
+                    }
                 </div>
 
                 <div class="badge badge-soft badge-accent gap-2">
                     <span class="opacity-70 text-[10px]">MAPPED</span>
-                    <span class="font-mono">{{ tp.mapped }}</span>
+                    @for (currentValue of [tp.mapped]; track currentValue) {
+                        <span class="font-mono animate-update">{{ currentValue }} IDs/sec</span>
+                    }
                 </div>
             </div>
 
@@ -57,9 +61,11 @@
                             @for (value of mappedItems; track value[0] + value[1]) {
                                 <div class="flex flex-col border-l-2 border-accent/30 pl-2">
                                     <span class="text-[14px] opacity-60 truncate">{{ value[2] }}</span>
-                                    <!---@for (v of [value[3]]; track v) {-->
-                                    <span class="text-xl font-mono font-bold leading-none animate-pop">{{ value[3] | number }}</span>
-                                    <!--}-->
+                                    @for (currentValue of [value[3]]; track currentValue) {
+                                        <span class="text-xl font-mono font-bold leading-none animate-update">
+                                            {{ currentValue | number }}
+                                        </span>
+                                    }
                                 </div>
                             }
                         </div>

@@ -48,6 +48,7 @@ impl Nativer {
                             .unwrap();
                         if let Ok(records) = rx.recv_async().await {
                             let length = records.len();
+                            let ids = records.iter().map(|record| record.meta.id).collect::<Vec<_>>();
                             match engine
                                 .store(
                                     Stage::Mapped,
@@ -65,12 +66,13 @@ impl Nativer {
                                 Ok(_) => {
                                     engine
                                         .statistic_sender
-                                        .send(Event::Insert(
-                                            definition.id,
-                                            length,
-                                            engine.id,
-                                            Stage::Mapped,
-                                        ))
+                                        .send(Event::Insert {
+                                            id: definition.id,
+                                            size: length,
+                                            source: engine.id,
+                                            stage: Stage::Mapped,
+                                            ids
+                                        })
                                         .unwrap();
 
                                     let _ = output.send(records);

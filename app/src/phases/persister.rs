@@ -136,7 +136,7 @@ impl Persister {
 
                 let mut last_log = Instant::now();
 
-                let engine_id = engine.id;
+                let source = engine.id;
 
                 let name = format!("Persister {}", engine);
 
@@ -150,12 +150,13 @@ impl Persister {
                         // try to drain the "buffer"
 
                         for (id, records) in buckets.drain() {
-                            let length = records.len();
+                            let size = records.len();
+                            let ids = records.iter().map(|record| record.meta.id).collect::<Vec<_>>();
                             let definition = definitions.get(&id).unwrap();
                             let name = definition.entity.plain.clone();
                             match clone.store(Stage::Plain, name, records.clone()).await {
                                 Ok(_) => {
-                                    engine.statistic_sender.send(Event::Insert(id, length, engine_id, Stage::Plain)).unwrap();
+                                    engine.statistic_sender.send(Event::Insert{id, size, source, ids, stage: Stage::Plain}).unwrap();
                                     definition.native.0.send_async(records).await.unwrap();
                                     error_count = 0;
                                     count = 0;

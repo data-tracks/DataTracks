@@ -1,9 +1,11 @@
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use flume::{Receiver, Sender, unbounded};
 use std::thread;
 use std::thread::JoinHandle;
 use std::time::Duration;
-use tokio::runtime::{Builder, Runtime};
-use tokio::task::JoinSet;
+use tokio::runtime::{Builder};
+use tokio::task::{JoinSet};
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
@@ -18,28 +20,16 @@ struct TimerWorker {
 pub struct TimerManager {
     workers: Vec<(u64, TimerWorker)>,
     next_id: u64,
-    id_queue: Receiver<Vec<u64>>,
-    rt_timer_manager: Runtime,
+    counter: Arc<AtomicU64>,
 }
 
 impl TimerManager {
     fn new() -> Self {
-        let rt_timer_manager = Builder::new_multi_thread()
-            .worker_threads(1)
-            .thread_name("timer-processor")
-            .enable_all()
-            .build()
-            .unwrap();
-
-        let (tx, id_queue) = unbounded();
-
-        rt_timer_manager.spawn(async { start_id_generator(tx, 2).await });
-
+        let counter = Arc::new(AtomicU64::new(0));
         Self {
             workers: vec![],
             next_id: 0,
-            rt_timer_manager,
-            id_queue,
+            counter,
         }
     }
 
@@ -49,12 +39,15 @@ impl TimerManager {
 
     pub fn add_worker(&mut self, incoming: Receiver<InitialRecord>, sender: Sender<TimedRecord>) {
         info!("Added worker: {}", self.workers.len());
+
+        const BATCH_SIZE: u64 = 1_000_000;
         let id = self.next_id;
         let token = CancellationToken::new();
         let token_clone = token.clone();
 
         let timer_workers = 4;
-        let id_queue = self.id_queue.clone();
+
+        let id_source = self.counter.clone();
 
         let handle = thread::spawn(move || {
             let rt_timer = Builder::new_current_thread()
@@ -66,7 +59,6 @@ impl TimerManager {
             // timer
             let incoming = incoming.clone();
             let sender = sender.clone();
-            let id_queue = id_queue.clone();
 
             let mut joins: JoinSet<()> = JoinSet::new();
 
@@ -74,43 +66,35 @@ impl TimerManager {
                 for i in 0..timer_workers {
                     let incoming = incoming.clone();
                     let sender = sender.clone();
-                    let id_queue = id_queue.clone();
+                    let id_source = id_source.clone();
                     let worker_token = token_clone.clone();
 
                     joins.spawn(async move {
-                        let mut available_ids = vec![];
                         let statistics_sender = get_statistic_sender();
                         let name = format!("Timer {} {}", id, i);
+
+                        let mut current_id = id_source.fetch_add(BATCH_SIZE, Ordering::Relaxed);
+                        let mut end_id = current_id + BATCH_SIZE;
+
                         loop {
                             statistics_sender.send(Heartbeat(name.clone())).unwrap();
                             if worker_token.is_cancelled() {
                                 info!("WAL Worker {} shutting down gracefully", id);
                                 return;
                             }
+                            if current_id >= end_id {
+                                current_id = id_source.fetch_add(BATCH_SIZE, Ordering::Relaxed);
+                                end_id = current_id + BATCH_SIZE;
+                            }
 
-                            //info!("else {}", id);
-                            if available_ids.is_empty() {
-                                match id_queue.recv_async().await {
-                                    Ok(ids) => available_ids.extend(ids),
-                                    Err(_) => {
-                                        error!("No available ids in worker {}", i);
-                                        sleep(Duration::from_millis(50)).await;
-                                        continue;
-                                    }
-                                }
-                            }
-                            if available_ids.is_empty() {
-                                error!("No available ids in worker {}", i);
-                                sleep(Duration::from_millis(50)).await;
-                                continue;
-                            }
 
                             match incoming.recv_async().await {
                                 Err(_) => {
                                     error!("No incoming {}", i);
                                 }
                                 Ok(InitialRecord { value, meta }) => {
-                                    let id = available_ids.pop().unwrap(); // can unwrap, check above
+                                    let id = current_id; // can unwrap, check above
+                                    current_id += 1;
                                     let context = TimedMeta::new(id, meta);
                                     sender.send((value, context).into()).unwrap();
                                 }
@@ -200,26 +184,4 @@ pub fn handle_initial_time_annotation(
         }
     });
     control_rx_timer
-}
-
-async fn start_id_generator(tx: Sender<Vec<u64>>, workers: i32) {
-    log_channel(tx.clone(), "Id generator", None).await;
-
-    let prepared_ids = (workers * 2) as usize;
-    const ID_PACKETS_SIZE: u64 = 100_000;
-
-    // we prepare as much "id packets" as we have workers plus some more
-    let mut count = 0u64;
-    loop {
-        if tx.len() > prepared_ids {
-            sleep(Duration::from_millis(50)).await;
-        } else {
-            let mut ids: Vec<u64> = vec![ID_PACKETS_SIZE];
-            for _ in 0..ID_PACKETS_SIZE {
-                ids.push(count);
-                count += 1;
-            }
-            tx.send(ids).unwrap();
-        }
-    }
 }

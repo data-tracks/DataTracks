@@ -37,10 +37,10 @@ impl Statistics {
 
     async fn handle_event(&mut self, event: Event) {
         match event {
-            Event::Insert(definition_id, amount, engine_id, stage) => {
-                self.engines.entry(engine_id).or_default().handle_insert(
-                    amount,
-                    definition_id,
+            Event::Insert{id, size, source, ids, stage} => {
+                self.engines.entry(source).or_default().handle_insert(
+                    size,
+                    id,
                     stage,
                 );
             }
@@ -109,7 +109,7 @@ pub fn start(rt: Runtimes, tx: Sender<Event>, rx: Receiver<Event>, output: broad
             let mut last_time = Instant::now();
 
             let mut last = statistics.get_summary();
-            let mut current = last.clone();
+            let mut current;
 
             loop {
                 select! {

@@ -118,9 +118,8 @@ async fn handle_socket_logic(mut socket: WebSocket, state: EventState, path: Str
 async fn ws_channel_handler(
     Path(id): Path<String>, // Extracts the ":id" from the URL
     ws: WebSocketUpgrade,
-    State(state): State<EventState>, // Your existing state
+    State(state): State<EventState>,
 ) -> impl IntoResponse {
-    // You can now use the 'id' to filter topics or join specific rooms
     info!("New connection to channel: {}", id);
 
     ws.on_upgrade(move |socket| handle_socket(socket, id, state))
