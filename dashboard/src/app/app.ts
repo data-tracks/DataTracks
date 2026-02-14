@@ -5,10 +5,11 @@ import {QueuesComponent} from "./queues/queues.component";
 import {StatisticsComponent} from "./statistics/statistics.component";
 import {RoundtripComponent} from "./roundtrip/roundtrip.component";
 import {ThreadsComponent} from "./threads/threads.component";
+import {ArchitectureComponent} from "./architecture/architecture.component";
 
 @Component({
   selector: 'app-root',
-  imports: [EventsComponent, QueuesComponent, StatisticsComponent, RoundtripComponent, ThreadsComponent],
+  imports: [EventsComponent, QueuesComponent, StatisticsComponent, RoundtripComponent, ThreadsComponent, EventsComponent, ArchitectureComponent],
   templateUrl: './app.html',
   styleUrl: './app.css'
 })

@@ -1,0 +1,9 @@
+/* The "Flowing" Arrow effect */
+@keyframes flow {
+    to { stroke-dashoffset: -20; }
+}
+
+::ng-deep .mermaid .edgePath path {
+    stroke-dasharray: 10, 5;
+    animation: flow 1s linear infinite;
+}

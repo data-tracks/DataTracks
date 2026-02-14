@@ -77,7 +77,8 @@
             </div>
 
             <div [class.active-tab]="activeTab === Tab.Queues" class="tab-pane">
-                <app-queues [inputs]="service.queues()"/>
+                <app-architecture [inputs]="service.queues()"/>
+                <!--<app-queues [inputs]="service.queues()"/>-->
             </div>
 
             <div [class.active-tab]="activeTab === Tab.Stats" class="tab-pane">
