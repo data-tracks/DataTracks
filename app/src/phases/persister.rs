@@ -194,7 +194,6 @@ impl Persister {
                         }
                     }
 
-
                     match engine.rx.try_recv() {
                         Err(_) => sleep(Duration::from_millis(1)).await, // max shift after max timeout for sending finished chunk out
                         Ok(record) => {

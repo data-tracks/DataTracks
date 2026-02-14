@@ -2,7 +2,9 @@ use crate::management::catalog::Catalog;
 use engine::engine::Engine;
 use tokio::sync::broadcast::Sender;
 use tokio::task::JoinSet;
-use tracing::{debug, error};
+use tracing::{debug, error, info};
+use tracing::log::log;
+use engine::EngineKind;
 use util::definition::Stage;
 use util::{target, Batch, Event, TargetedRecord};
 
@@ -46,7 +48,13 @@ impl Nativer {
                             .statistic_sender
                             .send(Event::Heartbeat(name.clone()))
                             .unwrap();
-                        if let Ok(records) = rx.recv_async().await {
+                        if let Ok(mut records) = rx.recv_async().await {
+                            if rx.len() > 0 {
+                                while let Ok(more) = rx.try_recv() && records.len() < 100_000 {
+                                    records.records.extend(more);
+                                }
+                            }
+
                             let length = records.len();
                             let ids = records.iter().map(|record| record.meta.id).collect::<Vec<_>>();
                             match engine
