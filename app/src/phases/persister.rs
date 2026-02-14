@@ -182,6 +182,7 @@ async fn flush_buckets(
     engine: &mut Engine,
     definitions: &HashMap<DefinitionId, Definition>,
 ) {
+    let mut error_count = 0u64;
     // We use drain() to take ownership of the Vecs without reallocating the HashMap memory
     for (id, records) in buckets.drain() {
         let definition = match definitions.get(&id) {
@@ -195,7 +196,6 @@ async fn flush_buckets(
         let size = records.len();
         let source = engine.id;
         let table_name = definition.entity.plain.clone();
-        let mut error_count = 0u64;
         let mut last_log = Instant::now();
 
         let ids: Vec<u64> = records.iter().map(|r| r.meta.id).collect();

@@ -1,3 +1,4 @@
+use std::time::Duration;
 use crate::management::catalog::Catalog;
 use engine::engine::Engine;
 use tokio::sync::broadcast::Sender;
@@ -41,54 +42,51 @@ impl Nativer {
 
                     let name = format!("Nativer {} {}", engine.engine_kind, i);
 
+                    let mut hb_ticker = tokio::time::interval(Duration::from_secs(5));
+                    let hb_name = name.clone();
+
                     loop {
-                        engine
-                            .statistic_sender
-                            .send(Event::Heartbeat(name.clone()))
-                            .unwrap();
-                        if let Ok(mut records) = rx.recv_async().await {
-                            if rx.len() > 0 {
-                                while let Ok(more) = rx.try_recv() && records.len() < 100_000 {
-                                    records.records.extend(more);
-                                }
+                        tokio::select! {
+                            _ = hb_ticker.tick() => {
+                                let _ = engine.statistic_sender.send(Event::Heartbeat(hb_name.clone()));
                             }
 
-                            let length = records.len();
-                            let ids = records.iter().map(|record| record.meta.id).collect::<Vec<_>>();
-                            match engine
-                                .store(
-                                    Stage::Mapped,
-                                    entity.mapped.clone(),
-                                    &records
-                                        .clone()
-                                        .into_iter()
-                                        .map(|TargetedRecord { value, meta }| {
-                                            target!(mapper(value), meta)
-                                        })
-                                        .collect(),
-                                )
-                                .await
-                            {
-                                Ok(_) => {
-                                    engine
-                                        .statistic_sender
-                                        .send(Event::Insert {
+                            res = rx.recv_async() => {
+                                let mut records = match res {
+                                    Ok(r) => r,
+                                    Err(_) => break, // Channel closed
+                                };
+
+                                // Efficiently drain pending records without over-allocating
+                                while let Ok(more) = rx.try_recv() {
+                                    records.records.extend(more);
+                                    if records.len() >= 100_000 { break; }
+                                }
+
+                                let length = records.len();
+                                let ids: Vec<u64> = records.iter().map(|r| r.meta.id).collect();
+                                let entity_name = entity.mapped.clone();
+
+                                let mapped_data: Batch<_> = records.iter().map(|r| {
+                                    target!(mapper(r.value.clone()), r.meta.clone())
+                                }).collect();
+
+                                match engine.store(Stage::Mapped, entity_name, &mapped_data).await {
+                                    Ok(_) => {
+                                        let _ = engine.statistic_sender.send(Event::Insert {
                                             id: definition.id,
                                             size: length,
                                             source: engine.id,
                                             stage: Stage::Mapped,
                                             ids
-                                        })
-                                        .unwrap();
+                                        });
 
-                                    let _ = output.send(records);
-
-                                    debug!("mapped")
+                                        // Send original records to next phase
+                                        let _ = output.send(records);
+                                    }
+                                    Err(err) => error!("Mapping Store Error: {:?}", err),
                                 }
-                                Err(err) => {
-                                    error!("{:?}", err)
-                                }
-                            };
+                            }
                         }
                     }
                 });

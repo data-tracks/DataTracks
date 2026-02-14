@@ -84,7 +84,7 @@ async fn handle_socket_logic(mut socket: WebSocket, state: EventState, path: Str
             Ok(event) => {
                 let msg = match (path.as_str(), event) {
                     ("/events", e) => {
-                        if matches!(e, Event::Heartbeat(_)) {
+                        if matches!(e, Event::Heartbeat(_)) || matches!(e, Event::Insert {..}) {
                             continue;
                         }
                         serde_json::to_string(&e).ok()

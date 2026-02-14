@@ -1,5 +1,4 @@
 use flume::Sender;
-use std::ops::AddAssign;
 use std::time::Duration;
 use tracing::error;
 use util::Event::Heartbeat;
@@ -32,17 +31,28 @@ impl DummySink {
     ) {
         match self {
             DummySink::Interval { value, interval } => {
-                let id = format!("DummyInterval {} {}", name, id);
+                let heartbeat_id = format!("DummyInterval {} {}", name, id);
+                let meta_name = Some(name.clone());
+
+                let mut data_ticker = tokio::time::interval(*interval);
+                // Heartbeat every 5 seconds
+                let mut hb_ticker = tokio::time::interval(Duration::from_secs(3));
+
                 loop {
-                    statistics_tx.send(Heartbeat(id.clone())).unwrap();
-                    match sender.send((value.clone(), InitialMeta::new(Some(name.clone()))).into())
-                    {
-                        Ok(_) => {}
-                        Err(err) => {
-                            error!("Could not sink: {}", err)
+                    tokio::select! {
+                        // Case 1: Time to send data
+                        _ = data_ticker.tick() => {
+                            let record = (value.clone(), InitialMeta::new(meta_name.clone())).into();
+                            if let Err(err) = sender.send(record) {
+                                error!("Could not sink: {}", err);
+                            }
+                        }
+
+                        // Case 2: Time to send heartbeat (much less frequent)
+                        _ = hb_ticker.tick() => {
+                            let _ = statistics_tx.send(Heartbeat(heartbeat_id.clone()));
                         }
                     }
-                    tokio::time::sleep(*interval).await;
                 }
             }
             DummySink::Ramping {
@@ -50,20 +60,34 @@ impl DummySink {
                 interval,
                 delta,
             } => {
-                let id = format!("DummyRamping {} {}", name, id);
-                let mut interval = *interval;
-                let delta = *delta;
+                let heartbeat_id = format!("DummyRamping {} {}", name, id);
+                let meta_name = Some(name.clone());
+
+                // 1. Setup heartbeat timer (e.g., every 5 seconds)
+                let mut hb_ticker = tokio::time::interval(Duration::from_secs(3));
+
+                // 2. Track the dynamic data interval
+                let mut current_interval = *interval;
+                let mut next_send = tokio::time::Instant::now();
+
                 loop {
-                    statistics_tx.send(Heartbeat(id.clone())).unwrap();
-                    match sender.send((value.clone(), InitialMeta::new(Some(name.clone()))).into())
-                    {
-                        Ok(_) => {}
-                        Err(err) => {
-                            error!("Could not sink: {}", err)
+                    tokio::select! {
+                        _ = hb_ticker.tick() => {
+                            let _ = statistics_tx.send(Heartbeat(heartbeat_id.clone()));
+                        }
+
+                        _ = tokio::time::sleep_until(next_send) => {
+                            let record = (value.clone(), InitialMeta::new(meta_name.clone())).into();
+
+                            if let Err(err) = sender.send(record) {
+                                error!("Could not sink ({}): {}", heartbeat_id, err);
+                            }
+
+                            // Update the interval and schedule the next send
+                            current_interval = current_interval.saturating_add(*delta);
+                            next_send = tokio::time::Instant::now() + current_interval;
                         }
                     }
-                    tokio::time::sleep(interval).await;
-                    interval.add_assign(delta);
                 }
             }
         }

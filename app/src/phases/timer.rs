@@ -76,27 +76,49 @@ impl TimerManager {
                         let mut current_id = id_source.fetch_add(BATCH_SIZE, Ordering::Relaxed);
                         let mut end_id = current_id + BATCH_SIZE;
 
+                        let mut hb_ticker = tokio::time::interval(Duration::from_secs(5));
+                        let heartbeat_name = name.clone();
+
                         loop {
-                            statistics_sender.send(Heartbeat(name.clone())).unwrap();
-                            if worker_token.is_cancelled() {
-                                info!("WAL Worker {} shutting down gracefully", id);
-                                return;
-                            }
-                            if current_id >= end_id {
-                                current_id = id_source.fetch_add(BATCH_SIZE, Ordering::Relaxed);
-                                end_id = current_id + BATCH_SIZE;
-                            }
-
-
-                            match incoming.recv_async().await {
-                                Err(_) => {
-                                    error!("No incoming {}", i);
+                            tokio::select! {
+                                // Priority: Check cancellation first
+                                _ = worker_token.cancelled() => {
+                                    info!("WAL Worker {} shutting down gracefully", id);
+                                    return;
                                 }
-                                Ok(InitialRecord { value, meta }) => {
-                                    let id = current_id; // can unwrap, check above
-                                    current_id += 1;
-                                    let context = TimedMeta::new(id, meta);
-                                    sender.send((value, context).into()).unwrap();
+
+                                // Timer-based Heartbeat: Fires even if no data is being received
+                                _ = hb_ticker.tick() => {
+                                    let _ = statistics_sender.send(Heartbeat(heartbeat_name.clone()));
+                                }
+
+                                // Data Processing
+                                res = incoming.recv_async() => {
+                                    match res {
+                                        Ok(InitialRecord { value, meta }) => {
+                                            // Check if we need a new ID block
+                                            if current_id >= end_id {
+                                                current_id = id_source.fetch_add(BATCH_SIZE, Ordering::Relaxed);
+                                                end_id = current_id + BATCH_SIZE;
+                                            }
+
+                                            let id = current_id;
+                                            current_id += 1;
+
+                                            let context = TimedMeta::new(id, meta);
+
+                                            if let Err(err) = sender.send((value, context).into()) {
+                                                error!("Worker {} failed to send downstream: {}", id, err);
+                                                // If downstream is closed, we should probably stop
+                                                return;
+                                            }
+                                        }
+                                        Err(_) => {
+                                            // Channel closed
+                                            error!("Incoming channel closed for worker {}", i);
+                                            return;
+                                        }
+                                    }
                                 }
                             }
                         }
