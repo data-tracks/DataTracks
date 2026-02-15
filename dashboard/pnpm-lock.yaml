@@ -29,6 +29,9 @@ importers:
       capnp-ts:
         specifier: ^0.7.0
         version: 0.7.0
+      cytoscape:
+        specifier: ^3.33.1
+        version: 3.33.1
       daisyui:
         specifier: ^5.5.14
         version: 5.5.14

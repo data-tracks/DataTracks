@@ -6,10 +6,11 @@ import {StatisticsComponent} from "./statistics/statistics.component";
 import {RoundtripComponent} from "./roundtrip/roundtrip.component";
 import {ThreadsComponent} from "./threads/threads.component";
 import {ArchitectureComponent} from "./architecture/architecture.component";
+import {CytoComponent} from "./cyto/cyto.component";
 
 @Component({
   selector: 'app-root',
-  imports: [EventsComponent, StatisticsComponent, RoundtripComponent, ThreadsComponent, EventsComponent, ArchitectureComponent],
+    imports: [EventsComponent, StatisticsComponent, RoundtripComponent, ThreadsComponent, EventsComponent, ArchitectureComponent, CytoComponent],
   templateUrl: './app.html',
   styleUrl: './app.css'
 })

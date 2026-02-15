@@ -3,7 +3,7 @@ use crate::management::catalog::Catalog;
 use engine::engine::Engine;
 use tokio::sync::broadcast::Sender;
 use tokio::task::JoinSet;
-use tracing::{debug, error};
+use tracing::{error};
 use util::definition::Stage;
 use util::{target, Batch, Event, TargetedRecord};
 

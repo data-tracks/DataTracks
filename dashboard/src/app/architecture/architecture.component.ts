@@ -20,7 +20,9 @@ export class ArchitectureComponent implements AfterViewInit, OnChanges {
         return;
       }
       this.queues.set(entry.name, entry.size);
-      this.renderGraph();
+      this.renderGraph().catch(err => {
+        console.log(err)
+      })
     });
 
   }
@@ -42,11 +44,15 @@ export class ArchitectureComponent implements AfterViewInit, OnChanges {
       }
     });
 
-    this.renderGraph();
+    this.renderGraph().catch(err => {
+      console.log(err)
+    })
   }
 
   ngOnChanges() {
-    this.renderGraph();
+    this.renderGraph().catch(err => {
+      console.log(err)
+    })
   }
 
   async renderGraph() {
@@ -59,30 +65,38 @@ export class ArchitectureComponent implements AfterViewInit, OnChanges {
     const pPost = this.queues.get("Persister mongodb") || "0";
     const pNeo = this.queues.get("Persister postgres") || "0";
 
+    const nNeo = this.queues.get("Definition Native 2 - Graph test to Engine") || "0";
+    const nPost = this.queues.get("Definition Native 1 - Relational test to Engine") || "0";
+    const nMongo = this.queues.get("Definition Native 0 - Document test to Engine") || "0";
+
     let graphDefinition = 'stateDiagram-v2\n' +
         `  direction LR\n` +
         `  [*] --> Sink\n` +
-        `  Sink --> Timer: ${this.formatNumber(sinkVal)}\n` +
-        `  Timer:::healthy --> WAL: ${this.formatNumber(timerVal)}\n` +
-        `  WAL --> Persister: ${this.formatNumber(walVal)}\n` +
+        `  Sink --> Timer ${this.formatNumber(sinkVal)}\n` +
+        `  Timer --> WAL${this.formatNumber(timerVal)}\n` +
+        `  WAL --> Persister${this.formatNumber(walVal)}\n` +
         `  state Persister{\n` +
-        `  [*] --> PMongo: ${this.formatNumber(pMongo)}\n` +
+        `  direction LR\n` +
+        `  [*] --> PMongo${this.formatNumber(pMongo)}\n` +
         `  PMongo: Persister Mongo\n` +
-        `  [*] --> PPost: ${this.formatNumber(pPost)}\n` +
+        `  [*] --> PPost${this.formatNumber(pPost)}\n` +
         `  PPost: Persister Postgres\n` +
-        `  [*] --> PNeo: ${this.formatNumber(pNeo)}\n` +
+        `  [*] --> PNeo${this.formatNumber(pNeo)}\n` +
         `  PNeo: Persister Neo4j\n` +
         `  }\n` +
-        `  Persister --> Nativer: 702\n`;
+        `  Persister --> Nativer\n` +
+        `  state Nativer{\n` +
+        `  direction LR\n` +
+        `  [*] --> NMongo${this.formatNumber(nMongo)}\n` +
+        `  NMongo: Nativer Definition Mongo\n` +
+        `  [*] --> NPost${this.formatNumber(nPost)}\n` +
+        `  NPost: Nativer Definition Postgres\n` +
+        `  [*] --> NNeo${this.formatNumber(nNeo)}\n` +
+        `  NNeo: Nativer Definition Neo4j\n` +
+        `  }\n`;
 
     graphDefinition += `  classDef healthy fill:#52c41a,color:#fff\n`;
-    //graphDefinition += `  class Timer healthy\n`;
-    //graphDefinition += `  linkStyle 0 stroke:${this.getQueueColor(sinkVal)},color:${this.getQueueColor(sinkVal)},stroke-width:2px\n`;
-    //graphDefinition += `  linkStyle 1 stroke:${this.getQueueColor(timerVal)},color:${this.getQueueColor(timerVal)},stroke-width:2px\n`;
-    //graphDefinition += `  linkStyle 2 stroke:${this.getQueueColor(walVal)},color:${this.getQueueColor(walVal)},stroke-width:2px\n`;
-    //graphDefinition += `  linkStyle 3 stroke:${this.getQueueColor(pMongo)},color:${this.getQueueColor(pMongo)},stroke-width:2px\n`;
-    //graphDefinition += `  linkStyle 4 stroke:${this.getQueueColor(pPost)},color:${this.getQueueColor(pPost)},stroke-width:2px\n`;
-    //graphDefinition += `  linkStyle 5 stroke:${this.getQueueColor(pNeo)},color:${this.getQueueColor(pNeo)},stroke-width:2px\n`;
+    graphDefinition += `  classDef error fill:red,color:#fff\n`;
 
     const style = `
     <style>
@@ -116,7 +130,9 @@ export class ArchitectureComponent implements AfterViewInit, OnChanges {
     const num = typeof val === 'string' ? parseInt(val) : val;
     if (isNaN(num)) return "0";
 
-    return num.toLocaleString('en-US').replace(/,/g, "'");
+    const number = num.toLocaleString('en-US').replace(/,/g, "'");
+
+    return ":" + number;
   }
 }
 
