@@ -9,7 +9,7 @@ import {ArchitectureComponent} from "./architecture/architecture.component";
 
 @Component({
   selector: 'app-root',
-  imports: [EventsComponent, QueuesComponent, StatisticsComponent, RoundtripComponent, ThreadsComponent, EventsComponent, ArchitectureComponent],
+  imports: [EventsComponent, StatisticsComponent, RoundtripComponent, ThreadsComponent, EventsComponent, ArchitectureComponent],
   templateUrl: './app.html',
   styleUrl: './app.css'
 })

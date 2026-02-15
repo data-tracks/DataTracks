@@ -59,26 +59,44 @@ export class ArchitectureComponent implements AfterViewInit, OnChanges {
     const pPost = this.queues.get("Persister mongodb") || "0";
     const pNeo = this.queues.get("Persister postgres") || "0";
 
-    let graphDefinition = 'graph LR\n' +
-        `  Sink -- "${this.formatNumber(sinkVal)}" --> Timer\n` +
-        `  Timer -- "${this.formatNumber(timerVal)}" --> WAL\n` +
-        `  WAL -- "${this.formatNumber(walVal)}" --> Persister\n` +
-        `  Persister -- "${this.formatNumber(pMongo)}" --> PMongo["Persister Mongo"]\n` +
-        `  Persister -- "${this.formatNumber(pPost)}" --> PPostgres["Persister Postgres"]\n` +
-        `  Persister -- "${this.formatNumber(pNeo)}" --> PNeo4j["Persister Neo4j"]\n` +
-        `  Persister -- "702" --> Nativer\n`;
+    let graphDefinition = 'stateDiagram-v2\n' +
+        `  direction LR\n` +
+        `  [*] --> Sink\n` +
+        `  Sink --> Timer: ${this.formatNumber(sinkVal)}\n` +
+        `  Timer:::healthy --> WAL: ${this.formatNumber(timerVal)}\n` +
+        `  WAL --> Persister: ${this.formatNumber(walVal)}\n` +
+        `  state Persister{\n` +
+        `  [*] --> PMongo: ${this.formatNumber(pMongo)}\n` +
+        `  PMongo: Persister Mongo\n` +
+        `  [*] --> PPost: ${this.formatNumber(pPost)}\n` +
+        `  PPost: Persister Postgres\n` +
+        `  [*] --> PNeo: ${this.formatNumber(pNeo)}\n` +
+        `  PNeo: Persister Neo4j\n` +
+        `  }\n` +
+        `  Persister --> Nativer: 702\n`;
 
-    graphDefinition += `  linkStyle 0 stroke:${this.getQueueColor(sinkVal)},color:${this.getQueueColor(sinkVal)},stroke-width:2px\n`;
-    graphDefinition += `  linkStyle 1 stroke:${this.getQueueColor(timerVal)},color:${this.getQueueColor(timerVal)},stroke-width:2px\n`;
-    graphDefinition += `  linkStyle 2 stroke:${this.getQueueColor(walVal)},color:${this.getQueueColor(walVal)},stroke-width:4px\n`;
-    graphDefinition += `  linkStyle 3 stroke:${this.getQueueColor(pMongo)},color:${this.getQueueColor(pMongo)},stroke-width:4px\n`;
-    graphDefinition += `  linkStyle 4 stroke:${this.getQueueColor(pPost)},color:${this.getQueueColor(pPost)},stroke-width:4px\n`;
-    graphDefinition += `  linkStyle 5 stroke:${this.getQueueColor(pNeo)},color:${this.getQueueColor(pNeo)},stroke-width:4px\n`;
+    graphDefinition += `  classDef healthy fill:#52c41a,color:#fff\n`;
+    //graphDefinition += `  class Timer healthy\n`;
+    //graphDefinition += `  linkStyle 0 stroke:${this.getQueueColor(sinkVal)},color:${this.getQueueColor(sinkVal)},stroke-width:2px\n`;
+    //graphDefinition += `  linkStyle 1 stroke:${this.getQueueColor(timerVal)},color:${this.getQueueColor(timerVal)},stroke-width:2px\n`;
+    //graphDefinition += `  linkStyle 2 stroke:${this.getQueueColor(walVal)},color:${this.getQueueColor(walVal)},stroke-width:2px\n`;
+    //graphDefinition += `  linkStyle 3 stroke:${this.getQueueColor(pMongo)},color:${this.getQueueColor(pMongo)},stroke-width:2px\n`;
+    //graphDefinition += `  linkStyle 4 stroke:${this.getQueueColor(pPost)},color:${this.getQueueColor(pPost)},stroke-width:2px\n`;
+    //graphDefinition += `  linkStyle 5 stroke:${this.getQueueColor(pNeo)},color:${this.getQueueColor(pNeo)},stroke-width:2px\n`;
 
     const style = `
     <style>
       .edgeLabel { background: transparent !important; }
       .edgeLabel rect { padding: 2px; fill: rgba(0,0,0,0.1) !important; } /* Label background */
+      .edgeLabels .edgeLabel{ 
+        color: white !important; 
+       }
+      /*.edgeLabels .edgeLabel:nth-of-type(4) span{ 
+        color: ${this.getQueueColor(walVal)} !important; 
+      }
+      .edgeLabels .edgeLabel:nth-of-type(3) span{ 
+        color: ${this.getQueueColor(walVal)} !important; 
+      }*/
     </style>
   `;
 
