@@ -1,5 +1,6 @@
-import {Component, effect, input, signal, WritableSignal} from '@angular/core';
+import {Component, input, OnInit, signal, WritableSignal} from '@angular/core';
 import {DecimalPipe, NgOptimizedImage} from "@angular/common";
+import {Observable, Subject} from "rxjs";
 
 @Component({
     selector: 'app-statistics',
@@ -10,70 +11,63 @@ import {DecimalPipe, NgOptimizedImage} from "@angular/common";
     templateUrl: './statistics.component.html',
     styleUrl: './statistics.component.css',
 })
-export class StatisticsComponent {
-    inputs = input.required<any>();
+export class StatisticsComponent implements OnInit {
+    inputs = input.required<Observable<any>>();
+    private queue$ = new Subject<any>();
 
     protected plainStatistics: WritableSignal<Map<string, [number, Stage, string, number][]>> = signal(new Map());
     protected mappedStatistics: WritableSignal<Map<string, [number, Stage, string, number][]>> = signal(new Map());
 
     protected tps: WritableSignal<Map<string, Throughput>> = signal(new Map())
 
-    constructor() {
-        effect(() => {
-            let data = this.inputs();
+    ngOnInit() {
+        // Subscribe to the stream passed from the parent
+        this.inputs().subscribe(data => {
+            this.processData(data);
+        });
+    }
 
-            console.log(data)
 
-            if (!data){
-                return;
-            }
-
-            if (data.type == "Throughput"){
-                let tps: ThroughputEvent = data.data;
-                this.tps.update(map => {
-                    let d = new Map(map);
-                    for (let key in tps.tps) {
-                        let value = tps.tps[key];
-                        d.set(key, value)
-
-                    }
-
-                    return d
-                })
-                return;
-            }
-            let map: StatisticEvent = data.data;
-
-            if (!map) {
-                return;
-            }
-
-            this.plainStatistics.update(m => {
-                let d = new Map(m);
-
-                for (let key in map.engines) {
-                    let entries = map.engines[key];
-
-                    let values = [...entries[0]].filter((e) => e[1] == Stage.Plain).sort((a, b) => a[0] - b[0])
-                    d.set(entries[1], values)
+    private processData(data: any) {
+        if (data.type === "Throughput") {
+            const tps: ThroughputEvent = data.data;
+            this.tps.update(map => {
+                const d = new Map(map);
+                for (const key in tps.tps) {
+                    d.set(key, tps.tps[key]);
                 }
                 return d;
             });
+            return;
+        }
 
-            this.mappedStatistics.update(m => {
-                let d = new Map(m);
+        const stats: StatisticEvent = data.data;
+        if (!stats) return;
 
-                for (let key in map.engines) {
-                    let entries = map.engines[key];
+        // Process Statistics
+        this.updateStats(stats);
+    }
 
-                    let values = [...entries[0]].filter((e) => e[1] == Stage.Mapped).sort((a, b) => a[0] - b[0])
-                    d.set(entries[1], values)
-                }
-                return d;
-            });
-
+    private updateStats(map: StatisticEvent) {
+        this.plainStatistics.update(m => {
+            const d = new Map(m);
+            for (const key in map.engines) {
+                const [entries, engineName] = map.engines[key];
+                const values = [...entries].filter(e => e[1] === Stage.Plain).sort((a, b) => a[0] - b[0]);
+                d.set(engineName, values);
+            }
+            return d;
         });
 
+        this.mappedStatistics.update(m => {
+            const d = new Map(m);
+            for (const key in map.engines) {
+                const [entries, engineName] = map.engines[key];
+                const values = [...entries].filter(e => e[1] === Stage.Mapped).sort((a, b) => a[0] - b[0]);
+                d.set(engineName, values);
+            }
+            return d;
+        });
     }
 
     protected getImage(engineName: string): string | null {

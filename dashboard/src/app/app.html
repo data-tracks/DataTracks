@@ -83,7 +83,7 @@
             </div>
 
             <div [class.active-tab]="activeTab === Tab.Stats" class="tab-pane">
-                <app-statistics [inputs]="service.statistics()"/>
+                <app-statistics [inputs]="service.$statistics"/>
             </div>
 
             <div [class.active-tab]="activeTab === Tab.Threads" class="tab-pane">

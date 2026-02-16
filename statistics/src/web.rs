@@ -5,26 +5,30 @@ use axum::extract::{Path, State, WebSocketUpgrade};
 use axum::response::IntoResponse;
 use axum::routing::get;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::Sender;
+use tokio::time::sleep;
 use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
 use tracing::{error, info, warn};
-use util::{Batch, Event, StatisticEvent, TargetedRecord};
+use util::{Batch, Event, StatisticEvent, TargetedRecord, ThroughputEvent};
 
 #[derive(Clone)]
 struct EventState {
     sender: Sender<Event>,
     output: Sender<Batch<TargetedRecord>>,
-    last: Arc<Mutex<StatisticEvent>>,
+    last_statistic: Arc<Mutex<StatisticEvent>>,
+    last_tp: Arc<Mutex<ThroughputEvent>>,
 }
 pub fn start(
     rt: &mut Runtime,
     tx: Sender<Event>,
     output: Sender<Batch<TargetedRecord>>,
-    last: Arc<Mutex<StatisticEvent>>,
+    last_statistic: Arc<Mutex<StatisticEvent>>,
+    last_tp: Arc<Mutex<ThroughputEvent>>,
 ) {
     rt.spawn(async move {
         let root_dir = std::env::current_dir().unwrap();
@@ -37,7 +41,8 @@ pub fn start(
         let shared_state = EventState {
             sender: tx,
             output,
-            last,
+            last_statistic,
+            last_tp,
         };
 
         let app = Router::new()
@@ -70,12 +75,20 @@ async fn handle_socket_logic(mut socket: WebSocket, state: EventState, path: Str
     let mut rx = state.sender.subscribe();
 
     if path.as_str() == "/statistics" {
-        let statistics = (*state.last.lock().unwrap()).clone();
+        let statistics = (*state.last_statistic.lock().unwrap()).clone();
         let msg = serde_json::to_string(&Event::Statistics(statistics)).ok();
         if let Some(text) = msg
             && socket.send(Message::Text(text.into())).await.is_err()
         {
             error!("Error sending initial statistic.")
+        }
+        //sleep(Duration::from_millis(1000)).await;
+        let tp = (*state.last_tp.lock().unwrap()).clone();
+        let msg = serde_json::to_string(&Event::Throughput(tp)).ok();
+        if let Some(text) = msg
+            && socket.send(Message::Text(text.into())).await.is_err()
+        {
+            error!("Error sending initial tp.")
         }
     }
 
@@ -84,7 +97,7 @@ async fn handle_socket_logic(mut socket: WebSocket, state: EventState, path: Str
             Ok(event) => {
                 let msg = match (path.as_str(), event) {
                     ("/events", e) => {
-                        if matches!(e, Event::Heartbeat(_)) || matches!(e, Event::Insert {..}) {
+                        if matches!(e, Event::Heartbeat(_)) || matches!(e, Event::Insert { .. }) {
                             continue;
                         }
                         serde_json::to_string(&e).ok()
@@ -112,8 +125,8 @@ async fn handle_socket_logic(mut socket: WebSocket, state: EventState, path: Str
             }
             Err(err) => {
                 warn!("Client error: {}", err);
-                break
-            },
+                break;
+            }
         }
     }
 }

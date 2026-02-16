@@ -1,6 +1,6 @@
 use crate::definition::DefinitionFilter::AllMatch;
 use crate::mappings::DefinitionMapping;
-use crate::{DefinitionId, EntityId, TargetedRecord, TimedMeta, log_channel, Batch};
+use crate::{Batch, DefinitionId, EntityId, TargetedRecord, TimedMeta, log_channel};
 use flume::{Receiver, Sender, unbounded};
 use serde::Serialize;
 use speedy::{Readable, Writable};
@@ -21,7 +21,10 @@ pub struct Definition {
     /// final destination
     pub entity: Entity,
     #[serde(skip)]
-    pub native: (Sender<Batch<TargetedRecord>>, Receiver<Batch<TargetedRecord>>),
+    pub native: (
+        Sender<Batch<TargetedRecord>>,
+        Receiver<Batch<TargetedRecord>>,
+    ),
     pub mapping: DefinitionMapping,
 }
 
@@ -39,7 +42,7 @@ impl Definition {
 
         log_channel(
             tx.clone(),
-            format!("Definition Native {} - {} to Engine", id.0, name.as_ref()),
+            format!("Definition-{}-{}", id.0, name.as_ref()),
             None,
         )
         .await;

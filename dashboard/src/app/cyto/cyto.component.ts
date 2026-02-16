@@ -49,8 +49,8 @@ export class CytoComponent implements AfterViewInit {
           selector: 'edge',
           style: {
             'width': 2,
-            'line-color': '#444',
-            'target-arrow-color': '#444',
+            'line-color': 'data(color)',
+            'target-arrow-color': 'data(color)',
             'target-arrow-shape': 'triangle',
             'curve-style': 'bezier',
             'label': 'data(value)', // This maps to the numeric value
@@ -83,6 +83,15 @@ export class CytoComponent implements AfterViewInit {
             'target-endpoint': '0% -50%',  // End at the left-middle of the target node
             'text-rotation': 1.6,
           }
+        },
+        {
+          selector: 'edge.no-label', // Targets edges with the 'no-label' class
+          style: {
+            'line-color': 'grey',
+            'target-arrow-color': 'gray',
+            'label': '', // This removes the text/number
+            'text-background-opacity': 0 // Optional: ensures no ghost box remains
+          }
         }
       ],
       elements: this.getInitialElements(),
@@ -103,9 +112,9 @@ export class CytoComponent implements AfterViewInit {
       "Persister mongodb": "edge-persister1",
       "Persister postgres": "edge-persister2",
       "Persister neo4j": "edge-persister3",
-      "Definition Native 0 - Document test to Engine": "edge-nativer0",
-      "Definition Native 1 - Relational test to Engine": "edge-nativer1",
-      "Definition Native 2 - Graph test to Engine": "edge-nativer2"
+      "Definition-0-Document test": "edge-nativer0",
+      "Definition-1-Relational test": "edge-nativer1",
+      "Definition-2-Graph test": "edge-nativer2"
     };
 
     this.queues.forEach((value, key) => {
@@ -136,9 +145,9 @@ export class CytoComponent implements AfterViewInit {
 
       // Nativers
       {data: {id: 'nativer', label: 'Nativer'}, position: {x: 600, y: 100}},
-      {data: {id: 'nativer1', label: 'Definition 1'}, position: {x: 550, y: 300}, classes: "rotate"},
-      {data: {id: 'nativer2', label: 'Definition 2'}, position: {x: 600, y: 300}, classes: "rotate"},
-      {data: {id: 'nativer3', label: 'Definition 3'}, position: {x: 650, y: 300}, classes: "rotate"},
+      {data: {id: 'nativer0', label: 'Definition 0'}, position: {x: 550, y: 300}, classes: "rotate"},
+      {data: {id: 'nativer1', label: 'Definition 1'}, position: {x: 600, y: 300}, classes: "rotate"},
+      {data: {id: 'nativer2', label: 'Definition 2'}, position: {x: 650, y: 300}, classes: "rotate"},
 
       // end
       {data: {id: 'end', label: 'Poly'}, position: {x: 750, y: 100}},
@@ -161,7 +170,14 @@ export class CytoComponent implements AfterViewInit {
         classes: "rotate"
       },
 
-      {data: {id: 'edge-persister-nativer', source: 'persister', target: 'nativer'}},
+      {
+        data: {id: 'edge-persister-nativer', source: 'persister', target: 'nativer', value: '0', color: '#fff'},
+        classes: "no-label"
+      },
+      {
+        data: {id: 'edge-nativer0', source: 'nativer', target: 'nativer0', value: '0', color: '#fff'},
+        classes: "rotate"
+      },
       {
         data: {id: 'edge-nativer1', source: 'nativer', target: 'nativer1', value: '0', color: '#fff'},
         classes: "rotate"
@@ -170,12 +186,11 @@ export class CytoComponent implements AfterViewInit {
         data: {id: 'edge-nativer2', source: 'nativer', target: 'nativer2', value: '0', color: '#fff'},
         classes: "rotate"
       },
-      {
-        data: {id: 'edge-nativer3', source: 'nativer', target: 'nativer3', value: '0', color: '#fff'},
-        classes: "rotate"
-      },
 
-      {data: {id: 'edge-nativer-poly', source: 'nativer', target: 'end'}},
+      {
+        data: {id: 'edge-nativer-poly', source: 'nativer', target: 'end', value: '0', color: '#fff'},
+        classes: "no-label"
+      },
     ];
   }
 

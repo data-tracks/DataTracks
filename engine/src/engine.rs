@@ -14,7 +14,7 @@ use std::time::Duration;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
 use util::definition::{Definition, Model, Stage};
-use util::{DefinitionId, EngineId, Event, TargetedRecord, log_channel, Batch};
+use util::{Batch, DefinitionId, EngineId, Event, TargetedRecord, log_channel};
 use value::Value;
 
 static ID_BUILDER: AtomicU64 = AtomicU64::new(0);

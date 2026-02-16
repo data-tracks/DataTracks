@@ -9,7 +9,13 @@ pub type DefinitionMeta = (Vec<(DefinitionId, Stage, String, usize)>, Option<Str
 #[derive(Serialize, Clone, Debug)]
 #[serde(tag = "type", content = "data")]
 pub enum Event {
-    Insert{id: DefinitionId, size: usize, ids: Vec<u64>, source: EngineId, stage: Stage},
+    Insert {
+        id: DefinitionId,
+        size: usize,
+        ids: Vec<u64>,
+        source: EngineId,
+        stage: Stage,
+    },
     Definition(DefinitionId, Box<Definition>),
     Engine(EngineId, EngineEvent),
     Runtime(RuntimeEvent),
@@ -29,7 +35,7 @@ pub struct RuntimeEvent {
     pub budget_forces_yield: usize,
 }
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug, Default)]
 pub struct ThroughputEvent {
     pub tps: HashMap<String, ThroughputMeta>,
 }

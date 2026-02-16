@@ -12,7 +12,7 @@ use tokio::time::{interval, sleep, Instant};
 use tracing::log::debug;
 use util::definition::{Definition, Stage};
 use util::Event::Runtime;
-use util::{log_channel, set_statistic_sender, Batch, DefinitionId, EngineEvent, EngineId, Event, RuntimeEvent, Runtimes, StatisticEvent, TargetedRecord, ThroughputEvent};
+use util::{log_channel, set_statistic_sender, Batch, DefinitionId, EngineEvent, EngineId, Event, RuntimeEvent, Runtimes, StatisticEvent, TargetedRecord, ThroughputEvent, ThroughputMeta};
 
 pub struct Statistics {
     engines: HashMap<EngineId, EngineStatistic>,
@@ -86,9 +86,11 @@ pub fn start(rt: Runtimes, tx: Sender<Event>, rx: Receiver<Event>, output: broad
     let (bc_tx, _) = broadcast::channel(1_000_000);
     let clone_bc_tx = bc_tx.clone();
 
-    let last_shared = Arc::new(Mutex::new(StatisticEvent::default()));
+    let last_shared_statistic = Arc::new(Mutex::new(StatisticEvent::default()));
+    let last_shared_tp = Arc::new(Mutex::new(ThroughputEvent::default()));
 
-    let last_shared_clone = last_shared.clone();
+    let last_shared_statistics_clone = last_shared_statistic.clone();
+    let last_shared_tp_clone = last_shared_tp.clone();
 
     let tx_clone = tx.clone();
     let statistic = spawn(move || {
@@ -128,18 +130,19 @@ pub fn start(rt: Runtimes, tx: Sender<Event>, rx: Receiver<Event>, output: broad
                             debug!("Statistic ticks", )
                         }
                         
-                        if clone_bc_tx.send(Event::Throughput(ThroughputEvent{tps: throughput})).is_err() {
+                        if clone_bc_tx.send(Event::Throughput(ThroughputEvent{tps: throughput.clone()})).is_err() {
                             debug!("Statistic throughput ticks", )
                         }
 
                         last_time = Instant::now();
                         last = current.clone();
-                        *last_shared_clone.lock().unwrap() = last.clone()
+                        *last_shared_statistics_clone.lock().unwrap() = last.clone();
+                        *last_shared_tp_clone.lock().unwrap() = ThroughputEvent{tps: throughput};
                     }
                 }
             }
         });
-        web::start(&mut rt, bc_tx, output, last_shared);
+        web::start(&mut rt, bc_tx, output, last_shared_statistic, last_shared_tp);
 
         let statistic_tx = tx.clone();
 

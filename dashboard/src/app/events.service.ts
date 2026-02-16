@@ -1,4 +1,5 @@
 import {computed, Injectable, NgZone, signal} from '@angular/core';
+import {Subject} from "rxjs";
 
 @Injectable({
   providedIn: 'root',
@@ -19,8 +20,7 @@ export class EventsService {
   public connectedStatistics = signal<boolean>(false);
   public connectedEvents = signal<boolean>(false);
   public connectedQueues = signal<boolean>(false);
-  private _statistics = signal<any>(null);
-  public statistics = this._statistics.asReadonly();
+  public $statistics = new Subject<any>()
 
   constructor(private zone: NgZone) {
     this.initEventsConnection();
@@ -75,7 +75,7 @@ export class EventsService {
         this.connectedStatistics.set(true);
         const data = JSON.parse(queue.data);
 
-        this._statistics.set(data);
+        this.$statistics.next(data);
       });
     };
 
