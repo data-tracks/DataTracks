@@ -92,6 +92,32 @@ export class CytoComponent implements AfterViewInit {
             'label': '', // This removes the text/number
             'text-background-opacity': 0 // Optional: ensures no ghost box remains
           }
+        },
+        {
+          selector: 'node.database', // Triggered if node has 'database' class
+          style: {
+            'background-image': 'assets/database.png', // #2085b5
+            'background-fit': 'contain',
+            'background-clip': 'none',
+            'width': 50,
+            'height': 50,
+            'label': 'data(label)',
+            'background-opacity': 0, // Makes the default circle/square invisible
+            'shape': 'rectangle'    // Gives the image a frame to sit in
+          }
+        },
+        {
+          selector: 'node.in', // Triggered if node has 'database' class
+          style: {
+            'background-image': 'assets/in.png', // #2085b5
+            'background-fit': 'contain',
+            'background-clip': 'none',
+            'width': 30,
+            'height': 30,
+            'label': 'data(label)',
+            'background-opacity': 0, // Makes the default circle/square invisible
+            'shape': 'round-rectangle',  // Gives the image a frame to sit in
+          }
         }
       ],
       elements: this.getInitialElements(),
@@ -134,14 +160,15 @@ export class CytoComponent implements AfterViewInit {
     return [
       // Nodes
       {data: {id: 'sink', label: 'Sink'}, position: {x: 0, y: 100}},
+      {data: {id: 'sinkLogo', label: ''}, position: {x: -40, y: 100}, classes:"in" },
       {data: {id: 'timer', label: 'Timer'}, position: {x: 150, y: 100}},
       {data: {id: 'wal', label: 'WAL'}, position: {x: 300, y: 100}},
 
       // Persisters
       {data: {id: 'persister', label: 'Persister'}, position: {x: 450, y: 100}},
-      {data: {id: 'persister1', label: 'Mongo'}, position: {x: 400, y: 300}, classes: "rotate"},
-      {data: {id: 'persister2', label: 'Postgres'}, position: {x: 450, y: 300}, classes: "rotate"},
-      {data: {id: 'persister3', label: 'Neo4j'}, position: {x: 500, y: 300}, classes: "rotate"},
+      {data: {id: 'persister1', label: 'Mongo'}, position: {x: 400, y: 300}, classes: "database"},
+      {data: {id: 'persister2', label: 'Postgres'}, position: {x: 450, y: 300}, classes: "database"},
+      {data: {id: 'persister3', label: 'Neo4j'}, position: {x: 500, y: 300}, classes: "database"},
 
       // Nativers
       {data: {id: 'nativer', label: 'Nativer'}, position: {x: 600, y: 100}},
@@ -149,8 +176,13 @@ export class CytoComponent implements AfterViewInit {
       {data: {id: 'nativer1', label: 'Definition 1'}, position: {x: 600, y: 300}, classes: "rotate"},
       {data: {id: 'nativer2', label: 'Definition 2'}, position: {x: 650, y: 300}, classes: "rotate"},
 
+      {data: {id: 'nativer0engine', label: 'Mongo'}, position: {x: 550, y: 400}, classes: "database"},
+      {data: {id: 'nativer1engine', label: 'Postgres'}, position: {x: 600, y: 400}, classes: "database"},
+      {data: {id: 'nativer2engine', label: 'Neo4j'}, position: {x: 650, y: 400}, classes: "database"},
+
       // end
       {data: {id: 'end', label: 'Poly'}, position: {x: 750, y: 100}},
+      {data: {id: 'endLogo', label: ''}, position: {x: 790, y: 100}, classes:"in" },
 
       // Edges with initial values
       { data: { id: 'edge-sink-timer', source: 'sink', target: 'timer', value: "0", color: '#fff' } },
@@ -169,7 +201,7 @@ export class CytoComponent implements AfterViewInit {
         data: {id: 'edge-persister3', source: 'persister', target: 'persister3', value: '0', color: '#fff'},
         classes: "rotate"
       },
-
+      //nativer
       {
         data: {id: 'edge-persister-nativer', source: 'persister', target: 'nativer', value: '0', color: '#fff'},
         classes: "no-label"
@@ -185,6 +217,20 @@ export class CytoComponent implements AfterViewInit {
       {
         data: {id: 'edge-nativer2', source: 'nativer', target: 'nativer2', value: '0', color: '#fff'},
         classes: "rotate"
+      },
+
+      //nativer engines
+      {
+        data: {id: 'edge-nativer0engine', source: 'nativer0', target: 'nativer0engine', value: '0', color: '#fff'},
+        classes: "rotate no-label"
+      },
+      {
+        data: {id: 'edge-nativer1engine', source: 'nativer1', target: 'nativer1engine', value: '0', color: '#fff'},
+        classes: "rotate no-label"
+      },
+      {
+        data: {id: 'edge-nativer2engine', source: 'nativer2', target: 'nativer2engine', value: '0', color: '#fff'},
+        classes: "rotate no-label"
       },
 
       {

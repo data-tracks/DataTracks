@@ -1,4 +1,4 @@
-use crate::web;
+use crate::{tpc, web};
 use flume::{unbounded, Receiver, Sender};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -37,7 +37,7 @@ impl Statistics {
 
     async fn handle_event(&mut self, event: Event) {
         match event {
-            Event::Insert{id, size, source, ids, stage} => {
+            Event::Insert{id, size, source, ids: _ids, stage} => {
                 self.engines.entry(source).or_default().handle_insert(
                     size,
                     id,
@@ -142,7 +142,8 @@ pub fn start(rt: Runtimes, tx: Sender<Event>, rx: Receiver<Event>, output: broad
                 }
             }
         });
-        web::start(&mut rt, bc_tx, output, last_shared_statistic, last_shared_tp);
+        web::start(&mut rt, bc_tx.clone(), output.clone(), last_shared_statistic.clone(), last_shared_tp.clone());
+        tpc::start(&mut rt, bc_tx, output, last_shared_statistic, last_shared_tp);
 
         let statistic_tx = tx.clone();
 
