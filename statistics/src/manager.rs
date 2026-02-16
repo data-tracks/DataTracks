@@ -12,7 +12,7 @@ use tokio::time::{interval, sleep, Instant};
 use tracing::log::debug;
 use util::definition::{Definition, Stage};
 use util::Event::Runtime;
-use util::{log_channel, set_statistic_sender, Batch, DefinitionId, EngineEvent, EngineId, Event, RuntimeEvent, Runtimes, StatisticEvent, TargetedRecord, ThroughputEvent, ThroughputMeta};
+use util::{log_channel, set_statistic_sender, Batch, DefinitionId, EngineEvent, EngineId, Event, RuntimeEvent, Runtimes, StatisticEvent, TargetedRecord, ThroughputEvent};
 
 pub struct Statistics {
     engines: HashMap<EngineId, EngineStatistic>,
@@ -142,8 +142,8 @@ pub fn start(rt: Runtimes, tx: Sender<Event>, rx: Receiver<Event>, output: broad
                 }
             }
         });
-        web::start(&mut rt, bc_tx.clone(), output.clone(), last_shared_statistic.clone(), last_shared_tp.clone());
-        tpc::start(&mut rt, bc_tx, output, last_shared_statistic, last_shared_tp);
+        web::start(&mut rt, bc_tx.clone(), output, last_shared_statistic.clone(), last_shared_tp.clone());
+        tpc::start(&mut rt, bc_tx, last_shared_statistic, last_shared_tp);
 
         let statistic_tx = tx.clone();
 

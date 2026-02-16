@@ -6,12 +6,11 @@ use tokio::runtime::Runtime;
 use tokio::sync::broadcast::Sender;
 use tracing::{error, info};
 use tracing::log::warn;
-use util::{Batch, Event, StatisticEvent, TargetedRecord, ThroughputEvent};
+use util::{Event, StatisticEvent, ThroughputEvent};
 
 #[derive(Clone)]
 struct EventState {
     sender: Sender<Event>,
-    output: Sender<Batch<TargetedRecord>>,
     last_statistic: Arc<Mutex<StatisticEvent>>,
     last_tp: Arc<Mutex<ThroughputEvent>>
 }
@@ -19,13 +18,11 @@ struct EventState {
 pub fn start(
     rt: &mut Runtime,
     tx: Sender<Event>,
-    output: Sender<Batch<TargetedRecord>>,
     last_statistic: Arc<Mutex<StatisticEvent>>,
     last_tp: Arc<Mutex<ThroughputEvent>>,
 ) {
     let shared_state = EventState {
         sender: tx,
-        output,
         last_statistic,
         last_tp,
     };
