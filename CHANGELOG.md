@@ -1,5 +1,8 @@
-# Fixing UI Communication
+# PolyStream Change & new Dashboard
 
 ---
 
-- Adjusted incorrect ```EventsComponent``` creation in UI 
+- New engine based approach
+- Removed train and wagon logic
+- Removed core, threading, error
+- New dashboard with statistics, queues and event tracking
