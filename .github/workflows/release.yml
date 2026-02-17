@@ -27,28 +27,6 @@ jobs:
       - name: Checkout to get Cargo.toml
         uses: actions/checkout@v4
 
-      - name: 🛠️ Install flatc
-        run: |
-          git clone https://github.com/google/flatbuffers.git
-          cd flatbuffers
-
-          # Configure with CMake
-          cmake -DCMAKE_BUILD_TYPE=Release .
-
-          # Build all enabled targets
-          make -j$(nproc)
-
-          # 3. Ensure it has execution permissions
-          sudo mv flatc /usr/local/bin/
-
-          # 4. Verify it works
-          flatc --version
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libcurl4-openssl-dev
-
       - name: Extract version from Cargo.toml
         id: get-version
         run: |
@@ -97,6 +75,28 @@ jobs:
         with:
           submodules: 'true'
           token: ${{ secrets.TRACKVIEW }}
+
+      - name: 🛠️ Install flatc
+        run: |
+          git clone https://github.com/google/flatbuffers.git
+          cd flatbuffers
+
+          # Configure with CMake
+          cmake -DCMAKE_BUILD_TYPE=Release .
+
+          # Build all enabled targets
+          make -j$(nproc)
+
+          # 3. Ensure it has execution permissions
+          sudo mv flatc /usr/local/bin/
+
+          # 4. Verify it works
+          flatc --version
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcurl4-openssl-dev
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
