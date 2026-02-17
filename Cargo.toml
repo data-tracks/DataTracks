@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["core", "app", "value", "threading", "macro", "engine", "util", "sink", "statistics"]
+members = ["app", "value", "macro", "engine", "util", "sink", "statistics"]
 
 
 [workspace.package]
@@ -31,15 +31,13 @@ rumqttc = "0.25.1"
 rumqttd = "0.20.0"
 tracing-test = "0.2.6"
 tokio = { version = "1.49.0", features = ["full"] }
+tokio-util = "0.7.18"
 mongodb = { version = "3.5.1" }
 crossbeam = "0.8.4"
 value = { path = "./value" }
-core = { path = "./core" }
-threading = { path = "./threading" }
 util = { path = "./util" }
 sink = { path = "./sink" }
 engine = { path = "engine" }
-error = { path = "./error" }
 uuid = { version = "1.21.0", features = ["v4"] }
 rand = "0.10.0"
 parking_lot = "0.12.5"

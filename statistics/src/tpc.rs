@@ -67,10 +67,8 @@ async fn handle_tcp_client(mut socket: TcpStream, state: EventState) {
                     _ => true,
                 };
 
-                if should_send {
-                    if let Err(_) = send_json_frame(&mut socket, &event).await {
-                        break; // Client disconnected
-                    }
+                if should_send && send_json_frame(&mut socket, &event).await.is_err() {
+                    break; // Client disconnected
                 }
             }
             Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {

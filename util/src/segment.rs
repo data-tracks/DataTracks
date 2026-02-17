@@ -50,7 +50,7 @@ impl SegmentedLog {
         let file = OpenOptions::new()
             .read(true)
             .write(true)
-            .create(true)
+            .create(true).truncate(true)
             .open(path)
             .await
             .expect("Failed to open segment");

@@ -16,18 +16,17 @@ eula = false
 [dependencies]
 value = { workspace = true }
 anyhow = { workspace = true }
-core = { workspace = true }
 tokio = { workspace = true }
+tokio-util = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
-flatbuffers = { workspace = true }
 util = { workspace = true }
 engine = { workspace = true }
 sink = { workspace = true }
 futures = { workspace = true }
 statistics = { workspace = true }
 flume = { workspace = true }
-tokio-util = "0.7.18"
+
 
 
 [dev-dependencies]

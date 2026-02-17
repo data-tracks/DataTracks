@@ -49,8 +49,7 @@ impl MongoDB {
             Duration::from_secs(5),
             client.database("admin").run_command(doc! { "ping": 1 }),
         )
-        .await?
-        .map_err(|err| err)?;
+        .await??;
         info!("☑️ Connected to mongoDB database");
 
         self.client = Some(client);
@@ -99,7 +98,7 @@ impl MongoDB {
                 let mut res: Cursor<Value> = client
                     .database("public")
                     .collection(&entity)
-                    .find(doc! {"id": {"$in": ids.into_iter().map(|id|Value::from(id)).collect::<Vec<_>>()}})
+                    .find(doc! {"id": {"$in": ids.into_iter().map(Value::from).collect::<Vec<_>>()}})
                     .await?;
 
                 let mut values = vec![];

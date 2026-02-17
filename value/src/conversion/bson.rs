@@ -25,9 +25,10 @@ impl From<Bson> for Value {
     }
 }
 
-impl Into<Bson> for Value {
-    fn into(self) -> Bson {
-        match self {
+impl From<Value> for Bson {
+
+    fn from(value: Value) -> Self {
+        match value {
             Value::Int(i) => Bson::Int32(i.0 as i32),
             Value::Float(f) => Bson::Double(f.as_f64()),
             Value::Bool(b) => Bson::Boolean(b.0),
@@ -43,7 +44,7 @@ impl Into<Bson> for Value {
                     .map(|(k, v)| (k, v.into()))
                     .collect::<HashMap<String, Bson>>(),
             )
-            .unwrap(),
+                .unwrap(),
             Value::Node(_) => todo!(),
             Value::Edge(_) => todo!(),
             Value::Null => Bson::Null,

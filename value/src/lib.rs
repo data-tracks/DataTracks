@@ -29,7 +29,6 @@ pub mod node;
 mod text;
 mod time;
 pub mod timeunit;
-pub mod train;
 mod r#type;
 pub mod wagon;
 mod conversion;

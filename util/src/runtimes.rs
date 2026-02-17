@@ -58,6 +58,12 @@ pub struct RuntimeStates {
     id_builder: u64
 }
 
+impl Default for RuntimeStates {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RuntimeStates {
     pub fn new() -> Self {
         Self{

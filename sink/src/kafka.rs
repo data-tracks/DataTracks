@@ -91,9 +91,9 @@ pub struct SinkRecord {
     value: String,
 }
 
-impl Into<Value> for SinkRecord {
-    fn into(self) -> Value {
-        self.value.into()
+impl From<SinkRecord> for Value {
+    fn from(value: SinkRecord) -> Self {
+        value.value.into()
     }
 }
 

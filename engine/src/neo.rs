@@ -193,7 +193,7 @@ impl Neo4j {
                         query(cypher_query).param(
                             "values",
                             ids.into_iter()
-                                .map(|id| Value::from(id))
+                                .map(Value::from)
                                 .collect::<Vec<_>>(),
                         ),
                     )
