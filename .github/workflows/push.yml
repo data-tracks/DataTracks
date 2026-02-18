@@ -22,22 +22,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
-      - name: 🛠️ Install flatc
-        run: |
-          git clone https://github.com/google/flatbuffers.git
-          cd flatbuffers
-          
-          # Configure with CMake
-          cmake -DCMAKE_BUILD_TYPE=Release .
-          
-          # Build all enabled targets
-          make -j$(nproc)
-
-          # 3. Ensure it has execution permissions
-          sudo mv flatc /usr/local/bin/
-          
-          # 4. Verify it works
-          flatc --version
+      - name: Install latest flatc
+        uses: Nugine/setup-flatc@v1
 
       - name: Install dependencies
         run: |
