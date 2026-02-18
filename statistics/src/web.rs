@@ -16,9 +16,10 @@ use tracing::{error, info, warn};
 use util::{Batch, Event, StatisticEvent, TargetedRecord, ThroughputEvent};
 
 #[derive(RustEmbed)]
-#[folder = "$FRONTEND_DIST_DIR"]
+#[folder = "../dashboard/dist/dashboard/browser/"]
 #[derive(Clone)]
 struct Assets;
+
 
 #[derive(Clone)]
 struct EventState {

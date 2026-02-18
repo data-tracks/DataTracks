@@ -6,6 +6,12 @@
 /out-tsc
 /bazel-out
 
+# webui bundle
+!/dist/
+!/dist/dashboard/
+!/dist/dashboard/browser/
+!/dist/dashboard/browser/.gitkeep
+
 # Node
 /node_modules
 npm-debug.log
