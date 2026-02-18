@@ -4,15 +4,21 @@ use axum::extract::ws::{Message, WebSocket};
 use axum::extract::{Path, State, WebSocketUpgrade};
 use axum::response::IntoResponse;
 use axum::routing::get;
+use axum_embed::ServeEmbed;
+use rust_embed::RustEmbed;
 use std::sync::{Arc, Mutex};
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::Sender;
 use tower_http::cors::CorsLayer;
-use tower_http::services::ServeDir;
 use tracing::{error, info, warn};
 use util::{Batch, Event, StatisticEvent, TargetedRecord, ThroughputEvent};
+
+#[derive(RustEmbed)]
+#[folder = "../dashboard/dist/dashboard/browser/"]
+#[derive(Clone)]
+struct Assets;
 
 #[derive(Clone)]
 struct EventState {
@@ -29,19 +35,14 @@ pub fn start(
     last_tp: Arc<Mutex<ThroughputEvent>>,
 ) {
     rt.spawn(async move {
-        let root_dir = std::env::current_dir().unwrap();
-        let dist_path = root_dir
-            .join("dashboard")
-            .join("dist")
-            .join("dashboard")
-            .join("browser");
-
         let shared_state = EventState {
             sender: tx,
             output,
             last_statistic,
             last_tp,
         };
+
+        let serve_assets = ServeEmbed::<Assets>::new();
 
         let app = Router::new()
             .route("/events", get(ws_handler))
@@ -51,7 +52,7 @@ pub fn start(
             .route("/threads", get(ws_handler))
             .layer(CorsLayer::permissive())
             .with_state(shared_state)
-            .fallback_service(ServeDir::new(dist_path));
+            .fallback_service(serve_assets);
 
         let listener = TcpListener::bind("127.0.0.1:3131").await.unwrap();
         info!("Web server running on http://127.0.0.1:3131");

@@ -13,10 +13,9 @@ value = { workspace = true }
 flume = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
-comfy-table = { workspace = true }
-num-format = { workspace = true }
 axum = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tower-http = { workspace = true }
-mime_guess = "2.0.5"
+rust-embed = "8.11.0"
+axum-embed = "0.1.0"
