@@ -3,6 +3,10 @@ use std::path::Path;
 use std::process::Command;
 
 fn main() {
+    setup_protocol();
+}
+
+fn setup_protocol() {
     let schema_path = "../flatbuffer/value.fbs"; // Path to your .fbs file
     let generated_file = "src/value_generated.rs"; // Path to the file flatc creates
 

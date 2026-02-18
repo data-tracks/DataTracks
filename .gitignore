@@ -5,3 +5,8 @@ debug.txt
 *.db
 *.log
 /wals/
+
+# Node
+/node_modules
+npm-debug.log
+yarn-error.log
