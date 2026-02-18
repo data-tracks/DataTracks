@@ -18,6 +18,11 @@ fn setup_webui() {
         .status()
         .expect("Failed to install dependencies. Is pnpm it installed?");
 
+    let path = "../dashboard/dist/dashboard/browser/";
+
+    // Set this variable for the compilation phase
+    println!("cargo:rustc-env=FRONTEND_DIST_DIR={}", path);
+
     Command::new("pnpm")
         .args(["run", "build"])
         .current_dir("../dashboard")
