@@ -11,19 +11,28 @@ fn setup_webui() {
     let dist_path = "../dashboard/dist/dashboard/browser/";
     fs::create_dir_all(dist_path).expect("Failed to create dist directory");
 
-    // Tell Cargo to rerun this script if the schema changes
+    // rerun this script if the schema changes
     println!("cargo:rerun-if-changed={}", ui_path);
 
-    Command::new("pnpm")
+    // call pnpm based on the OS
+    let mut cmd = if cfg!(target_os = "windows") {
+        let mut c = Command::new("cmd");
+        c.args(["/C", "pnpm"]);
+        c
+    } else {
+        Command::new("pnpm")
+    };
+
+    cmd
         .args([
-            "i",
+            "install",
         ])
         .current_dir("../dashboard")
         .status()
         .expect("Failed to install dependencies. Is pnpm it installed?");
 
 
-    Command::new("pnpm")
+    cmd
         .args(["run", "build"])
         .current_dir("../dashboard")
         .status()
