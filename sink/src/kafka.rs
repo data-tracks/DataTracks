@@ -1,4 +1,4 @@
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use flume::Sender;
 use rdkafka::admin::{AdminClient, AdminOptions, NewTopic, TopicReplication};
 use rdkafka::consumer::{Consumer, StreamConsumer};
@@ -9,7 +9,7 @@ use std::time::Duration;
 use tokio::task::JoinSet;
 use tracing::{debug, error, info};
 use util::container::Mapping;
-use util::{container, InitialMeta};
+use util::{InitialMeta, container};
 use value::Value;
 
 const TOPIC: &str = "poly"; // The topic to consume from
@@ -61,7 +61,7 @@ impl KafkaSink {
                             match sender.send((
                                 Value::from(record.value),
                                 InitialMeta {
-                                    name: Some(record.id),
+                                    topics: record.topics,
                                 },
                             )) {
                                 Ok(_) => {}
@@ -87,7 +87,7 @@ impl KafkaSink {
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub struct SinkRecord {
-    id: String,
+    topics: Vec<String>,
     value: String,
 }
 
@@ -135,7 +135,7 @@ impl Kafka {
 
     pub async fn send_value_doc(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
         self.send(SinkRecord {
-            id: "doc".to_string(),
+            topics: vec!["doc".to_string()],
             value: "Success2".to_string(),
         })
         .await?;
@@ -144,7 +144,7 @@ impl Kafka {
 
     pub async fn send_value_graph(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
         self.send(SinkRecord {
-            id: "graph".to_string(),
+            topics: vec!["graph".to_string()],
             value: "Success2".to_string(),
         })
         .await?;
@@ -153,7 +153,7 @@ impl Kafka {
 
     pub async fn send_value_relational(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
         self.send(SinkRecord {
-            id: "relational".to_string(),
+            topics: vec!["relational".to_string()],
             value: "Success2".to_string(),
         })
         .await?;

@@ -4,12 +4,12 @@ use serde::Serialize;
 use speedy::{Readable, Writable};
 #[derive(Clone, Debug, Writable, Readable)]
 pub struct InitialMeta {
-    pub name: Option<String>,
+    pub topics: Vec<String>,
 }
 
 impl InitialMeta {
-    pub fn new(name: Option<String>) -> Self {
-        InitialMeta { name }
+    pub fn new(topics: Vec<String>) -> Self {
+        InitialMeta { topics }
     }
 }
 
@@ -17,7 +17,7 @@ impl InitialMeta {
 pub struct TimedMeta {
     pub id: u64,
     pub timestamp: i64,
-    pub name: Option<String>,
+    pub topics: Vec<String>,
 }
 
 impl TimedMeta {
@@ -25,7 +25,7 @@ impl TimedMeta {
         Self {
             id,
             timestamp: Utc::now().timestamp_millis(),
-            name: initial_meta.name,
+            topics: initial_meta.topics,
         }
     }
 }

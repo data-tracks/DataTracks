@@ -1,11 +1,11 @@
+use flume::{Receiver, Sender, unbounded};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use flume::{Receiver, Sender, unbounded};
 use std::thread;
 use std::thread::JoinHandle;
 use std::time::Duration;
-use tokio::runtime::{Builder};
-use tokio::task::{JoinSet};
+use tokio::runtime::Builder;
+use tokio::task::JoinSet;
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
@@ -50,7 +50,8 @@ impl TimerManager {
         let id_source = self.counter.clone();
 
         let handle = thread::spawn(move || {
-            let rt_timer = Builder::new_current_thread()
+            let rt_timer = Builder::new_multi_thread()
+                .worker_threads(4)
                 .thread_name(format!("timer-processor-{}", id))
                 .enable_all()
                 .build()

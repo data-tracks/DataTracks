@@ -17,6 +17,7 @@ memmap2 = { workspace = true }
 speedy = { workspace = true }
 chrono = { workspace = true }
 flume = { workspace = true }
-serde = { version = "1.0.228", features = ["derive"] }
+serde = { workspace = true }
+serde_with = { workspace = true }
 anyhow = { workspace = true }
 num-format = { workspace = true }

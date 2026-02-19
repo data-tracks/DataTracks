@@ -1,5 +1,6 @@
 use crate::definition::DefinitionFilter::AllMatch;
 use crate::mappings::DefinitionMapping;
+use crate::partition::PartitionInfo;
 use crate::{Batch, DefinitionId, EntityId, TargetedRecord, TimedMeta, log_channel};
 use flume::{Receiver, Sender, unbounded};
 use serde::Serialize;
@@ -15,7 +16,7 @@ static ID_BUILDER: AtomicU64 = AtomicU64::new(0);
 #[derive(Clone, Debug, Serialize)]
 pub struct Definition {
     pub id: DefinitionId,
-    pub name: String,
+    pub topic: String,
     filter: DefinitionFilter,
     pub model: Model,
     /// final destination
@@ -26,11 +27,12 @@ pub struct Definition {
         Receiver<Batch<TargetedRecord>>,
     ),
     pub mapping: DefinitionMapping,
+    pub partition_info: PartitionInfo,
 }
 
 impl Definition {
     pub async fn new<S: AsRef<str>>(
-        name: S,
+        topic: S,
         filter: DefinitionFilter,
         mapping: DefinitionMapping,
         model: Model,
@@ -42,19 +44,20 @@ impl Definition {
 
         log_channel(
             tx.clone(),
-            format!("Definition-{}-{}", id.0, name.as_ref()),
+            format!("Definition-{}-{}", id.0, topic.as_ref()),
             None,
         )
         .await;
 
         Definition {
-            name: name.as_ref().to_string(),
+            topic: topic.as_ref().to_string(),
             id,
             filter,
             model,
             entity: Entity::new(entity),
             native: (tx, rx),
             mapping,
+            partition_info: PartitionInfo::new(),
         }
     }
 
@@ -62,7 +65,7 @@ impl Definition {
     pub fn matches(&self, value: &Value, meta: &TimedMeta) -> bool {
         match &self.filter {
             AllMatch => true,
-            DefinitionFilter::MetaName(n) => meta.name == Some(n.clone()),
+            DefinitionFilter::Topic(n) => meta.topics.contains(n),
             DefinitionFilter::KeyName(k, v) => match value {
                 Dict(d) => d.get(k) == Some(&Value::from(v.clone())),
                 _ => false,
@@ -76,7 +79,7 @@ impl Definition {
 #[derive(Clone, Debug, Serialize)]
 pub enum DefinitionFilter {
     AllMatch,
-    MetaName(String),
+    Topic(String),
     KeyName(String, String),
 }
 

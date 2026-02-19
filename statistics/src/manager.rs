@@ -60,7 +60,7 @@ impl Statistics {
         let definition_names = self
             .definitions
             .iter()
-            .map(|(id, d)| (id.0, d.name.clone()))
+            .map(|(id, d)| (id.0, d.topic.clone()))
             .collect::<HashMap<_, _>>();
         StatisticEvent {
             engines: self

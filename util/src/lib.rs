@@ -1,10 +1,11 @@
 mod channel;
 pub mod container;
-mod meta;
 pub mod definition;
 mod event;
 pub mod id;
 mod mappings;
+mod meta;
+mod partition;
 pub mod queue;
 mod record;
 pub mod runtimes;

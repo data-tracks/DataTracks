@@ -10,7 +10,9 @@ use tokio::task::JoinSet;
 use tracing::{error, info};
 use util::definition::{Definition, DefinitionFilter, Model};
 use util::runtimes::Runtimes;
-use util::{DefinitionMapping, Event, InitialRecord, RelationalType, TargetedRecord, log_channel, Batch};
+use util::{
+    Batch, DefinitionMapping, Event, InitialRecord, RelationalType, TargetedRecord, log_channel,
+};
 
 pub struct Manager {
     catalog: Catalog,
@@ -81,7 +83,7 @@ impl Manager {
 
             self.init_definitions(statistic_tx.clone()).await?;
 
-            persister.start_distributor(&mut self.joins).await;
+            persister.start_distributor(rt.clone()).await;
 
             let sink = self.start_sinks(persister, rt).await?;
             //let kafka = sink::kafka::start(&mut self.joins, tx.clone()).await?;
@@ -122,7 +124,7 @@ impl Manager {
             .add_definition(
                 Definition::new(
                     "Document test",
-                    DefinitionFilter::MetaName(String::from("doc")),
+                    DefinitionFilter::Topic(String::from("doc")),
                     DefinitionMapping::document(),
                     Model::Document,
                     String::from("doc"),
@@ -136,7 +138,7 @@ impl Manager {
             .add_definition(
                 Definition::new(
                     "Relational test",
-                    DefinitionFilter::MetaName(String::from("relational")),
+                    DefinitionFilter::Topic(String::from("relational")),
                     DefinitionMapping::tuple_to_relational(vec![
                         ("name".to_string(), RelationalType::Text),
                         ("age".to_string(), RelationalType::Integer),
@@ -153,7 +155,7 @@ impl Manager {
             .add_definition(
                 Definition::new(
                     "Graph test",
-                    DefinitionFilter::MetaName(String::from("graph")),
+                    DefinitionFilter::Topic(String::from("graph")),
                     DefinitionMapping::doc_to_graph(),
                     Model::Graph,
                     String::from("graph"),

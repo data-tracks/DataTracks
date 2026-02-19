@@ -1,20 +1,19 @@
 use crate::management::Runtimes;
 use crate::management::catalog::Catalog;
 use crate::phases::{timer, wal};
+use anyhow::anyhow;
 use engine::engine::Engine;
 use flume::{Receiver, unbounded};
 use std::collections::HashMap;
 use std::error::Error;
 use std::thread;
 use std::time::Duration;
-use anyhow::anyhow;
 use tokio::runtime::Builder;
 use tokio::task::JoinSet;
-use tokio::time::{Instant};
+use tokio::time::Instant;
 use tracing::{debug, error, warn};
 use util::definition::{Definition, Stage};
 use util::{Batch, DefinitionId, Event, InitialRecord, TargetedMeta, TargetedRecord, TimedRecord};
-use value::Value;
 
 pub struct Persister {
     catalog: Catalog,
@@ -27,16 +26,16 @@ impl Persister {
         Ok(Persister { catalog })
     }
 
-    pub async fn move_to_engines(
+    pub async fn send_to_engines(
         record: TimedRecord,
         engine: &mut [Engine],
         definitions: &mut [Definition],
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
-        let (engine, value, meta) = Self::select_engines(record, engine, definitions).await?;
+        let (engine, record) = Self::select_engines(record, engine, definitions).await?;
 
-        debug!("store {} - {:?}", engine, value);
+        debug!("store {} - {:?}", engine, record.value);
 
-        engine.tx.send((value, meta).into())?;
+        engine.tx.send(record)?;
 
         Ok(())
     }
@@ -69,7 +68,7 @@ impl Persister {
                             match wal_rx_clone.recv_async().await {
                                 Err(_) => {}
                                 Ok(record) => {
-                                    Self::move_to_engines(record, &mut engines, &mut definitions)
+                                    Self::send_to_engines(record, &mut engines, &mut definitions)
                                         .await
                                         .unwrap()
                                 }
@@ -88,7 +87,7 @@ impl Persister {
         record: TimedRecord,
         engines: &'a mut [Engine],
         definitions: &mut [Definition],
-    ) -> Result<(&'a Engine, Value, TargetedMeta), Box<dyn Error + Send + Sync>> {
+    ) -> Result<(&'a Engine, TargetedRecord), Box<dyn Error + Send + Sync>> {
         let definition = definitions
             .iter_mut()
             .find(|d| d.matches(&record.value, &record.meta))
@@ -113,13 +112,22 @@ impl Persister {
 
         Ok((
             cost.1,
-            record.value,
-            TargetedMeta::new(record.meta, definition.id),
+            (record.value, TargetedMeta::new(record.meta, definition.id)).into(),
         ))
     }
 
-    pub async fn start_distributor(&mut self, joins: &mut JoinSet<()>) {
-        for engine in self.catalog.engines().await {
+    pub async fn start_distributor(&mut self, rt: Runtimes) {
+        let engines = self.catalog.engines().await;
+        let len = engines.len();
+
+        let rt_persister = Builder::new_multi_thread()
+            .worker_threads(len)
+            .thread_name("persister")
+            .enable_all()
+            .build()
+            .unwrap();
+
+        for engine in engines {
             let mut clone = engine.clone();
             let definitions = self
                 .catalog
@@ -129,7 +137,7 @@ impl Persister {
                 .map(|d| (d.id, d))
                 .collect::<HashMap<_, _>>();
 
-            joins.spawn(async move {
+            rt_persister.spawn(async move {
                 let mut buckets: HashMap<DefinitionId, Batch<TargetedRecord>> = HashMap::new();
                 let mut count = 0;
 
@@ -174,6 +182,8 @@ impl Persister {
                 }
             });
         }
+
+        rt.add_runtime(rt_persister);
     }
 }
 
@@ -196,6 +206,7 @@ async fn flush_buckets(
         let size = records.len();
         let source = engine.id;
         let table_name = definition.entity.plain.clone();
+        let partition_id = definition.partition_info.next(id, size);
         let mut last_log = Instant::now();
 
         let ids: Vec<u64> = records.iter().map(|r| r.meta.id).collect();
@@ -213,7 +224,14 @@ async fn flush_buckets(
                 error_count = 0; // Reset errors on success
             }
             Err(err) => {
-                handle_error(anyhow!(err), engine, records, &mut error_count, &mut last_log).await;
+                handle_error(
+                    anyhow!(err),
+                    engine,
+                    records,
+                    &mut error_count,
+                    &mut last_log,
+                )
+                .await;
             }
         }
     }
@@ -231,7 +249,10 @@ async fn handle_error(
 
     // 1. Backpressure/Sleep logic based on severity
     if *error_count > 1_000 && last_log.elapsed().as_secs() > 10 {
-        warn!("High error rate detected ({} tries). Throttling...", error_count);
+        warn!(
+            "High error rate detected ({} tries). Throttling...",
+            error_count
+        );
         *last_log = Instant::now();
         // Use a small sleep to prevent "spinning" on a broken connection
         tokio::time::sleep(Duration::from_millis(50)).await;

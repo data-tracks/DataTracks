@@ -20,14 +20,14 @@
                 <div class="badge badge-outline badge-secondary gap-2">
                     <span class="opacity-70 text-[10px]">PLAIN</span>
                     @for (currentValue of [tp.plain]; track $index) {
-                        <span class="font-mono animate-update">{{ currentValue }} IDs/sec</span>
+                        <span class="font-mono animate-update">{{ currentValue | number }} IDs/sec</span>
                     }
                 </div>
 
                 <div class="badge badge-soft badge-accent gap-2">
                     <span class="opacity-70 text-[10px]">MAPPED</span>
                     @for (currentValue of [tp.mapped]; track $index) {
-                        <span class="font-mono animate-update">{{ currentValue }} IDs/sec</span>
+                        <span class="font-mono animate-update">{{ currentValue | number }} IDs/sec</span>
                     }
                 </div>
             </div>
