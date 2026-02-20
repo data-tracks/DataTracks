@@ -14,7 +14,7 @@ use tracing::{error, info};
 use util::Event::EngineStatus;
 use util::container::Mapping;
 use util::definition::{Definition, Stage};
-use util::{DefinitionMapping, Event, TargetedRecord, container, Batch};
+use util::{Batch, DefinitionMapping, Event, PartitionId, TargetedRecord, container};
 use value::Value;
 
 #[derive(Clone, Debug)]
@@ -98,7 +98,9 @@ impl MongoDB {
                 let mut res: Cursor<Value> = client
                     .database("public")
                     .collection(&entity)
-                    .find(doc! {"id": {"$in": ids.into_iter().map(Value::from).collect::<Vec<_>>()}})
+                    .find(
+                        doc! {"id": {"$in": ids.into_iter().map(Value::from).collect::<Vec<_>>()}},
+                    )
                     .await?;
 
                 let mut values = vec![];
@@ -126,11 +128,17 @@ impl MongoDB {
         }
     }
 
-    pub(crate) async fn init_entity(&self, definition: &Definition) -> anyhow::Result<()> {
-        self.create_collection(&definition.entity.plain).await?;
+    pub(crate) async fn init_entity(
+        &self,
+        definition: &Definition,
+        partition_id: PartitionId,
+    ) -> anyhow::Result<()> {
+        let name = definition.entity_name(partition_id, &Stage::Plain);
+        self.create_collection(name.as_str()).await?;
 
         if let DefinitionMapping::Document(_) = definition.mapping {
-            self.create_collection(&definition.entity.mapped).await?;
+            let name = definition.entity_name(partition_id, &Stage::Mapped);
+            self.create_collection(name.as_str()).await?;
         }
 
         Ok(())

@@ -7,7 +7,6 @@ extern crate alloc;
 
 #[allow(unused_imports, dead_code)]
 pub mod data_model {
-
     #[deprecated(
         since = "2.0.0",
         note = "Use associated constants instead. This will no longer be generated in 2021."

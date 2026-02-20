@@ -10,6 +10,7 @@ description.workspace = true
 [dependencies]
 bollard = { workspace = true }
 tokio = { workspace = true }
+dashmap = { workspace = true }
 tracing = { workspace = true }
 futures-util = "0.3.31"
 value = { workspace = true }

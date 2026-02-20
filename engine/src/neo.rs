@@ -14,7 +14,7 @@ use tracing::{debug, info};
 use util::Event::EngineStatus;
 use util::container::Mapping;
 use util::definition::{Definition, Stage};
-use util::{DefinitionMapping, Event, TargetedRecord, container, Batch};
+use util::{Batch, DefinitionMapping, Event, PartitionId, TargetedRecord, container};
 use value::Value;
 
 #[derive(Clone)]
@@ -87,21 +87,19 @@ impl Neo4j {
         Ok(())
     }
 
-    pub(crate) async fn init_entity(&mut self, definition: &Definition) {
+    pub(crate) async fn init_entity(&mut self, definition: &Definition, partition_id: PartitionId) {
         // native query
-        let cypher_query = self.create_value_query(&definition.entity.plain);
-        self.prepared_queries.insert(
-            (Stage::Plain, definition.entity.plain.clone()),
-            cypher_query,
-        );
+        let name = definition.entity_name(partition_id, &Stage::Plain);
+        let cypher_query = self.create_value_query(name.as_str());
+        self.prepared_queries
+            .insert((Stage::Plain, name.clone()), cypher_query);
 
         if let DefinitionMapping::Graph(_) = definition.mapping {
+            let name = definition.entity_name(partition_id, &Stage::Mapped);
             // mapped query
-            let cypher_query = self.create_node_query(&definition.entity.mapped);
-            self.prepared_queries.insert(
-                (Stage::Mapped, definition.entity.mapped.clone()),
-                cypher_query,
-            );
+            let cypher_query = self.create_node_query(name.as_str());
+            self.prepared_queries
+                .insert((Stage::Mapped, name.clone()), cypher_query);
         }
     }
 
@@ -189,14 +187,10 @@ impl Neo4j {
                     .ok_or(format!("No prepared query in neo4j for {}", entity))?;
 
                 let mut res = g
-                    .execute_read(
-                        query(cypher_query).param(
-                            "values",
-                            ids.into_iter()
-                                .map(Value::from)
-                                .collect::<Vec<_>>(),
-                        ),
-                    )
+                    .execute_read(query(cypher_query).param(
+                        "values",
+                        ids.into_iter().map(Value::from).collect::<Vec<_>>(),
+                    ))
                     .await?;
 
                 debug!("neo4j values {}", len);
@@ -296,7 +290,7 @@ mod tests {
     use std::collections::{BTreeMap, HashMap};
     use std::vec;
     use util::definition::{Definition, DefinitionFilter, Model, Stage};
-    use util::{batch, target, DefinitionMapping, TargetedMeta};
+    use util::{DefinitionMapping, PartitionId, TargetedMeta, batch, target};
     use value::Value;
 
     //#[tokio::test]
@@ -314,7 +308,7 @@ mod tests {
             "users".to_string(),
         )
         .await;
-        neo.init_entity(&definition).await;
+        neo.init_entity(&definition, PartitionId(0)).await;
 
         neo.store(
             Stage::Plain,
@@ -335,16 +329,14 @@ mod tests {
         neo.store(
             Stage::Mapped,
             String::from("users"),
-            &batch![
-                target!(
-                    Value::node(
-                        Value::int(0).as_int().unwrap(),
-                        vec![Value::text("test").as_text().unwrap()],
-                        BTreeMap::new(),
-                    ),
-                    TargetedMeta::default()
-                )
-            ],
+            &batch![target!(
+                Value::node(
+                    Value::int(0).as_int().unwrap(),
+                    vec![Value::text("test").as_text().unwrap()],
+                    BTreeMap::new(),
+                ),
+                TargetedMeta::default()
+            )],
         )
         .await
         .unwrap();
@@ -367,7 +359,7 @@ mod tests {
             "users".to_string(),
         )
         .await;
-        neo.init_entity(&definition).await;
+        neo.init_entity(&definition, PartitionId(0)).await;
 
         match neo.graph {
             None => {}

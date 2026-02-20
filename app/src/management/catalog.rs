@@ -32,8 +32,6 @@ impl Catalog {
     ) -> anyhow::Result<()> {
         let mut state = self.state.lock().await;
         for engine in &mut state.engines {
-            engine.engine_kind.init_entity(&definition).await?;
-
             engine.add_definition(&definition);
         }
         sender

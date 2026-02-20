@@ -1,7 +1,7 @@
 use crate::definition::DefinitionFilter::AllMatch;
 use crate::mappings::DefinitionMapping;
 use crate::partition::PartitionInfo;
-use crate::{Batch, DefinitionId, EntityId, TargetedRecord, TimedMeta, log_channel};
+use crate::{Batch, DefinitionId, EntityId, PartitionId, TargetedRecord, TimedMeta, log_channel};
 use flume::{Receiver, Sender, unbounded};
 use serde::Serialize;
 use speedy::{Readable, Writable};
@@ -31,6 +31,17 @@ pub struct Definition {
 }
 
 impl Definition {
+    pub fn entity_name(&self, id: PartitionId, stage: &Stage) -> String {
+        match stage {
+            Stage::Plain => {
+                format!("{}_{}", self.entity.plain, *id)
+            }
+            Stage::Mapped => {
+                format!("{}_{}", self.entity.mapped, *id)
+            }
+        }
+    }
+
     pub async fn new<S: AsRef<str>>(
         topic: S,
         filter: DefinitionFilter,

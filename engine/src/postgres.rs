@@ -14,8 +14,11 @@ use tokio_postgres::types::{ToSql, Type};
 use tokio_postgres::{Client, Statement};
 use tracing::{debug, error, info};
 use util::container::Mapping;
-use util::definition::{Definition, Entity, Stage};
-use util::{DefinitionMapping, Event, RelationalMapping, RelationalType, TargetedRecord, container, Batch};
+use util::definition::{Definition, Stage};
+use util::{
+    Batch, DefinitionMapping, Event, PartitionId, RelationalMapping, RelationalType,
+    TargetedRecord, container,
+};
 use value::Value;
 
 #[derive(Clone, Debug)]
@@ -151,12 +154,17 @@ impl Postgres {
         Ok(())
     }
 
-    pub async fn init_entity(&mut self, definition: &Definition) -> anyhow::Result<()> {
-        self.create_table_plain(&definition.entity.plain).await?;
+    pub async fn init_entity(
+        &mut self,
+        definition: &Definition,
+        partition_id: PartitionId,
+    ) -> anyhow::Result<()> {
+        self.create_table_plain(&definition.entity_name(partition_id, &Stage::Plain))
+            .await?;
 
         if let DefinitionMapping::Relational(m) = &definition.mapping {
-            self.create_table_mapped(m, definition.entity.clone())
-                .await?;
+            let name = definition.entity_name(partition_id, &Stage::Mapped);
+            self.create_table_mapped(name.as_str(), m).await?;
         }
 
         Ok(())
@@ -189,8 +197,8 @@ impl Postgres {
 
     async fn create_table_mapped(
         &mut self,
+        name: &str,
         mapping: &RelationalMapping,
-        entity: Entity,
     ) -> anyhow::Result<()> {
         let types = mapping.get_types();
 
@@ -201,7 +209,7 @@ impl Postgres {
                     "CREATE TABLE IF NOT EXISTS {} (
                     _id SERIAL PRIMARY KEY,
                     {})",
-                    entity.mapped,
+                    name,
                     types
                         .iter()
                         .map(|(name, t)| format!("{} {}", name, t))
@@ -212,10 +220,10 @@ impl Postgres {
                 //info!("{}", create_table_query);
 
                 client.execute(&create_table_query, &[]).await?;
-                info!("Table '{}' ensured to exist.", entity.mapped);
+                info!("Table '{}' ensured to exist.", name);
                 let copy_query = format!(
                     "COPY {} ({}) FROM STDIN BINARY",
-                    entity.mapped,
+                    name,
                     types
                         .iter()
                         .map(|(n, _)| n.to_string())
@@ -225,7 +233,7 @@ impl Postgres {
 
                 let statement = client.prepare(&copy_query).await?;
                 self.prepared_statements.insert(
-                    (entity.mapped, Stage::Mapped),
+                    (name.to_string(), Stage::Mapped),
                     (
                         statement,
                         types.into_iter().map(|(_, t)| Self::pg_type(t)).collect(),
@@ -362,7 +370,9 @@ pub mod tests {
     use tokio::task::JoinSet;
     use tracing_test::traced_test;
     use util::definition::{Entity, Stage};
-    use util::{batch, target, Mapping, MappingSource, RelationalMapping, RelationalType, TargetedMeta};
+    use util::{
+        Mapping, MappingSource, RelationalMapping, RelationalType, TargetedMeta, batch, target,
+    };
     use value::Value;
 
     #[tokio::test]
@@ -405,19 +415,15 @@ pub mod tests {
             },
         );
 
-        pg.create_table_mapped(&r, Entity::new("users"))
-            .await
-            .unwrap();
+        pg.create_table_mapped("users", &r).await.unwrap();
 
         pg.store(
             Stage::Mapped,
             String::from("users"),
-            &batch![
-                target!(
-                    Value::array(vec![Value::text("test"), Value::int(30)]),
-                    TargetedMeta::default()
-                )
-            ],
+            &batch![target!(
+                Value::array(vec![Value::text("test"), Value::int(30)]),
+                TargetedMeta::default()
+            )],
         )
         .await
         .unwrap();

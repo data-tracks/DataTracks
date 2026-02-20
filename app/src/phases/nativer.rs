@@ -1,11 +1,11 @@
-use std::time::Duration;
 use crate::management::catalog::Catalog;
 use engine::engine::Engine;
+use std::time::Duration;
 use tokio::sync::broadcast::Sender;
 use tokio::task::JoinSet;
-use tracing::{error};
+use tracing::error;
 use util::definition::Stage;
-use util::{target, Batch, Event, TargetedRecord};
+use util::{Batch, Event, PartitionId, TargetedRecord, target};
 
 pub struct Nativer {
     catalog: Catalog,
@@ -35,7 +35,6 @@ impl Nativer {
                 join_set.spawn(async move {
                     let rx = definition.native.1;
 
-                    let entity = definition.entity;
                     let mut engine = engines.into_iter().next().unwrap();
 
                     let mapper = definition.mapping.build();
@@ -44,6 +43,8 @@ impl Nativer {
 
                     let mut hb_ticker = tokio::time::interval(Duration::from_secs(5));
                     let hb_name = name.clone();
+
+                    let id = i.into();
 
                     loop {
                         tokio::select! {
@@ -63,15 +64,16 @@ impl Nativer {
                                     if records.len() >= 100_000 { break; }
                                 }
 
-                                let length = records.len();
+                                let length = records.len() as u64;
                                 let ids: Vec<u64> = records.iter().map(|r| r.meta.id).collect();
-                                let entity_name = entity.mapped.clone();
 
                                 let mapped_data: Batch<_> = records.iter().map(|r| {
                                     target!(mapper(r.value.clone()), r.meta.clone())
                                 }).collect();
 
-                                match engine.store(Stage::Mapped, entity_name, &mapped_data).await {
+                                let partition_id = definition.partition_info.next(&id,&length).into();
+
+                                match engine.store(partition_id, Stage::Mapped, definition.id, &mapped_data).await {
                                     Ok(_) => {
                                         let _ = engine.statistic_sender.send(Event::Insert {
                                             id: definition.id,

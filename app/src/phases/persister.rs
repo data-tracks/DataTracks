@@ -6,6 +6,7 @@ use engine::engine::Engine;
 use flume::{Receiver, unbounded};
 use std::collections::HashMap;
 use std::error::Error;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread;
 use std::time::Duration;
 use tokio::runtime::Builder;
@@ -13,7 +14,10 @@ use tokio::task::JoinSet;
 use tokio::time::Instant;
 use tracing::{debug, error, warn};
 use util::definition::{Definition, Stage};
-use util::{Batch, DefinitionId, Event, InitialRecord, TargetedMeta, TargetedRecord, TimedRecord};
+use util::{
+    Batch, DefinitionId, Event, InitialRecord, PartitionId, TargetedMeta, TargetedRecord,
+    TimedRecord, WorkerId,
+};
 
 pub struct Persister {
     catalog: Catalog,
@@ -127,60 +131,66 @@ impl Persister {
             .build()
             .unwrap();
 
+        let partition_id = AtomicU64::new(0);
+
         for engine in engines {
-            let mut clone = engine.clone();
-            let definitions = self
-                .catalog
-                .definitions()
-                .await
-                .into_iter()
-                .map(|d| (d.id, d))
-                .collect::<HashMap<_, _>>();
+            for _ in 0..3 {
+                let partition_id = partition_id.fetch_add(1, Ordering::Relaxed).into();
+                let engine = engine.clone();
+                let mut clone = engine.clone();
+                let definitions = self
+                    .catalog
+                    .definitions()
+                    .await
+                    .into_iter()
+                    .map(|d| (d.id, d))
+                    .collect::<HashMap<_, _>>();
 
-            rt_persister.spawn(async move {
-                let mut buckets: HashMap<DefinitionId, Batch<TargetedRecord>> = HashMap::new();
-                let mut count = 0;
+                rt_persister.spawn(async move {
+                    let mut buckets: HashMap<DefinitionId, Batch<TargetedRecord>> = HashMap::new();
+                    let mut count = 0;
 
-                let name = format!("Persister {}", engine);
+                    let name = format!("Persister {}", engine);
 
-                // Create a 200ms ticker for the flush interval
-                let mut flush_interval = tokio::time::interval(Duration::from_millis(200));
-                // don't let ticks pile up if processing is slow
-                flush_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+                    // Create a 200ms ticker for the flush interval
+                    let mut flush_interval = tokio::time::interval(Duration::from_millis(200));
+                    // don't let ticks pile up if processing is slow
+                    flush_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
-                let mut heartbeat_interval = tokio::time::interval(Duration::from_millis(500));
-                heartbeat_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+                    let mut heartbeat_interval = tokio::time::interval(Duration::from_millis(500));
+                    heartbeat_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
-                loop {
-                    tokio::select! {
-                        // Case A: The timer hit 200ms
-                        _ = flush_interval.tick() => {
-                            if !buckets.is_empty() {
-                                flush_buckets(&mut buckets, &mut clone, &definitions).await;
-                                count = 0;
+                    loop {
+                        tokio::select! {
+                            // Case A: The timer hit 200ms
+                            _ = flush_interval.tick() => {
+                                if !buckets.is_empty() {
+                                    flush_buckets(&partition_id, &mut buckets, &mut clone, &definitions).await;
+                                    count = 0;
+                                }
                             }
-                        }
 
-                        // Case B: A record arrived
-                        Ok(record) = engine.rx.recv_async() => {
-                            buckets.entry(record.meta.definition).or_default().push(record);
-                            count += 1;
+                            // Case B: A record arrived
+                            Ok(record) = engine.rx.recv_async() => {
+                                buckets.entry(record.meta.definition).or_default().push(record);
+                                count += 1;
 
-                            // Immediate flush if we hit the batch size
-                            if count >= BATCH_SIZE {
-                                flush_buckets(&mut buckets, &mut clone, &definitions).await;
-                                count = 0;
-                                flush_interval.reset(); // Reset the timer since we just flushed
+                                // Immediate flush if we hit the batch size
+                                if count >= BATCH_SIZE {
+                                    flush_buckets(&partition_id, &mut buckets, &mut clone, &definitions).await;
+                                    count = 0;
+                                    flush_interval.reset(); // Reset the timer since we just flushed
+                                }
                             }
-                        }
 
-                        // Case C: Send Heartbeat (maybe on a different interval)
-                        _ = heartbeat_interval.tick() => {
-                             let _ = engine.statistic_sender.send(Event::Heartbeat(name.clone()));
+                            // Case C: Send Heartbeat (maybe on a different interval)
+                            _ = heartbeat_interval.tick() => {
+                                 let _ = engine.statistic_sender.send(Event::Heartbeat(name.clone()));
+                            }
                         }
                     }
-                }
-            });
+                });
+            }
         }
 
         rt.add_runtime(rt_persister);
@@ -188,6 +198,7 @@ impl Persister {
 }
 
 async fn flush_buckets(
+    worker_id: &WorkerId,
     buckets: &mut HashMap<DefinitionId, Batch<TargetedRecord>>,
     engine: &mut Engine,
     definitions: &HashMap<DefinitionId, Definition>,
@@ -203,15 +214,18 @@ async fn flush_buckets(
             }
         };
 
-        let size = records.len();
+        let size = records.len() as u64;
         let source = engine.id;
-        let table_name = definition.entity.plain.clone();
-        let partition_id = definition.partition_info.next(id, size);
+        let partition_id = PartitionId(definition.partition_info.next(worker_id, &size));
+
         let mut last_log = Instant::now();
 
         let ids: Vec<u64> = records.iter().map(|r| r.meta.id).collect();
 
-        match engine.store(Stage::Plain, table_name, &records).await {
+        match engine
+            .store(partition_id, Stage::Plain, definition.id, &records)
+            .await
+        {
             Ok(_) => {
                 let _ = engine.statistic_sender.send(Event::Insert {
                     id,

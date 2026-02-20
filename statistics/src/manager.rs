@@ -1,7 +1,7 @@
 use crate::{tpc, web};
 use flume::{unbounded, Receiver, Sender};
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::spawn;
 use std::time::Duration;
@@ -174,14 +174,14 @@ pub fn start(rt: Runtimes, tx: Sender<Event>, rx: Receiver<Event>, output: broad
 
 #[derive(Default)]
 pub struct EngineStatistic {
-    handled_entities: HashMap<(DefinitionId, Stage), AtomicUsize>,
+    handled_entities: HashMap<(DefinitionId, Stage), AtomicU64>,
 }
 
 impl EngineStatistic {
     pub(crate) fn to_stat(
         &self,
         definition_names: &HashMap<u64, String>,
-    ) -> Vec<(DefinitionId, Stage, String, usize)> {
+    ) -> Vec<(DefinitionId, Stage, String, u64)> {
         self.handled_entities
             .iter()
             .map(|((k, stage), v)| {
@@ -195,7 +195,7 @@ impl EngineStatistic {
             .collect()
     }
 
-    pub(crate) fn handle_insert(&mut self, amount: usize, definition: DefinitionId, stage: Stage) {
+    pub(crate) fn handle_insert(&mut self, amount: u64, definition: DefinitionId, stage: Stage) {
         self.handled_entities
             .entry((definition, stage))
             .or_default()

@@ -14,7 +14,7 @@ use std::time::Duration;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
 use util::definition::{Definition, Model, Stage};
-use util::{Batch, DefinitionId, EngineId, Event, TargetedRecord, log_channel};
+use util::{Batch, DefinitionId, EngineId, Event, PartitionId, TargetedRecord, log_channel};
 use value::Value;
 
 static ID_BUILDER: AtomicU64 = AtomicU64::new(0);
@@ -25,6 +25,7 @@ pub struct Engine {
     pub rx: Receiver<TargetedRecord>,
     pub ids: Vec<u64>,
     pub statistic_sender: Sender<Event>,
+    pub existing_partitions: Vec<(DefinitionId, PartitionId)>,
     pub engine_kind: EngineKind,
     pub id: EngineId,
     pub definitions: HashMap<DefinitionId, Definition>,
@@ -56,6 +57,7 @@ impl Engine {
             rx,
             ids: vec![],
             statistic_sender: sender,
+            existing_partitions: vec![],
             engine_kind,
             definitions: Default::default(),
         }
@@ -102,8 +104,9 @@ impl Engine {
 
     pub async fn store(
         &mut self,
+        partition_id: PartitionId,
         stage: Stage,
-        entity_name: String,
+        definition_id: DefinitionId,
         values: &Batch<TargetedRecord>,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
         let ids = values
@@ -111,6 +114,18 @@ impl Engine {
             .map(|TargetedRecord { value: _, meta }| meta.id)
             .collect::<Vec<_>>();
         self.ids.extend(ids.clone());
+
+        let definition = self.definitions.get(&definition_id).unwrap();
+        if !self
+            .existing_partitions
+            .contains(&(definition_id, partition_id))
+        {
+            self.engine_kind
+                .init_entity(definition, partition_id)
+                .await?;
+            self.existing_partitions.push((definition_id, partition_id))
+        }
+        let entity_name = definition.entity_name(partition_id, &stage);
 
         match &self.engine_kind {
             EngineKind::Postgres(p) => p.store(stage, entity_name, values).await,
@@ -150,12 +165,17 @@ impl Display for EngineKind {
 }
 
 impl EngineKind {
-    pub async fn init_entity(&mut self, definition: &Definition) -> anyhow::Result<()> {
+    pub async fn init_entity(
+        &mut self,
+        definition: &Definition,
+        partition_id: PartitionId,
+    ) -> anyhow::Result<()> {
         match self {
-            EngineKind::Postgres(p) => p.init_entity(definition).await?,
-            EngineKind::MongoDB(m) => m.init_entity(definition).await?,
-            EngineKind::Neo4j(n) => n.init_entity(definition).await,
+            EngineKind::Postgres(p) => p.init_entity(definition, partition_id).await?,
+            EngineKind::MongoDB(m) => m.init_entity(definition, partition_id).await?,
+            EngineKind::Neo4j(n) => n.init_entity(definition, partition_id).await,
         };
+
         Ok(())
     }
 

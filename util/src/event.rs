@@ -4,14 +4,14 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::time::Duration;
 
-pub type DefinitionMeta = (Vec<(DefinitionId, Stage, String, usize)>, Option<String>);
+pub type DefinitionMeta = (Vec<(DefinitionId, Stage, String, u64)>, Option<String>);
 
 #[derive(Serialize, Clone, Debug)]
 #[serde(tag = "type", content = "data")]
 pub enum Event {
     Insert {
         id: DefinitionId,
-        size: usize,
+        size: u64,
         ids: Vec<u64>,
         source: EngineId,
         stage: Stage,
