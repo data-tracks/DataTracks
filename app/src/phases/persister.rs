@@ -39,7 +39,7 @@ impl Persister {
 
         debug!("store {} - {:?}", engine, record.value);
 
-        engine.tx.send(record)?;
+        //engine.tx.send(record)?;
 
         Ok(())
     }

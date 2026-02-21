@@ -1,6 +1,6 @@
 use crate::TimedRecord;
 use memmap2::{MmapMut, MmapOptions};
-use speedy::Writable;
+use speedy::{Readable, Writable};
 use std::error::Error;
 use std::path::{Path, PathBuf};
 use tokio::fs;
@@ -76,17 +76,22 @@ impl SegmentedLog {
         debug!("Rotated to segment {}", self.current_segment_id);
     }
 
-    pub async fn log(&mut self, records: &Vec<TimedRecord>) {
+    pub async fn log(&mut self, records: &Vec<TimedRecord>) -> (usize, usize) {
         self.batch.clear();
         for record in records {
             record.write_to_stream(&mut self.batch).unwrap();
             self.batch.push(b'\n');
         }
 
-        self.write_batch().await;
+        self.write_batch().await
     }
 
-    pub async fn write_batch(&mut self) {
+    pub async fn unlog(&self, segment_id: usize, range:(usize, usize) ) -> Vec<TimedRecord> {
+        let data = self.read(segment_id, range).await;
+        data.split(|&b| b == b'\n').filter(|e| e.is_empty()).map(|e| TimedRecord::read_from_stream_buffered(e).expect("Failed to deserialize record")).collect()
+    }
+
+    pub async fn write_batch(&mut self) -> (usize, usize) {
         if self.cursor + self.batch.len() > self.segment_size as usize {
             self.rotate().await;
         }
@@ -94,6 +99,16 @@ impl SegmentedLog {
         // Copy data to the memory-mapped region
         self.mmap[self.cursor..self.cursor + self.batch.len()].copy_from_slice(&self.batch);
         self.cursor += self.batch.len();
+        (self.cursor, self.current_segment_id)
+    }
+
+    pub async fn read(&self, mut segment_id: usize, range: (usize, usize)) -> Vec<u8> {
+        let mut values: Vec<u8> = vec![];
+        while segment_id != self.current_segment_id{
+            values.append(self.mmap[range.0..range.1].to_vec().as_mut());
+            segment_id -= 1;
+        }
+        values
     }
 
     pub async fn write(&mut self, data: &[u8]) {

@@ -32,7 +32,7 @@ fn setup_logging() {
 }
 
 fn setup_inputs(joins: &mut JoinSet<()>, tx: Sender<InitialRecord>, statistics_tx: Sender<Event>) {
-    let amount = 10_000; // 8_00 equals entry every 3ms // 1_000 every 1.6ms
+    let amount = 100_000; // 8_00 equals entry every 3ms // 1_000 every 1.6ms
 
     for i in 0..amount {
         let tx = tx.clone();
