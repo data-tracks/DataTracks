@@ -5,7 +5,7 @@ use tokio::sync::broadcast::Sender;
 use tokio::task::JoinSet;
 use tracing::error;
 use util::definition::Stage;
-use util::{Batch, Event, PartitionId, TargetedRecord, target};
+use util::{Batch, Event, TargetedRecord, target};
 
 pub struct Nativer {
     catalog: Catalog,

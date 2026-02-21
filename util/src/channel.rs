@@ -38,7 +38,7 @@ pub async fn log_channel<S: AsRef<str>, P: Send + 'static>(
         let overwhelmed = AtomicBool::new(false);
 
         let format = CustomFormat::builder().separator("'").build().unwrap();
-        let mut interval = tokio::time::interval(Duration::from_secs(3));
+        let mut interval = tokio::time::interval(Duration::from_secs(1));
 
         let mut len;
 

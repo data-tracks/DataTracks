@@ -56,7 +56,7 @@ impl WalManager {
                                     batch.push(record);
                                     batch.extend(rx.try_iter().take(99_999));
                                     log.log(&batch).await;
-                                    for r in batch.drain(..) { tx.send(r).unwrap(); }
+                                    //for r in batch.drain(..) { tx.send(r).unwrap(); }
                                 }
                                 Err(_) => return, // Channel closed
                             }
@@ -89,7 +89,7 @@ impl WalManager {
 pub fn handle_wal_to_engines(
     rt: &Runtimes,
     receiver: Receiver<TimedRecord>,
-    control_rx: Receiver<u64>,
+    incoming_control_rx: Receiver<u64>,
 ) -> (Receiver<TimedRecord>, Receiver<u64>) {
     let (wal_tx, wal_rx) = unbounded();
     let wal_tx_clone = wal_tx.clone();
@@ -110,13 +110,13 @@ pub fn handle_wal_to_engines(
             manager.add_worker(rx, tx);
         }
 
-        let repetition = 10;
-        let threshold = 10_000;
+        let repetition = 3; // logger sends value every second, how many do we wait to increase
+        let threshold = 100_000;
 
         let mut over = 0;
         let mut under = 0;
         loop {
-            let res: u64 = control_rx.recv().unwrap();
+            let res: u64 = incoming_control_rx.recv().unwrap();
             if res > threshold {
                 over += 1;
                 under = 0;

@@ -180,8 +180,8 @@ pub fn handle_initial_time_annotation(
             manager.add_worker(rx, tx);
         }
 
-        let repetition = 10;
-        let threshold = 10_000;
+        let repetition = 3; // logger sends update every second how long do we wait
+        let threshold = 100_000;
 
         let mut over = 0;
         let mut under = 0;

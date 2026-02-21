@@ -7,7 +7,7 @@ use bollard::models::{
 };
 use bollard::query_parameters::{
     CreateContainerOptionsBuilder, CreateImageOptionsBuilder, ListContainersOptionsBuilder,
-    ListImagesOptionsBuilder, RemoveContainerOptions, RemoveContainerOptionsBuilder,
+    ListImagesOptionsBuilder, RemoveContainerOptionsBuilder,
     StartContainerOptions, StopContainerOptions, StopContainerOptionsBuilder,
 };
 use futures_util::TryStreamExt;
@@ -271,7 +271,7 @@ pub async fn stop(name: &str) -> anyhow::Result<()> {
         .stop_container(name, None::<StopContainerOptions>)
         .await?;
     docker
-        .remove_container(name, None::<RemoveContainerOptions>)
+        .remove_container(name, Some(RemoveContainerOptionsBuilder::new().v(true).force(true).build()))
         .await?;
     info!("⏸️ Stopped container {}", name);
     Ok(())

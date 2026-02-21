@@ -61,9 +61,9 @@ export class ArchitectureComponent implements AfterViewInit, OnChanges {
     const timerVal = this.queues.get("Time Annotation -> WAL") || "0";
     const sinkVal = this.queues.get("Sink Input") || "0";
     const walVal = this.queues.get("WAL -> Engines") || "0";
-    const pMongo = this.queues.get("Persister neo4j") || "0";
-    const pPost = this.queues.get("Persister mongodb") || "0";
-    const pNeo = this.queues.get("Persister postgres") || "0";
+    const pNeo = this.queues.get("Persister neo4j") || "0";
+    const pMongo = this.queues.get("Persister mongodb") || "0";
+    const pPost = this.queues.get("Persister postgres") || "0";
 
     const nNeo = this.queues.get("Definition Native 2 - Graph test to Engine") || "0";
     const nPost = this.queues.get("Definition Native 1 - Relational test to Engine") || "0";
