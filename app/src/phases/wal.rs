@@ -1,9 +1,9 @@
-use flume::{Receiver, Sender, unbounded};
+use flume::{unbounded, Receiver, Sender};
 use std::thread;
 use tokio::runtime::Builder;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
-use util::{Runtimes, SegmentedLog, TimedRecord, log_channel};
+use util::{log_channel, Runtimes, SegmentedLog, TimedRecord};
 
 struct WalWorker {
     handle: thread::JoinHandle<()>,
@@ -41,6 +41,7 @@ impl WalManager {
                     .unwrap();
                 let mut batch = Vec::with_capacity(100_000);
 
+                let mut delayed = vec![];
                 loop {
                     tokio::select! {
                         // EXIT SIGNAL: The manager called for a shrink
@@ -56,7 +57,19 @@ impl WalManager {
                                     batch.push(record);
                                     batch.extend(rx.try_iter().take(99_999));
                                     log.log(&batch).await;
-                                    //for r in batch.drain(..) { tx.send(r).unwrap(); }
+
+                                    // todo fix no more values and delayed not empty
+
+                                    if tx.len() > 100_000 {
+                                        delayed.extend(batch.drain(..));
+                                    }else {
+                                        if !delayed.is_empty() {
+                                            // empty old
+                                            for r in delayed.drain(..) { tx.send(r).unwrap() }
+                                        }
+
+                                        for r in batch.drain(..) { tx.send(r).unwrap(); }
+                                    }
                                 }
                                 Err(_) => return, // Channel closed
                             }
