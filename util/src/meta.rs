@@ -13,7 +13,7 @@ impl InitialMeta {
     }
 }
 
-#[derive(Clone, Debug, Writable, Readable)]
+#[derive(Clone, Debug, Writable, Readable, Eq, PartialEq)]
 pub struct TimedMeta {
     pub id: u64,
     pub timestamp: i64,

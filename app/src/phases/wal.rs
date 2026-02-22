@@ -56,7 +56,7 @@ impl WalManager {
                                     batch.push(record);
                                     batch.extend(rx.try_iter().take(99_999));
                                     log.log(&batch).await;
-                                    for r in batch.drain(..) { tx.send(r).unwrap(); }
+                                    //for r in batch.drain(..) { tx.send(r).unwrap(); }
                                 }
                                 Err(_) => return, // Channel closed
                             }

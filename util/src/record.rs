@@ -109,10 +109,16 @@ impl From<(Value, InitialMeta)> for InitialRecord {
     }
 }
 
-#[derive(Clone, Debug, Writable, Readable)]
+#[derive(Clone, Debug, Writable, Readable, Eq, PartialEq)]
 pub struct TimedRecord {
     pub value: Value,
     pub meta: TimedMeta,
+}
+
+impl TimedRecord {
+    pub fn id(&self) -> u64 {
+        self.meta.id
+    }
 }
 
 impl From<(Value, TimedMeta)> for TimedRecord {
