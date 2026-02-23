@@ -3,7 +3,7 @@ use crate::mongo::MongoDB;
 use crate::neo::Neo4j;
 use crate::postgres::Postgres;
 use derive_more::From;
-use flume::{Receiver, Sender, unbounded};
+use flume::{Receiver, Sender, unbounded, bounded};
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
@@ -45,7 +45,7 @@ impl Display for Engine {
 
 impl Engine {
     pub async fn new(engine_kind: EngineKind, sender: Sender<Event>) -> Self {
-        let (tx, rx) = unbounded::<TargetedRecord>();
+        let (tx, rx) = bounded(200_000);
 
         let name = format!("Persister {}", engine_kind);
         log_channel(tx.clone(), name, None).await;

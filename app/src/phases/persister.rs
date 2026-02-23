@@ -3,7 +3,7 @@ use crate::management::catalog::Catalog;
 use crate::phases::{timer, wal};
 use anyhow::anyhow;
 use engine::engine::Engine;
-use flume::{Receiver, unbounded};
+use flume::{Receiver, unbounded, Sender};
 use std::collections::HashMap;
 use std::error::Error;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -21,13 +21,14 @@ use util::{
 
 pub struct Persister {
     catalog: Catalog,
+    pub statistics_tx: Sender<Event>,
 }
 
 const BATCH_SIZE: i32 = 100_000;
 
 impl Persister {
-    pub fn new(catalog: Catalog) -> anyhow::Result<Self> {
-        Ok(Persister { catalog })
+    pub fn new(catalog: Catalog, statistics_tx: Sender<Event>) -> anyhow::Result<Self> {
+        Ok(Persister { catalog, statistics_tx })
     }
 
     pub async fn send_to_engines(
@@ -51,7 +52,7 @@ impl Persister {
 
         let control_rx = timer::handle_initial_time_annotation(incoming, &rt, sender, control_rx);
 
-        let (wal_rx, _) = wal::handle_wal_to_engines(&rt, receiver, control_rx);
+        let (wal_rx, _) = wal::handle_wal_to_engines(&rt, receiver, control_rx, self.statistics_tx.clone());
 
         let storer = thread::spawn(move || {
             let rt_storer = Builder::new_current_thread()

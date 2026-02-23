@@ -67,7 +67,7 @@ impl Manager {
 
         self.runtimes.add_runtime(trash_rt);
 
-        let mut persister = Persister::new(self.catalog.clone())?;
+        let mut persister = Persister::new(self.catalog.clone(), self.statistic_tx.clone())?;
         let nativer = Nativer::new(self.catalog.clone());
 
         self.init_engines(self.statistic_tx.clone())?;

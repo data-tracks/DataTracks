@@ -3,7 +3,6 @@ use memmap2::{Mmap, MmapMut, MmapOptions};
 use speedy::{Readable, Writable};
 use std::error::Error;
 use std::path::{Path, PathBuf};
-use num_format::Locale::se;
 use tokio::fs;
 use tokio::fs::OpenOptions;
 use tracing::debug;

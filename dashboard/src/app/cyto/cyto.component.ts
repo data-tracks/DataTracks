@@ -13,10 +13,17 @@ export class CytoComponent implements AfterViewInit {
   private cy?: cytoscape.Core;
   private queues = new Map<string, number>();
 
+  private wal = new Map<number, number>();
+
   constructor() {
     effect(() => {
       const entry = this.inputs();
       if (!entry) return;
+
+      if (entry.name.toLowerCase().includes("wal delayed")) {
+        let id = entry.name.toLowerCase().replace("wal delayed", "").trim() as number;
+        this.wal.set(id, entry.size)
+      }
 
       this.queues.set(entry.name, entry.size);
 
@@ -107,6 +114,19 @@ export class CytoComponent implements AfterViewInit {
           }
         },
         {
+          selector: 'node.save',
+          style: {
+            'background-image': 'assets/save.png', // #2085b5
+            'background-fit': 'contain',
+            'background-clip': 'none',
+            'width': 40,
+            'height': 40,
+            'label': 'data(label)',
+            'background-opacity': 0, // Makes the default circle/square invisible
+            'shape': 'rectangle'    // Gives the image a frame to sit in
+          }
+        },
+        {
           selector: 'node.in', // Triggered if node has 'database' class
           style: {
             'background-image': 'assets/in.png', // #2085b5
@@ -142,51 +162,78 @@ export class CytoComponent implements AfterViewInit {
       "Definition-1-Relational test": "edge-nativer1",
       "Definition-2-Graph test": "edge-nativer2"
     };
+    this.cy.batch(() => {
+      this.queues.forEach((value, key) => {
+        const id = mapping[key];
+        if (!id) return;
 
-    this.queues.forEach((value, key) => {
-      const id = mapping[key];
-      if (!id) return;
-
-      const element = this.cy?.getElementById(id);
+        const element = this.cy?.getElementById(id);
+        if (element) {
+          // Update data without refreshing layout
+          element.data('value', this.formatNumber(value));
+          element.data('color', this.getQueueColor(value));
+        }
+      });
+      const element = this.cy?.getElementById("edge-wal-delay");
       if (element) {
+        let value = Array.from(this.wal.values()).reduce((acc, value) => acc + value, 0);
         // Update data without refreshing layout
         element.data('value', this.formatNumber(value));
         element.data('color', this.getQueueColor(value));
       }
-    });
+    })
+
   }
 
   private getInitialElements(): cytoscape.ElementDefinition[] {
+    let x = 0;
+    let y = 200;
+    let xDistance = 150;
+    let yDistance = 200;
+
+    let xPersisterDistance = x + xDistance*3
+    let xNativerDistance = x + xDistance*4
+    let xEnd = x + xDistance*5
+
+    let yFirst = yDistance + 200;
+
+    let ySecond = yFirst + 100;
+
     return [
       // Nodes
-      {data: {id: 'sink', label: 'Sink'}, position: {x: 0, y: 100}},
-      {data: {id: 'sinkLogo', label: ''}, position: {x: -40, y: 100}, classes:"in" },
-      {data: {id: 'timer', label: 'Timer'}, position: {x: 150, y: 100}},
-      {data: {id: 'wal', label: 'WAL'}, position: {x: 300, y: 100}},
+      {data: {id: 'sink', label: 'Sink'}, position: {x: x, y: y}},
+      {data: {id: 'sinkLogo', label: ''}, position: {x: x-40, y: y}, classes:"in" },
+      {data: {id: 'timer', label: 'Timer'}, position: {x: x + xDistance, y: y}},
+      {data: {id: 'wal', label: 'WAL'}, position: {x: x + xDistance*2, y: y}},
+
+      // WAL persister
+      {data: {id: 'walBuffer', label: 'WAL Delay'}, position: {x: x + xDistance*2, y: 50}, classes: "save"},
 
       // Persisters
-      {data: {id: 'persister', label: 'Persister'}, position: {x: 450, y: 100}},
-      {data: {id: 'persister1', label: 'Mongo'}, position: {x: 400, y: 300}, classes: "database"},
-      {data: {id: 'persister2', label: 'Postgres'}, position: {x: 450, y: 300}, classes: "database"},
-      {data: {id: 'persister3', label: 'Neo4j'}, position: {x: 500, y: 300}, classes: "database"},
+      {data: {id: 'persister', label: 'Persister'}, position: {x: xPersisterDistance, y: y}},
+      {data: {id: 'persister1', label: 'Mongo'}, position: {x: xPersisterDistance - 50, y: yFirst}, classes: "database"},
+      {data: {id: 'persister2', label: 'Postgres'}, position: {x: xPersisterDistance, y: yFirst}, classes: "database"},
+      {data: {id: 'persister3', label: 'Neo4j'}, position: {x: xPersisterDistance + 50, y: yFirst}, classes: "database"},
 
       // Nativers
-      {data: {id: 'nativer', label: 'Nativer'}, position: {x: 600, y: 100}},
-      {data: {id: 'nativer0', label: 'Definition 0'}, position: {x: 550, y: 300}, classes: "rotate"},
-      {data: {id: 'nativer1', label: 'Definition 1'}, position: {x: 600, y: 300}, classes: "rotate"},
-      {data: {id: 'nativer2', label: 'Definition 2'}, position: {x: 650, y: 300}, classes: "rotate"},
+      {data: {id: 'nativer', label: 'Nativer'}, position: {x: xNativerDistance, y: y}},
+      {data: {id: 'nativer0', label: 'Definition 0'}, position: {x: xNativerDistance - 50, y: yFirst}, classes: "rotate"},
+      {data: {id: 'nativer1', label: 'Definition 1'}, position: {x: xNativerDistance, y: yFirst}, classes: "rotate"},
+      {data: {id: 'nativer2', label: 'Definition 2'}, position: {x: xNativerDistance + 50, y: yFirst}, classes: "rotate"},
 
-      {data: {id: 'nativer0engine', label: 'Mongo'}, position: {x: 550, y: 400}, classes: "database"},
-      {data: {id: 'nativer1engine', label: 'Postgres'}, position: {x: 600, y: 400}, classes: "database"},
-      {data: {id: 'nativer2engine', label: 'Neo4j'}, position: {x: 650, y: 400}, classes: "database"},
+      {data: {id: 'nativer0engine', label: 'Mongo'}, position: {x: xNativerDistance - 50, y: ySecond}, classes: "database"},
+      {data: {id: 'nativer1engine', label: 'Postgres'}, position: {x: xNativerDistance, y: ySecond}, classes: "database"},
+      {data: {id: 'nativer2engine', label: 'Neo4j'}, position: {x: xNativerDistance + 50, y: ySecond}, classes: "database"},
 
       // end
-      {data: {id: 'end', label: 'Poly'}, position: {x: 750, y: 100}},
-      {data: {id: 'endLogo', label: ''}, position: {x: 790, y: 100}, classes:"in" },
+      {data: {id: 'end', label: 'Poly'}, position: {x: xEnd, y: y}},
+      {data: {id: 'endLogo', label: ''}, position: {x: xEnd + 40, y: y}, classes:"in" },
 
       // Edges with initial values
       { data: { id: 'edge-sink-timer', source: 'sink', target: 'timer', value: "0", color: '#fff' } },
       { data: { id: 'edge-timer-wal', source: 'timer', target: 'wal', value: '0', color: '#fff' } },
+      { data: { id: 'edge-wal-delay', source: 'wal', target: 'walBuffer', value: '0', color: '#fff' } },
+      { data: { id: 'edge-wal-delay-back', source: 'walBuffer', target: 'wal', value: ' ', color: '#fff' } },
       { data: { id: 'edge-wal-persister', source: 'wal', target: 'persister', value: '0', color: '#fff' } },
 
       {
