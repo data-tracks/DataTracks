@@ -1,7 +1,6 @@
 use flume::Sender;
 use std::time::Duration;
 use tracing::error;
-use util::Event::Heartbeat;
 use util::{Event, InitialMeta, InitialRecord};
 use value::Value;
 
@@ -27,11 +26,11 @@ impl DummySink {
         id: usize,
         name: String,
         sender: Sender<InitialRecord>,
-        statistics_tx: Sender<Event>,
+        _statistics_tx: Sender<Event>,
     ) {
         match self {
             DummySink::Interval { value, interval } => {
-                let heartbeat_id = format!("DummyInterval {} {}", name, id);
+                //let heartbeat_id = format!("DummyInterval {} {}", name, id);
                 let topics = vec![name.clone()];
 
                 let mut data_ticker = tokio::time::interval(*interval);

@@ -3,7 +3,7 @@ use crate::mongo::MongoDB;
 use crate::neo::Neo4j;
 use crate::postgres::Postgres;
 use derive_more::From;
-use flume::{Receiver, Sender, unbounded, bounded};
+use flume::{Receiver, Sender, bounded};
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
@@ -183,13 +183,17 @@ impl EngineKind {
         &mut self,
         join: &mut JoinSet<()>,
         sender: Sender<Event>,
+        is_new: bool,
     ) -> anyhow::Result<()> {
         match self {
-            EngineKind::Postgres(p) => p.start(join).await?,
-            EngineKind::MongoDB(m) => m.start().await?,
-            EngineKind::Neo4j(n) => n.start().await?,
+            EngineKind::Postgres(p) => p.start(join, is_new).await?,
+            EngineKind::MongoDB(m) => m.start(is_new).await?,
+            EngineKind::Neo4j(n) => n.start(is_new).await?,
         }
-        self.monitor(join, sender.clone()).await
+        if is_new {
+            self.monitor(join, sender.clone()).await?;
+        }
+        Ok(())
     }
 
     pub async fn start_all(
@@ -205,7 +209,7 @@ impl EngineKind {
         let mut engines: Vec<Engine> = vec![];
 
         for mut engine in &mut engine_kinds.into_iter() {
-            engine.start(join, statistic_tx.clone()).await?;
+            engine.start(join, statistic_tx.clone(), true).await?;
             engines.push(Engine::new(engine, statistic_tx.clone()).await);
         }
 

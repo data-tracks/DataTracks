@@ -1,7 +1,7 @@
 use crate::engine::Load;
 use anyhow::bail;
 use flume::Sender;
-use neo4rs::{Graph, query};
+use neo4rs::{query, Graph};
 use reqwest::Client;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -9,12 +9,12 @@ use std::error::Error;
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tokio::time::{Instant, sleep};
+use tokio::time::{sleep, Instant};
 use tracing::{debug, info};
-use util::Event::EngineStatus;
 use util::container::Mapping;
 use util::definition::{Definition, Stage};
-use util::{Batch, DefinitionMapping, Event, PartitionId, TargetedRecord, container};
+use util::Event::EngineStatus;
+use util::{container, Batch, DefinitionMapping, Event, PartitionId, TargetedRecord};
 use value::Value;
 
 #[derive(Clone)]
@@ -44,23 +44,25 @@ struct TxMetrics {
 }
 
 impl Neo4j {
-    pub(crate) async fn start(&mut self) -> anyhow::Result<()> {
-        container::start_container(
-            self.name.as_str(),
-            "neo4j:latest",
-            vec![
-                Mapping {
-                    container: 7687,
-                    host: self.port,
-                },
-                Mapping {
-                    container: 7474,
-                    host: 7474,
-                },
-            ],
-            Some(vec![format!("NEO4J_AUTH=neo4j/{}", "neoneoneo")]),
-        )
-        .await?;
+    pub(crate) async fn start(&mut self, is_new: bool) -> anyhow::Result<()> {
+        if is_new {
+            container::start_container(
+                self.name.as_str(),
+                "neo4j:latest",
+                vec![
+                    Mapping {
+                        container: 7687,
+                        host: self.port,
+                    },
+                    Mapping {
+                        container: 7474,
+                        host: 7474,
+                    },
+                ],
+                Some(vec![format!("NEO4J_AUTH=neo4j/{}", "neoneoneo")]),
+            )
+            .await?;
+        }
 
         let uri = format!("{}:{}", self.host, self.port);
 
@@ -286,11 +288,11 @@ impl Neo4j {
 #[cfg(test)]
 mod tests {
     use crate::EngineKind;
-    use neo4rs::{BoltInteger, BoltMap, BoltString, BoltType, query};
+    use neo4rs::{query, BoltInteger, BoltMap, BoltString, BoltType};
     use std::collections::{BTreeMap, HashMap};
     use std::vec;
     use util::definition::{Definition, DefinitionFilter, Model, Stage};
-    use util::{DefinitionMapping, PartitionId, TargetedMeta, batch, target};
+    use util::{batch, target, DefinitionMapping, PartitionId, TargetedMeta};
     use value::Value;
 
     //#[tokio::test]
@@ -298,7 +300,7 @@ mod tests {
     async fn test_insert() {
         let mut neo = EngineKind::neo4j_with_port(7688);
 
-        neo.start().await.unwrap();
+        neo.start(true).await.unwrap();
 
         let definition = Definition::new(
             "test",
@@ -349,7 +351,7 @@ mod tests {
     async fn test_insert_node() {
         let mut neo = EngineKind::neo4j();
 
-        neo.start().await.unwrap();
+        neo.start(true).await.unwrap();
 
         let definition = Definition::new(
             "test",

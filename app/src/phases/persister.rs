@@ -24,7 +24,7 @@ pub struct Persister {
     pub statistics_tx: Sender<Event>,
 }
 
-const BATCH_SIZE: i32 = 100_000;
+const BATCH_SIZE: i32 = 50_000; // between 50_000 and 100_000
 
 impl Persister {
     pub fn new(catalog: Catalog, statistics_tx: Sender<Event>) -> anyhow::Result<Self> {
@@ -55,7 +55,8 @@ impl Persister {
         let (wal_rx, _) = wal::handle_wal_to_engines(&rt, receiver, control_rx, self.statistics_tx.clone());
 
         let storer = thread::spawn(move || {
-            let rt_storer = Builder::new_current_thread()
+            let rt_storer = Builder::new_multi_thread()
+                .worker_threads(storer_workers)
                 .thread_name("storer")
                 .enable_all()
                 .build()
@@ -121,12 +122,12 @@ impl Persister {
         ))
     }
 
-    pub async fn start_distributor(&mut self, rt: Runtimes) {
+    pub async fn start_distributor(&mut self, rt: Runtimes, joins: &mut JoinSet<()>) {
         let engines = self.catalog.engines().await;
         let len = engines.len();
 
         let rt_persister = Builder::new_multi_thread()
-            .worker_threads(len)
+            .worker_threads(3*len)
             .thread_name("persister")
             .enable_all()
             .build()
@@ -135,10 +136,13 @@ impl Persister {
         let partition_id = AtomicU64::new(0);
 
         for engine in engines {
-            for _ in 0..3 {
+            for i in 0..3 {
                 let partition_id = partition_id.fetch_add(1, Ordering::Relaxed).into();
-                let engine = engine.clone();
-                let mut clone = engine.clone();
+                let mut engine = engine.clone();
+                // actually make a new connection
+                engine.engine_kind.start(joins, engine.statistic_sender.clone(), false).await.unwrap();
+
+                //let mut clone = engine.clone();
                 let definitions = self
                     .catalog
                     .definitions()
@@ -151,7 +155,7 @@ impl Persister {
                     let mut buckets: HashMap<DefinitionId, Batch<TargetedRecord>> = HashMap::new();
                     let mut count = 0;
 
-                    let name = format!("Persister {}", engine);
+                    let name = format!("Persister {} {}", engine, i);
 
                     // Create a 200ms ticker for the flush interval
                     let mut flush_interval = tokio::time::interval(Duration::from_millis(200));
@@ -166,7 +170,7 @@ impl Persister {
                             // Case A: The timer hit 200ms
                             _ = flush_interval.tick() => {
                                 if !buckets.is_empty() {
-                                    flush_buckets(&partition_id, &mut buckets, &mut clone, &definitions).await;
+                                    flush_buckets(&partition_id, &mut buckets, &mut engine, &definitions).await;
                                     count = 0;
                                 }
                             }
@@ -178,10 +182,10 @@ impl Persister {
 
                                 // Immediate flush if we hit the batch size
                                 if count >= BATCH_SIZE {
-                                    flush_buckets(&partition_id, &mut buckets, &mut clone, &definitions).await;
+                                    flush_buckets(&partition_id, &mut buckets, &mut engine, &definitions).await;
                                     count = 0;
-                                    flush_interval.reset(); // Reset the timer since we just flushed
                                 }
+                                flush_interval.reset(); // Reset the timer since we just flushed
                             }
 
                             // Case C: Send Heartbeat (maybe on a different interval)

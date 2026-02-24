@@ -1,11 +1,11 @@
 use crate::management::catalog::Catalog;
 use engine::engine::Engine;
 use std::time::Duration;
+use tokio::runtime::Builder;
 use tokio::sync::broadcast::Sender;
-use tokio::task::JoinSet;
 use tracing::error;
 use util::definition::Stage;
-use util::{Batch, Event, TargetedRecord, target};
+use util::{Batch, Event, TargetedRecord, target, Runtimes};
 
 pub struct Nativer {
     catalog: Catalog,
@@ -14,9 +14,18 @@ pub struct Nativer {
 impl Nativer {
     pub(crate) async fn start(
         &self,
-        join_set: &mut JoinSet<()>,
+        rt: Runtimes,
         output: Sender<Batch<TargetedRecord>>,
     ) {
+        let rt_mapper = Builder::new_multi_thread()
+            .worker_threads(3)
+            .thread_name("nativer")
+            .enable_all()
+            .build()
+            .unwrap();
+
+
+        let mut id_counter = 0;
         //let catalog = self.catalog.clone();
         for definition in self.catalog.definitions().await {
             let engines = self
@@ -27,24 +36,25 @@ impl Nativer {
                 .filter(|e| e.model() == definition.model)
                 .collect::<Vec<Engine>>();
 
-            for i in 0..5 {
+            for _ in 0..5 {
                 let definition = definition.clone();
                 let engines = engines.clone();
                 let output = output.clone();
 
-                join_set.spawn(async move {
+                let id = id_counter;
+                id_counter += 1;
+                rt_mapper.spawn(async move {
                     let rx = definition.native.1;
 
                     let mut engine = engines.into_iter().next().unwrap();
 
                     let mapper = definition.mapping.build();
 
-                    let name = format!("Nativer {} {}", engine.engine_kind, i);
+                    let name = format!("Nativer {} {}", engine.engine_kind, id);
 
                     let mut hb_ticker = tokio::time::interval(Duration::from_secs(5));
                     let hb_name = name.clone();
-
-                    let id = i.into();
+                    let id = id.into();
 
                     loop {
                         tokio::select! {
@@ -71,7 +81,7 @@ impl Nativer {
                                     target!(mapper(r.value.clone()), r.meta.clone())
                                 }).collect();
 
-                                let partition_id = definition.partition_info.next(&id,&length).into();
+                                let partition_id = definition.partition_info.next(&id, &length).into();
 
                                 match engine.store(partition_id, Stage::Mapped, definition.id, &mapped_data).await {
                                     Ok(_) => {
@@ -94,6 +104,7 @@ impl Nativer {
                 });
             }
         }
+        rt.add_runtime(rt_mapper);
     }
 
     pub fn new(catalog: Catalog) -> Self {

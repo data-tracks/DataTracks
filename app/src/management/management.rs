@@ -83,14 +83,14 @@ impl Manager {
 
             self.init_definitions(statistic_tx.clone()).await?;
 
-            persister.start_distributor(rt.clone()).await;
+            persister.start_distributor(rt.clone(), &mut joins).await;
 
-            let sink = self.start_sinks(persister, rt).await?;
+            let sink = self.start_sinks(persister, rt.clone()).await?;
             //let kafka = sink::kafka::start(&mut self.joins, tx.clone()).await?;
 
             sink_runner(&mut self.joins, sink, statistic_tx);
 
-            nativer.start(&mut self.joins, output).await;
+            nativer.start(rt.clone(), output).await;
 
             tokio::select! {
                     _ = ctrl_c_signal => {

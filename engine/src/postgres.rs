@@ -12,16 +12,16 @@ use tokio::time::{sleep, timeout};
 use tokio_postgres::binary_copy::BinaryCopyInWriter;
 use tokio_postgres::types::{ToSql, Type};
 use tokio_postgres::{Client, Statement};
-use tracing::{debug, error, info};
+use tracing::{debug, info};
 use util::container::Mapping;
 use util::definition::{Definition, Stage};
 use util::{
-    Batch, DefinitionMapping, Event, PartitionId, RelationalMapping, RelationalType,
-    TargetedRecord, container,
+    container, Batch, DefinitionMapping, Event, PartitionId, RelationalMapping,
+    RelationalType, TargetedRecord,
 };
 use value::Value;
 
-#[derive(Clone, Debug)]
+#[derive(Debug, Clone)]
 pub struct Postgres {
     pub(crate) name: String,
     pub(crate) load: Arc<Mutex<Load>>,
@@ -37,17 +37,23 @@ struct TxCounts {
 }
 
 impl Postgres {
-    pub(crate) async fn start(&mut self, join: &mut JoinSet<()>) -> anyhow::Result<()> {
-        container::start_container(
-            self.name.as_str(),
-            "postgres:latest",
-            vec![Mapping {
-                container: 5432,
-                host: self.connector.port,
-            }],
-            Some(vec![format!("POSTGRES_PASSWORD={}", "postgres")]),
-        )
-        .await?;
+    pub(crate) async fn start(
+        &mut self,
+        join: &mut JoinSet<()>,
+        start_container: bool,
+    ) -> anyhow::Result<()> {
+        if start_container {
+            container::start_container(
+                self.name.as_str(),
+                "postgres:latest",
+                vec![Mapping {
+                    container: 5432,
+                    host: self.connector.port,
+                }],
+                Some(vec![format!("POSTGRES_PASSWORD={}", "postgres")]),
+            )
+            .await?;
+        }
 
         let client = self.connector.connect(join).await?;
         info!("☑️ Connected to postgres database");
@@ -74,7 +80,7 @@ impl Postgres {
         match &self.client {
             None => return Err(Box::from("Could not create postgres database")),
             Some(client) => {
-                let rows_affected = self.copy_in(stage, client, entity, values).await?;
+                let rows_affected = self.copy_in(&stage, client, &entity, values).await?;
                 //let rows_affected = self.load_insert(client, entity, values).await?;
 
                 debug!("Inserted {} row(s) into 'users'.", rows_affected);
@@ -284,54 +290,57 @@ impl Postgres {
 
     async fn copy_in(
         &self,
-        stage: Stage,
+        stage: &Stage,
         client: &Arc<Client>,
-        entity: String,
+        entity: &String,
         values: &Batch<TargetedRecord>,
     ) -> Result<usize, Box<dyn Error + Send + Sync>> {
-        let rows = values.len();
-
         let (query, types) = self
             .prepared_statements
-            .get(&(entity, stage.clone()))
-            .unwrap();
+            .get(&(entity.to_string(), stage.clone()))
+            .ok_or("Statement not found")?;
 
         let sink = client.copy_in(query).await?;
-
         let writer = BinaryCopyInWriter::new(sink, types);
-
         pin_mut!(writer);
 
-        // 3. Encode each row
+        // Reusable buffer for JSON serialization to avoid per-row String allocations
+        let mut json_buffer = Vec::with_capacity(1024);
+
         for TargetedRecord { value, meta } in values {
-            match &stage {
+            match stage {
                 Stage::Plain => {
+                    json_buffer.clear();
+                    serde_json::to_writer(&mut json_buffer, &value)?;
+
+                    // 1. Convert the bytes to a string slice (&str)
+                    // 2. Map this to the Postgres TEXT/JSONB type
+                    let json_str = std::str::from_utf8(&json_buffer)
+                        .map_err(|e| format!("Invalid UTF-8 sequence: {}", e))?;
+
                     writer
                         .as_mut()
-                        .write(&[&(meta.id as i64), &serde_json::to_string(&value).unwrap()])
+                        .write(&[&(meta.id as i64), &json_str])
                         .await?;
                 }
                 Stage::Mapped => {
                     if let Value::Array(a) = value {
-                        writer
-                            .as_mut()
-                            .write(
-                                &a.values
-                                    .iter()
-                                    .map(|v| v as &(dyn ToSql + Sync))
-                                    .collect::<Vec<_>>(),
-                            )
-                            .await?;
+                        let row_params: Vec<&(dyn ToSql + Sync)> =
+                            a.values.iter().map(|v| v as &(dyn ToSql + Sync)).collect();
+
+                        writer.as_mut().write(&row_params).await?;
                     } else {
-                        error!("error value {:?}", value)
+                        return Err(format!(
+                            "Expected Array value for Mapped stage, got {:?}",
+                            value
+                        )
+                        .into());
                     }
                 }
             }
         }
-
         writer.finish().await?;
-
-        Ok(rows)
+        Ok(values.len())
     }
 
     #[allow(dead_code)]
@@ -367,11 +376,12 @@ impl Postgres {
 #[cfg(test)]
 pub mod tests {
     use crate::EngineKind;
+    use std::sync::{Arc, Mutex};
     use tokio::task::JoinSet;
     use tracing_test::traced_test;
     use util::definition::{Entity, Stage};
     use util::{
-        Mapping, MappingSource, RelationalMapping, RelationalType, TargetedMeta, batch, target,
+        batch, target, Mapping, MappingSource, RelationalMapping, RelationalType, TargetedMeta,
     };
     use value::Value;
 
@@ -380,7 +390,7 @@ pub mod tests {
     pub async fn test_postgres() {
         let mut pg = EngineKind::postgres();
         let mut joins = JoinSet::new();
-        pg.start(&mut joins).await.unwrap();
+        pg.start(&mut joins, true).await.unwrap();
 
         pg.create_table_plain("users").await.unwrap();
 
@@ -399,7 +409,7 @@ pub mod tests {
     pub async fn test_postgres_mapped() {
         let mut pg = EngineKind::postgres_with_port(5433);
         let mut joins = JoinSet::new();
-        pg.start(&mut joins).await.unwrap();
+        pg.start(&mut joins, true).await.unwrap();
 
         let r = RelationalMapping::Tuple(
             vec![

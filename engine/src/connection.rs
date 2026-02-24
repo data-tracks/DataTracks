@@ -1,10 +1,10 @@
-use std::time::Duration;
 use anyhow::bail;
+use std::time::Duration;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
 use tokio_postgres::{Client, NoTls};
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct PostgresConnection {
     pub(crate) url: String,
     pub(crate) port: u16,
@@ -34,7 +34,7 @@ impl PostgresConnection {
                 Ok((client, connection)) => {
                     join.spawn(async move {
                         if let Err(e) = connection.await {
-                            eprintln!("connection error: {}", e);
+                            eprintln!("connection error: {:?}", e);
                         }
                     });
 

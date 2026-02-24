@@ -145,7 +145,7 @@ impl From<(Value, TargetedMeta)> for TargetedRecord {
     }
 }
 
-
+/// Generate a TimedRecord from a value and TimedMeta
 #[macro_export]
 macro_rules! timed {
     ($val:expr, $meta:expr) => {
@@ -155,7 +155,7 @@ macro_rules! timed {
         }
     };
 }
-
+/// Generate a TargetedRecord from a value and TargetedMeta
 #[macro_export]
 macro_rules! target {
     ($val:expr, $meta:expr) => {

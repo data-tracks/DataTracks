@@ -11,10 +11,10 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::time::{sleep, timeout};
 use tracing::{error, info};
-use util::Event::EngineStatus;
 use util::container::Mapping;
 use util::definition::{Definition, Stage};
-use util::{Batch, DefinitionMapping, Event, PartitionId, TargetedRecord, container};
+use util::Event::EngineStatus;
+use util::{container, Batch, DefinitionMapping, Event, PartitionId, TargetedRecord};
 use value::Value;
 
 #[derive(Clone, Debug)]
@@ -25,17 +25,19 @@ pub struct MongoDB {
 }
 
 impl MongoDB {
-    pub(crate) async fn start(&mut self) -> anyhow::Result<()> {
-        container::start_container(
-            "engine-mongodb",
-            "mongo:latest",
-            vec![Mapping {
-                container: 27017,
-                host: 27017,
-            }],
-            None,
-        )
-        .await?;
+    pub(crate) async fn start(&mut self, is_new: bool) -> anyhow::Result<()> {
+        if is_new {
+            container::start_container(
+                "engine-mongodb",
+                "mongo:latest",
+                vec![Mapping {
+                    container: 27017,
+                    host: 27017,
+                }],
+                None,
+            )
+            .await?;
+        }
 
         let uri = format!("mongodb://localhost:{}", 27017);
         let mut client_options = ClientOptions::parse(uri).await?;
