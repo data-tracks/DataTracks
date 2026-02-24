@@ -74,7 +74,7 @@ impl WalManager {
                                     batch.extend(rx.try_iter().take(99_999));
                                     log.log(&batch).await;
 
-                                    if tx.len() >= 100_000 {
+                                    if tx.len() >= 200_000 {
                                         delayed.extend(batch.drain(..));
                                         timer.as_mut().reset(Instant::now() + duration);
                                         timer_active = true;
@@ -112,6 +112,7 @@ impl WalManager {
                         }
                         _ = delay_hb.tick() => {
                             statistics.send_async(Event::Queue (QueueEvent{name: name.clone(), size: delayed.len()})).await.unwrap();
+                            statistics.send_async(Event::Heartbeat(name.clone())).await.unwrap();
                         }
                     }
                 }

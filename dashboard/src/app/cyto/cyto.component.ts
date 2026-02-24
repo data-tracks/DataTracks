@@ -1,5 +1,39 @@
-import {AfterViewInit, Component, effect, ElementRef, input, ViewChild} from '@angular/core';
+import {
+  AfterViewInit,
+  Component,
+  effect,
+  ElementRef,
+  input,
+  TemplateRef,
+  ViewChild,
+  ViewContainerRef
+} from '@angular/core';
 import cytoscape from 'cytoscape';
+import cytoscapePopper from 'cytoscape-popper';
+import tippy from 'tippy.js';
+
+function tippyFactory(ref: any, content: any){
+  // Since tippy constructor requires DOM element/elements, create a placeholder
+  const dummyDomEle = document.createElement('div');
+
+  return tippy(dummyDomEle, {
+    getReferenceClientRect: ref.getBoundingClientRect,
+    trigger: 'manual', // mandatory
+    // dom element inside the tippy:
+    content: content,
+    // your own preferences:
+    arrow: true,
+    placement: 'top',
+    hideOnClick: false,
+    sticky: "reference",
+
+    // if interactive:
+    interactive: true,
+    appendTo: document.body // or append dummyDomEle to document.body
+  });
+}
+
+cytoscape.use(cytoscapePopper(tippyFactory));
 
 @Component({
   selector: 'app-cyto',
@@ -9,13 +43,16 @@ import cytoscape from 'cytoscape';
 export class CytoComponent implements AfterViewInit {
   @ViewChild('cyContainer') container!: ElementRef;
   inputs = input.required<any>();
+  @ViewChild('tooltipTemplate') tooltipTemplate!: TemplateRef<any>;
 
   private cy?: cytoscape.Core;
   private queues = new Map<string, number>();
 
-  private wal = new Map<number, number>();
+  protected wal = new Map<number, number>();
+  private viewContainerRef: ViewContainerRef;
 
-  constructor() {
+  constructor(private vcr: ViewContainerRef) {
+    this.viewContainerRef  = vcr;
     effect(() => {
       const entry = this.inputs();
       if (!entry) return;
@@ -145,6 +182,39 @@ export class CytoComponent implements AfterViewInit {
         name: 'preset'
       }
     });
+
+    this.setupPopups();
+  }
+
+  setupPopups() {
+    if (!this.cy){
+      return
+    }
+
+    const embeddedView = this.viewContainerRef.createEmbeddedView(this.tooltipTemplate, {
+      wals: Array.from(this.wal)
+    });
+
+    this.cy.edges(".wal").forEach(node => {
+      // 1. Create a popper reference
+      const ref = node.popperRef();
+
+      // 2. Initialize Tippy on a dummy element and link it to the reference
+      const dummyDomEle = document.createElement('div');
+      const tip = tippy(dummyDomEle, {
+        getReferenceClientRect: ref.getBoundingClientRect, // Link position to node
+        content: embeddedView.rootNodes[0],//`Details for ${node.data('id')}`,
+        trigger: 'manual', // We will trigger it via Cytoscape events
+        interactive: true,
+        arrow: true,
+        //theme: 'cytoscape-popper',
+        appendTo: () => document.body // Ensures popup isn't clipped by container
+      });
+
+      // 3. Attach listeners to show/hide
+      node.on('mouseover', () => tip.show());
+      node.on('mouseout', () => tip.hide());
+    });
   }
 
   private updateNodeValues() {
@@ -232,7 +302,7 @@ export class CytoComponent implements AfterViewInit {
       // Edges with initial values
       { data: { id: 'edge-sink-timer', source: 'sink', target: 'timer', value: "0", color: '#fff' } },
       { data: { id: 'edge-timer-wal', source: 'timer', target: 'wal', value: '0', color: '#fff' } },
-      { data: { id: 'edge-wal-delay', source: 'wal', target: 'walBuffer', value: '0', color: '#fff' } },
+      { data: { id: 'edge-wal-delay', source: 'wal', target: 'walBuffer', value: '0', color: '#fff' }, classes: "wal" },
       { data: { id: 'edge-wal-delay-back', source: 'walBuffer', target: 'wal', value: ' ', color: '#fff' } },
       { data: { id: 'edge-wal-persister', source: 'wal', target: 'persister', value: '0', color: '#fff' } },
 

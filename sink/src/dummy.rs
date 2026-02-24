@@ -50,7 +50,7 @@ impl DummySink {
 
                         // send heartbeat (much less frequent)
                         _ = hb_ticker.tick() => {
-                            let _ = statistics_tx.send(Heartbeat(heartbeat_id.clone()));
+                            //let _ = statistics_tx.send(Heartbeat(heartbeat_id.clone()));
                         }
                     }
                 }
@@ -73,7 +73,7 @@ impl DummySink {
                 loop {
                     tokio::select! {
                         _ = hb_ticker.tick() => {
-                            let _ = statistics_tx.send(Heartbeat(heartbeat_id.clone()));
+                            //let _ = statistics_tx.send(Heartbeat(heartbeat_id.clone()));
                         }
 
                         _ = tokio::time::sleep_until(next_send) => {

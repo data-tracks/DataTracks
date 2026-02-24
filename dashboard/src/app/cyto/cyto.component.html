@@ -9,3 +9,11 @@
         <div #cyContainer style="width: 100%; height: 600px; background: #1a1a1a;"></div>
     </div>
 </div>
+
+<ng-template #tooltipTemplate>
+    <div class="p-2 bg-accent rounded">
+        @for (w of wal; track w[1]) {
+            <div>Runner {{w[0]}} : {{formatNumber(w[1])}}</div>
+        }
+    </div>
+</ng-template>
