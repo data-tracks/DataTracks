@@ -2,10 +2,8 @@ use std::collections::VecDeque;
 use flume::{unbounded, Receiver, Sender};
 use std::{cmp, thread};
 use std::time::Duration;
-use futures::pin_mut;
 use tokio::runtime::Builder;
-use tokio::time;
-use tokio::time::{interval, Instant};
+use tokio::time::{interval, MissedTickBehavior};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 use util::{log_channel, Event, QueueEvent, Runtimes, SegmentedLog, TimedRecord};
@@ -48,11 +46,8 @@ impl WalManager {
 
                 let mut delayed = VecDeque::new();
 
-                let duration = Duration::from_millis(500);
-                let long_duration = Duration::from_secs(60 * 60 * 24);
-                let timer = time::sleep(long_duration);
-                pin_mut!(timer);
-                let mut timer_active = false;
+                let mut duration = interval(Duration::from_millis(50));
+                duration.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
                 let name = format!("WAL Delayed {}", id);
 
@@ -76,8 +71,6 @@ impl WalManager {
 
                                     if tx.len() >= 200_000 {
                                         delayed.extend(batch.drain(..));
-                                        timer.as_mut().reset(Instant::now() + duration);
-                                        timer_active = true;
                                     }else {
                                         if !delayed.is_empty() {
                                             // empty old
@@ -87,8 +80,6 @@ impl WalManager {
                                             if !delayed.is_empty(){
                                                 // still not empty
                                                 delayed.extend(batch.drain(..));
-                                                timer.as_mut().reset(Instant::now() + duration);
-                                                timer_active = true;
                                             }else {
                                                 for r in batch.drain(..) { tx.send(r).unwrap(); }
                                             }
@@ -96,19 +87,20 @@ impl WalManager {
                                             for r in batch.drain(..) { tx.send(r).unwrap(); }
                                         }
 
-
                                     }
                                 }
                                 Err(_) => return, // Channel closed
                             }
                         }
-                        () = &mut timer, if timer_active && tx.len() <= 100_000 => {
-                            // empty old
-                            info!("writing buffered messages len: {}", delayed.len());
-                            let count = cmp::min(delayed.len(), 100_000);
-                            for r in delayed.drain(0..count) { tx.send(r).unwrap() }
-                            timer.as_mut().reset(Instant::now() + long_duration);
-                            timer_active = false;
+                        _ = duration.tick() => {
+                            let len = tx.len();
+                            if !delayed.is_empty() && len < 100_000 {
+                                // empty old
+                                info!("writing buffered messages len: {}", len);
+                                let count = cmp::min(delayed.len(), len.saturating_sub(100_000));
+                                for r in delayed.drain(0..count) { tx.send(r).unwrap() }
+                            }
+
                         }
                         _ = delay_hb.tick() => {
                             statistics.send_async(Event::Queue (QueueEvent{name: name.clone(), size: delayed.len()})).await.unwrap();

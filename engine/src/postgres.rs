@@ -80,12 +80,15 @@ impl Postgres {
         match &self.client {
             None => return Err(Box::from("Could not create postgres database")),
             Some(client) => {
+                //let now = Instant::now();
                 let rows_affected = self.copy_in(&stage, client, &entity, values).await?;
                 //let rows_affected = self.load_insert(client, entity, values).await?;
 
+                //info!("duration {} {}", values.len(), now.elapsed().as_millis());
                 debug!("Inserted {} row(s) into 'users'.", rows_affected);
             }
         }
+
         Ok(())
     }
 
@@ -184,7 +187,7 @@ impl Postgres {
                     "CREATE TABLE IF NOT EXISTS {} (
                     _id SERIAL PRIMARY KEY,
                     id BIGINT,
-                    value TEXT)",
+                    value BYTEA)",
                     name
                 );
 
@@ -194,7 +197,7 @@ impl Postgres {
                 let statement = client.prepare(&copy_query).await?;
                 self.prepared_statements.insert(
                     (name.to_string(), Stage::Plain),
-                    (statement, vec![Type::INT8, Type::TEXT]),
+                    (statement, vec![Type::INT8, Type::BYTEA]),
                 );
             }
         }
@@ -304,37 +307,28 @@ impl Postgres {
         let writer = BinaryCopyInWriter::new(sink, types);
         pin_mut!(writer);
 
-        // Reusable buffer for JSON serialization to avoid per-row String allocations
-        let mut json_buffer = Vec::with_capacity(1024);
+        for chunk  in values.chunks(1000) {
+            for TargetedRecord { value, meta } in chunk {
+                match stage {
+                    Stage::Plain => {
+                        let id_val = meta.id as i64;
+                        //let row: [&(dyn ToSql + Sync); 2] = [&id_val, value];
 
-        for TargetedRecord { value, meta } in values {
-            match stage {
-                Stage::Plain => {
-                    json_buffer.clear();
-                    serde_json::to_writer(&mut json_buffer, &value)?;
+                        writer.as_mut().write(&[&id_val as &(dyn ToSql + Sync), value]).await?;
+                    }
+                    Stage::Mapped => {
+                        if let Value::Array(a) = value {
+                            let row_params: Vec<&(dyn ToSql + Sync)> =
+                                a.values.iter().map(|v| v as &(dyn ToSql + Sync)).collect();
 
-                    // 1. Convert the bytes to a string slice (&str)
-                    // 2. Map this to the Postgres TEXT/JSONB type
-                    let json_str = std::str::from_utf8(&json_buffer)
-                        .map_err(|e| format!("Invalid UTF-8 sequence: {}", e))?;
-
-                    writer
-                        .as_mut()
-                        .write(&[&(meta.id as i64), &json_str])
-                        .await?;
-                }
-                Stage::Mapped => {
-                    if let Value::Array(a) = value {
-                        let row_params: Vec<&(dyn ToSql + Sync)> =
-                            a.values.iter().map(|v| v as &(dyn ToSql + Sync)).collect();
-
-                        writer.as_mut().write(&row_params).await?;
-                    } else {
-                        return Err(format!(
-                            "Expected Array value for Mapped stage, got {:?}",
-                            value
-                        )
-                        .into());
+                            writer.as_mut().write(&row_params).await?;
+                        } else {
+                            return Err(format!(
+                                "Expected Array value for Mapped stage, got {:?}",
+                                value
+                            )
+                                .into());
+                        }
                     }
                 }
             }
@@ -372,6 +366,8 @@ impl Postgres {
         }
     }
 }
+
+
 
 #[cfg(test)]
 pub mod tests {

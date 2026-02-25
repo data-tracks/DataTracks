@@ -47,8 +47,8 @@ impl postgres::types::ToSql for Value {
             Value::Float(f) => out.put_f64(f.as_f64()),
             Value::Bool(b) => out.extend_from_slice(&[b.0 as u8]),
             Value::Text(t) => out.extend_from_slice(t.0.as_bytes()),
-            Value::Array(_) => return Err("Array not supported".into()),
-            Value::Dict(_) => return Err("Dict not supported".into()),
+            Value::Array(a) => out.extend_from_slice(a.write_to_vec()?.as_slice()),
+            Value::Dict(d) => out.extend_from_slice(d.write_to_vec()?.as_slice()),
             Value::Null => return Ok(IsNull::Yes),
             Value::Time(t) => out.put_i128(t.ms as i128),
             Value::Date(d) => out.put_i64(d.days),
@@ -65,6 +65,8 @@ impl postgres::types::ToSql for Value {
         matches!(
             *ty,
             Type::TEXT
+                | Type::CHAR
+                | Type::BYTEA
                 | Type::BOOL
                 | Type::INT8
                 | Type::INT4

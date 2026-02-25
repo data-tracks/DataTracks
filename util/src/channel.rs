@@ -6,14 +6,14 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tokio::sync::RwLock;
 use tokio::time::Instant;
-use tracing::info;
+use tracing::{info, warn};
 
 const WARNING: usize = 10_000;
 
 static EVENT_SENDER: OnceLock<Sender<Event>> = OnceLock::new();
 
-pub fn get_statistic_sender() -> Sender<Event> {
-    EVENT_SENDER.get().unwrap().clone()
+pub fn get_statistic_sender() -> Option<Sender<Event>> {
+    EVENT_SENDER.get().cloned()
 }
 
 pub fn set_statistic_sender(sender: Sender<Event>) {
@@ -25,13 +25,15 @@ pub async fn log_channel<S: AsRef<str>, P: Send + 'static>(
     name: S,
     control_tx: Option<Sender<u64>>,
 ) {
-    #[cfg(test)]
-    {
-        return;
-    }
+
 
     let name = name.as_ref().to_string();
-    let statistics = get_statistic_sender();
+    let statistics = if let Some(statistics) = get_statistic_sender(){
+        statistics
+    }else {
+        warn!("No sender for channel logging");
+        return;
+    };
 
     tokio::spawn(async move {
         let last_log = RwLock::new(Instant::now());

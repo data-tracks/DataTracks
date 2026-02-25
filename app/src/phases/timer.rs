@@ -71,7 +71,7 @@ impl TimerManager {
                     let worker_token = token_clone.clone();
 
                     joins.spawn(async move {
-                        let statistics_sender = get_statistic_sender();
+                        let statistics_sender = get_statistic_sender().unwrap();
                         let name = format!("Timer {} {}", id, i);
 
                         let mut current_id = id_source.fetch_add(BATCH_SIZE, Ordering::Relaxed);

@@ -10,6 +10,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread;
 use std::time::Duration;
 use tokio::runtime::Builder;
+use tokio::select;
 use tokio::task::JoinSet;
 use tokio::time::Instant;
 use tracing::{debug, error, warn};
@@ -24,7 +25,7 @@ pub struct Persister {
     pub statistics_tx: Sender<Event>,
 }
 
-const BATCH_SIZE: i32 = 50_000; // between 50_000 and 100_000
+const BATCH_SIZE: i32 = 100_000; // between 50_000 and 100_000
 
 impl Persister {
     pub fn new(catalog: Catalog, statistics_tx: Sender<Event>) -> anyhow::Result<Self> {
@@ -136,7 +137,7 @@ impl Persister {
         let partition_id = AtomicU64::new(0);
 
         for engine in engines {
-            for i in 0..3 {
+            for i in 0..10 {
                 let partition_id = partition_id.fetch_add(1, Ordering::Relaxed).into();
                 let mut engine = engine.clone();
                 // actually make a new connection
@@ -158,15 +159,15 @@ impl Persister {
                     let name = format!("Persister {} {}", engine, i);
 
                     // Create a 200ms ticker for the flush interval
-                    let mut flush_interval = tokio::time::interval(Duration::from_millis(200));
+                    let mut flush_interval = tokio::time::interval(Duration::from_millis(50));
                     // don't let ticks pile up if processing is slow
-                    flush_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+                    flush_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
                     let mut heartbeat_interval = tokio::time::interval(Duration::from_millis(500));
                     heartbeat_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
                     loop {
-                        tokio::select! {
+                        select! {
                             // Case A: The timer hit 200ms
                             _ = flush_interval.tick() => {
                                 if !buckets.is_empty() {
@@ -232,13 +233,13 @@ async fn flush_buckets(
             .await
         {
             Ok(_) => {
-                let _ = engine.statistic_sender.send(Event::Insert {
+                let _ = engine.statistic_sender.send_async(Event::Insert {
                     id,
                     size,
                     source,
                     ids,
                     stage: Stage::Plain,
-                });
+                }).await;
                 definition.native.0.send_async(records).await.unwrap();
                 error_count = 0; // Reset errors on success
             }
