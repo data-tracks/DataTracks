@@ -35,6 +35,7 @@ pub struct TargetedMeta {
     pub id: u64,
     pub timestamp: i64,
     pub definition: DefinitionId,
+    pub topics: Vec<String>,
 }
 
 impl TargetedMeta {
@@ -43,6 +44,7 @@ impl TargetedMeta {
             id: meta.id,
             timestamp: meta.timestamp,
             definition,
+            topics: meta.topics,
         }
     }
 }

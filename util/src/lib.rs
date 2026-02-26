@@ -12,7 +12,7 @@ pub mod runtimes;
 mod segment;
 mod types;
 
-pub use segment::SegmentedLog;
+pub use segment::*;
 
 pub use meta::*;
 

@@ -4,7 +4,7 @@ use crate::phases::{timer, wal};
 use anyhow::anyhow;
 use engine::engine::Engine;
 use flume::{Receiver, unbounded, Sender};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::error::Error;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread;
@@ -13,12 +13,10 @@ use tokio::runtime::Builder;
 use tokio::select;
 use tokio::task::JoinSet;
 use tokio::time::Instant;
+use tokio_util::bytes::BufMut;
 use tracing::{debug, error, warn};
 use util::definition::{Definition, Stage};
-use util::{
-    Batch, DefinitionId, Event, InitialRecord, PartitionId, TargetedMeta, TargetedRecord,
-    TimedRecord, WorkerId,
-};
+use util::{Batch, DefinitionId, Event, InitialRecord, PartitionId, SegmentedIndex, SegmentedLog, TargetedMeta, TargetedRecord, TimedRecord, WorkerId};
 
 pub struct Persister {
     catalog: Catalog,
@@ -36,12 +34,18 @@ impl Persister {
         record: TimedRecord,
         engine: &mut [Engine],
         definitions: &mut [Definition],
+        log: &mut SegmentedLog,
+        delayed: &mut VecDeque<(u64, u64, SegmentedIndex)>,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
         let (engine, record) = Self::select_engines(record, engine, definitions).await?;
 
         debug!("store {} - {:?}", engine, record.value);
 
-        engine.tx.send(record)?;
+        //if !engine.tx.is_full() {
+        engine.tx.send_async(record).await?;
+        /*}else {
+            delayed.put(log.log(&vec![record]))
+        }*/
 
         Ok(())
     }
@@ -66,7 +70,10 @@ impl Persister {
             rt_storer.block_on(async {
                 let mut joins = JoinSet::new();
 
-                for _ in 0..storer_workers {
+                for id in 0..storer_workers {
+                    let mut log = SegmentedLog::new(&format!("persists/persist_{}", id), 200 * 2048 * 2048).await.unwrap();
+                    let mut delayed = VecDeque::new();
+
                     let mut engines = self.catalog.engines().await;
                     let mut definitions = self.catalog.definitions().await;
                     let wal_rx_clone = wal_rx.clone();
@@ -75,7 +82,7 @@ impl Persister {
                             match wal_rx_clone.recv_async().await {
                                 Err(_) => {}
                                 Ok(record) => {
-                                    Self::send_to_engines(record, &mut engines, &mut definitions)
+                                    Self::send_to_engines(record, &mut engines, &mut definitions, &mut log, &mut delayed)
                                         .await
                                         .unwrap()
                                 }
@@ -158,7 +165,7 @@ impl Persister {
 
                     let name = format!("Persister {} {}", engine, i);
 
-                    // Create a 200ms ticker for the flush interval
+                    // Create a 50ms ticker for the flush interval
                     let mut flush_interval = tokio::time::interval(Duration::from_millis(50));
                     // don't let ticks pile up if processing is slow
                     flush_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -180,6 +187,15 @@ impl Persister {
                             Ok(record) = engine.rx.recv_async() => {
                                 buckets.entry(record.meta.definition).or_default().push(record);
                                 count += 1;
+
+                                // let's check if there is more
+                                let batch =  engine.rx.try_iter().take(99_999).collect::<Batch<_>>();
+                                if !batch.is_empty() {
+                                    for record in batch {
+                                        buckets.entry(record.meta.definition).or_default().push(record);
+                                        count += 1;
+                                    }
+                                }
 
                                 // Immediate flush if we hit the batch size
                                 if count >= BATCH_SIZE {

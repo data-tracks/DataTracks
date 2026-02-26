@@ -144,8 +144,9 @@ async fn ws_channel_handler(
 async fn handle_socket(mut socket: WebSocket, topic: String, state: EventState) {
     let mut recv = state.output.subscribe();
     loop {
-        if let Ok(msg) = recv.recv().await {
-            let values = msg.into_iter().map(|msg| msg.value).collect::<Vec<_>>();
+        if let Ok(records) = recv.recv().await {
+            let records = records.into_iter().filter(|rec| rec.meta.topics.contains(&topic)).collect::<Vec<_>>();
+            let values = records.into_iter().map(|msg| msg.value).collect::<Vec<_>>();
             let msg = value::message::Message {
                 topics: vec![],
                 payload: values,

@@ -5,6 +5,7 @@ debug.txt
 *.db
 *.log
 /wals/
+/tmp/
 
 # Node
 /node_modules

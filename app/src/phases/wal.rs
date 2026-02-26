@@ -39,12 +39,13 @@ impl WalManager {
         let handle = thread::spawn(move || {
             let rt = Builder::new_current_thread().enable_all().build().unwrap();
             rt.block_on(async {
-                let mut log = SegmentedLog::new(&format!("wals/wal_{}", id), 200 * 2048 * 2048)
+                let mut log = SegmentedLog::new(&format!("/temp/wals/wal_{}", id), 200 * 2048 * 2048)
                     .await
                     .unwrap();
                 let mut batch = Vec::with_capacity(100_000);
 
                 let mut delayed = VecDeque::new();
+                let mut delayed_length = 0usize;
 
                 let mut duration = interval(Duration::from_millis(50));
                 duration.set_missed_tick_behavior(MissedTickBehavior::Skip);
@@ -67,19 +68,26 @@ impl WalManager {
                                 Ok(record) => {
                                     batch.push(record);
                                     batch.extend(rx.try_iter().take(99_999));
-                                    log.log(&batch).await;
+                                    let index = log.log(&batch).await;
 
                                     if tx.len() >= 200_000 {
-                                        delayed.extend(batch.drain(..));
+                                        delayed_length += index.1 as usize;
+                                        delayed.push_back(index);
                                     }else {
                                         if !delayed.is_empty() {
                                             // empty old
-                                            let count = cmp::min(delayed.len(), 100_000);
-                                            for r in delayed.drain(0..count) { tx.send(r).unwrap() }
+                                            //let count = cmp::min(delayed_length, 100_000);
+                                            for (_, size, index) in delayed.drain(..) {
+                                                delayed_length -= size as usize;
+                                                for value in log.unlog(index).await {
+                                                    tx.send(value).unwrap()
+                                                }
+                                            }
 
                                             if !delayed.is_empty(){
                                                 // still not empty
-                                                delayed.extend(batch.drain(..));
+                                                batch.clear();
+                                                delayed.push_back(index);
                                             }else {
                                                 for r in batch.drain(..) { tx.send(r).unwrap(); }
                                             }
@@ -97,13 +105,19 @@ impl WalManager {
                             if !delayed.is_empty() && len < 100_000 {
                                 // empty old
                                 info!("writing buffered messages len: {}", len);
-                                let count = cmp::min(delayed.len(), len.saturating_sub(100_000));
-                                for r in delayed.drain(0..count) { tx.send(r).unwrap() }
+                                //let count = cmp::min(delayed.len(), len.saturating_sub(10_000));
+
+                                for (_, size, index) in delayed.drain(..) {
+                                    delayed_length -= size as usize;
+                                    for value in log.unlog(index).await {
+                                        tx.send(value).unwrap()
+                                    }
+                                }
                             }
 
                         }
                         _ = delay_hb.tick() => {
-                            statistics.send_async(Event::Queue (QueueEvent{name: name.clone(), size: delayed.len()})).await.unwrap();
+                            statistics.send_async(Event::Queue (QueueEvent{name: name.clone(), size: delayed_length})).await.unwrap();
                             statistics.send_async(Event::Heartbeat(name.clone())).await.unwrap();
                         }
                     }
