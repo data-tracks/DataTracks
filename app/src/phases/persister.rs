@@ -4,7 +4,7 @@ use crate::phases::{timer, wal};
 use anyhow::anyhow;
 use engine::engine::Engine;
 use flume::{Receiver, unbounded, Sender};
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap};
 use std::error::Error;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread;
@@ -33,18 +33,12 @@ impl Persister {
         record: TimedRecord,
         engine: &mut [Engine],
         definitions: &mut [Definition],
-        log: &mut SegmentedLogWriter,
-        delayed: &mut VecDeque<(u64, u64, SegmentedIndex)>,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
         let (engine, record) = Self::select_engines(record, engine, definitions).await?;
 
         debug!("store {} - {:?}", engine, record.value);
 
-        //if !engine.tx.is_full() {
-            engine.tx.send_async(record).await?;
-        /*}else {
-            delayed.put(log.log(&vec![record]))
-        }*/
+        engine.buffer_in.0.send_async(record).await?;
 
         Ok(())
     }
@@ -69,10 +63,7 @@ impl Persister {
             rt_storer.block_on(async {
                 let mut joins = JoinSet::new();
 
-                for id in 0..storer_workers {
-                    let mut log = SegmentedLogWriter::new(&format!("persists/persist_{}", id), 200 * 2048 * 2048).await.unwrap();
-                    let mut delayed = VecDeque::new();
-
+                for _ in 0..storer_workers {
                     let mut engines = self.catalog.engines().await;
                     let mut definitions = self.catalog.definitions().await;
                     let wal_rx_clone = wal_rx.clone();
@@ -81,7 +72,7 @@ impl Persister {
                             match wal_rx_clone.recv_async().await {
                                 Err(_) => {}
                                 Ok(record) => {
-                                    Self::send_to_engines(record, &mut engines, &mut definitions, &mut log, &mut delayed)
+                                    Self::send_to_engines(record, &mut engines, &mut definitions)
                                         .await
                                         .unwrap()
                                 }
@@ -147,7 +138,7 @@ impl Persister {
                 let partition_id = partition_id.fetch_add(1, Ordering::Relaxed).into();
                 let mut engine = engine.clone();
                 // actually make a new connection
-                engine.engine_kind.start(joins, engine.statistic_sender.clone(), false).await.unwrap();
+                engine.start(joins, engine.statistic_sender.clone(), false).await.unwrap();
 
                 //let mut clone = engine.clone();
                 let definitions = self
@@ -183,12 +174,12 @@ impl Persister {
                             }
 
                             // Case B: A record arrived
-                            Ok(record) = engine.rx.recv_async() => {
+                            Ok(record) = engine.buffer_out.1.recv_async() => {
                                 buckets.entry(record.meta.definition).or_default().push(record);
                                 count += 1;
 
                                 // let's check if there is more
-                                let batch =  engine.rx.try_iter().take(99_999).collect::<Batch<_>>();
+                                let batch =  engine.buffer_out.1.try_iter().take(99_999).collect::<Batch<_>>();
                                 if !batch.is_empty() {
                                     for record in batch {
                                         buckets.entry(record.meta.definition).or_default().push(record);
@@ -302,7 +293,7 @@ async fn handle_error(
     // 2. Data Recovery: Try to put records back into the engine's receiver
     // so they can be retried later.
     for record in records {
-        if let Err(send_err) = engine.tx.send(record) {
+        if let Err(send_err) = engine.buffer_out.0.send(record) {
             // If the internal channel is closed, we truly cannot save this data
             error!("Data loss: could not re-queue record: {:?}", send_err);
             break;

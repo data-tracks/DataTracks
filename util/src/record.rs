@@ -6,6 +6,10 @@ use std::slice::Iter;
 use std::vec::IntoIter;
 use value::Value;
 
+pub trait Identifiable{
+    fn id(&self) -> u64;
+}
+
 #[derive(Clone, Debug, Writable, Readable)]
 pub struct Batch<T> {
     pub timestamp: i64,
@@ -121,6 +125,12 @@ impl TimedRecord {
     }
 }
 
+impl Identifiable for TimedRecord {
+    fn id(&self) -> u64 {
+        self.id()
+    }
+}
+
 impl From<(Value, TimedMeta)> for TimedRecord {
     fn from(value: (Value, TimedMeta)) -> Self {
         TimedRecord {
@@ -136,12 +146,24 @@ pub struct TargetedRecord {
     pub meta: TargetedMeta,
 }
 
+impl TargetedRecord {
+    pub fn id(&self) -> u64 {
+        self.meta.id
+    }
+}
+
 impl From<(Value, TargetedMeta)> for TargetedRecord {
     fn from(value: (Value, TargetedMeta)) -> Self {
         TargetedRecord {
             value: value.0,
             meta: value.1,
         }
+    }
+}
+
+impl Identifiable for TargetedRecord {
+    fn id(&self) -> u64 {
+        self.id()
     }
 }
 

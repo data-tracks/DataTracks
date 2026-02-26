@@ -1,13 +1,20 @@
-use crate::TimedRecord;
+use crate::{Identifiable};
 use memmap2::{Mmap, MmapMut, MmapOptions};
-use speedy::{Readable, Writable};
+use speedy::{Context, Endianness, LittleEndian, Readable, Writable};
 use std::error::Error;
+use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 use tokio::fs;
 use tokio::fs::OpenOptions;
 use tracing::debug;
 
-pub struct SegmentedLogWriter {
+pub struct SegmentedLogWriter<T>
+where
+    for<'a> T: Readable<'a, LittleEndian>,
+    T: Writable<LittleEndian>,
+    T: Identifiable
+{
+    _p: PhantomData<T>,
     base_path: PathBuf,
     segment_size: u64,
     current_segment_id: usize,
@@ -16,19 +23,24 @@ pub struct SegmentedLogWriter {
     batch: Vec<u8>,
 }
 
-
-pub struct SegmentedLogReader {
+pub struct SegmentedLogReader<T>
+where
+    for<'a> T: Readable<'a, LittleEndian>,
+    T: Writable<LittleEndian>,
+    T: Identifiable
+{
+    _p: PhantomData<T>,
     base_path: PathBuf,
 }
 
 const SEGMENT_SIZE: u64 = 10 * 1024 * 1024;
 
-impl SegmentedLogWriter {
+impl<T: for<'a> speedy::Readable<'a, LittleEndian> + speedy::Writable<LittleEndian> + Identifiable> SegmentedLogWriter<T> {
     pub async fn async_default() -> Result<Self, Box<dyn Error + Send + Sync>> {
         Self::new("wal_segments", SEGMENT_SIZE).await // 10 MB segments
     }
 
-    pub async fn as_reader(&self) -> Result<SegmentedLogReader, Box<dyn Error + Send + Sync>> {
+    pub async fn as_reader(&self) -> Result<SegmentedLogReader<T>, Box<dyn Error + Send + Sync>> {
         SegmentedLogReader::new(self.base_path.to_str().unwrap()).await
     }
 
@@ -47,6 +59,7 @@ impl SegmentedLogWriter {
         let mmap = Self::map_segment(&base, first_segment_id, segment_size).await;
 
         Ok(Self {
+            _p: Default::default(),
             base_path: base,
             segment_size,
             current_segment_id: first_segment_id,
@@ -66,7 +79,6 @@ impl SegmentedLogWriter {
             .open(path)
             .await
             .expect("Failed to open segment");
-
 
         file.set_len(size).await.expect("Failed to set file size");
 
@@ -90,7 +102,7 @@ impl SegmentedLogWriter {
     }
 
     /// this expects records to no be empty
-    pub async fn log(&mut self, records: &Vec<TimedRecord>) -> (u64, u64, SegmentedIndex) {
+    pub async fn log(&mut self, records: &Vec<T>) -> (u64, u64, SegmentedIndex) {
         self.batch.clear();
         let first_id = &records[0].id();
         let len = records.len();
@@ -139,15 +151,15 @@ impl SegmentedLogWriter {
     }
 }
 
-impl SegmentedLogReader {
-
-    pub async fn new(
-        base_path: &str,
-    ) -> Result<Self, Box<dyn Error + Send + Sync>> {
+impl<T:
+    for<'a> speedy::Readable<'a, LittleEndian> + speedy::Writable<LittleEndian> + Identifiable>
+SegmentedLogReader<T> {
+    pub async fn new(base_path: &str) -> Result<Self, Box<dyn Error + Send + Sync>> {
         let base = PathBuf::from(base_path);
         fs::create_dir_all(&base).await?;
 
         Ok(Self {
+            _p: Default::default(),
             base_path: base,
         })
     }
@@ -174,9 +186,9 @@ impl SegmentedLogReader {
         values
     }
 
-    pub async fn unlog(&self, batch: SegmentedIndex) -> Vec<TimedRecord> {
+    pub async fn unlog(&self, batch: SegmentedIndex) -> Vec<T> {
         let data = self.read(batch).await;
-        Vec::<TimedRecord>::read_from_buffer(&data).expect("Failed to deserialize record")
+        Vec::<T>::read_from_buffer(&data).expect("Failed to deserialize record")
     }
 }
 
@@ -192,6 +204,7 @@ pub struct SegmentedIndex {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::TimedRecord;
     use crate::{InitialMeta, TimedMeta};
     use std::vec;
     use value::Value;
@@ -201,7 +214,10 @@ mod tests {
         let mut log = SegmentedLogWriter::new(&format!("temp/wals/wal_{}", 0), SEGMENT_SIZE)
             .await
             .unwrap();
-        let values = vec![TimedRecord::from((Value::int(3), TimedMeta::new(0, InitialMeta::new(vec![]))))];
+        let values = vec![TimedRecord::from((
+            Value::int(3),
+            TimedMeta::new(0, InitialMeta::new(vec![])),
+        ))];
         let (_, _, index) = log.log(&values).await;
 
         let reader = log.as_reader().await.unwrap();
@@ -253,7 +269,6 @@ mod tests {
             TimedMeta::new(0, InitialMeta::new(vec![])),
         ))];
         let (_, _, index) = log.log(&values).await;
-
 
         let reader = log.as_reader().await.unwrap();
         let values_retrieved = reader.unlog(index).await;

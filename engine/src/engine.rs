@@ -3,26 +3,34 @@ use crate::mongo::MongoDB;
 use crate::neo::Neo4j;
 use crate::postgres::Postgres;
 use derive_more::From;
-use flume::{Receiver, Sender, bounded};
+use flume::{bounded, unbounded, Receiver, Sender};
+use mongodb::bson::uuid;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::ops::Mul;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
+use std::thread;
 use std::time::Duration;
+use tokio::runtime::Builder;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
 use util::definition::{Definition, Model, Stage};
-use util::{Batch, DefinitionId, EngineId, Event, PartitionId, TargetedRecord, log_channel};
+use util::{
+    log_channel, Batch, DefinitionId, EngineId, Event, PartitionId, SegmentedLogWriter,
+    TargetedRecord,
+};
+use uuid::Uuid;
 use value::Value;
 
 static ID_BUILDER: AtomicU64 = AtomicU64::new(0);
+const SEGMENT_SIZE: u64 = 10 * 1024 * 1024;
 
 #[derive(Clone, Debug)]
 pub struct Engine {
-    pub tx: Sender<TargetedRecord>,
-    pub rx: Receiver<TargetedRecord>,
+    pub buffer_in: (Sender<TargetedRecord>, Receiver<TargetedRecord>),
+    pub buffer_out: (Sender<TargetedRecord>, Receiver<TargetedRecord>),
     pub ids: Vec<u64>,
     pub statistic_sender: Sender<Event>,
     pub existing_partitions: Vec<(DefinitionId, PartitionId)>,
@@ -45,22 +53,99 @@ impl Display for Engine {
 
 impl Engine {
     pub async fn new(engine_kind: EngineKind, sender: Sender<Event>) -> Self {
-        let (tx, rx) = bounded(200_000);
+        let buffer_in = unbounded();
+        // we move blocking before the engine, away from the other engines
+        let buffer_out = bounded(200_00);
 
         let name = format!("Persister {}", engine_kind);
-        log_channel(tx.clone(), name, None).await;
+        log_channel(buffer_out.0.clone(), name, None).await;
 
         let id = EngineId(ID_BUILDER.fetch_add(1, Ordering::Relaxed));
         Engine {
             id,
-            tx,
-            rx,
+            buffer_in,
+            buffer_out,
             ids: vec![],
             statistic_sender: sender,
             existing_partitions: vec![],
             engine_kind,
             definitions: Default::default(),
         }
+    }
+
+    pub async fn start(&mut self, join: &mut JoinSet<()>, sender: Sender<Event>, is_new: bool) -> anyhow::Result<()> {
+        let buffer_in_rx = self.buffer_in.1.clone();
+        let buffer_out_tx = self.buffer_out.0.clone();
+
+        let buffer_out_tx_skip = self.buffer_out.0.clone();
+
+        let mut log = SegmentedLogWriter::new(
+            format!("temp/engine/{}_{}.log", self.id.0, Uuid::new()).as_str(),
+            SEGMENT_SIZE,
+        )
+        .await
+        .unwrap();
+        let reader = log.as_reader().await.unwrap();
+
+        let buffer_size = Arc::new(AtomicU64::new(0));
+        let buffer_size_recv = buffer_size.clone();
+
+        let (index_tx, index_rx) = unbounded();
+        // unlimited buffer
+        thread::spawn(move || {
+            let rt = Builder::new_current_thread().enable_all().build().unwrap();
+            rt.block_on(async {
+                loop {
+                    match buffer_in_rx.recv() {
+                        Ok(record) => {
+                            let mut values = vec![record];
+                            values.extend(buffer_in_rx.try_iter().take(99_999));
+                            if buffer_out_tx_skip.len() < 200_000
+                                && index_tx.is_empty()
+                                && buffer_size.load(Ordering::Relaxed) == 0
+                            {
+                                // we can send direct, nothing buffered, no buffer needed
+                                for record in values {
+                                    buffer_out_tx_skip.send(record).unwrap();
+                                }
+                            } else {
+                                let record = log.log(&values).await;
+                                let _ = index_tx.send(record.2);
+                            }
+                        }
+                        Err(_) => break,
+                    }
+                }
+            })
+        });
+
+        // holding feeder
+        thread::spawn(move || {
+            let rt = Builder::new_current_thread().enable_all().build().unwrap();
+            rt.block_on(async {
+                loop {
+                    match index_rx.recv() {
+                        Ok(index) => {
+                            // we have small window here where the no buffer approach could succeed, but at this point we do not care if elements are unordered
+                            let mut indexes = vec![index];
+                            buffer_size_recv.store(1, Ordering::Relaxed);
+                            indexes.extend(index_rx.try_iter().take(99_999));
+
+                            for index in indexes {
+                                for record in reader.unlog(index).await {
+                                    let _ = buffer_out_tx.send(record);
+                                }
+                            }
+
+                            buffer_size_recv.store(0, Ordering::Relaxed);
+                        }
+                        Err(_) => break,
+                    }
+                }
+            })
+        });
+
+        self.engine_kind.start(join, sender, is_new).await
     }
 
     pub async fn stop(self) -> anyhow::Result<()> {
@@ -83,7 +168,7 @@ impl Engine {
             EngineKind::Neo4j(n) => n.cost(value),
         };
 
-        let pressure = self.rx.len() + 1;
+        let pressure = self.buffer_out.1.len() + 1;
 
         let mut cost = cost.mul(pressure as f64);
 
@@ -193,6 +278,7 @@ impl EngineKind {
         if is_new {
             self.monitor(join, sender.clone()).await?;
         }
+
         Ok(())
     }
 
