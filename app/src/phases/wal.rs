@@ -1,12 +1,12 @@
+use flume::{bounded, unbounded, Receiver, Sender};
 use std::collections::VecDeque;
-use flume::{unbounded, Receiver, Sender};
-use std::{cmp, thread};
 use std::time::Duration;
+use std::{cmp, thread};
 use tokio::runtime::Builder;
 use tokio::time::{interval, MissedTickBehavior};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
-use util::{log_channel, Event, QueueEvent, Runtimes, SegmentedLog, TimedRecord};
+use util::{log_channel, Event, QueueEvent, Runtimes, SegmentedIndex, SegmentedLogWriter, TimedRecord};
 
 struct WalWorker {
     handle: thread::JoinHandle<()>,
@@ -30,21 +30,54 @@ impl WalManager {
         }
     }
 
-    pub fn add_worker(&mut self, rx: Receiver<TimedRecord>, tx: Sender<TimedRecord>, statistics: Sender<Event>) {
+    pub fn add_worker(
+        &mut self,
+        rx: Receiver<TimedRecord>,
+        tx: Sender<TimedRecord>,
+        statistics: Sender<Event>,
+    ) {
         info!("Added worker: {}", self.workers.len());
         let id = self.next_id;
         let token = CancellationToken::new();
         let worker_token = token.clone();
 
+        let (seg_id_tx, seg_id_rx) = unbounded::<(u64, u64, SegmentedIndex)>();
+        let (buff_tx, buff_rx) = bounded(100_000);
+        let buff_token = token.clone();
+
         let handle = thread::spawn(move || {
             let rt = Builder::new_current_thread().enable_all().build().unwrap();
             rt.block_on(async {
-                let mut log = SegmentedLog::new(&format!("/temp/wals/wal_{}", id), 200 * 2048 * 2048)
+                let mut log = SegmentedLogWriter::new(&format!("/temp/wals/wal_{}", id), 200 * 2048 * 2048)
                     .await
                     .unwrap();
+
+                let reader = log.as_reader().await.unwrap();
+
+                let feeder = thread::spawn(move || {
+                    let rt = Builder::new_current_thread().enable_all().build().unwrap();
+                    rt.block_on(async {
+                        loop {
+                            tokio::select! {
+                                _ = buff_token.cancelled() => {
+                                    info!("WAL Buffer {} shutting down gracefully", id);
+                                    return;
+                                }
+                                index = seg_id_rx.recv_async() => match index {
+                                        Ok(index) => {
+                                            let record = reader.unlog(index.2).await;
+                                            // as long as it is not emptied we wait here
+                                            let _ = buff_tx.send(record);
+                                        }
+                                        Err(_) => return, // Channel closed
+                                    }
+                            }
+                        }
+                    });
+                });
+
                 let mut batch = Vec::with_capacity(100_000);
 
-                let mut delayed = VecDeque::new();
                 let mut delayed_length = 0usize;
 
                 let mut duration = interval(Duration::from_millis(50));
@@ -71,23 +104,25 @@ impl WalManager {
                                     let index = log.log(&batch).await;
 
                                     if tx.len() >= 200_000 {
+                                        batch.clear();
                                         delayed_length += index.1 as usize;
-                                        delayed.push_back(index);
+                                        seg_id_tx.send_async(index).await.unwrap();
                                     }else {
-                                        if !delayed.is_empty() {
+                                        if !buff_rx.is_empty() {
                                             // empty old
-                                            //let count = cmp::min(delayed_length, 100_000);
-                                            for (_, size, index) in delayed.drain(..) {
-                                                delayed_length -= size as usize;
-                                                for value in log.unlog(index).await {
+                                            let count = 100_000_usize.saturating_sub(buff_rx.len());
+                                            for records in buff_rx.try_iter().take(count) {
+                                                delayed_length -= records.len();
+                                                for value in records {
                                                     tx.send(value).unwrap()
                                                 }
                                             }
 
-                                            if !delayed.is_empty(){
+                                            if !buff_rx.is_empty(){
                                                 // still not empty
                                                 batch.clear();
-                                                delayed.push_back(index);
+                                                delayed_length += index.1 as usize;
+                                                seg_id_tx.send_async(index).await.unwrap();
                                             }else {
                                                 for r in batch.drain(..) { tx.send(r).unwrap(); }
                                             }
@@ -102,14 +137,13 @@ impl WalManager {
                         }
                         _ = duration.tick() => {
                             let len = tx.len();
-                            if !delayed.is_empty() && len < 100_000 {
+                            if !buff_rx.is_empty() && len < 100_000 {
                                 // empty old
-                                info!("writing buffered messages len: {}", len);
-                                //let count = cmp::min(delayed.len(), len.saturating_sub(10_000));
 
-                                for (_, size, index) in delayed.drain(..) {
-                                    delayed_length -= size as usize;
-                                    for value in log.unlog(index).await {
+                                let count = 100_000usize.saturating_sub(buff_rx.len());
+                                for records in buff_rx.try_iter().take(count) {
+                                    delayed_length -= records.len();
+                                    for value in records {
                                         tx.send(value).unwrap()
                                     }
                                 }

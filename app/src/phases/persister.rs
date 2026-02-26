@@ -13,10 +13,9 @@ use tokio::runtime::Builder;
 use tokio::select;
 use tokio::task::JoinSet;
 use tokio::time::Instant;
-use tokio_util::bytes::BufMut;
 use tracing::{debug, error, warn};
 use util::definition::{Definition, Stage};
-use util::{Batch, DefinitionId, Event, InitialRecord, PartitionId, SegmentedIndex, SegmentedLog, TargetedMeta, TargetedRecord, TimedRecord, WorkerId};
+use util::{Batch, DefinitionId, Event, InitialRecord, PartitionId, SegmentedIndex, SegmentedLogWriter, TargetedMeta, TargetedRecord, TimedRecord, WorkerId};
 
 pub struct Persister {
     catalog: Catalog,
@@ -34,7 +33,7 @@ impl Persister {
         record: TimedRecord,
         engine: &mut [Engine],
         definitions: &mut [Definition],
-        log: &mut SegmentedLog,
+        log: &mut SegmentedLogWriter,
         delayed: &mut VecDeque<(u64, u64, SegmentedIndex)>,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
         let (engine, record) = Self::select_engines(record, engine, definitions).await?;
@@ -42,7 +41,7 @@ impl Persister {
         debug!("store {} - {:?}", engine, record.value);
 
         //if !engine.tx.is_full() {
-        engine.tx.send_async(record).await?;
+            engine.tx.send_async(record).await?;
         /*}else {
             delayed.put(log.log(&vec![record]))
         }*/
@@ -71,7 +70,7 @@ impl Persister {
                 let mut joins = JoinSet::new();
 
                 for id in 0..storer_workers {
-                    let mut log = SegmentedLog::new(&format!("persists/persist_{}", id), 200 * 2048 * 2048).await.unwrap();
+                    let mut log = SegmentedLogWriter::new(&format!("persists/persist_{}", id), 200 * 2048 * 2048).await.unwrap();
                     let mut delayed = VecDeque::new();
 
                     let mut engines = self.catalog.engines().await;

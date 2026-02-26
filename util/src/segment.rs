@@ -7,7 +7,7 @@ use tokio::fs;
 use tokio::fs::OpenOptions;
 use tracing::debug;
 
-pub struct SegmentedLog {
+pub struct SegmentedLogWriter {
     base_path: PathBuf,
     segment_size: u64,
     current_segment_id: usize,
@@ -16,11 +16,20 @@ pub struct SegmentedLog {
     batch: Vec<u8>,
 }
 
+
+pub struct SegmentedLogReader {
+    base_path: PathBuf,
+}
+
 const SEGMENT_SIZE: u64 = 10 * 1024 * 1024;
 
-impl SegmentedLog {
+impl SegmentedLogWriter {
     pub async fn async_default() -> Result<Self, Box<dyn Error + Send + Sync>> {
         Self::new("wal_segments", SEGMENT_SIZE).await // 10 MB segments
+    }
+
+    pub async fn as_reader(&self) -> Result<SegmentedLogReader, Box<dyn Error + Send + Sync>> {
+        SegmentedLogReader::new(self.base_path.to_str().unwrap()).await
     }
 
     pub async fn new(
@@ -69,18 +78,6 @@ impl SegmentedLog {
                 .expect("Failed to mmap")
         }
     }
-
-    async fn map_segment_read(base: &Path, id: usize) -> Mmap {
-        let path = base.join(format!("segment_{:06}.log", id));
-        let file = OpenOptions::new()
-            .read(true)
-            .open(path)
-            .await
-            .expect("Failed to open segment");
-
-        unsafe { MmapOptions::new().map(&file).unwrap() }
-    }
-
     async fn rotate(&mut self) {
         // Ensure data is synced before switching
         self.mmap.flush().unwrap();
@@ -101,11 +98,6 @@ impl SegmentedLog {
         records.write_to_stream(&mut self.batch).unwrap();
 
         (*first_id, len as u64, self.write_batch().await)
-    }
-
-    pub async fn unlog(&self, batch: SegmentedIndex ) -> Vec<TimedRecord> {
-        let data = self.read(batch).await;
-        Vec::<TimedRecord>::read_from_buffer(&data).expect("Failed to deserialize record")
     }
 
     #[cfg(test)]
@@ -129,25 +121,11 @@ impl SegmentedLog {
         let bytes = self.batch.len();
         self.cursor += bytes;
         (self.cursor, self.current_segment_id);
-        SegmentedIndex{
+        SegmentedIndex {
             segment_id: self.current_segment_id,
             start_pointer,
             bytes,
         }
-    }
-
-    pub async fn read(&self, segment: SegmentedIndex) -> Vec<u8> {
-        let mut values: Vec<u8> = vec![];
-
-        let end_pointer = segment.start_pointer + segment.bytes;
-        if self.current_segment_id == segment.segment_id {
-            values.append(self.mmap[segment.start_pointer..end_pointer].to_vec().as_mut());
-        }else {
-            let mmap = Self::map_segment_read(&self.base_path, segment.segment_id).await;
-            values.append(mmap[segment.start_pointer..end_pointer].to_vec().as_mut());
-        }
-
-        values
     }
 
     pub async fn write(&mut self, data: &[u8]) {
@@ -161,31 +139,73 @@ impl SegmentedLog {
     }
 }
 
-pub struct SegmentedIndex{
+impl SegmentedLogReader {
+
+    pub async fn new(
+        base_path: &str,
+    ) -> Result<Self, Box<dyn Error + Send + Sync>> {
+        let base = PathBuf::from(base_path);
+        fs::create_dir_all(&base).await?;
+
+        Ok(Self {
+            base_path: base,
+        })
+    }
+
+    async fn map_segment_read(base: &Path, id: usize) -> Mmap {
+        let path = base.join(format!("segment_{:06}.log", id));
+        let file = OpenOptions::new()
+            .read(true)
+            .open(path)
+            .await
+            .expect("Failed to open segment");
+
+        unsafe { MmapOptions::new().map(&file).unwrap() }
+    }
+
+    pub async fn read(&self, segment: SegmentedIndex) -> Vec<u8> {
+        let mut values: Vec<u8> = vec![];
+
+        let end_pointer = segment.start_pointer + segment.bytes;
+
+        let mmap = Self::map_segment_read(&self.base_path, segment.segment_id).await;
+        values.append(mmap[segment.start_pointer..end_pointer].to_vec().as_mut());
+
+        values
+    }
+
+    pub async fn unlog(&self, batch: SegmentedIndex) -> Vec<TimedRecord> {
+        let data = self.read(batch).await;
+        Vec::<TimedRecord>::read_from_buffer(&data).expect("Failed to deserialize record")
+    }
+}
+
+pub struct SegmentedIndex {
     /// which file
     segment_id: usize,
     /// where is the first value
     start_pointer: usize,
     /// how many bytes?
-    bytes: usize
+    bytes: usize,
 }
-
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::{InitialMeta, TimedMeta};
     use std::vec;
     use value::Value;
-    use crate::{InitialMeta, TimedMeta};
-    use super::*;
 
     #[tokio::test]
     async fn test_one() {
-        let mut log = SegmentedLog::new(&format!("wals/wal_{}", 0), SEGMENT_SIZE)
+        let mut log = SegmentedLogWriter::new(&format!("temp/wals/wal_{}", 0), SEGMENT_SIZE)
             .await
             .unwrap();
         let values = vec![TimedRecord::from((Value::int(3), TimedMeta::new(0, InitialMeta::new(vec![]))))];
         let (_, _, index) = log.log(&values).await;
-        let values_retrieved = log.unlog(index).await;
+
+        let reader = log.as_reader().await.unwrap();
+        let values_retrieved = reader.unlog(index).await;
 
         log.reset().await.expect("Failed to cleanup test");
 
@@ -194,23 +214,52 @@ mod tests {
 
     #[tokio::test]
     async fn test_multiple() {
-        let mut log = SegmentedLog::new(&format!("wals/wal_{}", 1), SEGMENT_SIZE)
+        let mut log = SegmentedLogWriter::new(&format!("temp/wals/wal_{}", 1), SEGMENT_SIZE)
             .await
             .unwrap();
-        let values0 = vec![TimedRecord::from((Value::int(0), TimedMeta::new(0, InitialMeta::new(vec![]))))];
+        let values0 = vec![TimedRecord::from((
+            Value::int(0),
+            TimedMeta::new(0, InitialMeta::new(vec![])),
+        ))];
         let _ = log.log(&values0).await;
 
-        let values1 = vec![TimedRecord::from((Value::int(1), TimedMeta::new(1, InitialMeta::new(vec![]))))];
+        let values1 = vec![TimedRecord::from((
+            Value::int(1),
+            TimedMeta::new(1, InitialMeta::new(vec![])),
+        ))];
         let (_, _, index) = log.log(&values1).await;
 
-        let values2 = vec![TimedRecord::from((Value::int(2), TimedMeta::new(2, InitialMeta::new(vec![]))))];
+        let values2 = vec![TimedRecord::from((
+            Value::int(2),
+            TimedMeta::new(2, InitialMeta::new(vec![])),
+        ))];
         let _ = log.log(&values2).await;
 
-        let values_retrieved = log.unlog(index).await;
+        let reader = log.as_reader().await.unwrap();
+        let values_retrieved = reader.unlog(index).await;
 
         log.reset().await.expect("Failed to cleanup test");
 
         assert_eq!(values1, values_retrieved);
     }
 
+    #[tokio::test]
+    async fn test_parallel() {
+        let mut log = SegmentedLogWriter::new(&format!("temp/wals/wal_{}", 3), SEGMENT_SIZE)
+            .await
+            .unwrap();
+        let values = vec![TimedRecord::from((
+            Value::int(3),
+            TimedMeta::new(0, InitialMeta::new(vec![])),
+        ))];
+        let (_, _, index) = log.log(&values).await;
+
+
+        let reader = log.as_reader().await.unwrap();
+        let values_retrieved = reader.unlog(index).await;
+
+        log.reset().await.expect("Failed to cleanup test");
+
+        assert_eq!(values, values_retrieved);
+    }
 }
