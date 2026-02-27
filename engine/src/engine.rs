@@ -53,14 +53,18 @@ impl Display for Engine {
 
 impl Engine {
     pub async fn new(engine_kind: EngineKind, sender: Sender<Event>) -> Self {
-        let buffer_in = unbounded();
+        let buffer_in = bounded(1_000_000);
         // we move blocking before the engine, away from the other engines
-        let buffer_out = bounded(200_00);
-
-        let name = format!("Persister {}", engine_kind);
-        log_channel(buffer_out.0.clone(), name, None).await;
+        let buffer_out = bounded(100_000);
 
         let id = EngineId(ID_BUILDER.fetch_add(1, Ordering::Relaxed));
+
+        let name = format!("Engine-{}-{}", engine_kind, id.0);
+        log_channel(buffer_out.0.clone(), name, None).await;
+
+        let name = format!("Engine-{}-{}-buffer", engine_kind, id.0);
+        log_channel(buffer_in.0.clone(), name, None).await;
+
         Engine {
             id,
             buffer_in,

@@ -1,7 +1,6 @@
 use flume::{bounded, unbounded, Receiver, Sender};
-use std::collections::VecDeque;
 use std::time::Duration;
-use std::{cmp, thread};
+use std::{thread};
 use tokio::runtime::Builder;
 use tokio::time::{interval, MissedTickBehavior};
 use tokio_util::sync::CancellationToken;
@@ -54,7 +53,7 @@ impl WalManager {
 
                 let reader = log.as_reader().await.unwrap();
 
-                let feeder = thread::spawn(move || {
+                thread::spawn(move || {
                     let rt = Builder::new_current_thread().enable_all().build().unwrap();
                     rt.block_on(async {
                         loop {

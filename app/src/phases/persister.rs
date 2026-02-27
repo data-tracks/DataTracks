@@ -15,7 +15,7 @@ use tokio::task::JoinSet;
 use tokio::time::Instant;
 use tracing::{debug, error, warn};
 use util::definition::{Definition, Stage};
-use util::{Batch, DefinitionId, Event, InitialRecord, PartitionId, SegmentedIndex, SegmentedLogWriter, TargetedMeta, TargetedRecord, TimedRecord, WorkerId};
+use util::{Batch, DefinitionId, Event, InitialRecord, PartitionId, TargetedMeta, TargetedRecord, TimedRecord, WorkerId};
 
 pub struct Persister {
     catalog: Catalog,

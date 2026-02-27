@@ -1,6 +1,6 @@
 use crate::{Identifiable};
 use memmap2::{Mmap, MmapMut, MmapOptions};
-use speedy::{Context, Endianness, LittleEndian, Readable, Writable};
+use speedy::{LittleEndian, Readable, Writable};
 use std::error::Error;
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
