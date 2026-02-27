@@ -55,7 +55,7 @@ impl Engine {
     pub async fn new(engine_kind: EngineKind, sender: Sender<Event>) -> Self {
         let buffer_in = bounded(1_000_000);
         // we move blocking before the engine, away from the other engines
-        let buffer_out = bounded(100_000);
+        let buffer_out = bounded(200_000);
 
         let id = EngineId(ID_BUILDER.fetch_add(1, Ordering::Relaxed));
 

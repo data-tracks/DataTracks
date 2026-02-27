@@ -44,7 +44,7 @@ impl Persister {
     }
 
     pub fn start(self, incoming: Receiver<InitialRecord>, rt: Runtimes, control_rx: Receiver<u64>) {
-        let storer_workers = 4;
+        let storer_workers = 8; // todo make dynamic
 
         let (sender, receiver) = unbounded();
 
