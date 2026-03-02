@@ -15,10 +15,7 @@ use tokio::task::JoinSet;
 use tokio::time::Instant;
 use tracing::{debug, error, warn};
 use util::definition::{Definition, Stage};
-use util::{
-    Batch, DefinitionId, Event, InitialRecord, PartitionId, TargetedMeta, TargetedRecord,
-    TimedRecord, WorkerId,
-};
+use util::{Batch, DefinitionId, Event, InitialRecord, PartitionId, TargetedMeta, TargetedRecord, TimedRecord, WorkerId};
 
 pub struct Persister {
     catalog: Catalog,
@@ -82,8 +79,8 @@ impl Persister {
                                 Err(_) => {}
                                 Ok(record) => {
                                     let mut records = vec![];
-                                    records.push(record);
-                                    records.extend(wal_rx_clone.try_iter().take(99_999));
+                                    records.extend(record);
+                                    records.extend(wal_rx_clone.try_iter().take(100).flatten());
 
                                     Self::send_to_engines(records, &mut engines, &mut definitions)
                                         .await

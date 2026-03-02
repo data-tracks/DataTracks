@@ -1,4 +1,10 @@
 <div class="flex flex-col gap-4">
+    <div class="card bg-base-100 border border-base-300 shadow-sm overflow-hidden">
+        <div class="bg-base-200/50 px-3 py-2 flex items-center gap-3 border-b border-base-300">
+            Delay: {{delay() ?? "initializing"}}
+        </div>
+    </div>
+
     @for (entry of plainStatistics(); track entry[0]) {
         @let img = getImage(entry[0]);
         @let plainItems = plainStatistics().get(entry[0]);

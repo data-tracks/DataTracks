@@ -15,6 +15,8 @@ export class StatisticsComponent implements OnInit {
     inputs = input.required<Observable<any>>();
     private queue$ = new Subject<any>();
 
+    protected delay: WritableSignal<string | undefined> = signal(undefined);
+
     protected plainStatistics: WritableSignal<Map<string, [number, Stage, string, number][]>> = signal(new Map());
     protected mappedStatistics: WritableSignal<Map<string, [number, Stage, string, number][]>> = signal(new Map());
 
@@ -49,6 +51,8 @@ export class StatisticsComponent implements OnInit {
     }
 
     private updateStats(map: StatisticEvent) {
+        this.delay.set(this.formatDuration(map.delay));
+
         this.plainStatistics.update(m => {
             const d = new Map(m);
             for (const key in map.engines) {
@@ -68,6 +72,23 @@ export class StatisticsComponent implements OnInit {
             }
             return d;
         });
+    }
+
+    private formatDuration(ms: number): string {
+        if (ms < 1000) return `${ms}ms`;
+
+        const seconds = Math.floor((ms / 1000) % 60);
+        const minutes = Math.floor((ms / 60000) % 60);
+        const hours = Math.floor(ms / 3600000);
+        ms = Math.floor(ms % 1000);
+
+        const parts = [];
+        if (hours > 0) parts.push(`${hours}h`);
+        if (minutes > 0) parts.push(`${minutes}m`);
+        if (seconds > 0) parts.push(`${seconds}s`);
+        if (ms > 0 || parts.length === 0) parts.push(`${ms}ms`);
+
+        return parts.join(' ');
     }
 
     protected getImage(engineName: string): string | null {
@@ -92,6 +113,7 @@ export type EngineId = number;
 
 export interface StatisticEvent {
     engines: Record<string, [[DefinitionId, Stage, string, number][], string]>;
+    delay: number
 }
 
 export interface ThroughputEvent {

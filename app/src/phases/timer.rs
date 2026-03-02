@@ -37,7 +37,7 @@ impl TimerManager {
         self.workers.len()
     }
 
-    pub fn add_worker(&mut self, incoming: Receiver<InitialRecord>, sender: Sender<TimedRecord>) {
+    pub fn add_worker(&mut self, incoming: Receiver<InitialRecord>, sender: Sender<Vec<TimedRecord>>) {
         info!("Added worker: {}", self.workers.len());
 
         const BATCH_SIZE: u64 = 1_000_000;
@@ -108,7 +108,7 @@ impl TimerManager {
 
                                             let context = TimedMeta::new(id, meta);
 
-                                            if let Err(err) = sender.send((value, context).into()) {
+                                            if let Err(err) = sender.send(vec![(value, context).into()]) {
                                                 error!("Worker {} failed to send downstream: {}", id, err);
                                                 // If downstream is closed, we should probably stop
                                                 return;
@@ -155,7 +155,7 @@ impl TimerManager {
 pub fn handle_initial_time_annotation(
     incoming: Receiver<InitialRecord>,
     rt: &Runtimes,
-    sender: Sender<TimedRecord>,
+    sender: Sender<Vec<TimedRecord>>,
     control_rx: Receiver<u64>,
 ) -> Receiver<u64> {
     let (control_tx_timer, control_rx_timer) = unbounded();

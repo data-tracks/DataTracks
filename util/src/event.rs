@@ -1,3 +1,5 @@
+use serde_with::DurationMilliSeconds;
+use serde_with::serde_as;
 use crate::definition::{Definition, Stage};
 use crate::{DefinitionId, EngineId};
 use serde::Serialize;
@@ -40,9 +42,12 @@ pub struct ThroughputEvent {
     pub tps: HashMap<String, ThroughputMeta>,
 }
 
+#[serde_as]
 #[derive(Serialize, Clone, Debug, Default)]
 pub struct StatisticEvent {
     pub engines: HashMap<EngineId, DefinitionMeta>,
+    #[serde_as(as = "DurationMilliSeconds<u64>")]
+    pub delay: Duration,
 }
 
 #[derive(Serialize, Clone, Debug, Default)]

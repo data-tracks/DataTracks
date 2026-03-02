@@ -85,7 +85,7 @@ impl Postgres {
                 //let rows_affected = self.load_insert(client, entity, values).await?;
 
                 //info!("duration {} {}", values.len(), now.elapsed().as_millis());
-                debug!("Inserted {} row(s) into 'users'.", rows_affected);
+                info!("Inserted {} row(s) into postgres engine.", rows_affected);
             }
         }
 

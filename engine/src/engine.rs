@@ -16,6 +16,7 @@ use std::time::Duration;
 use tokio::runtime::Builder;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
+use tracing::warn;
 use util::definition::{Definition, Model, Stage};
 use util::{
     log_channel, Batch, DefinitionId, EngineId, Event, PartitionId, SegmentedLogWriter,
@@ -130,9 +131,14 @@ impl Engine {
                 loop {
                     match index_rx.recv() {
                         Ok(index) => {
-                            // we have small window here where the no buffer approach could succeed, but at this point we do not care if elements are unordered
+                            // we have very small window here where the no buffer approach could succeed, but at this point we do not care if elements are unordered
                             let mut indexes = vec![index];
                             buffer_size_recv.store(1, Ordering::Relaxed);
+
+                            if index_rx.len() > 1_000_000 {
+                                warn!("indexes too high {}", index_rx.len());
+                            }
+
                             indexes.extend(index_rx.try_iter().take(99_999));
 
                             for index in indexes {

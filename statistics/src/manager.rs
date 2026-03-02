@@ -9,6 +9,7 @@ use tokio::runtime::{Builder, Handle};
 use tokio::select;
 use tokio::sync::broadcast;
 use tokio::time::{interval, sleep, Instant};
+use tracing::error;
 use tracing::log::debug;
 use util::definition::{Definition, Stage};
 use util::Event::Runtime;
@@ -18,6 +19,8 @@ pub struct Statistics {
     engines: HashMap<EngineId, EngineStatistic>,
     engine_names: HashMap<EngineId, String>,
     definitions: HashMap<DefinitionId, Definition>,
+    ids: HashMap<u64, Instant>,
+    delay: Duration,
 }
 
 impl Default for Statistics {
@@ -32,17 +35,36 @@ impl Statistics {
             engines: Default::default(),
             engine_names: Default::default(),
             definitions: Default::default(),
+            ids: Default::default(),
+            delay: Default::default(),
         }
     }
 
     async fn handle_event(&mut self, event: Event) {
         match event {
-            Event::Insert{id, size, source, ids: _ids, stage} => {
+            Event::Insert{id, size, source,ids, stage} => {
                 self.engines.entry(source).or_default().handle_insert(
                     size,
                     id,
-                    stage,
+                    stage.clone(),
                 );
+                let now = Instant::now();
+                if matches!(stage, Stage::Plain) {
+                    for id in ids {
+                        self.ids.insert(id, now);
+                    }
+                }else {
+                    self.delay = ids.clone().into_iter().map(|id| {
+                        if let Some(old) = self.ids.get_mut(&id) {
+                            let duration = now.duration_since(old.clone());
+                            self.ids.remove(&id);
+                            duration
+                        }else {
+                            error!("mapped without plain");
+                            Duration::from_secs(10000)
+                        }
+                    }).sum::<Duration>() / ids.len() as u32;
+                }
             }
             Event::Definition(definition_id, definition) => {
                 self.definitions.insert(definition_id, *definition);
@@ -74,6 +96,7 @@ impl Statistics {
                     )
                 })
                 .collect(),
+            delay: self.delay,
         }
     }
 }

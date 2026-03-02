@@ -5,9 +5,7 @@ use tokio::runtime::Builder;
 use tokio::time::{MissedTickBehavior, interval};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
-use util::{
-    Event, QueueEvent, Runtimes, SegmentedIndex, SegmentedLogWriter, TimedRecord, log_channel,
-};
+use util::{Event, QueueEvent, Runtimes, SegmentedIndex, SegmentedLogWriter, TimedRecord, log_channel};
 
 struct WalWorker {
     handle: thread::JoinHandle<()>,
@@ -33,8 +31,8 @@ impl WalManager {
 
     pub fn add_worker(
         &mut self,
-        rx: Receiver<TimedRecord>,
-        tx: Sender<TimedRecord>,
+        rx: Receiver<Vec<TimedRecord>>,
+        tx: Sender<Vec<TimedRecord>>,
         statistics: Sender<Event>,
     ) {
         info!("Added worker: {}", self.workers.len());
@@ -106,8 +104,8 @@ impl WalManager {
                         res = rx.recv_async() => {
                             match res {
                                 Ok(record) => {
-                                    batch.push(record);
-                                    batch.extend(rx.try_iter().take(99_999));
+                                    batch.extend(record);
+                                    batch.extend(rx.try_iter().take(100).flatten());
                                     let index = log.log(&batch).await;
 
                                     if tx.len() >= 200_000 {
@@ -120,9 +118,7 @@ impl WalManager {
                                             let count = 100_000_usize.saturating_sub(buff_rx.len());
                                             for records in buff_rx.try_iter().take(count) {
                                                 delayed_length -= records.len();
-                                                for value in records {
-                                                    tx.send(value).unwrap()
-                                                }
+                                                tx.send(records).unwrap()
                                             }
 
                                             if !buff_rx.is_empty(){
@@ -131,10 +127,10 @@ impl WalManager {
                                                 delayed_length += index.1 as usize;
                                                 seg_id_tx.send_async(index).await.unwrap();
                                             }else {
-                                                for r in batch.drain(..) { tx.send(r).unwrap(); }
+                                                tx.send(batch.drain(..).collect()).unwrap();
                                             }
                                         }else {
-                                            for r in batch.drain(..) { tx.send(r).unwrap(); }
+                                            tx.send(batch.drain(..).collect()).unwrap();
                                         }
 
                                     }
@@ -150,9 +146,7 @@ impl WalManager {
                                 let count = 100_000usize.saturating_sub(buff_rx.len());
                                 for records in buff_rx.try_iter().take(count) {
                                     delayed_length -= records.len();
-                                    for value in records {
-                                        tx.send(value).unwrap()
-                                    }
+                                    tx.send(records).unwrap()
                                 }
                             }
 
@@ -188,10 +182,10 @@ impl WalManager {
 
 pub fn handle_wal_to_engines(
     rt: &Runtimes,
-    receiver: Receiver<TimedRecord>,
+    receiver: Receiver<Vec<TimedRecord>>,
     incoming_control_rx: Receiver<u64>,
     statistics: Sender<Event>,
-) -> (Receiver<TimedRecord>, Receiver<u64>) {
+) -> (Receiver<Vec<TimedRecord>>, Receiver<u64>) {
     let (wal_tx, wal_rx) = unbounded();
     let wal_tx_clone = wal_tx.clone();
 
