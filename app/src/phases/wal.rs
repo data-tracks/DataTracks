@@ -1,11 +1,13 @@
-use flume::{bounded, unbounded, Receiver, Sender};
+use flume::{Receiver, Sender, bounded, unbounded};
+use std::thread;
 use std::time::Duration;
-use std::{thread};
 use tokio::runtime::Builder;
-use tokio::time::{interval, MissedTickBehavior};
+use tokio::time::{MissedTickBehavior, interval};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
-use util::{log_channel, Event, QueueEvent, Runtimes, SegmentedIndex, SegmentedLogWriter, TimedRecord};
+use util::{
+    Event, QueueEvent, Runtimes, SegmentedIndex, SegmentedLogWriter, TimedRecord, log_channel,
+};
 
 struct WalWorker {
     handle: thread::JoinHandle<()>,
@@ -47,7 +49,7 @@ impl WalManager {
         let handle = thread::spawn(move || {
             let rt = Builder::new_current_thread().enable_all().build().unwrap();
             rt.block_on(async {
-                let mut log = SegmentedLogWriter::new(&format!("/temp/wals/wal_{}", id), 200 * 2048 * 2048)
+                let mut log = SegmentedLogWriter::new(&format!("temp/wals/wal_{}", id), 200 * 2048 * 2048)
                     .await
                     .unwrap();
 

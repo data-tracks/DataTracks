@@ -3,8 +3,8 @@ use crate::management::catalog::Catalog;
 use crate::phases::{timer, wal};
 use anyhow::anyhow;
 use engine::engine::Engine;
-use flume::{Receiver, unbounded, Sender};
-use std::collections::{HashMap};
+use flume::{Receiver, Sender, unbounded};
+use std::collections::HashMap;
 use std::error::Error;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread;
@@ -15,7 +15,10 @@ use tokio::task::JoinSet;
 use tokio::time::Instant;
 use tracing::{debug, error, warn};
 use util::definition::{Definition, Stage};
-use util::{Batch, DefinitionId, Event, InitialRecord, PartitionId, TargetedMeta, TargetedRecord, TimedRecord, WorkerId};
+use util::{
+    Batch, DefinitionId, Event, InitialRecord, PartitionId, TargetedMeta, TargetedRecord,
+    TimedRecord, WorkerId,
+};
 
 pub struct Persister {
     catalog: Catalog,
@@ -26,19 +29,24 @@ const BATCH_SIZE: i32 = 100_000; // between 50_000 and 100_000
 
 impl Persister {
     pub fn new(catalog: Catalog, statistics_tx: Sender<Event>) -> anyhow::Result<Self> {
-        Ok(Persister { catalog, statistics_tx })
+        Ok(Persister {
+            catalog,
+            statistics_tx,
+        })
     }
 
     pub async fn send_to_engines(
-        record: TimedRecord,
+        records: Vec<TimedRecord>,
         engine: &mut [Engine],
         definitions: &mut [Definition],
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
-        let (engine, record) = Self::select_engines(record, engine, definitions).await?;
+        for record in records {
+            let (engine, record) = Self::select_engines(record, engine, definitions).await?;
 
-        debug!("store {} - {:?}", engine, record.value);
+            debug!("store {} - {:?}", engine, record.value);
 
-        engine.buffer_in.0.send_async(record).await?;
+            engine.buffer_in.0.send_async(record).await?;
+        }
 
         Ok(())
     }
@@ -50,7 +58,8 @@ impl Persister {
 
         let control_rx = timer::handle_initial_time_annotation(incoming, &rt, sender, control_rx);
 
-        let (wal_rx, _) = wal::handle_wal_to_engines(&rt, receiver, control_rx, self.statistics_tx.clone());
+        let (wal_rx, _) =
+            wal::handle_wal_to_engines(&rt, receiver, control_rx, self.statistics_tx.clone());
 
         let storer = thread::spawn(move || {
             let rt_storer = Builder::new_multi_thread()
@@ -72,7 +81,11 @@ impl Persister {
                             match wal_rx_clone.recv_async().await {
                                 Err(_) => {}
                                 Ok(record) => {
-                                    Self::send_to_engines(record, &mut engines, &mut definitions)
+                                    let mut records = vec![];
+                                    records.push(record);
+                                    records.extend(wal_rx_clone.try_iter().take(99_999));
+
+                                    Self::send_to_engines(records, &mut engines, &mut definitions)
                                         .await
                                         .unwrap()
                                 }
@@ -125,7 +138,7 @@ impl Persister {
         let len = engines.len();
 
         let rt_persister = Builder::new_multi_thread()
-            .worker_threads(3*len)
+            .worker_threads(3 * len)
             .thread_name("persister")
             .enable_all()
             .build()
@@ -138,7 +151,10 @@ impl Persister {
                 let partition_id = partition_id.fetch_add(1, Ordering::Relaxed).into();
                 let mut engine = engine.clone();
                 // actually make a new connection
-                engine.start(joins, engine.statistic_sender.clone(), false).await.unwrap();
+                engine
+                    .start(joins, engine.statistic_sender.clone(), false)
+                    .await
+                    .unwrap();
 
                 //let mut clone = engine.clone();
                 let definitions = self
@@ -239,13 +255,16 @@ async fn flush_buckets(
             .await
         {
             Ok(_) => {
-                let _ = engine.statistic_sender.send_async(Event::Insert {
-                    id,
-                    size,
-                    source,
-                    ids,
-                    stage: Stage::Plain,
-                }).await;
+                let _ = engine
+                    .statistic_sender
+                    .send_async(Event::Insert {
+                        id,
+                        size,
+                        source,
+                        ids,
+                        stage: Stage::Plain,
+                    })
+                    .await;
                 definition.native.0.send_async(records).await.unwrap();
                 error_count = 0; // Reset errors on success
             }
