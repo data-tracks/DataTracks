@@ -1,4 +1,5 @@
-import {Component, effect, input, signal, WritableSignal} from '@angular/core';
+import {Component, effect, inject, input, signal, WritableSignal} from '@angular/core';
+import {EventsService} from "../events.service";
 
 @Component({
     selector: 'app-events',
@@ -8,6 +9,8 @@ import {Component, effect, input, signal, WritableSignal} from '@angular/core';
 })
 class EventsComponent {
 
+    service = inject(EventsService);
+
     inputs = input.required<Event>();
     protected msgs: WritableSignal<any[]> = signal([]);
     protected readonly JSON = JSON;
@@ -16,8 +19,10 @@ class EventsComponent {
     protected activeFilters = signal<string[]>([]);
 
     constructor() {
+        this.service.initEventsConnection();
+
         effect(() => {
-            let data = this.inputs();
+            let data = this.service.events();
 
             if (!data) {
                 return;

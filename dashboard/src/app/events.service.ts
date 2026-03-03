@@ -13,7 +13,7 @@ export class EventsService {
   public queues = this._queues.asReadonly();
 
   public connectedThreads = signal<boolean>(false);
-  public connected = computed(() => this.connectedQueues() && this.connectedEvents() && this.connectedStatistics() && this.connectedThreads())
+  //public connected = computed(() => this.connectedQueues() && this.connectedEvents() && this.connectedStatistics() && this.connectedThreads())
   private _threads = signal<any>(null);
   public threads = this._threads.asReadonly();
 
@@ -23,13 +23,13 @@ export class EventsService {
   public $statistics = new Subject<any>()
 
   constructor(private zone: NgZone) {
-    this.initEventsConnection();
-    this.initQueueConnection();
-    this.initStatisticsConnection();
-    this.initThreadsConnection()
+    //this.initEventsConnection();
+    //this.initQueueConnection();
+    //this.initStatisticsConnection();
+    //this.initThreadsConnection()
   }
 
-  private initEventsConnection() {
+  public initEventsConnection() {
     const socket = new WebSocket('ws://localhost:3131/events');
 
     socket.onmessage = (event) => {
@@ -48,14 +48,17 @@ export class EventsService {
     };
   }
 
-  private initQueueConnection() {
+  public initQueueConnection() {
     const socket = new WebSocket('ws://localhost:3131/queues');
 
     socket.onmessage = (queue) => {
       this.zone.run(() => {
         this.connectedQueues.set(true);
         const data = JSON.parse(queue.data);
-
+        if (!data) {
+          return
+        }
+        //console.log(data)
         this._queues.set(data);
       });
     };
@@ -67,7 +70,7 @@ export class EventsService {
     };
   }
 
-  private initStatisticsConnection() {
+  public initStatisticsConnection() {
     const socket = new WebSocket('ws://localhost:3131/statistics');
 
     socket.onmessage = (queue) => {
@@ -86,7 +89,7 @@ export class EventsService {
     };
   }
 
-  private initThreadsConnection() {
+  public initThreadsConnection() {
     const socket = new WebSocket('ws://localhost:3131/threads');
 
     socket.onmessage = (queue) => {

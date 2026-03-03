@@ -1,8 +1,10 @@
 use crate::management::catalog::Catalog;
 use engine::engine::Engine;
-use std::time::Duration;
+use std::time::{Duration};
 use tokio::runtime::Builder;
 use tokio::sync::broadcast::Sender;
+use tokio::task::JoinSet;
+use tokio::time::Instant;
 use tracing::error;
 use util::definition::Stage;
 use util::{Batch, Event, TargetedRecord, target, Runtimes};
@@ -39,14 +41,16 @@ impl Nativer {
             for _ in 0..5 {
                 let definition = definition.clone();
                 let engines = engines.clone();
+                let mut engine = engines.into_iter().next().unwrap();
                 let output = output.clone();
 
                 let id = id_counter;
                 id_counter += 1;
                 rt_mapper.spawn(async move {
-                    let rx = definition.native.1;
+                    let mut join_set = JoinSet::new();
 
-                    let mut engine = engines.into_iter().next().unwrap();
+                    let rx = definition.native.1;
+                    engine.start(&mut join_set, false).await.unwrap();
 
                     let mapper = definition.mapping.build();
 
@@ -87,10 +91,10 @@ impl Nativer {
                                     Ok(_) => {
                                         let _ = engine.statistic_sender.send(Event::Insert {
                                             id: definition.id,
-                                            size: length,
                                             source: engine.id,
                                             stage: Stage::Mapped,
-                                            ids
+                                            ids,
+                                            first: Instant::now()
                                         });
 
                                         // Send original records to next phase

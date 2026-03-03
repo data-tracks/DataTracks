@@ -15,20 +15,34 @@ use tokio_postgres::{Client, Statement};
 use tracing::{debug, info};
 use util::container::Mapping;
 use util::definition::{Definition, Stage};
-use util::{
-    container, Batch, DefinitionMapping, Event, PartitionId, RelationalMapping,
-    RelationalType, TargetedRecord,
-};
+use util::{container, Batch, DefinitionMapping, EngineId, Event, PartitionId, RelationalMapping, RelationalType, TargetedRecord};
 use value::Value;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Postgres {
+    pub(crate) id: Option<EngineId>,
     pub(crate) name: String,
     pub(crate) load: Arc<Mutex<Load>>,
     pub(crate) connector: PostgresConnection,
     pub(crate) client: Option<Arc<Client>>,
     pub(crate) prepared_statements: HashMap<(String, Stage), (Statement, Vec<Type>)>,
+    pub(crate) join: Option<Arc<Mutex<JoinSet<()>>>>
 }
+
+impl Clone for Postgres {
+    fn clone(&self) -> Self {
+        Self{
+            id: None,
+            name: self.name.clone(),
+            load: Arc::new(Mutex::new(Load::Low)),
+            connector: self.connector.clone(),
+            client: None,
+            prepared_statements: Default::default(),
+            join: None,
+        }
+    }
+}
+
 
 #[derive(Debug)]
 struct TxCounts {
@@ -36,11 +50,18 @@ struct TxCounts {
     rollback: i64,
 }
 
+impl Drop for Postgres {
+    fn drop(&mut self) {
+        info!("Dropping Postgres {:?}", self.id)
+    }
+}
+
 impl Postgres {
-    pub(crate) async fn start(
+    pub(crate) async fn start<S:Into<EngineId>>(
         &mut self,
-        join: &mut JoinSet<()>,
+        join_set: &mut JoinSet<()>,
         start_container: bool,
+        id: S,
     ) -> anyhow::Result<()> {
         if start_container {
             container::start_container(
@@ -55,10 +76,14 @@ impl Postgres {
             .await?;
         }
 
-        let client = self.connector.connect(join).await?;
-        info!("☑️ Connected to postgres database");
+        let client = self.connector.connect(join_set).await?;
+        let id = id.into();
+        info!("☑️ Connected to Postgres database {}", id);
+        self.id = Some(id);
+
         timeout(Duration::from_secs(5), client.check_connection()).await??;
         self.client = Some(Arc::new(client));
+        self.join = Some(Arc::new(Mutex::new(JoinSet::new())));
 
         Ok(())
     }
@@ -85,7 +110,7 @@ impl Postgres {
                 //let rows_affected = self.load_insert(client, entity, values).await?;
 
                 //info!("duration {} {}", values.len(), now.elapsed().as_millis());
-                info!("Inserted {} row(s) into postgres engine.", rows_affected);
+                debug!("Inserted {} row(s) into postgres engine.", rows_affected);
             }
         }
 
@@ -120,9 +145,9 @@ impl Postgres {
     pub(crate) async fn monitor(
         &self,
         statistic_tx: &Sender<Event>,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    ) -> anyhow::Result<()>  {
         loop {
-            self.check_throughput(statistic_tx).await?;
+            self.check_throughput(statistic_tx).await.unwrap();
             sleep(Duration::from_secs(5)).await;
         }
     }
@@ -330,6 +355,7 @@ impl Postgres {
                                 .into());
                         }
                     }
+                    _ => panic!()
                 }
             }
         }
@@ -385,8 +411,8 @@ pub mod tests {
     #[traced_test]
     pub async fn test_postgres() {
         let mut pg = EngineKind::postgres();
-        let mut joins = JoinSet::new();
-        pg.start(&mut joins, true).await.unwrap();
+        let mut join_set = JoinSet::new();
+        pg.start(&mut join_set, true, 0).await.unwrap();
 
         pg.create_table_plain("users").await.unwrap();
 
@@ -404,8 +430,8 @@ pub mod tests {
     //#[traced_test]
     pub async fn test_postgres_mapped() {
         let mut pg = EngineKind::postgres_with_port(5433);
-        let mut joins = JoinSet::new();
-        pg.start(&mut joins, true).await.unwrap();
+        let mut join_set = JoinSet::new();
+        pg.start(&mut join_set, true, 0).await.unwrap();
 
         let r = RelationalMapping::Tuple(
             vec![

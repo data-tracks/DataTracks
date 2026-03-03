@@ -1,3 +1,4 @@
+use std::fmt::{Display, Formatter};
 use std::ops::{Deref, DerefMut};
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
@@ -7,6 +8,18 @@ use std::sync::atomic::{AtomicUsize, Ordering};
     Copy, Clone, Debug, Serialize, Deserialize, Readable, Writable, Hash, Eq, PartialEq, Default
 )]
 pub struct EngineId(pub u64);
+
+impl Display for EngineId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl Into<EngineId> for u64 {
+    fn into(self) -> EngineId {
+        EngineId(self)
+    }
+}
 
 impl Deref for EngineId {
     type Target = u64;

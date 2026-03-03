@@ -2,9 +2,10 @@ use serde_with::DurationMilliSeconds;
 use serde_with::serde_as;
 use crate::definition::{Definition, Stage};
 use crate::{DefinitionId, EngineId};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::time::Duration;
+use std::time::{Duration};
+use tokio::time::Instant;
 
 pub type DefinitionMeta = (Vec<(DefinitionId, Stage, String, u64)>, Option<String>);
 
@@ -13,7 +14,8 @@ pub type DefinitionMeta = (Vec<(DefinitionId, Stage, String, u64)>, Option<Strin
 pub enum Event {
     Insert {
         id: DefinitionId,
-        size: u64,
+        #[serde(skip_serializing)]
+        first: Instant,
         ids: Vec<u64>,
         source: EngineId,
         stage: Stage,
@@ -46,8 +48,16 @@ pub struct ThroughputEvent {
 #[derive(Serialize, Clone, Debug, Default)]
 pub struct StatisticEvent {
     pub engines: HashMap<EngineId, DefinitionMeta>,
+    pub delay: Delay,
+}
+
+#[serde_as]
+#[derive(Clone, Copy, Serialize, Deserialize, Debug, Default)]
+pub struct Delay {
     #[serde_as(as = "DurationMilliSeconds<u64>")]
-    pub delay: Duration,
+    pub plain: Duration,
+    #[serde_as(as = "DurationMilliSeconds<u64>")]
+    pub mapped: Duration,
 }
 
 #[derive(Serialize, Clone, Debug, Default)]
@@ -102,6 +112,7 @@ impl StatisticEvent {
                     Stage::Mapped => {
                         tp.mapped = *amount as f64;
                     }
+                    _ => {}
                 }
             }
             map.insert(name, tp);

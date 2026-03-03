@@ -1,6 +1,7 @@
-import {Component, computed, effect, input, signal} from '@angular/core';
+import {Component, computed, effect, inject, input, signal} from '@angular/core';
 import {DecimalPipe} from "@angular/common";
 import {QueueComponent} from "./queue/queue.component";
+import {EventsService} from "../events.service";
 
 @Component({
   selector: 'app-queues',
@@ -11,7 +12,7 @@ import {QueueComponent} from "./queue/queue.component";
   styleUrl: './queues.component.css',
 })
 export class QueuesComponent {
-  inputs = input.required<any>();
+  service = inject(EventsService);
 
   queues = signal(new Map<string, number>);
 
@@ -24,7 +25,7 @@ export class QueuesComponent {
 
   constructor() {
     effect(() => {
-      let d = this.inputs();
+      let d = this.service.queues();
       if (!d) {
         return
       }

@@ -4,23 +4,23 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::spawn;
-use std::time::Duration;
+use std::time::{Duration};
 use tokio::runtime::{Builder, Handle};
 use tokio::select;
 use tokio::sync::broadcast;
 use tokio::time::{interval, sleep, Instant};
-use tracing::error;
-use tracing::log::debug;
+use tracing::{error, warn};
+use tracing::log::{debug};
 use util::definition::{Definition, Stage};
 use util::Event::Runtime;
-use util::{log_channel, set_statistic_sender, Batch, DefinitionId, EngineEvent, EngineId, Event, RuntimeEvent, Runtimes, StatisticEvent, TargetedRecord, ThroughputEvent};
+use util::{log_channel, set_statistic_sender, Batch, DefinitionId, Delay, EngineEvent, EngineId, Event, RuntimeEvent, Runtimes, StatisticEvent, TargetedRecord, ThroughputEvent};
 
 pub struct Statistics {
     engines: HashMap<EngineId, EngineStatistic>,
     engine_names: HashMap<EngineId, String>,
     definitions: HashMap<DefinitionId, Definition>,
     ids: HashMap<u64, Instant>,
-    delay: Duration,
+    delay: Delay,
 }
 
 impl Default for Statistics {
@@ -42,28 +42,33 @@ impl Statistics {
 
     async fn handle_event(&mut self, event: Event) {
         match event {
-            Event::Insert{id, size, source,ids, stage} => {
+            Event::Insert{id, first, source,ids, stage } => {
                 self.engines.entry(source).or_default().handle_insert(
-                    size,
+                    ids.len() as u64,
                     id,
                     stage.clone(),
                 );
-                let now = Instant::now();
-                if matches!(stage, Stage::Plain) {
-                    for id in ids {
-                        self.ids.insert(id, now);
-                    }
-                }else {
-                    self.delay = ids.clone().into_iter().map(|id| {
-                        if let Some(old) = self.ids.get_mut(&id) {
-                            let duration = now.duration_since(old.clone());
-                            self.ids.remove(&id);
-                            duration
-                        }else {
-                            error!("mapped without plain");
-                            Duration::from_secs(10000)
+
+                match stage {
+                    Stage::Timer => {}
+                    Stage::WAL => {}
+                    Stage::Plain => {
+                        for id in ids {
+                            self.ids.insert(id, first);
                         }
-                    }).sum::<Duration>() / ids.len() as u32;
+                    }
+                    Stage::Mapped => {
+                        self.delay.mapped = ids.clone().into_iter().map(|id| {
+                            if let Some(old) = self.ids.get_mut(&id) {
+                                let duration = first.duration_since(old.clone());
+                                self.ids.remove(&id);
+                                duration
+                            }else {
+                                error!("mapped without plain");
+                                Duration::from_secs(10000)
+                            }
+                        }).sum::<Duration>() / ids.len() as u32;
+                    }
                 }
             }
             Event::Definition(definition_id, definition) => {
@@ -118,7 +123,8 @@ pub fn start(rt: Runtimes, tx: Sender<Event>, rx: Receiver<Event>, output: broad
     let tx_clone = tx.clone();
     let statistic = spawn(move || {
         let tx = tx_clone.clone();
-        let mut rt = Builder::new_current_thread()
+        let mut rt = Builder::new_multi_thread()
+            .worker_threads(4)
             .thread_name("statistic-rt")
             .enable_all()
             .build()
@@ -140,8 +146,16 @@ pub fn start(rt: Runtimes, tx: Sender<Event>, rx: Receiver<Event>, output: broad
                 select! {
                     maybe_event = rx.recv_async() => {
                         if let Ok(event) = maybe_event {
-                            statistics.handle_event(event.clone()).await;
-                            let _res = clone_bc_tx.send(event);
+                            let mut events = vec![event];
+                            if rx.len() % 10_000 == 0 && rx.len() != 0 {
+                                error!("Bigger than x0k {}", rx.len());
+                            }
+                            events.extend(rx.try_iter().take(99_999));
+
+                            for event in events{
+                                statistics.handle_event(event.clone()).await;
+                                let _res = clone_bc_tx.send(event);
+                            }
                         }
                     },
                     _ = timer.tick() => {
@@ -156,7 +170,7 @@ pub fn start(rt: Runtimes, tx: Sender<Event>, rx: Receiver<Event>, output: broad
                         if clone_bc_tx.send(Event::Throughput(ThroughputEvent{tps: throughput.clone()})).is_err() {
                             debug!("Statistic throughput ticks", )
                         }
-
+                        warn!("{:?}", statistics.delay);
                         last_time = Instant::now();
                         last = current.clone();
                         *last_shared_statistics_clone.lock().unwrap() = last.clone();

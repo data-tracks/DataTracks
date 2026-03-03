@@ -1,6 +1,7 @@
-import {Component, input, OnInit, signal, WritableSignal} from '@angular/core';
+import {Component, inject, input, OnInit, signal, WritableSignal} from '@angular/core';
 import {DecimalPipe, NgOptimizedImage} from "@angular/common";
 import {Observable, Subject} from "rxjs";
+import {EventsService} from "../events.service";
 
 @Component({
     selector: 'app-statistics',
@@ -11,20 +12,21 @@ import {Observable, Subject} from "rxjs";
     templateUrl: './statistics.component.html',
     styleUrl: './statistics.component.css',
 })
-export class StatisticsComponent implements OnInit {
-    inputs = input.required<Observable<any>>();
+export class StatisticsComponent {
+    service = inject(EventsService);
     private queue$ = new Subject<any>();
 
-    protected delay: WritableSignal<string | undefined> = signal(undefined);
+    protected delay: WritableSignal<Delay | undefined> = signal(undefined);
 
     protected plainStatistics: WritableSignal<Map<string, [number, Stage, string, number][]>> = signal(new Map());
     protected mappedStatistics: WritableSignal<Map<string, [number, Stage, string, number][]>> = signal(new Map());
 
     protected tps: WritableSignal<Map<string, Throughput>> = signal(new Map())
 
-    ngOnInit() {
+    constructor() {
+        this.service.initStatisticsConnection();
         // Subscribe to the stream passed from the parent
-        this.inputs().subscribe(data => {
+        this.service.$statistics.subscribe(data => {
             this.processData(data);
         });
     }
@@ -51,17 +53,22 @@ export class StatisticsComponent implements OnInit {
     }
 
     private updateStats(map: StatisticEvent) {
-        this.delay.set(this.formatDuration(map.delay));
+        this.delay.set(map.delay);
 
         this.plainStatistics.update(m => {
             const d = new Map(m);
+            //console.log(map.engines)
             for (const key in map.engines) {
+                if (!key){
+                    continue;
+                }
                 const [entries, engineName] = map.engines[key];
                 const values = [...entries].filter(e => e[1] === Stage.Plain).sort((a, b) => a[0] - b[0]);
                 d.set(engineName, values);
             }
             return d;
         });
+        //console.log(this.plainStatistics())
 
         this.mappedStatistics.update(m => {
             const d = new Map(m);
@@ -74,7 +81,7 @@ export class StatisticsComponent implements OnInit {
         });
     }
 
-    private formatDuration(ms: number): string {
+    protected formatDuration(ms: number): string {
         if (ms < 1000) return `${ms}ms`;
 
         const seconds = Math.floor((ms / 1000) % 60);
@@ -113,7 +120,7 @@ export type EngineId = number;
 
 export interface StatisticEvent {
     engines: Record<string, [[DefinitionId, Stage, string, number][], string]>;
-    delay: number
+    delay: Delay
 }
 
 export interface ThroughputEvent {
@@ -123,6 +130,11 @@ export interface ThroughputEvent {
 export enum Stage {
     Plain = "Plain",
     Mapped = "Mapped"
+}
+
+export interface Delay {
+    plain: number,
+    mapped: number
 }
 
 export interface Throughput {

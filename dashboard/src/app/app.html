@@ -1,64 +1,40 @@
 <main class="h-screen flex flex-col bg-black overflow-hidden">
     <header class="flex-none bg-base-100 border-b border-white/10 p-2 flex flex-col md:flex-row items-center gap-4">
         <div class="flex items-center gap-3 px-4">
-            <div class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-primary-content font-black">
-                PS
-            </div>
+            <div class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-primary-content font-black">PS</div>
             <div>
                 <h1 class="text-sm font-bold uppercase tracking-widest leading-none">PolyStream</h1>
-                <div class="flex items-center gap-1 mt-1">
-
-                    @if (service.connected()) {
-                        <span class="relative flex h-2 w-2">
-                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>
-                            <span class="relative inline-flex rounded-full h-2 w-2 bg-success"></span>
-                        </span>
-                        <span class="text-[10px] opacity-50 font-mono">CONNECTED</span>
-                    } @else {
-                        <span class="relative flex h-2 w-2">
-                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-error opacity-75"></span>
-                            <span class="relative inline-flex rounded-full h-2 w-2 bg-error"></span>
-                        </span>
-                        <span class="text-[10px] opacity-50 font-mono">DISCONNECTED</span>
-                    }
-                </div>
             </div>
         </div>
 
         <div class="tabs tabs-boxed bg-base-300 p-1">
-            <button (click)="activeTab = Tab.Stats" [class.tab-active]="activeTab === Tab.Stats"
-                    class="tab tab-sm gap-2">
+            <a routerLink="/stats" routerLinkActive="tab-active" class="tab tab-sm gap-2" #statsRef="routerLinkActive">
                 Statistics
-                @if (activeTab === Tab.Stats){
-                    <span [class.badge-success]="service.connectedStatistics()" [class.badge-error]="!service.connectedStatistics()" class="badge badge-xs"></span>
+                @if (statsRef.isActive) {
+                    <span [class.badge-success]="service.connectedStatistics()" class="badge badge-xs"></span>
                 }
-            </button>
-            <button (click)="activeTab = Tab.Events" [class.tab-active]="activeTab === Tab.Events"
-                    class="tab tab-sm gap-2">
+            </a>
+            <a routerLink="/events" routerLinkActive="tab-active" class="tab tab-sm gap-2" #eventsRef="routerLinkActive">
                 Events
-                @if (activeTab === Tab.Events){
-                    <span [class.badge-success]="service.connectedEvents()" [class.badge-error]="!service.connectedEvents()" class="badge badge-xs"></span>
+                @if (eventsRef.isActive) {
+                    <span [class.badge-success]="service.connectedEvents()" class="badge badge-xs"></span>
                 }
-            </button>
-            <button (click)="activeTab = Tab.Queues" [class.tab-active]="activeTab === Tab.Queues"
-                    class="tab tab-sm gap-2">
+            </a>
+            <a routerLink="/queues" routerLinkActive="tab-active" class="tab tab-sm gap-2" #queuesRef="routerLinkActive">
                 Queues
-                @if (activeTab === Tab.Queues){
-                    <span [class.badge-success]="service.connectedQueues()" [class.badge-error]="!service.connectedQueues()" class="badge badge-xs"></span>
+                @if (queuesRef.isActive) {
+                    <span [class.badge-success]="service.connectedQueues()" class="badge badge-xs"></span>
                 }
-            </button>
-            <button (click)="activeTab = Tab.Threads" [class.tab-active]="activeTab === Tab.Threads"
-                    class="tab tab-sm gap-2">
+            </a>
+            <a routerLink="/threads" routerLinkActive="tab-active" class="tab tab-sm gap-2" #threadsRef="routerLinkActive">
                 Threads
-                @if (activeTab === Tab.Threads){
-                    <span [class.badge-success]="service.connectedThreads()" [class.badge-error]="!service.connectedThreads()" class="badge badge-xs"></span>
+                @if (threadsRef.isActive) {
+                    <span [class.badge-success]="service.connectedThreads()" class="badge badge-xs"></span>
                 }
-            </button>
-            <button (click)="activeTab = Tab.Roundtrip" [class.tab-active]="activeTab === Tab.Roundtrip"
-                    class="tab tab-sm gap-2">
+            </a>
+            <a routerLink="/roundtrip" routerLinkActive="tab-active" class="tab tab-sm gap-2">
                 Roundtrip
-                <span [class.badge-primary]="activeTab === Tab.Roundtrip" class="badge badge-xs"></span>
-            </button>
+            </a>
         </div>
 
         <div class="hidden lg:flex ml-auto items-center gap-4 pr-4">
@@ -70,29 +46,8 @@
     </header>
 
     <div class="grow overflow-y-auto custom-scrollbar p-4 lg:p-6 bg-black">
-        <div class="max-w-7xl mx-auto h-full grid">
-
-            <div [class.active-tab]="activeTab === Tab.Events" class="tab-pane">
-                <app-events [inputs]="service.events()"/>
-            </div>
-
-            <div [class.active-tab]="activeTab === Tab.Queues" class="tab-pane">
-                <app-cyto [inputs]="service.queues()"/>
-                <!--<app-architecture [inputs]="service.queues()"/>-->
-                <!--<app-queues [inputs]="service.queues()"/>-->
-            </div>
-
-            <div [class.active-tab]="activeTab === Tab.Stats" class="tab-pane">
-                <app-statistics [inputs]="service.$statistics"/>
-            </div>
-
-            <div [class.active-tab]="activeTab === Tab.Threads" class="tab-pane">
-                <app-threads [inputs]="service.threads()"/>
-            </div>
-
-            <div [class.active-tab]="activeTab === Tab.Roundtrip" class="tab-pane">
-                <app-roundtrip/>
-            </div>
+        <div class="max-w-7xl mx-auto h-full">
+            <router-outlet></router-outlet>
         </div>
     </div>
 </main>

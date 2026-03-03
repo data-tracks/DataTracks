@@ -13,10 +13,11 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
+use futures_util::future::{join_all};
 use tokio::runtime::Builder;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
-use tracing::warn;
+use tracing::{warn};
 use util::definition::{Definition, Model, Stage};
 use util::{
     log_channel, Batch, DefinitionId, EngineId, Event, PartitionId, SegmentedLogWriter,
@@ -25,10 +26,10 @@ use util::{
 use uuid::Uuid;
 use value::Value;
 
-static ID_BUILDER: AtomicU64 = AtomicU64::new(0);
+static ID_BUILDER: AtomicU64 = AtomicU64::new(1);
 const SEGMENT_SIZE: u64 = 10 * 1024 * 1024;
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Engine {
     pub buffer_in: (Sender<TargetedRecord>, Receiver<TargetedRecord>),
     pub buffer_out: (Sender<TargetedRecord>, Receiver<TargetedRecord>),
@@ -39,6 +40,23 @@ pub struct Engine {
     pub id: EngineId,
     pub definitions: HashMap<DefinitionId, Definition>,
 }
+
+impl Clone for Engine {
+    fn clone(&self) -> Self {
+        //let id = EngineId(ID_BUILDER.fetch_add(1, Ordering::Relaxed));
+        Self{
+            buffer_in: self.buffer_in.clone(),
+            buffer_out: self.buffer_out.clone(),
+            ids: vec![],
+            statistic_sender: self.statistic_sender.clone(),
+            existing_partitions: vec![],
+            engine_kind: self.engine_kind.clone(),
+            id: self.id.clone(),
+            definitions: self.definitions.clone(),
+        }
+    }
+}
+
 
 impl AsRef<EngineKind> for Engine {
     fn as_ref(&self) -> &EngineKind {
@@ -78,7 +96,7 @@ impl Engine {
         }
     }
 
-    pub async fn start(&mut self, join: &mut JoinSet<()>, sender: Sender<Event>, is_new: bool) -> anyhow::Result<()> {
+    pub async fn start(&mut self, join_set: &mut JoinSet<()>, is_new: bool) -> anyhow::Result<()> {
         let buffer_in_rx = self.buffer_in.1.clone();
         let buffer_out_tx = self.buffer_out.0.clone();
 
@@ -155,7 +173,7 @@ impl Engine {
             })
         });
 
-        self.engine_kind.start(join, sender, is_new).await
+        self.engine_kind.start( join_set, self.id, self.statistic_sender.clone(), is_new).await
     }
 
     pub async fn stop(self) -> anyhow::Result<()> {
@@ -276,24 +294,25 @@ impl EngineKind {
 
     pub async fn start(
         &mut self,
-        join: &mut JoinSet<()>,
+        join_set: &mut JoinSet<()>,
+        id: EngineId,
         sender: Sender<Event>,
         is_new: bool,
     ) -> anyhow::Result<()> {
         match self {
-            EngineKind::Postgres(p) => p.start(join, is_new).await?,
-            EngineKind::MongoDB(m) => m.start(is_new).await?,
-            EngineKind::Neo4j(n) => n.start(is_new).await?,
+            EngineKind::Postgres(p) => p.start(join_set, is_new, id).await?,
+            EngineKind::MongoDB(m) => m.start(is_new, id).await?,
+            EngineKind::Neo4j(n) => n.start(is_new, id).await?,
         }
-        if is_new {
-            self.monitor(join, sender.clone()).await?;
-        }
+        /*if is_new {
+            self.monitor(join_set, sender.clone()).await?;
+        }*/
 
         Ok(())
     }
 
     pub async fn start_all(
-        join: &mut JoinSet<()>,
+        join_set: &mut JoinSet<()>,
         statistic_tx: Sender<Event>,
     ) -> anyhow::Result<Vec<Engine>> {
         let engine_kinds: Vec<EngineKind> = vec![
@@ -302,11 +321,15 @@ impl EngineKind {
             EngineKind::neo4j().into(),
         ];
 
-        let mut engines: Vec<Engine> = vec![];
+        // 1. Initialize all engines in parallel
+        let init_futures = engine_kinds.into_iter().map(|kind| {
+            Engine::new(kind, statistic_tx.clone())
+        });
+        let mut engines = join_all(init_futures).await;
 
-        for mut engine in &mut engine_kinds.into_iter() {
-            engine.start(join, statistic_tx.clone(), true).await?;
-            engines.push(Engine::new(engine, statistic_tx.clone()).await);
+        // 2. Start all engines in parallel
+        for engine in &mut engines {
+            engine.start(join_set, true).await?;
         }
 
         Ok(engines)
@@ -314,20 +337,21 @@ impl EngineKind {
 
     pub async fn stop(self) -> anyhow::Result<()> {
         match self {
-            EngineKind::Postgres(p) => p.stop().await,
-            EngineKind::MongoDB(m) => m.stop().await,
-            EngineKind::Neo4j(n) => n.stop().await,
+            EngineKind::Postgres(ref p) => p.stop().await,
+            EngineKind::MongoDB(ref m) => m.stop().await,
+            EngineKind::Neo4j(ref n) => n.stop().await,
         }
     }
 
     pub async fn monitor(
         &mut self,
-        join: &mut JoinSet<()>,
+        join_set: &mut JoinSet<()>,
         statistic_tx: Sender<Event>,
     ) -> anyhow::Result<()> {
-        let engine = self.clone();
+        let mut engine = self.clone();
+        engine.start(join_set, EngineId(0), statistic_tx.clone(), false).await?;
 
-        join.spawn(async move {
+        join_set.spawn(async move {
             loop {
                 match &engine {
                     EngineKind::Postgres(p) => p.monitor(&statistic_tx).await.unwrap(),
@@ -346,6 +370,7 @@ impl EngineKind {
 
     pub fn postgres_with_port(port: u16) -> Postgres {
         Postgres {
+            id: None,
             name: "engine-postgres".to_string(),
             load: Arc::new(Mutex::new(Load::Low)),
             connector: PostgresConnection {
@@ -357,11 +382,13 @@ impl EngineKind {
             },
             client: None,
             prepared_statements: Default::default(),
+            join: None,
         }
     }
 
     fn mongo_db() -> MongoDB {
         MongoDB {
+            id: None,
             load: Arc::new(Mutex::new(Load::Low)),
             client: None,
             names: Default::default(),
@@ -374,6 +401,7 @@ impl EngineKind {
 
     pub(crate) fn neo4j_with_port(port: u16) -> Neo4j {
         Neo4j {
+            id: None,
             name: "neo4j-engine".to_string(),
             load: Arc::new(Mutex::new(Load::Low)),
             host: "localhost".to_string(),

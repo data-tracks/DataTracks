@@ -1,29 +1,13 @@
-import {Component, inject, signal} from '@angular/core';
-import EventsComponent from "./events/events.component";
+import {Component, inject} from '@angular/core';
+import {RouterLink, RouterLinkActive, RouterOutlet} from "@angular/router";
 import {EventsService} from "./events.service";
-import {StatisticsComponent} from "./statistics/statistics.component";
-import {RoundtripComponent} from "./roundtrip/roundtrip.component";
-import {ThreadsComponent} from "./threads/threads.component";
-import {CytoComponent} from "./cyto/cyto.component";
 
 @Component({
   selector: 'app-root',
-  imports: [EventsComponent, StatisticsComponent, RoundtripComponent, ThreadsComponent, EventsComponent, CytoComponent],
+  imports: [RouterOutlet, RouterLinkActive, RouterLink],
   templateUrl: './app.html',
   styleUrl: './app.css'
 })
 export class App {
-  protected readonly title = signal('dashboard');
   protected service = inject(EventsService);
-
-  public activeTab = Tab.Stats;
-  protected readonly Tab = Tab;
-}
-
-export enum Tab {
-  Events,
-  Queues,
-  Stats,
-  Roundtrip,
-  Threads
 }

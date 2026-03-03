@@ -14,18 +14,36 @@ use tracing::{error, info};
 use util::container::Mapping;
 use util::definition::{Definition, Stage};
 use util::Event::EngineStatus;
-use util::{container, Batch, DefinitionMapping, Event, PartitionId, TargetedRecord};
+use util::{container, Batch, DefinitionMapping, EngineId, Event, PartitionId, TargetedRecord};
 use value::Value;
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct MongoDB {
+    pub(crate) id: Option<EngineId>,
     pub(crate) load: Arc<Mutex<Load>>,
     pub(crate) client: Option<Client>,
     pub names: HashMap<(String, Stage), String>,
 }
 
+impl Clone for MongoDB {
+    fn clone(&self) -> Self {
+        Self{
+            id: None,
+            load: Arc::new(Mutex::new(Load::Low)),
+            client: None,
+            names: Default::default(),
+        }
+    }
+}
+
+impl Drop for MongoDB {
+    fn drop(&mut self) {
+        info!("Dropping MongoDB {:?}", self.id)
+    }
+}
+
 impl MongoDB {
-    pub(crate) async fn start(&mut self, is_new: bool) -> anyhow::Result<()> {
+    pub(crate) async fn start<S: Into<EngineId>>(&mut self, is_new: bool, id: S) -> anyhow::Result<()> {
         if is_new {
             container::start_container(
                 "engine-mongodb",
@@ -53,7 +71,9 @@ impl MongoDB {
             client.database("admin").run_command(doc! { "ping": 1 }),
         )
         .await??;
-        info!("☑️ Connected to mongoDB database");
+        let id = id.into();
+        info!("☑️ Connected to MongoDB database {}", id);
+        self.id = Some(id);
 
         self.client = Some(client);
 
@@ -119,7 +139,7 @@ impl MongoDB {
     pub(crate) async fn monitor(
         &self,
         statistic_tx: &Sender<Event>,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    ) -> anyhow::Result<()>  {
         loop {
             match self.measure_opcounters(statistic_tx).await {
                 Ok(_) => {}

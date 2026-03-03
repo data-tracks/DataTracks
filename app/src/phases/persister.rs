@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration};
 use tokio::runtime::Builder;
 use tokio::select;
 use tokio::task::JoinSet;
@@ -130,7 +130,7 @@ impl Persister {
         ))
     }
 
-    pub async fn start_distributor(&mut self, rt: Runtimes, joins: &mut JoinSet<()>) {
+    pub async fn start_distributor(&mut self, join_set: &mut JoinSet<()>, rt: Runtimes) {
         let engines = self.catalog.engines().await;
         let len = engines.len();
 
@@ -149,7 +149,7 @@ impl Persister {
                 let mut engine = engine.clone();
                 // actually make a new connection
                 engine
-                    .start(joins, engine.statistic_sender.clone(), false)
+                    .start(join_set, false)
                     .await
                     .unwrap();
 
@@ -256,10 +256,10 @@ async fn flush_buckets(
                     .statistic_sender
                     .send_async(Event::Insert {
                         id,
-                        size,
                         source,
                         ids,
                         stage: Stage::Plain,
+                        first: Instant::now(),
                     })
                     .await;
                 definition.native.0.send_async(records).await.unwrap();

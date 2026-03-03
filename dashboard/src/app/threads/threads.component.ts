@@ -1,5 +1,6 @@
-import {Component, computed, effect, input, signal} from '@angular/core';
+import {Component, computed, effect, inject, input, signal} from '@angular/core';
 import {DatePipe, KeyValuePipe, NgClass} from "@angular/common";
+import {EventsService} from "../events.service";
 
 @Component({
     selector: 'app-threads',
@@ -12,7 +13,7 @@ import {DatePipe, KeyValuePipe, NgClass} from "@angular/common";
     styleUrl: './threads.component.css',
 })
 export class ThreadsComponent {
-    inputs = input.required<string>()
+    service = inject(EventsService);
 
     threads = signal<Map<string, number>>(new Map());
 
@@ -51,10 +52,11 @@ export class ThreadsComponent {
     });
 
     constructor() {
+        this.service.initThreadsConnection();
         setInterval(() => this.currentTime.set(Date.now()), 100);
 
         effect(() => {
-            let name = this.inputs();
+            let name = this.service.threads();
 
             if (!name) {
                 return;

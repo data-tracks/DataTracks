@@ -39,6 +39,7 @@ impl Definition {
             Stage::Mapped => {
                 format!("{}_{}", self.entity.mapped, *id)
             }
+            _ => "undefined".to_string(),
         }
     }
 
@@ -123,6 +124,8 @@ impl Entity {
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize)]
 pub enum Stage {
+    Timer,
+    WAL,
     Plain,
     Mapped,
 }

@@ -14,11 +14,11 @@ use tracing::{debug, info};
 use util::container::Mapping;
 use util::definition::{Definition, Stage};
 use util::Event::EngineStatus;
-use util::{container, Batch, DefinitionMapping, Event, PartitionId, TargetedRecord};
+use util::{container, Batch, DefinitionMapping, EngineId, Event, PartitionId, TargetedRecord};
 use value::Value;
 
-#[derive(Clone)]
 pub struct Neo4j {
+    pub(crate) id: Option<EngineId>,
     pub(crate) name: String,
     pub(crate) load: Arc<Mutex<Load>>,
     pub(crate) host: String,
@@ -27,6 +27,28 @@ pub struct Neo4j {
     pub(crate) password: String,
     pub(crate) graph: Option<Graph>,
     pub(crate) prepared_queries: HashMap<(Stage, String), String>,
+}
+
+impl Clone for Neo4j {
+    fn clone(&self) -> Self {
+        Self{
+            id: None,
+            name: self.name.clone(),
+            load: Arc::new(Mutex::new(Load::Low)),
+            host: self.host.clone(),
+            port: self.port.clone(),
+            user: self.user.clone(),
+            password: self.password.clone(),
+            graph: None,
+            prepared_queries: Default::default(),
+        }
+    }
+}
+
+impl Drop for Neo4j {
+    fn drop(&mut self) {
+        info!("Dropping Neo4j {:?}", self.id)
+    }
 }
 
 impl Debug for Neo4j {
@@ -44,7 +66,7 @@ struct TxMetrics {
 }
 
 impl Neo4j {
-    pub(crate) async fn start(&mut self, is_new: bool) -> anyhow::Result<()> {
+    pub(crate) async fn start<S:Into<EngineId>>(&mut self, is_new: bool, id: S) -> anyhow::Result<()> {
         if is_new {
             container::start_container(
                 self.name.as_str(),
@@ -82,8 +104,9 @@ impl Neo4j {
                 }
             }
         }
-
-        info!("️️☑️ Connected to neo4j");
+        let id = id.into();
+        info!("️️☑️ Connected to Neo4j {}", id);
+        self.id = Some(id);
         self.graph = Some(graph);
 
         Ok(())
@@ -116,11 +139,11 @@ impl Neo4j {
     pub(crate) async fn monitor(
         &self,
         statistic_tx: &Sender<Event>,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    ) -> anyhow::Result<()>  {
         let clone = self.clone();
 
         loop {
-            clone.check_throughput(statistic_tx).await?;
+            clone.check_throughput(statistic_tx).await.unwrap();
             sleep(Duration::from_secs(5)).await;
         }
     }
@@ -144,6 +167,7 @@ impl Neo4j {
                 let values = match &stage {
                     Stage::Plain => Self::wrap_value_plain(values),
                     Stage::Mapped => Self::wrap_value_mapped(values),
+                    _ => panic!()
                 };
 
                 g.run(query(cypher_query).param("values", values)).await?;
@@ -300,7 +324,7 @@ mod tests {
     async fn test_insert() {
         let mut neo = EngineKind::neo4j_with_port(7688);
 
-        neo.start(true).await.unwrap();
+        neo.start(true, 0.into()).await.unwrap();
 
         let definition = Definition::new(
             "test",
@@ -351,7 +375,7 @@ mod tests {
     async fn test_insert_node() {
         let mut neo = EngineKind::neo4j();
 
-        neo.start(true).await.unwrap();
+        neo.start(true, 0.into()).await.unwrap();
 
         let definition = Definition::new(
             "test",

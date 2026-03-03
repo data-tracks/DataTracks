@@ -96,19 +96,29 @@ impl TimerManager {
                                 // Data Processing
                                 res = incoming.recv_async() => {
                                     match res {
-                                        Ok(InitialRecord { value, meta }) => {
-                                            // Check if we need a new ID block
-                                            if current_id >= end_id {
-                                                current_id = id_source.fetch_add(BATCH_SIZE, Ordering::Relaxed);
-                                                end_id = current_id + BATCH_SIZE;
+                                        Ok(record) => {
+                                            let mut records = vec![record];
+
+                                            records.extend(incoming.try_iter().take(99_999));
+
+                                            let mut outs = vec![];
+                                            let mut ids = vec![];
+                                            for InitialRecord{value,meta} in records {
+                                                // Check if we need a new ID block
+                                                if current_id >= end_id {
+                                                    current_id = id_source.fetch_add(BATCH_SIZE, Ordering::Relaxed);
+                                                    end_id = current_id + BATCH_SIZE;
+                                                }
+
+                                                let id = current_id;
+                                                current_id += 1;
+
+                                                ids.push(id);
+                                                let context = TimedMeta::new(id, meta);
+                                                outs.push((value, context).into());
                                             }
 
-                                            let id = current_id;
-                                            current_id += 1;
-
-                                            let context = TimedMeta::new(id, meta);
-
-                                            if let Err(err) = sender.send(vec![(value, context).into()]) {
+                                            if let Err(err) = sender.send(outs) {
                                                 error!("Worker {} failed to send downstream: {}", id, err);
                                                 // If downstream is closed, we should probably stop
                                                 return;

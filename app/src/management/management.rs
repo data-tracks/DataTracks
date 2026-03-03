@@ -83,7 +83,7 @@ impl Manager {
 
             self.init_definitions(statistic_tx.clone()).await?;
 
-            persister.start_distributor(rt.clone(), &mut joins).await;
+            persister.start_distributor(&mut joins, rt.clone()).await;
 
             let sink = self.start_sinks(persister, rt.clone()).await?;
             //let kafka = sink::kafka::start(&mut self.joins, tx.clone()).await?;
@@ -181,9 +181,9 @@ impl Manager {
                 .unwrap();
 
             rt.block_on(async move {
-                let mut joins: JoinSet<()> = JoinSet::new();
+                let mut join_set: JoinSet<()> = JoinSet::new();
 
-                let engines = EngineKind::start_all(&mut joins, statistic_tx.clone())
+                let engines = EngineKind::start_all(&mut join_set, statistic_tx.clone())
                     .await
                     .unwrap();
                 for engine in engines.into_iter() {
@@ -191,7 +191,7 @@ impl Manager {
                 }
                 tx.send_async(true).await.unwrap();
 
-                joins.join_all().await;
+                join_set.join_all().await;
             });
         });
         self.runtimes.add_handle(engines);

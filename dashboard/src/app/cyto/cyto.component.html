@@ -12,7 +12,7 @@
 
 <ng-template #tooltipTemplate>
     <div class="p-2 bg-accent rounded">
-        @for (w of wal; track w[1]) {
+        @for (w of wal; track $index) {
             <div>Runner {{w[0]}} : {{formatNumber(w[1])}}</div>
         }
     </div>

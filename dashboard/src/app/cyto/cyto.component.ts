@@ -1,9 +1,9 @@
 import {
-  AfterViewInit,
+  AfterViewInit, ChangeDetectorRef,
   Component,
   effect,
-  ElementRef,
-  input,
+  ElementRef, inject,
+  input, OnInit,
   TemplateRef,
   ViewChild,
   ViewContainerRef
@@ -11,6 +11,7 @@ import {
 import cytoscape from 'cytoscape';
 import cytoscapePopper from 'cytoscape-popper';
 import tippy from 'tippy.js';
+import {EventsService} from "../events.service";
 
 function tippyFactory(ref: any, content: any){
   // Since tippy constructor requires DOM element/elements, create a placeholder
@@ -42,8 +43,9 @@ cytoscape.use(cytoscapePopper(tippyFactory));
 })
 export class CytoComponent implements AfterViewInit {
   @ViewChild('cyContainer') container!: ElementRef;
-  inputs = input.required<any>();
   @ViewChild('tooltipTemplate') tooltipTemplate!: TemplateRef<any>;
+
+  service = inject(EventsService);
 
   private cy?: cytoscape.Core;
   private queues = new Map<string, number>();
@@ -55,11 +57,14 @@ export class CytoComponent implements AfterViewInit {
   protected enginesBuffer = new Map<string, number>();
 
   private viewContainerRef: ViewContainerRef;
+  private changeDetectorRef: ChangeDetectorRef;
 
-  constructor(private vcr: ViewContainerRef) {
+  constructor(private vcr: ViewContainerRef, private cd: ChangeDetectorRef) {
+    this.service.initQueueConnection();
+    this.changeDetectorRef = cd;
     this.viewContainerRef  = vcr;
     effect(() => {
-      const entry = this.inputs();
+      const entry = this.service.queues();
       if (!entry) return;
       //console.log(entry)
 
@@ -214,6 +219,7 @@ export class CytoComponent implements AfterViewInit {
     });
 
     this.setupPopups();
+    this.cd.detectChanges();
   }
 
   setupPopups() {
@@ -304,10 +310,8 @@ export class CytoComponent implements AfterViewInit {
         }
 
       }
-
-
     })
-
+    this.cd.detectChanges();
   }
 
   private getInitialElements(): cytoscape.ElementDefinition[] {
