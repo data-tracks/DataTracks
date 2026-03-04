@@ -3,7 +3,8 @@ use crate::mongo::MongoDB;
 use crate::neo::Neo4j;
 use crate::postgres::Postgres;
 use derive_more::From;
-use flume::{bounded, unbounded, Receiver, Sender};
+use flume::{Receiver, Sender, bounded, unbounded};
+use futures_util::future::join_all;
 use mongodb::bson::uuid;
 use std::collections::HashMap;
 use std::error::Error;
@@ -13,15 +14,13 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
-use futures_util::future::{join_all};
 use tokio::runtime::Builder;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
-use tracing::{warn};
 use util::definition::{Definition, Model, Stage};
 use util::{
-    log_channel, Batch, DefinitionId, EngineId, Event, PartitionId, SegmentedLogWriter,
-    TargetedRecord,
+    Batch, DefinitionId, EngineId, Event, PartitionId, QueueEvent, SegmentedLogWriter,
+    TargetedRecord, log_channel,
 };
 use uuid::Uuid;
 use value::Value;
@@ -44,7 +43,7 @@ pub struct Engine {
 impl Clone for Engine {
     fn clone(&self) -> Self {
         //let id = EngineId(ID_BUILDER.fetch_add(1, Ordering::Relaxed));
-        Self{
+        Self {
             buffer_in: self.buffer_in.clone(),
             buffer_out: self.buffer_out.clone(),
             ids: vec![],
@@ -56,7 +55,6 @@ impl Clone for Engine {
         }
     }
 }
-
 
 impl AsRef<EngineKind> for Engine {
     fn as_ref(&self) -> &EngineKind {
@@ -113,30 +111,30 @@ impl Engine {
         let buffer_size = Arc::new(AtomicU64::new(0));
         let buffer_size_recv = buffer_size.clone();
 
+        let statistic_sender = self.statistic_sender.clone();
+        let name = format!("persister-file-{}", self.engine_kind);
+
         let (index_tx, index_rx) = unbounded();
         // unlimited buffer
         thread::spawn(move || {
             let rt = Builder::new_current_thread().enable_all().build().unwrap();
             rt.block_on(async {
                 loop {
-                    match buffer_in_rx.recv() {
-                        Ok(record) => {
-                            let mut values = vec![record];
-                            values.extend(buffer_in_rx.try_iter().take(99_999));
-                            if buffer_out_tx_skip.len() < 200_000
-                                && index_tx.is_empty()
-                                && buffer_size.load(Ordering::Relaxed) == 0
-                            {
-                                // we can send direct, nothing buffered, no buffer needed
-                                for record in values {
-                                    buffer_out_tx_skip.send(record).unwrap();
-                                }
-                            } else {
-                                let record = log.log(&values).await;
-                                let _ = index_tx.send(record.2);
+                    if let Ok(record) = buffer_in_rx.recv() {
+                        let mut values = vec![record];
+                        values.extend(buffer_in_rx.try_iter().take(99_999));
+                        if buffer_out_tx_skip.len() < 200_000
+                            && index_tx.is_empty()
+                            && buffer_size.load(Ordering::Relaxed) == 0
+                        {
+                            // we can send direct, nothing buffered, no buffer needed
+                            for record in values {
+                                buffer_out_tx_skip.send(record).unwrap();
                             }
+                        } else {
+                            let record = log.log(&values).await;
+                            let _ = index_tx.send(record.2);
                         }
-                        Err(_) => break,
                     }
                 }
             })
@@ -146,17 +144,25 @@ impl Engine {
         thread::spawn(move || {
             let rt = Builder::new_current_thread().enable_all().build().unwrap();
             rt.block_on(async {
+                // Create a 5-second interval timer
+                let mut report_interval = tokio::time::interval(Duration::from_secs(3));
+
                 loop {
-                    match index_rx.recv() {
-                        Ok(index) => {
-                            // we have very small window here where the no buffer approach could succeed, but at this point we do not care if elements are unordered
+                    tokio::select! {
+                        // Branch 1: Periodic Status Reporting
+                        _ = report_interval.tick() => {
+                            let _ = statistic_sender.send_async(Event::Queue(QueueEvent {
+                                name: name.to_string(),
+                                size: index_rx.len()
+                            })).await;
+                        }
+
+                        // Branch 2: Main Processing Logic
+                        Ok(index) = async { index_rx.recv() } => {
                             let mut indexes = vec![index];
                             buffer_size_recv.store(1, Ordering::Relaxed);
 
-                            if index_rx.len() > 1_000_000 {
-                                warn!("indexes too high {}", index_rx.len());
-                            }
-
+                            // Drain the channel up to 100k items to process in batch
                             indexes.extend(index_rx.try_iter().take(99_999));
 
                             for index in indexes {
@@ -167,13 +173,11 @@ impl Engine {
 
                             buffer_size_recv.store(0, Ordering::Relaxed);
                         }
-                        Err(_) => break,
                     }
                 }
             })
         });
-
-        self.engine_kind.start( join_set, self.id, self.statistic_sender.clone(), is_new).await
+        self.engine_kind.start(join_set, self.id, is_new).await
     }
 
     pub async fn stop(self) -> anyhow::Result<()> {
@@ -296,7 +300,6 @@ impl EngineKind {
         &mut self,
         join_set: &mut JoinSet<()>,
         id: EngineId,
-        sender: Sender<Event>,
         is_new: bool,
     ) -> anyhow::Result<()> {
         match self {
@@ -304,9 +307,6 @@ impl EngineKind {
             EngineKind::MongoDB(m) => m.start(is_new, id).await?,
             EngineKind::Neo4j(n) => n.start(is_new, id).await?,
         }
-        /*if is_new {
-            self.monitor(join_set, sender.clone()).await?;
-        }*/
 
         Ok(())
     }
@@ -322,9 +322,9 @@ impl EngineKind {
         ];
 
         // 1. Initialize all engines in parallel
-        let init_futures = engine_kinds.into_iter().map(|kind| {
-            Engine::new(kind, statistic_tx.clone())
-        });
+        let init_futures = engine_kinds
+            .into_iter()
+            .map(|kind| Engine::new(kind, statistic_tx.clone()));
         let mut engines = join_all(init_futures).await;
 
         // 2. Start all engines in parallel
@@ -349,7 +349,7 @@ impl EngineKind {
         statistic_tx: Sender<Event>,
     ) -> anyhow::Result<()> {
         let mut engine = self.clone();
-        engine.start(join_set, EngineId(0), statistic_tx.clone(), false).await?;
+        engine.start(join_set, EngineId(0), false).await?;
 
         join_set.spawn(async move {
             loop {
@@ -371,6 +371,7 @@ impl EngineKind {
     pub fn postgres_with_port(port: u16) -> Postgres {
         Postgres {
             id: None,
+            pg_id: crate::postgres::ID_BUILDER.fetch_add(1, Ordering::Relaxed),
             name: "engine-postgres".to_string(),
             load: Arc::new(Mutex::new(Load::Low)),
             connector: PostgresConnection {

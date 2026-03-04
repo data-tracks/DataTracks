@@ -1,9 +1,10 @@
 import {
-  AfterViewInit, ChangeDetectorRef,
+  AfterViewInit,
+  ChangeDetectorRef,
   Component,
   effect,
-  ElementRef, inject,
-  input, OnInit,
+  ElementRef,
+  inject,
   TemplateRef,
   ViewChild,
   ViewContainerRef
@@ -55,6 +56,7 @@ export class CytoComponent implements AfterViewInit {
   protected engines = new Map<string, number>();
 
   protected enginesBuffer = new Map<string, number>();
+  protected enginesBufferFile = new Map<string, number>();
 
   private viewContainerRef: ViewContainerRef;
   private changeDetectorRef: ChangeDetectorRef;
@@ -82,6 +84,10 @@ export class CytoComponent implements AfterViewInit {
         }else {
           this.engines.set(id, entry.size);
         }
+      }
+      if (name.includes("persister-file")) {
+        let id = name.replace("persister-file-");
+        this.enginesBufferFile.set(id, entry.size);
       }
 
       this.queues.set(entry.name, entry.size);
@@ -145,6 +151,13 @@ export class CytoComponent implements AfterViewInit {
         },
         {
           selector: 'edge.rotate',
+          style: {
+            'target-endpoint': '0% -50%',  // End at the left-middle of the target node
+            'text-rotation': 1.6,
+          }
+        },
+        {
+          selector: 'node.rotate',
           style: {
             'target-endpoint': '0% -50%',  // End at the left-middle of the target node
             'text-rotation': 1.6,
@@ -261,9 +274,6 @@ export class CytoComponent implements AfterViewInit {
       "Sink Input": "edge-sink-timer",
       "Time Annotation -> WAL": "edge-timer-wal",
       "WAL -> Engines": "edge-wal-persister",
-      //"Persister mongodb": "edge-persister1",
-      //"Persister postgres": "edge-persister2",
-      //"Persister neo4j": "edge-persister3",
       "Definition-0-Document test": "edge-nativer0",
       "Definition-1-Relational test": "edge-nativer1",
       "Definition-2-Graph test": "edge-nativer2"
@@ -295,7 +305,7 @@ export class CytoComponent implements AfterViewInit {
 
         const element = this.cy?.getElementById(`edge-${name}`);
         if (element) {
-          let value = Array.from(this.engines).filter(([key, value]) => key.includes(name) ).map(([key,value]) => value).reduce((acc, value) => acc + value, 0);
+          let value = Array.from(this.engines).filter(([key]) => key.includes(name)).map(([, value]) => value).reduce((acc, value) => acc + value, 0);
           // Update data without refreshing layout
           element.data('value', this.formatNumber(value));
           element.data('color', this.getQueueColor(value));
@@ -303,10 +313,16 @@ export class CytoComponent implements AfterViewInit {
         // buffers
         const buffer = this.cy?.getElementById(`edge-buffer-${name}`);
         if (buffer) {
-          let value = Array.from(this.enginesBuffer).filter(([key, value]) => key.includes(name) ).map(([key,value]) => value).reduce((acc, value) => acc + value, 0);
-          // Update data without refreshing layout
+          let value = Array.from(this.enginesBuffer).filter(([key]) => key.includes(name)).map(([, value]) => value).reduce((acc, value) => acc + value, 0);
           buffer.data('value', this.formatNumber(value));
           buffer.data('color', this.getQueueColor(value));
+        }
+        // file buffers
+        const fileBuffer = this.cy?.getElementById(`buffer-${name}`);
+        if (fileBuffer) {
+          let value = Array.from(this.enginesBufferFile).filter(([key]) => key.includes(name)).map(([, value]) => value).reduce((acc, value) => acc + value, 0);
+          fileBuffer.data('label', this.formatNumber(value));
+          fileBuffer.data('color', this.getQueueColor(value));
         }
 
       }
@@ -342,13 +358,37 @@ export class CytoComponent implements AfterViewInit {
       {data: {id: 'persister', label: 'Persister'}, position: {x: xPersisterDistance, y: y}},
 
       // buffers
-      {data: {id: 'bufferMongo', label: ''}, position: {x: xPersisterDistance - 50, y: yFirst}, classes: "buffer"},
-      {data: {id: 'bufferPostgres', label: ''}, position: {x: xPersisterDistance, y: yFirst}, classes: "buffer"},
-      {data: {id: 'bufferNeo', label: ''}, position: {x: xPersisterDistance + 50, y: yFirst}, classes: "buffer"},
+      {
+        data: {id: 'buffer-mongodb', label: '0'},
+        position: {x: xPersisterDistance - 50, y: yFirst},
+        classes: "buffer rotate"
+      },
+      {
+        data: {id: 'buffer-postgres', label: '0'},
+        position: {x: xPersisterDistance, y: yFirst},
+        classes: "buffer rotate"
+      },
+      {
+        data: {id: 'buffer-neo4j', label: '0'},
+        position: {x: xPersisterDistance + 50, y: yFirst},
+        classes: "buffer rotate"
+      },
 
-      {data: {id: 'engineMongo', label: 'Mongo'}, position: {x: xPersisterDistance - 50, y: ySecond}, classes: "database"},
-      {data: {id: 'enginePostgres', label: 'Postgres'}, position: {x: xPersisterDistance, y: ySecond}, classes: "database"},
-      {data: {id: 'engineNeo', label: 'Neo4j'}, position: {x: xPersisterDistance + 50, y: ySecond}, classes: "database"},
+      {
+        data: {id: 'engine-mongodb', label: 'Mongo'},
+        position: {x: xPersisterDistance - 50, y: ySecond},
+        classes: "database"
+      },
+      {
+        data: {id: 'engine-postgres', label: 'Postgres'},
+        position: {x: xPersisterDistance, y: ySecond},
+        classes: "database"
+      },
+      {
+        data: {id: 'engine-neo4j', label: 'Neo4j'},
+        position: {x: xPersisterDistance + 50, y: ySecond},
+        classes: "database"
+      },
 
       // Nativers
       {data: {id: 'nativer', label: 'Nativer'}, position: {x: xNativerDistance, y: y}},
@@ -372,29 +412,29 @@ export class CytoComponent implements AfterViewInit {
       { data: { id: 'edge-wal-persister', source: 'wal', target: 'persister', value: '0', color: '#fff' } },
 
       {
-        data: {id: 'edge-buffer-mongodb', source: 'persister', target: 'bufferMongo', value: '0', color: '#fff'},
+        data: {id: 'edge-buffer-mongodb', source: 'persister', target: 'buffer-mongodb', value: '0', color: '#fff'},
         classes: "rotate"
       },
       {
-        data: {id: 'edge-buffer-postgres', source: 'persister', target: 'bufferPostgres', value: '0', color: '#fff'},
+        data: {id: 'edge-buffer-postgres', source: 'persister', target: 'buffer-postgres', value: '0', color: '#fff'},
         classes: "rotate"
       },
       {
-        data: {id: 'edge-buffer-neo4j', source: 'persister', target: 'bufferNeo', value: '0', color: '#fff'},
+        data: {id: 'edge-buffer-neo4j', source: 'persister', target: 'buffer-neo4j', value: '0', color: '#fff'},
         classes: "rotate"
       },
 
 
       {
-        data: {id: 'edge-mongodb', source: 'bufferMongo', target: 'engineMongo', value: '0', color: '#fff'},
+        data: {id: 'edge-mongodb', source: 'buffer-mongodb', target: 'engine-mongodb', value: '0', color: '#fff'},
         classes: "rotate"
       },
       {
-        data: {id: 'edge-postgres', source: 'bufferPostgres', target: 'enginePostgres', value: '0', color: '#fff'},
+        data: {id: 'edge-postgres', source: 'buffer-postgres', target: 'engine-postgres', value: '0', color: '#fff'},
         classes: "rotate"
       },
       {
-        data: {id: 'edge-neo4j', source: 'bufferNeo', target: 'engineNeo', value: '0', color: '#fff'},
+        data: {id: 'edge-neo4j', source: 'buffer-neo4j', target: 'engine-neo4j', value: '0', color: '#fff'},
         classes: "rotate"
       },
       //nativer

@@ -48,6 +48,7 @@ impl PartitionInfo {
             let new_id = self.state.next.fetch_add(1, Ordering::Relaxed);
             partition.partition_id = new_id.into();
             partition.size = *size;
+
             new_id
         } else {
             // Increment: Update in-place

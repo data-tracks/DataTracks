@@ -5,6 +5,7 @@ use flume::Sender;
 use pin_utils::pin_mut;
 use std::collections::HashMap;
 use std::error::Error;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::task::JoinSet;
@@ -15,24 +16,31 @@ use tokio_postgres::{Client, Statement};
 use tracing::{debug, info};
 use util::container::Mapping;
 use util::definition::{Definition, Stage};
-use util::{container, Batch, DefinitionMapping, EngineId, Event, PartitionId, RelationalMapping, RelationalType, TargetedRecord};
+use util::{
+    Batch, DefinitionMapping, EngineId, Event, PartitionId, RelationalMapping, RelationalType,
+    TargetedRecord, container,
+};
 use value::Value;
+
+pub(crate) static ID_BUILDER: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Debug)]
 pub struct Postgres {
     pub(crate) id: Option<EngineId>,
+    pub(crate) pg_id: u64,
     pub(crate) name: String,
     pub(crate) load: Arc<Mutex<Load>>,
     pub(crate) connector: PostgresConnection,
     pub(crate) client: Option<Arc<Client>>,
     pub(crate) prepared_statements: HashMap<(String, Stage), (Statement, Vec<Type>)>,
-    pub(crate) join: Option<Arc<Mutex<JoinSet<()>>>>
+    pub(crate) join: Option<Arc<Mutex<JoinSet<()>>>>,
 }
 
 impl Clone for Postgres {
     fn clone(&self) -> Self {
-        Self{
+        Self {
             id: None,
+            pg_id: ID_BUILDER.fetch_add(1, Ordering::Relaxed),
             name: self.name.clone(),
             load: Arc::new(Mutex::new(Load::Low)),
             connector: self.connector.clone(),
@@ -42,7 +50,6 @@ impl Clone for Postgres {
         }
     }
 }
-
 
 #[derive(Debug)]
 struct TxCounts {
@@ -57,7 +64,7 @@ impl Drop for Postgres {
 }
 
 impl Postgres {
-    pub(crate) async fn start<S:Into<EngineId>>(
+    pub(crate) async fn start<S: Into<EngineId>>(
         &mut self,
         join_set: &mut JoinSet<()>,
         start_container: bool,
@@ -102,6 +109,7 @@ impl Postgres {
         entity: String,
         values: &Batch<TargetedRecord>,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
+        //let now = Instant::now();
         match &self.client {
             None => return Err(Box::from("Could not create postgres database")),
             Some(client) => {
@@ -113,7 +121,7 @@ impl Postgres {
                 debug!("Inserted {} row(s) into postgres engine.", rows_affected);
             }
         }
-
+        //warn!("inserted in postgres {} {:?}", values.len(), now.elapsed());
         Ok(())
     }
 
@@ -142,10 +150,7 @@ impl Postgres {
         }
     }
 
-    pub(crate) async fn monitor(
-        &self,
-        statistic_tx: &Sender<Event>,
-    ) -> anyhow::Result<()>  {
+    pub(crate) async fn monitor(&self, statistic_tx: &Sender<Event>) -> anyhow::Result<()> {
         loop {
             self.check_throughput(statistic_tx).await.unwrap();
             sleep(Duration::from_secs(5)).await;
@@ -217,7 +222,10 @@ impl Postgres {
                 );
 
                 client.execute(&create_table_query, &[]).await?;
-                info!("Table '{}' ensured to exist.", name);
+                info!(
+                    "Table '{}' ensured to exist on {:?} pg_id {}.",
+                    name, self.id, self.pg_id
+                );
                 let copy_query = format!("COPY {} (id, value) FROM STDIN BINARY", name);
                 let statement = client.prepare(&copy_query).await?;
                 self.prepared_statements.insert(
@@ -332,14 +340,17 @@ impl Postgres {
         let writer = BinaryCopyInWriter::new(sink, types);
         pin_mut!(writer);
 
-        for chunk  in values.chunks(1000) {
+        for chunk in values.chunks(1000) {
             for TargetedRecord { value, meta } in chunk {
                 match stage {
                     Stage::Plain => {
                         let id_val = meta.id as i64;
                         //let row: [&(dyn ToSql + Sync); 2] = [&id_val, value];
 
-                        writer.as_mut().write(&[&id_val as &(dyn ToSql + Sync), value]).await?;
+                        writer
+                            .as_mut()
+                            .write(&[&id_val as &(dyn ToSql + Sync), value])
+                            .await?;
                     }
                     Stage::Mapped => {
                         if let Value::Array(a) = value {
@@ -352,10 +363,10 @@ impl Postgres {
                                 "Expected Array value for Mapped stage, got {:?}",
                                 value
                             )
-                                .into());
+                            .into());
                         }
                     }
-                    _ => panic!()
+                    _ => panic!(),
                 }
             }
         }
@@ -393,8 +404,6 @@ impl Postgres {
     }
 }
 
-
-
 #[cfg(test)]
 pub mod tests {
     use crate::EngineKind;
@@ -403,7 +412,7 @@ pub mod tests {
     use tracing_test::traced_test;
     use util::definition::{Entity, Stage};
     use util::{
-        batch, target, Mapping, MappingSource, RelationalMapping, RelationalType, TargetedMeta,
+        Mapping, MappingSource, RelationalMapping, RelationalType, TargetedMeta, batch, target,
     };
     use value::Value;
 

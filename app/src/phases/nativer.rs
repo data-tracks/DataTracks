@@ -1,35 +1,32 @@
 use crate::management::catalog::Catalog;
 use engine::engine::Engine;
-use std::time::{Duration};
+use std::time::Duration;
 use tokio::runtime::Builder;
 use tokio::sync::broadcast::Sender;
 use tokio::task::JoinSet;
 use tokio::time::Instant;
 use tracing::error;
 use util::definition::Stage;
-use util::{Batch, Event, TargetedRecord, target, Runtimes};
+use util::{Batch, Event, Runtimes, TargetedRecord, target};
 
 pub struct Nativer {
     catalog: Catalog,
 }
 
 impl Nativer {
-    pub(crate) async fn start(
-        &self,
-        rt: Runtimes,
-        output: Sender<Batch<TargetedRecord>>,
-    ) {
+    pub(crate) async fn start(&self, rt: Runtimes, output: Sender<Batch<TargetedRecord>>) {
+        let definitions = self.catalog.definitions().await;
+
         let rt_mapper = Builder::new_multi_thread()
-            .worker_threads(3)
+            .worker_threads(definitions.len())
             .thread_name("nativer")
             .enable_all()
             .build()
             .unwrap();
 
-
         let mut id_counter = 0;
         //let catalog = self.catalog.clone();
-        for definition in self.catalog.definitions().await {
+        for definition in definitions {
             let engines = self
                 .catalog
                 .engines()
@@ -38,7 +35,7 @@ impl Nativer {
                 .filter(|e| e.model() == definition.model)
                 .collect::<Vec<Engine>>();
 
-            for _ in 0..5 {
+            for _ in 0..3 {
                 let definition = definition.clone();
                 let engines = engines.clone();
                 let mut engine = engines.into_iter().next().unwrap();
@@ -59,6 +56,7 @@ impl Nativer {
                     let mut hb_ticker = tokio::time::interval(Duration::from_secs(5));
                     let hb_name = name.clone();
                     let id = id.into();
+                    error!("Warn work {:?}", id);
 
                     loop {
                         tokio::select! {
@@ -99,6 +97,8 @@ impl Nativer {
 
                                         // Send original records to next phase
                                         let _ = output.send(records);
+
+                                        tokio::task::yield_now().await;
                                     }
                                     Err(err) => error!("Mapping Store Error: {:?}", err),
                                 }

@@ -1,7 +1,7 @@
 use crate::engine::Load;
 use anyhow::bail;
 use flume::Sender;
-use neo4rs::{query, Graph};
+use neo4rs::{Graph, query};
 use reqwest::Client;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -9,12 +9,12 @@ use std::error::Error;
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tokio::time::{sleep, Instant};
+use tokio::time::{Instant, sleep};
 use tracing::{debug, info};
+use util::Event::EngineStatus;
 use util::container::Mapping;
 use util::definition::{Definition, Stage};
-use util::Event::EngineStatus;
-use util::{container, Batch, DefinitionMapping, EngineId, Event, PartitionId, TargetedRecord};
+use util::{Batch, DefinitionMapping, EngineId, Event, PartitionId, TargetedRecord, container};
 use value::Value;
 
 pub struct Neo4j {
@@ -31,7 +31,7 @@ pub struct Neo4j {
 
 impl Clone for Neo4j {
     fn clone(&self) -> Self {
-        Self{
+        Self {
             id: None,
             name: self.name.clone(),
             load: Arc::new(Mutex::new(Load::Low)),
@@ -66,7 +66,11 @@ struct TxMetrics {
 }
 
 impl Neo4j {
-    pub(crate) async fn start<S:Into<EngineId>>(&mut self, is_new: bool, id: S) -> anyhow::Result<()> {
+    pub(crate) async fn start<S: Into<EngineId>>(
+        &mut self,
+        is_new: bool,
+        id: S,
+    ) -> anyhow::Result<()> {
         if is_new {
             container::start_container(
                 self.name.as_str(),
@@ -136,10 +140,7 @@ impl Neo4j {
         1.0
     }
 
-    pub(crate) async fn monitor(
-        &self,
-        statistic_tx: &Sender<Event>,
-    ) -> anyhow::Result<()>  {
+    pub(crate) async fn monitor(&self, statistic_tx: &Sender<Event>) -> anyhow::Result<()> {
         let clone = self.clone();
 
         loop {
@@ -157,7 +158,8 @@ impl Neo4j {
         match &self.graph {
             None => Err(Box::from("No graph")),
             Some(g) => {
-                let len = values.len();
+                //let now = Instant::now();
+                //let len = values.len();
 
                 let cypher_query = self
                     .prepared_queries
@@ -167,12 +169,12 @@ impl Neo4j {
                 let values = match &stage {
                     Stage::Plain => Self::wrap_value_plain(values),
                     Stage::Mapped => Self::wrap_value_mapped(values),
-                    _ => panic!()
+                    _ => panic!(),
                 };
 
                 g.run(query(cypher_query).param("values", values)).await?;
 
-                debug!("neo4j values {}", len);
+                //warn!("inserted in neo4j {} {:?}", len, now.elapsed());
                 Ok(())
             }
         }
@@ -312,11 +314,11 @@ impl Neo4j {
 #[cfg(test)]
 mod tests {
     use crate::EngineKind;
-    use neo4rs::{query, BoltInteger, BoltMap, BoltString, BoltType};
+    use neo4rs::{BoltInteger, BoltMap, BoltString, BoltType, query};
     use std::collections::{BTreeMap, HashMap};
     use std::vec;
     use util::definition::{Definition, DefinitionFilter, Model, Stage};
-    use util::{batch, target, DefinitionMapping, PartitionId, TargetedMeta};
+    use util::{DefinitionMapping, PartitionId, TargetedMeta, batch, target};
     use value::Value;
 
     //#[tokio::test]
@@ -324,7 +326,7 @@ mod tests {
     async fn test_insert() {
         let mut neo = EngineKind::neo4j_with_port(7688);
 
-        neo.start(true, 0.into()).await.unwrap();
+        neo.start(true, 0).await.unwrap();
 
         let definition = Definition::new(
             "test",
@@ -375,7 +377,7 @@ mod tests {
     async fn test_insert_node() {
         let mut neo = EngineKind::neo4j();
 
-        neo.start(true, 0.into()).await.unwrap();
+        neo.start(true, 0).await.unwrap();
 
         let definition = Definition::new(
             "test",

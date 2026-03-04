@@ -8,14 +8,17 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread;
-use std::time::{Duration};
+use std::time::Duration;
 use tokio::runtime::Builder;
 use tokio::select;
 use tokio::task::JoinSet;
 use tokio::time::Instant;
 use tracing::{debug, error, warn};
 use util::definition::{Definition, Stage};
-use util::{Batch, DefinitionId, Event, InitialRecord, PartitionId, TargetedMeta, TargetedRecord, TimedRecord, WorkerId};
+use util::{
+    Batch, DefinitionId, Event, InitialRecord, PartitionId, TargetedMeta, TargetedRecord,
+    TimedRecord, WorkerId,
+};
 
 pub struct Persister {
     catalog: Catalog,
@@ -141,19 +144,15 @@ impl Persister {
             .build()
             .unwrap();
 
-        let partition_id = AtomicU64::new(0);
+        let builder_id = AtomicU64::new(0);
 
         for engine in engines {
-            for i in 0..10 {
-                let partition_id = partition_id.fetch_add(1, Ordering::Relaxed).into();
+            for i in 0..5 {
+                let worker_id = builder_id.fetch_add(1, Ordering::Relaxed).into();
                 let mut engine = engine.clone();
                 // actually make a new connection
-                engine
-                    .start(join_set, false)
-                    .await
-                    .unwrap();
+                engine.start(join_set, false).await.unwrap();
 
-                //let mut clone = engine.clone();
                 let definitions = self
                     .catalog
                     .definitions()
@@ -181,7 +180,7 @@ impl Persister {
                             // Case A: The timer hit 200ms
                             _ = flush_interval.tick() => {
                                 if !buckets.is_empty() {
-                                    flush_buckets(&partition_id, &mut buckets, &mut engine, &definitions).await;
+                                    flush_buckets(&worker_id, &mut buckets, &mut engine, &definitions).await;
                                     count = 0;
                                 }
                             }
@@ -202,7 +201,7 @@ impl Persister {
 
                                 // Immediate flush if we hit the batch size
                                 if count >= BATCH_SIZE {
-                                    flush_buckets(&partition_id, &mut buckets, &mut engine, &definitions).await;
+                                    flush_buckets(&worker_id, &mut buckets, &mut engine, &definitions).await;
                                     count = 0;
                                 }
                                 flush_interval.reset(); // Reset the timer since we just flushed
@@ -277,6 +276,8 @@ async fn flush_buckets(
             }
         }
     }
+    // give it some breathing room
+    tokio::task::yield_now().await;
 }
 
 async fn handle_error(
@@ -286,7 +287,7 @@ async fn handle_error(
     error_count: &mut u64,
     last_log: &mut Instant,
 ) {
-    error!("Distribution error for engine {:?}: {:?}", engine.id, err);
+    debug!("Distribution error for engine {:?}: {:?}", engine.id, err);
     *error_count += 1;
 
     // 1. Backpressure/Sleep logic based on severity

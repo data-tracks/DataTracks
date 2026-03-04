@@ -11,10 +11,10 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::time::{sleep, timeout};
 use tracing::{error, info};
+use util::Event::EngineStatus;
 use util::container::Mapping;
 use util::definition::{Definition, Stage};
-use util::Event::EngineStatus;
-use util::{container, Batch, DefinitionMapping, EngineId, Event, PartitionId, TargetedRecord};
+use util::{Batch, DefinitionMapping, EngineId, Event, PartitionId, TargetedRecord, container};
 use value::Value;
 
 #[derive(Debug)]
@@ -27,7 +27,7 @@ pub struct MongoDB {
 
 impl Clone for MongoDB {
     fn clone(&self) -> Self {
-        Self{
+        Self {
             id: None,
             load: Arc::new(Mutex::new(Load::Low)),
             client: None,
@@ -43,7 +43,11 @@ impl Drop for MongoDB {
 }
 
 impl MongoDB {
-    pub(crate) async fn start<S: Into<EngineId>>(&mut self, is_new: bool, id: S) -> anyhow::Result<()> {
+    pub(crate) async fn start<S: Into<EngineId>>(
+        &mut self,
+        is_new: bool,
+        id: S,
+    ) -> anyhow::Result<()> {
         if is_new {
             container::start_container(
                 "engine-mongodb",
@@ -63,6 +67,7 @@ impl MongoDB {
         let server_api = ServerApi::builder().version(ServerApiVersion::V1).build();
         client_options.server_api = Some(server_api);
         client_options.max_connecting = Some(16);
+        client_options.max_pool_size = Some(16);
 
         let client = Client::with_options(client_options)?;
 
@@ -93,6 +98,7 @@ impl MongoDB {
         match &self.client {
             None => Err(Box::from("No client")),
             Some(client) => {
+                //let now = Instant::now();
                 client
                     .database("public")
                     .collection(&entity)
@@ -102,9 +108,11 @@ impl MongoDB {
                             ("id", Value::int(meta.id as i64)),
                         ])
                     }))
+                    .ordered(false)
                     .bypass_document_validation(true)
                     .await?;
 
+                //warn!("inserted in mongo {} {:?}", values.len(), now.elapsed());
                 Ok(())
             }
         }
@@ -136,10 +144,7 @@ impl MongoDB {
         }
     }
 
-    pub(crate) async fn monitor(
-        &self,
-        statistic_tx: &Sender<Event>,
-    ) -> anyhow::Result<()>  {
+    pub(crate) async fn monitor(&self, statistic_tx: &Sender<Event>) -> anyhow::Result<()> {
         loop {
             match self.measure_opcounters(statistic_tx).await {
                 Ok(_) => {}
