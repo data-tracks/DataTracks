@@ -1,5 +1,5 @@
 use crate::engine::Load;
-use anyhow::bail;
+use anyhow::{anyhow, bail};
 use flume::Sender;
 use neo4rs::{Graph, query};
 use reqwest::Client;
@@ -154,9 +154,9 @@ impl Neo4j {
         stage: Stage,
         entity: String,
         values: &Batch<TargetedRecord>,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    ) -> anyhow::Result<()> {
         match &self.graph {
-            None => Err(Box::from("No graph")),
+            None => bail!("No graph"),
             Some(g) => {
                 //let now = Instant::now();
                 //let len = values.len();
@@ -164,7 +164,7 @@ impl Neo4j {
                 let cypher_query = self
                     .prepared_queries
                     .get(&(stage.clone(), entity.clone()))
-                    .ok_or(format!("No prepared query in neo4j for {}", entity))?;
+                    .ok_or(anyhow!(format!("No prepared query in neo4j for {}", entity)))?;
 
                 let values = match &stage {
                     Stage::Plain => Self::wrap_value_plain(values),

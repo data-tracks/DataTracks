@@ -56,7 +56,6 @@ impl Nativer {
                     let mut hb_ticker = tokio::time::interval(Duration::from_secs(5));
                     let hb_name = name.clone();
                     let id = id.into();
-                    error!("Warn work {:?}", id);
 
                     loop {
                         tokio::select! {
@@ -83,7 +82,7 @@ impl Nativer {
                                     target!(mapper(r.value.clone()), r.meta.clone())
                                 }).collect();
 
-                                let partition_id = definition.partition_info.next(&id, &length).into();
+                                let partition_id = definition.partition_info.next(&id, definition.id.to_string(), &length).into();
 
                                 match engine.store(partition_id, Stage::Mapped, definition.id, &mapped_data).await {
                                     Ok(_) => {

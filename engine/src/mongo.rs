@@ -94,9 +94,9 @@ impl MongoDB {
         _: Stage,
         entity: String,
         values: &Batch<TargetedRecord>,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    ) -> anyhow::Result<()> {
         match &self.client {
-            None => Err(Box::from("No client")),
+            None => bail!("No client"),
             Some(client) => {
                 //let now = Instant::now();
                 client

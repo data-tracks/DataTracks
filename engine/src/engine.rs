@@ -3,7 +3,7 @@ use crate::mongo::MongoDB;
 use crate::neo::Neo4j;
 use crate::postgres::Postgres;
 use derive_more::From;
-use flume::{Receiver, Sender, bounded, unbounded};
+use flume::{bounded, unbounded, Receiver, Sender};
 use futures_util::future::join_all;
 use mongodb::bson::uuid;
 use std::collections::HashMap;
@@ -19,8 +19,8 @@ use tokio::task::JoinSet;
 use tokio::time::sleep;
 use util::definition::{Definition, Model, Stage};
 use util::{
-    Batch, DefinitionId, EngineId, Event, PartitionId, QueueEvent, SegmentedLogWriter,
-    TargetedRecord, log_channel,
+    log_channel, Batch, DefinitionId, EngineId, Event, PartitionId, QueueEvent,
+    SegmentedLogWriter, TargetedRecord,
 };
 use uuid::Uuid;
 use value::Value;
@@ -225,7 +225,7 @@ impl Engine {
         stage: Stage,
         definition_id: DefinitionId,
         values: &Batch<TargetedRecord>,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    ) -> anyhow::Result<()> {
         let ids = values
             .iter()
             .map(|TargetedRecord { value: _, meta }| meta.id)
@@ -240,6 +240,7 @@ impl Engine {
             self.engine_kind
                 .init_entity(definition, partition_id)
                 .await?;
+
             self.existing_partitions.push((definition_id, partition_id))
         }
         let entity_name = definition.entity_name(partition_id, &stage);

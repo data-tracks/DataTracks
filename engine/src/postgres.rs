@@ -1,6 +1,6 @@
 use crate::connection::PostgresConnection;
 use crate::engine::Load;
-use anyhow::bail;
+use anyhow::{anyhow, bail};
 use flume::Sender;
 use pin_utils::pin_mut;
 use std::collections::HashMap;
@@ -13,7 +13,7 @@ use tokio::time::{sleep, timeout};
 use tokio_postgres::binary_copy::BinaryCopyInWriter;
 use tokio_postgres::types::{ToSql, Type};
 use tokio_postgres::{Client, Statement};
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 use util::container::Mapping;
 use util::definition::{Definition, Stage};
 use util::{
@@ -58,8 +58,7 @@ struct TxCounts {
 }
 
 impl Drop for Postgres {
-    fn drop(&mut self) {
-        info!("Dropping Postgres {:?}", self.id)
+    fn drop(&mut self) {info!("Dropping Postgres {:?}", self.id)
     }
 }
 
@@ -108,10 +107,10 @@ impl Postgres {
         stage: Stage,
         entity: String,
         values: &Batch<TargetedRecord>,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    ) -> anyhow::Result<()> {
         //let now = Instant::now();
         match &self.client {
-            None => return Err(Box::from("Could not create postgres database")),
+            None => bail!("Could not create postgres database"),
             Some(client) => {
                 //let now = Instant::now();
                 let rows_affected = self.copy_in(&stage, client, &entity, values).await?;
@@ -121,7 +120,7 @@ impl Postgres {
                 debug!("Inserted {} row(s) into postgres engine.", rows_affected);
             }
         }
-        //warn!("inserted in postgres {} {:?}", values.len(), now.elapsed());
+        warn!("inserted in postgres {} {:?}", entity, self.pg_id);
         Ok(())
     }
 
@@ -222,10 +221,11 @@ impl Postgres {
                 );
 
                 client.execute(&create_table_query, &[]).await?;
-                info!(
+                /*info!(
                     "Table '{}' ensured to exist on {:?} pg_id {}.",
                     name, self.id, self.pg_id
-                );
+                );*/
+
                 let copy_query = format!("COPY {} (id, value) FROM STDIN BINARY", name);
                 let statement = client.prepare(&copy_query).await?;
                 self.prepared_statements.insert(
@@ -262,7 +262,7 @@ impl Postgres {
                 //info!("{}", create_table_query);
 
                 client.execute(&create_table_query, &[]).await?;
-                info!("Table '{}' ensured to exist.", name);
+                //info!("Table '{}' ensured to exist.", name);
                 let copy_query = format!(
                     "COPY {} ({}) FROM STDIN BINARY",
                     name,
@@ -330,11 +330,11 @@ impl Postgres {
         client: &Arc<Client>,
         entity: &String,
         values: &Batch<TargetedRecord>,
-    ) -> Result<usize, Box<dyn Error + Send + Sync>> {
+    ) -> anyhow::Result<usize> {
         let (query, types) = self
             .prepared_statements
             .get(&(entity.to_string(), stage.clone()))
-            .ok_or("Statement not found")?;
+            .ok_or(anyhow!("Statement not found"))?;
 
         let sink = client.copy_in(query).await?;
         let writer = BinaryCopyInWriter::new(sink, types);
@@ -359,11 +359,10 @@ impl Postgres {
 
                             writer.as_mut().write(&row_params).await?;
                         } else {
-                            return Err(format!(
+                            bail!(
                                 "Expected Array value for Mapped stage, got {:?}",
                                 value
-                            )
-                            .into());
+                            );
                         }
                     }
                     _ => panic!(),

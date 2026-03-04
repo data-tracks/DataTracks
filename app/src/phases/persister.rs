@@ -207,7 +207,7 @@ impl Persister {
                                 flush_interval.reset(); // Reset the timer since we just flushed
                             }
 
-                            // Case C: Send Heartbeat (maybe on a different interval)
+                            // Case C: Send Heartbeat
                             _ = heartbeat_interval.tick() => {
                                  let _ = engine.statistic_sender.send(Event::Heartbeat(name.clone()));
                             }
@@ -240,7 +240,7 @@ async fn flush_buckets(
 
         let size = records.len() as u64;
         let source = engine.id;
-        let partition_id = PartitionId(definition.partition_info.next(worker_id, &size));
+        let partition_id = PartitionId(definition.partition_info.next(worker_id, engine.engine_kind.to_string(), &size));
 
         let mut last_log = Instant::now();
 

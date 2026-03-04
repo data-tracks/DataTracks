@@ -2,8 +2,11 @@ use dashmap::DashMap;
 use serde::Serialize;
 use serde_with::serde_as;
 use std::ops::Deref;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
+use tracing::{error, warn};
+
+static ID_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 #[serde_as]
 #[derive(Clone, Debug, Serialize)]
@@ -25,11 +28,12 @@ impl PartitionInfo {
                 partitions: Default::default(),
                 closed: vec![],
                 next: Default::default(),
+                id: ID_COUNTER.fetch_add(1, Ordering::Relaxed)
             }),
         }
     }
 
-    pub fn next(&self, worker_id: &WorkerId, size: &u64) -> u64 {
+    pub fn next(&self, worker_id: &WorkerId, name: String, size: &u64) -> u64 {
         // 1. Get or Create the partition.
         // DashMap handles the internal locking for this specific key.
         let mut entry = self.state.partitions.entry(*worker_id).or_insert_with(|| {
@@ -49,6 +53,8 @@ impl PartitionInfo {
             partition.partition_id = new_id.into();
             partition.size = *size;
 
+            //warn!("id: {} name:{} new_id:{}", self.state.id, name, new_id);
+
             new_id
         } else {
             // Increment: Update in-place
@@ -63,6 +69,7 @@ struct State {
     partitions: DashMap<WorkerId, Partition>,
     closed: Vec<u64>,
     next: AtomicU64,
+    id: u64
 }
 
 #[derive(Copy, Clone, Debug, Serialize, Eq, Hash, PartialEq)]
