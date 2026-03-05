@@ -8,6 +8,7 @@ repository.workspace = true
 description.workspace = true
 
 [dependencies]
+rayon = { workspace = true }
 tokio-postgres = { workspace = true }
 mongodb = { workspace = true }
 util = { workspace = true }
@@ -24,3 +25,5 @@ flume = { workspace = true }
 pin-utils = "0.1.0"
 tracing-test = { workspace = true }
 anyhow = { workspace = true }
+log = "0.4.29"
+indexmap = {workspace = true}

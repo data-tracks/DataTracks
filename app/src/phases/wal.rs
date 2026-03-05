@@ -52,7 +52,7 @@ impl WalManager {
                     .unwrap();
 
                 for _ in 0..4 {
-                    let reader = log.as_reader().await.unwrap();
+                    let reader = log.build_reader().await.unwrap();
                     let buff_token = buff_token.clone();
                     let seg_id_rx = seg_id_rx.clone();
                     let buff_tx = buff_tx.clone();
@@ -69,7 +69,7 @@ impl WalManager {
                                     }
                                     index = seg_id_rx.recv_async() => match index {
                                             Ok(index) => {
-                                                let record = reader.unlog(index.2).await;
+                                                let record = reader.unlog(&index.2).await;
                                                 // as long as it is not emptied we wait here
                                                 let _ = buff_tx.send(record);
                                             }

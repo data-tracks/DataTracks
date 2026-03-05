@@ -21,7 +21,7 @@ export class ThreadsComponent {
     groupedThreads = computed(() => {
         const threads = this.threads();
         const now = this.currentTime(); // Tracking dependency
-        const STALE_THRESHOLD_MS = 5000; // Define what "stale" means (e.g., 2 seconds)
+        const STALE_THRESHOLD_MS = 7000; // Define what "stale" means
 
         const groups: Record<string, any[]> = {};
 

@@ -4,7 +4,6 @@ use serde_with::serde_as;
 use std::ops::Deref;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use tracing::{error, warn};
 
 static ID_COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -33,7 +32,7 @@ impl PartitionInfo {
         }
     }
 
-    pub fn next(&self, worker_id: &WorkerId, name: String, size: &u64) -> u64 {
+    pub fn next(&self, worker_id: &WorkerId, size: &u64) -> u64 {
         // 1. Get or Create the partition.
         // DashMap handles the internal locking for this specific key.
         let mut entry = self.state.partitions.entry(*worker_id).or_insert_with(|| {

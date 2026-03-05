@@ -5,23 +5,22 @@ use crate::postgres::Postgres;
 use derive_more::From;
 use flume::{bounded, unbounded, Receiver, Sender};
 use futures_util::future::join_all;
+use futures_util::{stream, StreamExt};
+use indexmap::IndexSet;
 use mongodb::bson::uuid;
 use std::collections::HashMap;
-use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::ops::Mul;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::thread::JoinHandle;
 use std::time::Duration;
 use tokio::runtime::Builder;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
 use util::definition::{Definition, Model, Stage};
-use util::{
-    log_channel, Batch, DefinitionId, EngineId, Event, PartitionId, QueueEvent,
-    SegmentedLogWriter, TargetedRecord,
-};
+use util::{log_channel, Batch, DefinitionId, EngineId, Event, PartitionId, QueueEvent, SegmentedLogWriter, TargetedRecord};
 use uuid::Uuid;
 use value::Value;
 
@@ -31,14 +30,16 @@ const SEGMENT_SIZE: u64 = 10 * 1024 * 1024;
 #[derive(Debug)]
 pub struct Engine {
     pub buffer_in: (Sender<TargetedRecord>, Receiver<TargetedRecord>),
-    pub buffer_out: (Sender<TargetedRecord>, Receiver<TargetedRecord>),
+    pub buffer_out: (Sender<Vec<TargetedRecord>>, Receiver<Vec<TargetedRecord>>),
     pub ids: Vec<u64>,
     pub statistic_sender: Sender<Event>,
     pub existing_partitions: Vec<(DefinitionId, PartitionId)>,
     pub engine_kind: EngineKind,
     pub id: EngineId,
     pub definitions: HashMap<DefinitionId, Definition>,
+    pub handles: Vec<JoinHandle<()>>
 }
+
 
 impl Clone for Engine {
     fn clone(&self) -> Self {
@@ -52,6 +53,7 @@ impl Clone for Engine {
             engine_kind: self.engine_kind.clone(),
             id: self.id.clone(),
             definitions: self.definitions.clone(),
+            handles: vec![],
         }
     }
 }
@@ -76,12 +78,6 @@ impl Engine {
 
         let id = EngineId(ID_BUILDER.fetch_add(1, Ordering::Relaxed));
 
-        let name = format!("Engine-{}-{}", engine_kind, id.0);
-        log_channel(buffer_out.0.clone(), name, None).await;
-
-        let name = format!("Engine-{}-{}-buffer", engine_kind, id.0);
-        log_channel(buffer_in.0.clone(), name, None).await;
-
         Engine {
             id,
             buffer_in,
@@ -91,32 +87,50 @@ impl Engine {
             existing_partitions: vec![],
             engine_kind,
             definitions: Default::default(),
+            handles: vec![],
         }
     }
 
-    pub async fn start(&mut self, join_set: &mut JoinSet<()>, is_new: bool) -> anyhow::Result<()> {
+    pub async fn start_container(&self) -> anyhow::Result<()> {
+        match &self.engine_kind {
+            EngineKind::Postgres(p) => p.start_container().await,
+            EngineKind::MongoDB(m) => m.start_container().await,
+            EngineKind::Neo4j(n) => n.start_container().await,
+        }
+    }
+
+    pub async fn start(&mut self, join_set: &mut JoinSet<()>) -> anyhow::Result<()> {
         let buffer_in_rx = self.buffer_in.1.clone();
         let buffer_out_tx = self.buffer_out.0.clone();
 
         let buffer_out_tx_skip = self.buffer_out.0.clone();
 
         let mut log = SegmentedLogWriter::new(
-            format!("temp/engine/{}_{}.log", self.id.0, Uuid::new()).as_str(),
+            format!("temp/engine/{}_{}", self.id.0, Uuid::new()).as_str(),
             SEGMENT_SIZE,
         )
         .await
         .unwrap();
-        let reader = log.as_reader().await.unwrap();
+        let reader = log.build_reader().await.unwrap();
+        let cleaner = log.build_cleaner();
 
         let buffer_size = Arc::new(AtomicU64::new(0));
         let buffer_size_recv = buffer_size.clone();
 
         let statistic_sender = self.statistic_sender.clone();
-        let name = format!("persister-file-{}", self.engine_kind);
+
+        let name = format!("Engine-{}-{}", self.engine_kind, self.id);
+        log_channel(self.buffer_out.0.clone(), name, None).await;
+
+        let name = format!("Engine-{}-{}-buffer", self.engine_kind, self.id);
+        log_channel(self.buffer_in.0.clone(), name, None).await;
+
 
         let (index_tx, index_rx) = unbounded();
+        let name = format!("persister-file-{}", self.engine_kind);
+
         // unlimited buffer
-        thread::spawn(move || {
+        let handle = thread::spawn(move || {
             let rt = Builder::new_current_thread().enable_all().build().unwrap();
             rt.block_on(async {
                 loop {
@@ -128,28 +142,31 @@ impl Engine {
                             && buffer_size.load(Ordering::Relaxed) == 0
                         {
                             // we can send direct, nothing buffered, no buffer needed
-                            for record in values {
-                                buffer_out_tx_skip.send(record).unwrap();
-                            }
+                            buffer_out_tx_skip.send(values).unwrap();
+
                         } else {
                             let record = log.log(&values).await;
                             let _ = index_tx.send(record.2);
+                            // warn!("direct insert {}", name_clone);
                         }
                     }
                 }
             })
         });
+        self.handles.push(handle);
 
         // holding feeder
-        thread::spawn(move || {
+        let handle = thread::spawn(move || {
             let rt = Builder::new_current_thread().enable_all().build().unwrap();
             rt.block_on(async {
-                // Create a 5-second interval timer
                 let mut report_interval = tokio::time::interval(Duration::from_secs(3));
+                report_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+
+                let mut remove_segments:IndexSet<_> = IndexSet::new();
 
                 loop {
                     tokio::select! {
-                        // Branch 1: Periodic Status Reporting
+                        // Periodic Status Reporting
                         _ = report_interval.tick() => {
                             let _ = statistic_sender.send_async(Event::Queue(QueueEvent {
                                 name: name.to_string(),
@@ -157,18 +174,29 @@ impl Engine {
                             })).await;
                         }
 
-                        // Branch 2: Main Processing Logic
+                        // Main Processing Logic
                         Ok(index) = async { index_rx.recv() } => {
+
                             let mut indexes = vec![index];
                             buffer_size_recv.store(1, Ordering::Relaxed);
 
                             // Drain the channel up to 100k items to process in batch
                             indexes.extend(index_rx.try_iter().take(99_999));
 
-                            for index in indexes {
-                                for record in reader.unlog(index).await {
-                                    let _ = buffer_out_tx.send(record);
+                            remove_segments.extend(indexes.iter().map(|i| i.segment_id));
+
+                            stream::iter(indexes).for_each_concurrent(10, |index| {
+                                let reader = &reader;
+                                let buffer_out_tx = &buffer_out_tx;
+
+                                async move {
+                                    let data = reader.unlog(&index).await;
+                                    let _ = buffer_out_tx.send(data);
                                 }
+                            }).await;
+
+                            for index in remove_segments.drain(..remove_segments.len().saturating_sub(1)){
+                                cleaner.clean(index).await;
                             }
 
                             buffer_size_recv.store(0, Ordering::Relaxed);
@@ -177,7 +205,8 @@ impl Engine {
                 }
             })
         });
-        self.engine_kind.start(join_set, self.id, is_new).await
+        self.handles.push(handle);
+        self.engine_kind.start(join_set, self.id).await
     }
 
     pub async fn stop(self) -> anyhow::Result<()> {
@@ -238,7 +267,7 @@ impl Engine {
             .contains(&(definition_id, partition_id))
         {
             self.engine_kind
-                .init_entity(definition, partition_id)
+                .init_entity(definition, partition_id, &stage)
                 .await?;
 
             self.existing_partitions.push((definition_id, partition_id))
@@ -246,9 +275,9 @@ impl Engine {
         let entity_name = definition.entity_name(partition_id, &stage);
 
         match &self.engine_kind {
-            EngineKind::Postgres(p) => p.store(stage, entity_name, values).await,
-            EngineKind::MongoDB(m) => m.store(stage, entity_name, values).await,
-            EngineKind::Neo4j(n) => n.store(stage, entity_name, values).await,
+            EngineKind::Postgres(p) => p.store(&stage, entity_name, values).await,
+            EngineKind::MongoDB(m) => m.store(&stage, entity_name, values).await,
+            EngineKind::Neo4j(n) => n.store(&stage, entity_name, values).await,
         }
     }
 
@@ -256,7 +285,7 @@ impl Engine {
         &mut self,
         entity: String,
         ids: Vec<u64>,
-    ) -> Result<Vec<Value>, Box<dyn Error + Send + Sync>> {
+    ) -> anyhow::Result<Vec<Value>> {
         match &self.engine_kind {
             EngineKind::Postgres(p) => p.read(entity, ids).await,
             EngineKind::MongoDB(m) => m.read(entity, ids).await,
@@ -287,10 +316,11 @@ impl EngineKind {
         &mut self,
         definition: &Definition,
         partition_id: PartitionId,
+        stage: &Stage,
     ) -> anyhow::Result<()> {
         match self {
-            EngineKind::Postgres(p) => p.init_entity(definition, partition_id).await?,
-            EngineKind::MongoDB(m) => m.init_entity(definition, partition_id).await?,
+            EngineKind::Postgres(p) => p.init_entity(definition, partition_id, stage).await?,
+            EngineKind::MongoDB(m) => m.init_entity(definition, partition_id, stage).await?,
             EngineKind::Neo4j(n) => n.init_entity(definition, partition_id).await,
         };
 
@@ -301,19 +331,17 @@ impl EngineKind {
         &mut self,
         join_set: &mut JoinSet<()>,
         id: EngineId,
-        is_new: bool,
     ) -> anyhow::Result<()> {
         match self {
-            EngineKind::Postgres(p) => p.start(join_set, is_new, id).await?,
-            EngineKind::MongoDB(m) => m.start(is_new, id).await?,
-            EngineKind::Neo4j(n) => n.start(is_new, id).await?,
+            EngineKind::Postgres(p) => p.start(join_set, id).await?,
+            EngineKind::MongoDB(m) => m.start(id).await?,
+            EngineKind::Neo4j(n) => n.start(id).await?,
         }
 
         Ok(())
     }
 
-    pub async fn start_all(
-        join_set: &mut JoinSet<()>,
+    pub async fn get_all(
         statistic_tx: Sender<Event>,
     ) -> anyhow::Result<Vec<Engine>> {
         let engine_kinds: Vec<EngineKind> = vec![
@@ -322,18 +350,10 @@ impl EngineKind {
             EngineKind::neo4j().into(),
         ];
 
-        // 1. Initialize all engines in parallel
         let init_futures = engine_kinds
             .into_iter()
             .map(|kind| Engine::new(kind, statistic_tx.clone()));
-        let mut engines = join_all(init_futures).await;
-
-        // 2. Start all engines in parallel
-        for engine in &mut engines {
-            engine.start(join_set, true).await?;
-        }
-
-        Ok(engines)
+        Ok(join_all(init_futures).await)
     }
 
     pub async fn stop(self) -> anyhow::Result<()> {
@@ -350,7 +370,7 @@ impl EngineKind {
         statistic_tx: Sender<Event>,
     ) -> anyhow::Result<()> {
         let mut engine = self.clone();
-        engine.start(join_set, EngineId(0), false).await?;
+        engine.start(join_set, EngineId(0)).await?;
 
         join_set.spawn(async move {
             loop {

@@ -9,8 +9,11 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tokio::time::{sleep, timeout};
+use rayon::iter::ParallelIterator;
+use rayon::iter::IntoParallelRefIterator;
+use tokio::time::{sleep, timeout, Instant};
 use tracing::{error, info};
+use tracing::log::debug;
 use util::Event::EngineStatus;
 use util::container::Mapping;
 use util::definition::{Definition, Stage};
@@ -38,29 +41,17 @@ impl Clone for MongoDB {
 
 impl Drop for MongoDB {
     fn drop(&mut self) {
-        info!("Dropping MongoDB {:?}", self.id)
+        if self.client.is_some() {
+            info!("Dropping MongoDB {:?}", self.id)
+        }
     }
 }
 
 impl MongoDB {
     pub(crate) async fn start<S: Into<EngineId>>(
         &mut self,
-        is_new: bool,
         id: S,
     ) -> anyhow::Result<()> {
-        if is_new {
-            container::start_container(
-                "engine-mongodb",
-                "mongo:latest",
-                vec![Mapping {
-                    container: 27017,
-                    host: 27017,
-                }],
-                None,
-            )
-            .await?;
-        }
-
         let uri = format!("mongodb://localhost:{}", 27017);
         let mut client_options = ClientOptions::parse(uri).await?;
 
@@ -85,16 +76,30 @@ impl MongoDB {
         Ok(())
     }
 
+    pub(crate) async fn start_container(&self) -> anyhow::Result<()> {
+        container::start_container(
+            "engine-mongodb",
+            "mongo:latest",
+            vec![Mapping {
+                container: 27017,
+                host: 27017,
+            }],
+            None,
+        ).await
+    }
+
     pub(crate) fn cost(&self, _: &Value) -> f64 {
         1.0
     }
 
     pub(crate) async fn store(
         &self,
-        _: Stage,
+        _: &Stage,
         entity: String,
         values: &Batch<TargetedRecord>,
     ) -> anyhow::Result<()> {
+        let now = Instant::now();
+        let len = values.len();
         match &self.client {
             None => bail!("No client"),
             Some(client) => {
@@ -102,17 +107,17 @@ impl MongoDB {
                 client
                     .database("public")
                     .collection(&entity)
-                    .insert_many(values.into_iter().map(|TargetedRecord { value, meta }| {
+                    .insert_many(values.records.par_iter().map(|TargetedRecord { value, meta }| {
                         Value::dict_from_pairs(vec![
                             ("value", value.clone()),
                             ("id", Value::int(meta.id as i64)),
                         ])
-                    }))
+                    }).collect::<Vec<_>>())
                     .ordered(false)
                     .bypass_document_validation(true)
                     .await?;
 
-                //warn!("inserted in mongo {} {:?}", values.len(), now.elapsed());
+                debug!("inserted in mongo {} {:?}", len, now.elapsed());
                 Ok(())
             }
         }
@@ -122,9 +127,9 @@ impl MongoDB {
         &self,
         entity: String,
         ids: Vec<u64>,
-    ) -> Result<Vec<Value>, Box<dyn Error + Send + Sync>> {
+    ) -> anyhow::Result<Vec<Value>> {
         match &self.client {
-            None => Err(Box::from("No client")),
+            None => bail!("No client"),
             Some(client) => {
                 let mut res: Cursor<Value> = client
                     .database("public")
@@ -160,11 +165,15 @@ impl MongoDB {
         &self,
         definition: &Definition,
         partition_id: PartitionId,
+        stage: &Stage,
     ) -> anyhow::Result<()> {
-        let name = definition.entity_name(partition_id, &Stage::Plain);
-        self.create_collection(name.as_str()).await?;
+        if matches!(stage, Stage::Plain) {
+            let name = definition.entity_name(partition_id, &Stage::Plain);
+            self.create_collection(name.as_str()).await?;
+        }
 
-        if let DefinitionMapping::Document(_) = definition.mapping {
+
+        if matches!(stage, Stage::Mapped) && let DefinitionMapping::Document(_) = definition.mapping {
             let name = definition.entity_name(partition_id, &Stage::Mapped);
             self.create_collection(name.as_str()).await?;
         }

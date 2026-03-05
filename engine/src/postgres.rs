@@ -8,12 +8,14 @@ use std::error::Error;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use rayon::iter::IntoParallelRefIterator;
+use rayon::iter::ParallelIterator;
 use tokio::task::JoinSet;
-use tokio::time::{sleep, timeout};
+use tokio::time::{sleep, timeout, Instant};
 use tokio_postgres::binary_copy::BinaryCopyInWriter;
 use tokio_postgres::types::{ToSql, Type};
 use tokio_postgres::{Client, Statement};
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 use util::container::Mapping;
 use util::definition::{Definition, Stage};
 use util::{
@@ -58,7 +60,10 @@ struct TxCounts {
 }
 
 impl Drop for Postgres {
-    fn drop(&mut self) {info!("Dropping Postgres {:?}", self.id)
+    fn drop(&mut self) {
+        if self.client.is_some() {
+            info!("Dropping Postgres {:?}", self.id)
+        }
     }
 }
 
@@ -66,21 +71,8 @@ impl Postgres {
     pub(crate) async fn start<S: Into<EngineId>>(
         &mut self,
         join_set: &mut JoinSet<()>,
-        start_container: bool,
         id: S,
     ) -> anyhow::Result<()> {
-        if start_container {
-            container::start_container(
-                self.name.as_str(),
-                "postgres:latest",
-                vec![Mapping {
-                    container: 5432,
-                    host: self.connector.port,
-                }],
-                Some(vec![format!("POSTGRES_PASSWORD={}", "postgres")]),
-            )
-            .await?;
-        }
 
         let client = self.connector.connect(join_set).await?;
         let id = id.into();
@@ -94,6 +86,18 @@ impl Postgres {
         Ok(())
     }
 
+    pub(crate) async fn start_container(&self) -> anyhow::Result<()> {
+        container::start_container(
+            self.name.as_str(),
+            "postgres:latest",
+            vec![Mapping {
+                container: 5432,
+                host: self.connector.port,
+            }],
+            Some(vec![format!("POSTGRES_PASSWORD={}", "postgres")]),
+        ).await
+    }
+
     pub(crate) async fn stop(&self) -> anyhow::Result<()> {
         container::stop(self.name.as_str()).await
     }
@@ -104,11 +108,13 @@ impl Postgres {
 
     pub(crate) async fn store(
         &self,
-        stage: Stage,
+        stage: &Stage,
         entity: String,
         values: &Batch<TargetedRecord>,
     ) -> anyhow::Result<()> {
-        //let now = Instant::now();
+        let now = Instant::now();
+        let len = values.len();
+
         match &self.client {
             None => bail!("Could not create postgres database"),
             Some(client) => {
@@ -120,7 +126,7 @@ impl Postgres {
                 debug!("Inserted {} row(s) into postgres engine.", rows_affected);
             }
         }
-        warn!("inserted in postgres {} {:?}", entity, self.pg_id);
+        debug!("inserted in postgres {} {:?}", len, now.elapsed());
         Ok(())
     }
 
@@ -128,9 +134,9 @@ impl Postgres {
         &self,
         entity: String,
         ids: Vec<u64>,
-    ) -> Result<Vec<Value>, Box<dyn Error + Send + Sync>> {
+    ) -> anyhow::Result<Vec<Value>> {
         match &self.client {
-            None => Err(Box::from("Could not create postgres database")),
+            None => bail!("Could not create postgres database"),
             Some(client) => {
                 let insert_query = format!("SELECT * FROM {} WHERE id IN($1)", entity);
                 let statement = client.prepare(&insert_query).await?;
@@ -196,11 +202,15 @@ impl Postgres {
         &mut self,
         definition: &Definition,
         partition_id: PartitionId,
+        stage: &Stage,
     ) -> anyhow::Result<()> {
-        self.create_table_plain(&definition.entity_name(partition_id, &Stage::Plain))
-            .await?;
+        if matches!(stage, Stage::Plain) {
+            self.create_table_plain(&definition.entity_name(partition_id, &Stage::Plain))
+                .await?;
+        }
 
-        if let DefinitionMapping::Relational(m) = &definition.mapping {
+
+        if matches!(stage, Stage::Mapped) && let DefinitionMapping::Relational(m) = &definition.mapping {
             let name = definition.entity_name(partition_id, &Stage::Mapped);
             self.create_table_mapped(name.as_str(), m).await?;
         }
@@ -221,10 +231,10 @@ impl Postgres {
                 );
 
                 client.execute(&create_table_query, &[]).await?;
-                /*info!(
+                debug!(
                     "Table '{}' ensured to exist on {:?} pg_id {}.",
                     name, self.id, self.pg_id
-                );*/
+                );
 
                 let copy_query = format!("COPY {} (id, value) FROM STDIN BINARY", name);
                 let statement = client.prepare(&copy_query).await?;
@@ -355,7 +365,7 @@ impl Postgres {
                     Stage::Mapped => {
                         if let Value::Array(a) = value {
                             let row_params: Vec<&(dyn ToSql + Sync)> =
-                                a.values.iter().map(|v| v as &(dyn ToSql + Sync)).collect();
+                                a.values.par_iter().map(|v| v as &(dyn ToSql + Sync)).collect();
 
                             writer.as_mut().write(&row_params).await?;
                         } else {
@@ -420,12 +430,13 @@ pub mod tests {
     pub async fn test_postgres() {
         let mut pg = EngineKind::postgres();
         let mut join_set = JoinSet::new();
-        pg.start(&mut join_set, true, 0).await.unwrap();
+        pg.start_container().await.unwrap();
+        pg.start(&mut join_set, 0).await.unwrap();
 
         pg.create_table_plain("users").await.unwrap();
 
         pg.store(
-            Stage::Plain,
+            &Stage::Plain,
             String::from("users"),
             &batch![target!(Value::text("test"), TargetedMeta::default())],
         )
@@ -438,8 +449,9 @@ pub mod tests {
     //#[traced_test]
     pub async fn test_postgres_mapped() {
         let mut pg = EngineKind::postgres_with_port(5433);
+        pg.start_container().await.unwrap();
         let mut join_set = JoinSet::new();
-        pg.start(&mut join_set, true, 0).await.unwrap();
+        pg.start(&mut join_set, 0).await.unwrap();
 
         let r = RelationalMapping::Tuple(
             vec![
@@ -458,7 +470,7 @@ pub mod tests {
         pg.create_table_mapped("users", &r).await.unwrap();
 
         pg.store(
-            Stage::Mapped,
+            &Stage::Mapped,
             String::from("users"),
             &batch![target!(
                 Value::array(vec![Value::text("test"), Value::int(30)]),

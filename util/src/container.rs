@@ -204,20 +204,16 @@ pub async fn start_container(
 
     let mut status = docker.create_image(Some(options), None, None);
 
-    let mut first = true;
+    println!();
+
     while let Some(msg) = status.try_next().await? {
         if let Some(progress) = msg.progress_detail {
-            if !first {
-                print!("\rLoading {:?}/{:?}", progress.current, progress.total)
-            } else {
-                println!("Loading {:?}/{:?}", progress.current, progress.total)
-            }
-            first = false;
+            print!("\rLoading {:?}/{:?}", progress.current, progress.total);
         } else if let Some(status) = msg.status {
-            info!("Pull Event: {}", status);
+            print!("\rPull Event: {}", status);
         }
     }
-    print!("\r");
+    print!("\rImage successfully setup {}\n", name);
 
     let mut exposed_ports = vec![];
     let mut port_bindings = HashMap::new();

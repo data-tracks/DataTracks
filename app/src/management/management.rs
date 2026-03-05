@@ -180,23 +180,24 @@ impl Manager {
                 .build()
                 .unwrap();
 
-            rt.block_on(async move {
-                let mut join_set: JoinSet<()> = JoinSet::new();
 
-                let engines = EngineKind::start_all(&mut join_set, statistic_tx.clone())
+            rt.block_on(async move {
+                let engines = EngineKind::get_all(statistic_tx.clone())
                     .await
                     .unwrap();
+
                 for engine in engines.into_iter() {
+                    engine.start_container().await.unwrap();
                     catalog.add_engine(engine).await;
                 }
-                tx.send_async(true).await.unwrap();
 
-                join_set.join_all().await;
+                tx.send_async(true).await.unwrap();
             });
         });
         self.runtimes.add_handle(engines);
 
         rx.recv()?;
+        info!("All engines added");
 
         Ok(())
     }

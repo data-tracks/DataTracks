@@ -1,18 +1,22 @@
-use crate::{Identifiable};
+use crate::Identifiable;
+use flume::{Receiver, Sender};
 use memmap2::{Mmap, MmapMut, MmapOptions};
 use speedy::{LittleEndian, Readable, Writable};
 use std::error::Error;
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
+use std::thread;
+use std::thread::JoinHandle;
 use tokio::fs;
 use tokio::fs::OpenOptions;
-use tracing::debug;
+use tokio::runtime::{Builder};
+use tracing::{debug, error};
 
 pub struct SegmentedLogWriter<T>
 where
-    for<'a> T: Readable<'a, LittleEndian>,
-    T: Writable<LittleEndian>,
-    T: Identifiable
+        for<'a> T: Readable<'a, LittleEndian>,
+        T: Writable<LittleEndian>,
+        T: Identifiable,
 {
     _p: PhantomData<T>,
     base_path: PathBuf,
@@ -23,14 +27,61 @@ where
     batch: Vec<u8>,
 }
 
+
 pub struct SegmentedLogReader<T>
 where
-    for<'a> T: Readable<'a, LittleEndian>,
-    T: Writable<LittleEndian>,
-    T: Identifiable
+        for<'a> T: Readable<'a, LittleEndian>,
+        T: Writable<LittleEndian>,
+        T: Identifiable,
 {
     _p: PhantomData<T>,
     base_path: PathBuf,
+}
+
+pub struct SegmentedLogCleaner {
+    cleaner_rx: Receiver<usize>,
+    cleaner_tx: Sender<usize>,
+    base_path: PathBuf,
+    handle: Option<JoinHandle<()>>,
+}
+
+
+impl SegmentedLogCleaner {
+    pub fn new(base_path: PathBuf) -> Self {
+        let channel = flume::unbounded();
+        Self {
+            cleaner_rx: channel.1.clone(),
+            cleaner_tx: channel.0.clone(),
+            base_path,
+            handle: None,
+        }
+    }
+
+    pub async fn clean(&self, segment_id: usize) {
+        self.cleaner_tx.send(segment_id).unwrap();
+    }
+
+    pub fn start(&mut self) {
+        let rx = self.cleaner_rx.clone();
+        let base_path = self.base_path.clone();
+        let handle = thread::spawn(move || {
+            let builder = Builder::new_current_thread().enable_all().build().unwrap();
+            builder.block_on(async move {
+                loop {
+                    match rx.recv() {
+                        Ok(segment_id) => {
+                            let path = base_path.join(format!("segment_{:06}.log", segment_id));
+                            fs::remove_file(path.clone()).await.unwrap();
+                            debug!("cleaned {}", path.display());
+                        }
+                        Err(_) => {}
+                    }
+                }
+            });
+            error!("end cleaner");
+        });
+        self.handle = Some(handle);
+    }
 }
 
 const SEGMENT_SIZE: u64 = 10 * 1024 * 1024;
@@ -40,7 +91,7 @@ impl<T: for<'a> speedy::Readable<'a, LittleEndian> + speedy::Writable<LittleEndi
         Self::new("wal_segments", SEGMENT_SIZE).await // 10 MB segments
     }
 
-    pub async fn as_reader(&self) -> Result<SegmentedLogReader<T>, Box<dyn Error + Send + Sync>> {
+    pub async fn build_reader(&self) -> Result<SegmentedLogReader<T>, Box<dyn Error + Send + Sync>> {
         SegmentedLogReader::new(self.base_path.to_str().unwrap()).await
     }
 
@@ -67,6 +118,12 @@ impl<T: for<'a> speedy::Readable<'a, LittleEndian> + speedy::Writable<LittleEndi
             cursor: 0,
             batch: vec![],
         })
+    }
+
+    pub fn build_cleaner(&self) -> SegmentedLogCleaner {
+        let mut cleaner = SegmentedLogCleaner::new(self.base_path.clone());
+        cleaner.start();
+        cleaner
     }
 
     async fn map_segment(base: &Path, id: usize, size: u64) -> MmapMut {
@@ -175,7 +232,7 @@ SegmentedLogReader<T> {
         unsafe { MmapOptions::new().map(&file).unwrap() }
     }
 
-    pub async fn read(&self, segment: SegmentedIndex) -> Vec<u8> {
+    pub async fn read(&self, segment: &SegmentedIndex) -> Vec<u8> {
         let mut values: Vec<u8> = vec![];
 
         let end_pointer = segment.start_pointer + segment.bytes;
@@ -186,19 +243,20 @@ SegmentedLogReader<T> {
         values
     }
 
-    pub async fn unlog(&self, batch: SegmentedIndex) -> Vec<T> {
+    pub async fn unlog(&self, batch: &SegmentedIndex) -> Vec<T> {
         let data = self.read(batch).await;
         Vec::<T>::read_from_buffer(&data).expect("Failed to deserialize record")
     }
+
 }
 
 pub struct SegmentedIndex {
     /// which file
-    segment_id: usize,
+    pub segment_id: usize,
     /// where is the first value
-    start_pointer: usize,
+    pub start_pointer: usize,
     /// how many bytes?
-    bytes: usize,
+    pub bytes: usize,
 }
 
 #[cfg(test)]
@@ -220,8 +278,8 @@ mod tests {
         ))];
         let (_, _, index) = log.log(&values).await;
 
-        let reader = log.as_reader().await.unwrap();
-        let values_retrieved = reader.unlog(index).await;
+        let reader = log.build_reader().await.unwrap();
+        let values_retrieved = reader.unlog(&index).await;
 
         log.reset().await.expect("Failed to cleanup test");
 
@@ -251,8 +309,8 @@ mod tests {
         ))];
         let _ = log.log(&values2).await;
 
-        let reader = log.as_reader().await.unwrap();
-        let values_retrieved = reader.unlog(index).await;
+        let reader = log.build_reader().await.unwrap();
+        let values_retrieved = reader.unlog(&index).await;
 
         log.reset().await.expect("Failed to cleanup test");
 
@@ -270,8 +328,8 @@ mod tests {
         ))];
         let (_, _, index) = log.log(&values).await;
 
-        let reader = log.as_reader().await.unwrap();
-        let values_retrieved = reader.unlog(index).await;
+        let reader = log.build_reader().await.unwrap();
+        let values_retrieved = reader.unlog(&index).await;
 
         log.reset().await.expect("Failed to cleanup test");
 

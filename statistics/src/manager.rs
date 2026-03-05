@@ -8,7 +8,7 @@ use std::time::{Duration};
 use tokio::runtime::{Builder, Handle};
 use tokio::select;
 use tokio::sync::broadcast;
-use tokio::time::{interval, sleep, Instant};
+use tokio::time::{interval, sleep, Instant, MissedTickBehavior};
 use tracing::{error, warn};
 use tracing::log::{debug};
 use util::definition::{Definition, Stage};
@@ -82,14 +82,14 @@ impl Statistics {
         }
     }
 
-    pub(crate) fn get_summary(&self) -> StatisticEvent {
+    pub(crate) fn get_summary(&mut self) -> StatisticEvent {
         let names = &self.engine_names;
         let definition_names = self
             .definitions
             .iter()
             .map(|(id, d)| (id.0, d.topic.clone()))
             .collect::<HashMap<_, _>>();
-        StatisticEvent {
+        let event = StatisticEvent {
             engines: self
                 .engines
                 .iter()
@@ -102,7 +102,9 @@ impl Statistics {
                 })
                 .collect(),
             delay: self.delay,
-        }
+        };
+        self.engines.clear();
+        event
     }
 }
 
@@ -136,6 +138,7 @@ pub fn start(rt: Runtimes, tx: Sender<Event>, rx: Receiver<Event>, output: broad
             let mut statistics = Statistics::new();
 
             let mut timer = interval(Duration::from_secs(20));
+            timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
             let mut last_time = Instant::now();
 
@@ -147,9 +150,7 @@ pub fn start(rt: Runtimes, tx: Sender<Event>, rx: Receiver<Event>, output: broad
                     maybe_event = rx.recv_async() => {
                         if let Ok(event) = maybe_event {
                             let mut events = vec![event];
-                            if rx.len() % 10_000 == 0 && rx.len() != 0 {
-                                error!("Bigger than x0k {}", rx.len());
-                            }
+
                             events.extend(rx.try_iter().take(99_999));
 
                             for event in events{

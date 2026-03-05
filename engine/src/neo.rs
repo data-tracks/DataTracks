@@ -3,12 +3,13 @@ use anyhow::{anyhow, bail};
 use flume::Sender;
 use neo4rs::{Graph, query};
 use reqwest::Client;
-use serde::Deserialize;
+use serde::{Deserialize};
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use tokio::time::{Instant, sleep};
 use tracing::{debug, info};
 use util::Event::EngineStatus;
@@ -47,7 +48,9 @@ impl Clone for Neo4j {
 
 impl Drop for Neo4j {
     fn drop(&mut self) {
-        info!("Dropping Neo4j {:?}", self.id)
+        if self.graph.is_some() {
+            info!("Dropping Neo4j {:?}", self.id)
+        }
     }
 }
 
@@ -68,28 +71,8 @@ struct TxMetrics {
 impl Neo4j {
     pub(crate) async fn start<S: Into<EngineId>>(
         &mut self,
-        is_new: bool,
         id: S,
     ) -> anyhow::Result<()> {
-        if is_new {
-            container::start_container(
-                self.name.as_str(),
-                "neo4j:latest",
-                vec![
-                    Mapping {
-                        container: 7687,
-                        host: self.port,
-                    },
-                    Mapping {
-                        container: 7474,
-                        host: 7474,
-                    },
-                ],
-                Some(vec![format!("NEO4J_AUTH=neo4j/{}", "neoneoneo")]),
-            )
-            .await?;
-        }
-
         let uri = format!("{}:{}", self.host, self.port);
 
         let graph = Graph::new(&uri, self.user.clone(), self.password.clone())?;
@@ -114,6 +97,24 @@ impl Neo4j {
         self.graph = Some(graph);
 
         Ok(())
+    }
+
+    pub(crate) async fn start_container(&self) -> anyhow::Result<()> {
+        container::start_container(
+            self.name.as_str(),
+            "neo4j:latest",
+            vec![
+                Mapping {
+                    container: 7687,
+                    host: self.port,
+                },
+                Mapping {
+                    container: 7474,
+                    host: 7474,
+                },
+            ],
+            Some(vec![format!("NEO4J_AUTH=neo4j/{}", "neoneoneo")]),
+        ).await
     }
 
     pub(crate) async fn init_entity(&mut self, definition: &Definition, partition_id: PartitionId) {
@@ -151,15 +152,15 @@ impl Neo4j {
 
     pub(crate) async fn store(
         &self,
-        stage: Stage,
+        stage: &Stage,
         entity: String,
         values: &Batch<TargetedRecord>,
     ) -> anyhow::Result<()> {
         match &self.graph {
             None => bail!("No graph"),
             Some(g) => {
-                //let now = Instant::now();
-                //let len = values.len();
+                let now = Instant::now();
+                let len = values.len();
 
                 let cypher_query = self
                     .prepared_queries
@@ -174,27 +175,26 @@ impl Neo4j {
 
                 g.run(query(cypher_query).param("values", values)).await?;
 
-                //warn!("inserted in neo4j {} {:?}", len, now.elapsed());
+                debug!("inserted in neo4j {} {:?}", len, now.elapsed());
                 Ok(())
             }
         }
     }
 
     fn wrap_value_plain(values: &Batch<TargetedRecord>) -> Vec<Vec<Value>> {
-        values
-            .into_iter()
-            .map(|TargetedRecord { value, meta }| {
-                vec![
-                    Value::text(&serde_json::to_string(&value).unwrap()),
-                    Value::int(meta.id as i64),
-                ]
-            })
-            .collect::<Vec<_>>()
+        let now = Instant::now();
+
+        let processed = values.records.par_iter()
+            .map(|r| vec![r.value.clone(), Value::int(r.meta.id as i64)])
+            .collect();
+
+        debug!("inserted in neo4j ser {} {:?}", values.len(), now.elapsed());
+        processed
     }
 
     fn wrap_value_mapped(values: &Batch<TargetedRecord>) -> Vec<Vec<Value>> {
-        values
-            .into_iter()
+        values.records
+            .par_iter()
             .map(|TargetedRecord { value, meta }| vec![value.clone(), Value::int(meta.id as i64)])
             .collect::<Vec<_>>()
     }
@@ -203,16 +203,16 @@ impl Neo4j {
         &self,
         entity: String,
         ids: Vec<u64>,
-    ) -> Result<Vec<Value>, Box<dyn Error + Send + Sync>> {
+    ) -> anyhow::Result<Vec<Value>> {
         match &self.graph {
-            None => Err(Box::from("No graph")),
+            None => bail!("No graph"),
             Some(g) => {
                 let len = ids.len();
 
                 let cypher_query = self
                     .prepared_queries
                     .get(&(Stage::Plain, entity.clone()))
-                    .ok_or(format!("No prepared query in neo4j for {}", entity))?;
+                    .ok_or(anyhow!("No prepared query in neo4j for {}", entity))?;
 
                 let mut res = g
                     .execute_read(query(cypher_query).param(
@@ -325,8 +325,8 @@ mod tests {
     //#[traced_test]
     async fn test_insert() {
         let mut neo = EngineKind::neo4j_with_port(7688);
-
-        neo.start(true, 0).await.unwrap();
+        neo.start_container().await.unwrap();
+        neo.start(0).await.unwrap();
 
         let definition = Definition::new(
             "test",
@@ -339,7 +339,7 @@ mod tests {
         neo.init_entity(&definition, PartitionId(0)).await;
 
         neo.store(
-            Stage::Plain,
+            &Stage::Plain,
             String::from("users"),
             &batch![target!(Value::text("test"), TargetedMeta::default())],
         )
@@ -347,7 +347,7 @@ mod tests {
         .unwrap();
 
         neo.store(
-            Stage::Plain,
+            &Stage::Plain,
             String::from("users"),
             &batch![target!(Value::text("test"), TargetedMeta::default())],
         )
@@ -355,7 +355,7 @@ mod tests {
         .unwrap();
 
         neo.store(
-            Stage::Mapped,
+            &Stage::Mapped,
             String::from("users"),
             &batch![target!(
                 Value::node(
@@ -376,8 +376,8 @@ mod tests {
     //#[traced_test]
     async fn test_insert_node() {
         let mut neo = EngineKind::neo4j();
-
-        neo.start(true, 0).await.unwrap();
+        neo.start_container().await.unwrap();
+        neo.start( 0).await.unwrap();
 
         let definition = Definition::new(
             "test",

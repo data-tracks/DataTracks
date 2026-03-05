@@ -151,7 +151,7 @@ impl Persister {
                 let worker_id = builder_id.fetch_add(1, Ordering::Relaxed).into();
                 let mut engine = engine.clone();
                 // actually make a new connection
-                engine.start(join_set, false).await.unwrap();
+                engine.start(join_set).await.unwrap();
 
                 let definitions = self
                     .catalog
@@ -186,23 +186,32 @@ impl Persister {
                             }
 
                             // Case B: A record arrived
-                            Ok(record) = engine.buffer_out.1.recv_async() => {
-                                buckets.entry(record.meta.definition).or_default().push(record);
-                                count += 1;
+                            Ok(records) = engine.buffer_out.1.recv_async() => {
+                                for record in records {
+                                    buckets.entry(record.meta.definition).or_default().push(record);
+                                    count += 1;
 
-                                // let's check if there is more
-                                let batch =  engine.buffer_out.1.try_iter().take(99_999).collect::<Batch<_>>();
-                                if !batch.is_empty() {
+                                    // let's check if there is more
+                                    let mut batch =  vec![];
+                                    while batch.len() < 100_000 {
+                                        match engine.buffer_out.1.try_recv(){
+                                            Ok(res) => {
+                                                batch.extend(res)
+                                            }
+                                            Err(_) => {}
+                                        }
+                                    }
                                     for record in batch {
                                         buckets.entry(record.meta.definition).or_default().push(record);
                                         count += 1;
                                     }
-                                }
 
-                                // Immediate flush if we hit the batch size
-                                if count >= BATCH_SIZE {
-                                    flush_buckets(&worker_id, &mut buckets, &mut engine, &definitions).await;
-                                    count = 0;
+
+                                    // Immediate flush if we hit the batch size
+                                    if count >= BATCH_SIZE {
+                                        flush_buckets(&worker_id, &mut buckets, &mut engine, &definitions).await;
+                                        count = 0;
+                                    }
                                 }
                                 flush_interval.reset(); // Reset the timer since we just flushed
                             }
@@ -240,7 +249,7 @@ async fn flush_buckets(
 
         let size = records.len() as u64;
         let source = engine.id;
-        let partition_id = PartitionId(definition.partition_info.next(worker_id, engine.engine_kind.to_string(), &size));
+        let partition_id = PartitionId(definition.partition_info.next(worker_id, &size));
 
         let mut last_log = Instant::now();
 
@@ -309,11 +318,10 @@ async fn handle_error(
 
     // 2. Data Recovery: Try to put records back into the engine's receiver
     // so they can be retried later.
-    for record in records {
-        if let Err(send_err) = engine.buffer_out.0.send(record) {
-            // If the internal channel is closed, we truly cannot save this data
-            error!("Data loss: could not re-queue record: {:?}", send_err);
-            break;
-        }
+
+    if let Err(send_err) = engine.buffer_out.0.send(records.records) {
+        // If the internal channel is closed, we truly cannot save this data
+        error!("Data loss: could not re-queue record: {:?}", send_err);
     }
+
 }

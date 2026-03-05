@@ -47,7 +47,7 @@ impl Nativer {
                     let mut join_set = JoinSet::new();
 
                     let rx = definition.native.1;
-                    engine.start(&mut join_set, false).await.unwrap();
+                    engine.start(&mut join_set).await.unwrap();
 
                     let mapper = definition.mapping.build();
 
@@ -82,7 +82,7 @@ impl Nativer {
                                     target!(mapper(r.value.clone()), r.meta.clone())
                                 }).collect();
 
-                                let partition_id = definition.partition_info.next(&id, definition.id.to_string(), &length).into();
+                                let partition_id = definition.partition_info.next(&id, &length).into();
 
                                 match engine.store(partition_id, Stage::Mapped, definition.id, &mapped_data).await {
                                     Ok(_) => {
