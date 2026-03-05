@@ -40,7 +40,7 @@ where
 
 pub struct SegmentedLogCleaner {
     cleaner_rx: Receiver<usize>,
-    cleaner_tx: Sender<usize>,
+    pub cleaner_tx: Sender<usize>,
     base_path: PathBuf,
     handle: Option<JoinHandle<()>>,
 }
@@ -250,6 +250,7 @@ SegmentedLogReader<T> {
 
 }
 
+#[derive(Clone, Copy)]
 pub struct SegmentedIndex {
     /// which file
     pub segment_id: usize,

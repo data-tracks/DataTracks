@@ -31,6 +31,7 @@ const SEGMENT_SIZE: u64 = 10 * 1024 * 1024;
 pub struct Engine {
     pub buffer_in: (Sender<TargetedRecord>, Receiver<TargetedRecord>),
     pub buffer_out: (Sender<Vec<TargetedRecord>>, Receiver<Vec<TargetedRecord>>),
+    buffer_size: Arc<AtomicU64>,
     pub ids: Vec<u64>,
     pub statistic_sender: Sender<Event>,
     pub existing_partitions: Vec<(DefinitionId, PartitionId)>,
@@ -47,6 +48,7 @@ impl Clone for Engine {
         Self {
             buffer_in: self.buffer_in.clone(),
             buffer_out: self.buffer_out.clone(),
+            buffer_size: Arc::new(Default::default()),
             ids: vec![],
             statistic_sender: self.statistic_sender.clone(),
             existing_partitions: vec![],
@@ -82,6 +84,7 @@ impl Engine {
             id,
             buffer_in,
             buffer_out,
+            buffer_size: Arc::new(Default::default()),
             ids: vec![],
             statistic_sender: sender,
             existing_partitions: vec![],
@@ -111,7 +114,6 @@ impl Engine {
         .await
         .unwrap();
 
-        let buffer_size = Arc::new(AtomicU64::new(0));
 
         let name = format!("Engine-{}-{}", self.engine_kind, self.id);
         log_channel(self.buffer_out.0.clone(), name, None).await;
@@ -124,7 +126,8 @@ impl Engine {
 
         let (index_tx, index_rx) = unbounded();
 
-        let buffer_size_recv = buffer_size.clone();
+        let buffer_size = self.buffer_size.clone();
+        let buffer_size_recv = self.buffer_size.clone();
 
         // unlimited buffer
         let handle = thread::spawn(move || {
@@ -155,6 +158,7 @@ impl Engine {
         let buffer_size_recv = buffer_size_recv.clone();
         let statistic_sender = self.statistic_sender.clone();
         let index_rx = index_rx.clone();
+        let index_rx_clone = index_rx.clone();
         let name = format!("persister-file-{}", self.engine_kind);
         let reader = reader.clone();
         let buffer_out_tx = self.buffer_out.0.clone();
@@ -166,7 +170,42 @@ impl Engine {
                 let mut report_interval = tokio::time::interval(Duration::from_secs(3));
                 report_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
-                let mut remove_segments: IndexSet<_> = IndexSet::new();
+                let index_stream = stream::unfold(index_rx, |rx| async move {
+                    match rx.recv() {
+                        Ok(index) => {
+                            let mut indexes = vec![index];
+                            indexes.extend(rx.try_iter().take(999));
+                            Some((indexes, rx))
+                        },
+                        Err(_) => None,
+                    }
+                });
+
+                let processed_stream = index_stream
+                    .map(|indexes| {
+                        let reader = reader.clone();
+                        let buffer_size_recv = buffer_size_recv.clone();
+
+                        async move {
+                            buffer_size_recv.store(1, Ordering::Relaxed);
+
+                            // Read from disk concurrently for this specific batch
+                            let data_results = stream::iter(indexes.clone())
+                                .map(|idx| {
+                                    let reader = reader.clone();
+                                    async move { reader.unlog(&idx).await }
+                                })
+                                .buffer_unordered(20_000) // Internal concurrency for disk reads
+                                .collect::<Vec<_>>()
+                                .await;
+
+                            // Return the data and the indexes (for cleaning)
+                            (data_results, indexes)
+                        }
+                    })
+                    .buffered(20_000);
+
+                tokio::pin!(processed_stream);
 
                 loop {
                     tokio::select! {
@@ -174,33 +213,17 @@ impl Engine {
                         _ = report_interval.tick() => {
                             let _ = statistic_sender.send_async(Event::Queue(QueueEvent {
                                 name: name.to_string(),
-                                size: index_rx.len()
+                                size: index_rx_clone.len()
                             })).await;
                         }
 
-                        // Main Processing Logic
-                        Ok(index) = async { index_rx.recv() } => {
-                            let mut indexes = vec![index];
-                            buffer_size_recv.store(1, Ordering::Relaxed);
-
-                            // Drain the channel up to 100k items to process in batch
-                            indexes.extend(index_rx.try_iter().take(100));
-
-
-                            remove_segments.extend(indexes.iter().map(|i| i.segment_id));
-
-                            stream::iter(indexes).for_each_concurrent(10, |index| {
-                                let reader = &reader;
-                                let buffer_out_tx = &buffer_out_tx;
-
-                                async move {
-                                    let data = reader.unlog(&index).await;
-                                    let _ = buffer_out_tx.send(data);
-                                }
-                            }).await;
-
-                            for index in remove_segments.drain(..remove_segments.len().saturating_sub(1)){
-                                cleaner.clean(index).await;
+                        Some((data_batch, indexes)) = processed_stream.next() => {
+                            for data in data_batch {
+                                let _ = buffer_out_tx.send(data);
+                            }
+                            let remove_segments: IndexSet<_> = indexes.iter().map(|i| i.segment_id).collect();
+                            for seg_id in remove_segments {
+                                cleaner.clean(seg_id).await;
                             }
 
                             buffer_size_recv.store(0, Ordering::Relaxed);
@@ -234,7 +257,7 @@ impl Engine {
             EngineKind::Neo4j(n) => n.cost(value),
         };
 
-        let pressure = self.buffer_out.1.len() + 1;
+        let pressure = self.buffer_size.load(Ordering::Relaxed) + 1;
 
         let mut cost = cost.mul(pressure as f64);
 

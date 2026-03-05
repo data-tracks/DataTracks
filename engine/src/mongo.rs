@@ -12,7 +12,7 @@ use std::time::Duration;
 use rayon::iter::ParallelIterator;
 use rayon::iter::IntoParallelRefIterator;
 use tokio::time::{sleep, timeout, Instant};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 use util::Event::EngineStatus;
 use util::container::Mapping;
 use util::definition::{Definition, Stage};

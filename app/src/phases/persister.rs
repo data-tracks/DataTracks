@@ -41,7 +41,7 @@ impl Persister {
         definitions: &mut [Definition],
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
         for record in records {
-            let (engine, record) = Self::select_engines(record, engine, definitions).await?;
+            let (engine, record) = Self::select_engine(record, engine, definitions).await?;
 
             debug!("store {} - {:?}", engine, record.value);
 
@@ -100,7 +100,7 @@ impl Persister {
         rt.add_handle(storer);
     }
 
-    async fn select_engines<'a>(
+    async fn select_engine<'a>(
         record: TimedRecord,
         engines: &'a mut [Engine],
         definitions: &mut [Definition],

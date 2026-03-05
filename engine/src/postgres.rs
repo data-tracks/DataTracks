@@ -416,10 +416,9 @@ impl Postgres {
 #[cfg(test)]
 pub mod tests {
     use crate::EngineKind;
-    use std::sync::{Arc, Mutex};
     use tokio::task::JoinSet;
     use tracing_test::traced_test;
-    use util::definition::{Entity, Stage};
+    use util::definition::{Stage};
     use util::{
         Mapping, MappingSource, RelationalMapping, RelationalType, TargetedMeta, batch, target,
     };
