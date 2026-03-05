@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use tokio::time::{Instant, sleep};
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 use util::Event::EngineStatus;
 use util::container::Mapping;
 use util::definition::{Definition, Stage};
@@ -175,7 +175,7 @@ impl Neo4j {
 
                 g.run(query(cypher_query).param("values", values)).await?;
 
-                debug!("inserted in neo4j {} {:?}", len, now.elapsed());
+                warn!("inserted in neo4j {} {:?}", len, now.elapsed());
                 Ok(())
             }
         }

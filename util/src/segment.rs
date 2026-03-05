@@ -27,7 +27,7 @@ where
     batch: Vec<u8>,
 }
 
-
+#[derive(Clone)]
 pub struct SegmentedLogReader<T>
 where
         for<'a> T: Readable<'a, LittleEndian>,

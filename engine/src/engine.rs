@@ -101,7 +101,6 @@ impl Engine {
 
     pub async fn start(&mut self, join_set: &mut JoinSet<()>) -> anyhow::Result<()> {
         let buffer_in_rx = self.buffer_in.1.clone();
-        let buffer_out_tx = self.buffer_out.0.clone();
 
         let buffer_out_tx_skip = self.buffer_out.0.clone();
 
@@ -111,13 +110,8 @@ impl Engine {
         )
         .await
         .unwrap();
-        let reader = log.build_reader().await.unwrap();
-        let cleaner = log.build_cleaner();
 
         let buffer_size = Arc::new(AtomicU64::new(0));
-        let buffer_size_recv = buffer_size.clone();
-
-        let statistic_sender = self.statistic_sender.clone();
 
         let name = format!("Engine-{}-{}", self.engine_kind, self.id);
         log_channel(self.buffer_out.0.clone(), name, None).await;
@@ -125,9 +119,12 @@ impl Engine {
         let name = format!("Engine-{}-{}-buffer", self.engine_kind, self.id);
         log_channel(self.buffer_in.0.clone(), name, None).await;
 
+        let reader = log.build_reader().await.unwrap();
+        let cleaner = log.build_cleaner();
 
         let (index_tx, index_rx) = unbounded();
-        let name = format!("persister-file-{}", self.engine_kind);
+
+        let buffer_size_recv = buffer_size.clone();
 
         // unlimited buffer
         let handle = thread::spawn(move || {
@@ -155,6 +152,13 @@ impl Engine {
         });
         self.handles.push(handle);
 
+        let buffer_size_recv = buffer_size_recv.clone();
+        let statistic_sender = self.statistic_sender.clone();
+        let index_rx = index_rx.clone();
+        let name = format!("persister-file-{}", self.engine_kind);
+        let reader = reader.clone();
+        let buffer_out_tx = self.buffer_out.0.clone();
+
         // holding feeder
         let handle = thread::spawn(move || {
             let rt = Builder::new_current_thread().enable_all().build().unwrap();
@@ -162,7 +166,7 @@ impl Engine {
                 let mut report_interval = tokio::time::interval(Duration::from_secs(3));
                 report_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
-                let mut remove_segments:IndexSet<_> = IndexSet::new();
+                let mut remove_segments: IndexSet<_> = IndexSet::new();
 
                 loop {
                     tokio::select! {
@@ -176,12 +180,12 @@ impl Engine {
 
                         // Main Processing Logic
                         Ok(index) = async { index_rx.recv() } => {
-
                             let mut indexes = vec![index];
                             buffer_size_recv.store(1, Ordering::Relaxed);
 
                             // Drain the channel up to 100k items to process in batch
-                            indexes.extend(index_rx.try_iter().take(99_999));
+                            indexes.extend(index_rx.try_iter().take(100));
+
 
                             remove_segments.extend(indexes.iter().map(|i| i.segment_id));
 
@@ -206,6 +210,7 @@ impl Engine {
             })
         });
         self.handles.push(handle);
+
         self.engine_kind.start(join_set, self.id).await
     }
 
