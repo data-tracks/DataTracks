@@ -25,5 +25,4 @@ flume = { workspace = true }
 pin-utils = "0.1.0"
 tracing-test = { workspace = true }
 anyhow = { workspace = true }
-log = "0.4.29"
 indexmap = {workspace = true}

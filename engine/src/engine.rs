@@ -3,10 +3,8 @@ use crate::mongo::MongoDB;
 use crate::neo::Neo4j;
 use crate::postgres::Postgres;
 use derive_more::From;
-use flume::{bounded, unbounded, Receiver, Sender};
+use flume::{Receiver, Sender, bounded, unbounded};
 use futures_util::future::join_all;
-use futures_util::{stream, StreamExt};
-use indexmap::IndexSet;
 use mongodb::bson::uuid;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
@@ -20,7 +18,10 @@ use tokio::runtime::Builder;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
 use util::definition::{Definition, Model, Stage};
-use util::{log_channel, Batch, DefinitionId, EngineId, Event, PartitionId, QueueEvent, SegmentedLogWriter, TargetedRecord};
+use util::{
+    Batch, DefinitionId, EngineId, Event, PartitionId, QueueEvent, SegmentedLogWriter,
+    TargetedRecord, log_channel,
+};
 use uuid::Uuid;
 use value::Value;
 
@@ -38,9 +39,8 @@ pub struct Engine {
     pub engine_kind: EngineKind,
     pub id: EngineId,
     pub definitions: HashMap<DefinitionId, Definition>,
-    pub handles: Vec<JoinHandle<()>>
+    pub handles: Vec<JoinHandle<()>>,
 }
-
 
 impl Clone for Engine {
     fn clone(&self) -> Self {
@@ -114,15 +114,14 @@ impl Engine {
         .await
         .unwrap();
 
-
         let name = format!("Engine-{}-{}", self.engine_kind, self.id);
         log_channel(self.buffer_out.0.clone(), name, None).await;
 
         let name = format!("Engine-{}-{}-buffer", self.engine_kind, self.id);
         log_channel(self.buffer_in.0.clone(), name, None).await;
 
-        let reader = log.build_reader().await.unwrap();
-        let cleaner = log.build_cleaner();
+        let reader = Arc::new(log.build_reader().await.unwrap());
+        let cleaner = Arc::new(log.build_cleaner());
 
         let (index_tx, index_rx) = unbounded();
 
@@ -143,7 +142,6 @@ impl Engine {
                         {
                             // we can send direct, nothing buffered, no buffer needed
                             buffer_out_tx_skip.send(values).unwrap();
-
                         } else {
                             let record = log.log(&values).await;
                             let _ = index_tx.send(record.2);
@@ -160,77 +158,75 @@ impl Engine {
         let index_rx = index_rx.clone();
         let index_rx_clone = index_rx.clone();
         let name = format!("persister-file-{}", self.engine_kind);
-        let reader = reader.clone();
         let buffer_out_tx = self.buffer_out.0.clone();
 
         // holding feeder
         let handle = thread::spawn(move || {
-            let rt = Builder::new_current_thread().enable_all().build().unwrap();
+            let rt = Builder::new_multi_thread()
+                .worker_threads(2)
+                .enable_all()
+                .build()
+                .unwrap();
+
             rt.block_on(async {
+                // Use a Semaphore to limit total concurrent disk reads
+                // instead of a massive 200,000 buffer.
+                let disk_semaphore = Arc::new(tokio::sync::Semaphore::new(100));
                 let mut report_interval = tokio::time::interval(Duration::from_secs(3));
                 report_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
-                let index_stream = stream::unfold(index_rx, |rx| async move {
-                    match rx.recv() {
-                        Ok(index) => {
-                            let mut indexes = vec![index];
-                            indexes.extend(rx.try_iter().take(999));
-                            Some((indexes, rx))
-                        },
-                        Err(_) => None,
-                    }
-                });
-
-                let processed_stream = index_stream
-                    .map(|indexes| {
-                        let reader = reader.clone();
-                        let buffer_size_recv = buffer_size_recv.clone();
-
-                        async move {
-                            buffer_size_recv.store(1, Ordering::Relaxed);
-
-                            // Read from disk concurrently for this specific batch
-                            let data_results = stream::iter(indexes.clone())
-                                .map(|idx| {
-                                    let reader = reader.clone();
-                                    async move { reader.unlog(&idx).await }
-                                })
-                                .buffer_unordered(20_000) // Internal concurrency for disk reads
-                                .collect::<Vec<_>>()
-                                .await;
-
-                            // Return the data and the indexes (for cleaning)
-                            (data_results, indexes)
-                        }
-                    })
-                    .buffered(20_000);
-
-                tokio::pin!(processed_stream);
-
                 loop {
                     tokio::select! {
-                        // Periodic Status Reporting
                         _ = report_interval.tick() => {
                             let _ = statistic_sender.send_async(Event::Queue(QueueEvent {
                                 name: name.to_string(),
-                                size: index_rx_clone.len()
+                                size: index_rx.len()
                             })).await;
                         }
 
-                        Some((data_batch, indexes)) = processed_stream.next() => {
-                            for data in data_batch {
-                                let _ = buffer_out_tx.send(data);
-                            }
-                            let remove_segments: IndexSet<_> = indexes.iter().map(|i| i.segment_id).collect();
-                            for seg_id in remove_segments {
-                                cleaner.clean(seg_id).await;
+                        // Directly pull from Flume
+                        Ok(index) = index_rx.recv_async() => {
+                            // 1. Quick Batching
+                            let mut indexes = vec![index];
+                            for _ in 0..999 {
+                                if let Ok(idx) = index_rx.try_recv() {
+                                    indexes.push(idx);
+                                } else { break; }
                             }
 
-                            buffer_size_recv.store(0, Ordering::Relaxed);
+                            // 2. Clone what we need for the background task
+                            let reader = reader.clone();
+                            let buffer_out_tx = buffer_out_tx.clone();
+                            let cleaner = cleaner.clone();
+                            let sem = disk_semaphore.clone();
+
+                            // 3. Spawn the heavy lifting
+                            tokio::spawn(async move {
+                                let _permit = sem.acquire().await; // Throttle disk access
+
+                                // Concurrent reads within the batch
+                                let mut read_tasks = Vec::with_capacity(indexes.len());
+                                for idx in indexes.iter() {
+                                    read_tasks.push(reader.unlog(idx));
+                                }
+
+                                let results = join_all(read_tasks).await;
+
+                                // Send results downstream
+                                for data in results {
+                                    let _ = buffer_out_tx.send(data);
+                                }
+
+                                // 4. Clean up without blocking the next read
+                                /*let remove_segments: IndexSet<_> = indexes.into_iter().map(|i| i.segment_id).collect();
+                                for seg_id in remove_segments {
+                                    cleaner.clean(seg_id).await;
+                                }*/
+                            });
                         }
                     }
                 }
-            })
+            });
         });
         self.handles.push(handle);
 
@@ -309,11 +305,7 @@ impl Engine {
         }
     }
 
-    pub async fn read(
-        &mut self,
-        entity: String,
-        ids: Vec<u64>,
-    ) -> anyhow::Result<Vec<Value>> {
+    pub async fn read(&mut self, entity: String, ids: Vec<u64>) -> anyhow::Result<Vec<Value>> {
         match &self.engine_kind {
             EngineKind::Postgres(p) => p.read(entity, ids).await,
             EngineKind::MongoDB(m) => m.read(entity, ids).await,
@@ -355,11 +347,7 @@ impl EngineKind {
         Ok(())
     }
 
-    pub async fn start(
-        &mut self,
-        join_set: &mut JoinSet<()>,
-        id: EngineId,
-    ) -> anyhow::Result<()> {
+    pub async fn start(&mut self, join_set: &mut JoinSet<()>, id: EngineId) -> anyhow::Result<()> {
         match self {
             EngineKind::Postgres(p) => p.start(join_set, id).await?,
             EngineKind::MongoDB(m) => m.start(id).await?,
@@ -369,9 +357,7 @@ impl EngineKind {
         Ok(())
     }
 
-    pub async fn get_all(
-        statistic_tx: Sender<Event>,
-    ) -> anyhow::Result<Vec<Engine>> {
+    pub async fn get_all(statistic_tx: Sender<Event>) -> anyhow::Result<Vec<Engine>> {
         let engine_kinds: Vec<EngineKind> = vec![
             EngineKind::postgres().into(),
             EngineKind::mongo_db().into(),

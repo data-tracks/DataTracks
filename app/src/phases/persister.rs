@@ -194,11 +194,8 @@ impl Persister {
                                     // let's check if there is more
                                     let mut batch =  vec![];
                                     while batch.len() < 100_000 {
-                                        match engine.buffer_out.1.try_recv(){
-                                            Ok(res) => {
-                                                batch.extend(res)
-                                            }
-                                            Err(_) => {}
+                                        if let Ok(res) = engine.buffer_out.1.try_recv() {
+                                            batch.extend(res)
                                         }
                                     }
                                     for record in batch {
@@ -323,5 +320,4 @@ async fn handle_error(
         // If the internal channel is closed, we truly cannot save this data
         error!("Data loss: could not re-queue record: {:?}", send_err);
     }
-
 }

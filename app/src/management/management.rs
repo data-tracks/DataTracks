@@ -54,13 +54,13 @@ impl Manager {
         let ctrl_c_signal = tokio::signal::ctrl_c();
 
         let main_rt = Builder::new_multi_thread()
-            .worker_threads(8)
+            .worker_threads(16)
             .thread_name("main-rt")
             .enable_all()
             .build()?;
 
         let trash_rt = Builder::new_multi_thread()
-            .worker_threads(8)
+            .worker_threads(16)
             .thread_name("trash-rt")
             .enable_all()
             .build()?;
@@ -180,11 +180,8 @@ impl Manager {
                 .build()
                 .unwrap();
 
-
             rt.block_on(async move {
-                let engines = EngineKind::get_all(statistic_tx.clone())
-                    .await
-                    .unwrap();
+                let engines = EngineKind::get_all(statistic_tx.clone()).await.unwrap();
 
                 for engine in engines.into_iter() {
                     engine.start_container().await.unwrap();

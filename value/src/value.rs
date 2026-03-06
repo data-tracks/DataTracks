@@ -3,10 +3,11 @@ use crate::date::Date;
 use crate::dict::Dict;
 use crate::edge::Edge;
 use crate::node::Node;
-use crate::r#type::ValType;
 use crate::text::Text;
 use crate::time::Time;
-use crate::{bool, Bool, Float, Int};
+use crate::r#type::ValType;
+use crate::{Bool, Float, Int, bool};
+use anyhow::{anyhow, bail};
 use core::fmt::Pointer;
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
@@ -15,9 +16,7 @@ use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::str;
-use anyhow::{anyhow, bail};
 use tracing::debug;
-
 
 #[derive(Clone, Debug, Serialize, Deserialize, Ord, PartialOrd, Readable, Writable, Default)]
 pub enum Value {
@@ -34,7 +33,6 @@ pub enum Value {
     #[default]
     Null,
 }
-
 
 impl Value {
     pub fn text(string: &str) -> Value {
@@ -72,13 +70,19 @@ impl Value {
         }))
     }
 
-    pub(crate) fn edge(id: Int, label: Option<Text>, start: u64, end: u64, properties: BTreeMap<String, Value>) -> Value {
-        Value::Edge(Box::new(Edge{
+    pub(crate) fn edge(
+        id: Int,
+        label: Option<Text>,
+        start: u64,
+        end: u64,
+        properties: BTreeMap<String, Value>,
+    ) -> Value {
+        Value::Edge(Box::new(Edge {
             id,
             label,
             start,
             end,
-            properties
+            properties,
         }))
     }
 
@@ -525,8 +529,8 @@ impl From<Dict> for Value {
 #[cfg(test)]
 mod tests {
     use crate::value::Value;
-    use std::collections::hash_map::DefaultHasher;
     use std::collections::HashMap;
+    use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
     use std::vec;
 
@@ -568,7 +572,7 @@ mod tests {
 
     #[test]
     fn value_in_vec() {
-        let values = vec![
+        let values = [
             Value::int(42),
             Value::float(3.314),
             Value::bool(true),
@@ -619,7 +623,7 @@ mod tests {
             false.into(),
             vec![3.into(), 7.into()].into(),
         ];
-        let values = vec![
+        let values = [
             Value::int(3),
             Value::int(5),
             Value::float(3.3),

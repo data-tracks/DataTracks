@@ -9,14 +9,14 @@ use std::thread;
 use std::thread::JoinHandle;
 use tokio::fs;
 use tokio::fs::OpenOptions;
-use tokio::runtime::{Builder};
+use tokio::runtime::Builder;
 use tracing::{debug, error};
 
 pub struct SegmentedLogWriter<T>
 where
-        for<'a> T: Readable<'a, LittleEndian>,
-        T: Writable<LittleEndian>,
-        T: Identifiable,
+    for<'a> T: Readable<'a, LittleEndian>,
+    T: Writable<LittleEndian>,
+    T: Identifiable,
 {
     _p: PhantomData<T>,
     base_path: PathBuf,
@@ -30,9 +30,9 @@ where
 #[derive(Clone)]
 pub struct SegmentedLogReader<T>
 where
-        for<'a> T: Readable<'a, LittleEndian>,
-        T: Writable<LittleEndian>,
-        T: Identifiable,
+    for<'a> T: Readable<'a, LittleEndian>,
+    T: Writable<LittleEndian>,
+    T: Identifiable,
 {
     _p: PhantomData<T>,
     base_path: PathBuf,
@@ -44,7 +44,6 @@ pub struct SegmentedLogCleaner {
     base_path: PathBuf,
     handle: Option<JoinHandle<()>>,
 }
-
 
 impl SegmentedLogCleaner {
     pub fn new(base_path: PathBuf) -> Self {
@@ -68,13 +67,10 @@ impl SegmentedLogCleaner {
             let builder = Builder::new_current_thread().enable_all().build().unwrap();
             builder.block_on(async move {
                 loop {
-                    match rx.recv() {
-                        Ok(segment_id) => {
-                            let path = base_path.join(format!("segment_{:06}.log", segment_id));
-                            fs::remove_file(path.clone()).await.unwrap();
-                            debug!("cleaned {}", path.display());
-                        }
-                        Err(_) => {}
+                    if let Ok(segment_id) = rx.recv() {
+                        let path = base_path.join(format!("segment_{:06}.log", segment_id));
+                        fs::remove_file(path.clone()).await.unwrap();
+                        debug!("cleaned {}", path.display());
                     }
                 }
             });
@@ -86,12 +82,16 @@ impl SegmentedLogCleaner {
 
 const SEGMENT_SIZE: u64 = 10 * 1024 * 1024;
 
-impl<T: for<'a> speedy::Readable<'a, LittleEndian> + speedy::Writable<LittleEndian> + Identifiable> SegmentedLogWriter<T> {
+impl<T: for<'a> speedy::Readable<'a, LittleEndian> + speedy::Writable<LittleEndian> + Identifiable>
+    SegmentedLogWriter<T>
+{
     pub async fn async_default() -> Result<Self, Box<dyn Error + Send + Sync>> {
         Self::new("wal_segments", SEGMENT_SIZE).await // 10 MB segments
     }
 
-    pub async fn build_reader(&self) -> Result<SegmentedLogReader<T>, Box<dyn Error + Send + Sync>> {
+    pub async fn build_reader(
+        &self,
+    ) -> Result<SegmentedLogReader<T>, Box<dyn Error + Send + Sync>> {
         SegmentedLogReader::new(self.base_path.to_str().unwrap()).await
     }
 
@@ -208,9 +208,9 @@ impl<T: for<'a> speedy::Readable<'a, LittleEndian> + speedy::Writable<LittleEndi
     }
 }
 
-impl<T:
-    for<'a> speedy::Readable<'a, LittleEndian> + speedy::Writable<LittleEndian> + Identifiable>
-SegmentedLogReader<T> {
+impl<T: for<'a> speedy::Readable<'a, LittleEndian> + speedy::Writable<LittleEndian> + Identifiable>
+    SegmentedLogReader<T>
+{
     pub async fn new(base_path: &str) -> Result<Self, Box<dyn Error + Send + Sync>> {
         let base = PathBuf::from(base_path);
         fs::create_dir_all(&base).await?;
@@ -247,7 +247,6 @@ SegmentedLogReader<T> {
         let data = self.read(batch).await;
         Vec::<T>::read_from_buffer(&data).expect("Failed to deserialize record")
     }
-
 }
 
 #[derive(Clone, Copy)]
