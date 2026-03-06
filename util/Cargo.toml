@@ -8,6 +8,7 @@ repository.workspace = true
 description.workspace = true
 
 [dependencies]
+lru = { workspace = true }
 bollard = { workspace = true }
 tokio = { workspace = true }
 dashmap = { workspace = true }

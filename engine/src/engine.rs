@@ -9,7 +9,7 @@ use mongodb::bson::uuid;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::ops::Mul;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::JoinHandle;
@@ -17,6 +17,7 @@ use std::time::Duration;
 use tokio::runtime::Builder;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
+use tracing::warn;
 use util::definition::{Definition, Model, Stage};
 use util::{
     Batch, DefinitionId, EngineId, Event, PartitionId, QueueEvent, SegmentedLogWriter,
@@ -26,7 +27,6 @@ use uuid::Uuid;
 use value::Value;
 
 static ID_BUILDER: AtomicU64 = AtomicU64::new(1);
-const SEGMENT_SIZE: u64 = 10 * 1024 * 1024;
 
 #[derive(Debug)]
 pub struct Engine {
@@ -40,6 +40,7 @@ pub struct Engine {
     pub id: EngineId,
     pub definitions: HashMap<DefinitionId, Definition>,
     pub handles: Vec<JoinHandle<()>>,
+    pub logged: Arc<AtomicBool>,
 }
 
 impl Clone for Engine {
@@ -56,6 +57,7 @@ impl Clone for Engine {
             id: self.id.clone(),
             definitions: self.definitions.clone(),
             handles: vec![],
+            logged: self.logged.clone(),
         }
     }
 }
@@ -91,6 +93,7 @@ impl Engine {
             engine_kind,
             definitions: Default::default(),
             handles: vec![],
+            logged: Arc::new(Default::default()),
         }
     }
 
@@ -109,24 +112,23 @@ impl Engine {
 
         let mut log = SegmentedLogWriter::new(
             format!("temp/engine/{}_{}", self.id.0, Uuid::new()).as_str(),
-            SEGMENT_SIZE,
         )
-        .await
-        .unwrap();
+        .await?;
 
-        let name = format!("Engine-{}-{}", self.engine_kind, self.id);
-        log_channel(self.buffer_out.0.clone(), name, None).await;
+        if self.logged.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire).is_ok() {
+            let name = format!("Engine-{}-{}", self.engine_kind, self.id);
+            log_channel(self.buffer_out.0.clone(), name, None).await;
 
-        let name = format!("Engine-{}-{}-buffer", self.engine_kind, self.id);
-        log_channel(self.buffer_in.0.clone(), name, None).await;
+            let name = format!("Engine-{}-{}-buffer", self.engine_kind, self.id);
+            log_channel(self.buffer_in.0.clone(), name, None).await;
+        }
 
-        let reader = Arc::new(log.build_reader().await.unwrap());
-        let cleaner = Arc::new(log.build_cleaner());
+        let reader = Arc::new(log.build_reader().await?);
+        let cleaner = log.build_cleaner();
 
         let (index_tx, index_rx) = unbounded();
 
         let buffer_size = self.buffer_size.clone();
-        let buffer_size_recv = self.buffer_size.clone();
 
         // unlimited buffer
         let handle = thread::spawn(move || {
@@ -153,10 +155,7 @@ impl Engine {
         });
         self.handles.push(handle);
 
-        let buffer_size_recv = buffer_size_recv.clone();
         let statistic_sender = self.statistic_sender.clone();
-        let index_rx = index_rx.clone();
-        let index_rx_clone = index_rx.clone();
         let name = format!("persister-file-{}", self.engine_kind);
         let buffer_out_tx = self.buffer_out.0.clone();
 
@@ -174,6 +173,7 @@ impl Engine {
                 let disk_semaphore = Arc::new(tokio::sync::Semaphore::new(100));
                 let mut report_interval = tokio::time::interval(Duration::from_secs(3));
                 report_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+
 
                 loop {
                     tokio::select! {
@@ -197,8 +197,9 @@ impl Engine {
                             // 2. Clone what we need for the background task
                             let reader = reader.clone();
                             let buffer_out_tx = buffer_out_tx.clone();
-                            let cleaner = cleaner.clone();
                             let sem = disk_semaphore.clone();
+
+                            let cleaner = cleaner.cleaner_tx.clone();
 
                             // 3. Spawn the heavy lifting
                             tokio::spawn(async move {
@@ -214,14 +215,15 @@ impl Engine {
 
                                 // Send results downstream
                                 for data in results {
-                                    let _ = buffer_out_tx.send(data);
+                                    if let Err(err) = buffer_out_tx.send(data) {
+                                        warn!("Error sending data to buffer out channel: {}", err);
+                                    }
                                 }
 
                                 // 4. Clean up without blocking the next read
-                                /*let remove_segments: IndexSet<_> = indexes.into_iter().map(|i| i.segment_id).collect();
-                                for seg_id in remove_segments {
-                                    cleaner.clean(seg_id).await;
-                                }*/
+                                for index in indexes {
+                                    cleaner.send_async(index.segment_id).await.unwrap();
+                                }
                             });
                         }
                     }

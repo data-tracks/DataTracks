@@ -1,25 +1,22 @@
-use crate::Identifiable;
+use crate::{Identifiable};
 use flume::{Receiver, Sender};
 use memmap2::{Mmap, MmapMut, MmapOptions};
 use speedy::{LittleEndian, Readable, Writable};
-use std::collections::HashMap;
-use std::error::Error;
 use std::marker::PhantomData;
+use std::num::{NonZeroUsize};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::thread;
 use std::thread::JoinHandle;
+use dashmap::DashMap;
+use lru::LruCache;
 use tokio::fs;
 use tokio::fs::OpenOptions;
 use tokio::runtime::Builder;
 use tokio::sync::RwLock;
-use tokio::time::Instant;
 use tracing::{debug, error};
 
-struct CachedMmap {
-    mmap: Mmap,
-    last_used: Instant,
-}
+const SEGMENT_SIZE: u64 = 200 * 1024 * 1024;
 
 pub struct SegmentedLogWriter<T>
 where
@@ -32,6 +29,8 @@ where
     segment_size: u64,
     current_segment_id: usize,
     mmap: MmapMut,
+    // how many entries per segment_id exist
+    history: Arc<DashMap<usize, usize>>,
     cursor: usize,
     batch: Vec<u8>,
 }
@@ -45,7 +44,7 @@ where
 {
     _p: PhantomData<T>,
     base_path: PathBuf,
-    mmap_cache: Arc<RwLock<HashMap<usize, CachedMmap>>>,
+    mmap_cache: Arc<RwLock<LruCache<(PathBuf, usize), Mmap>>>,
 }
 
 pub struct SegmentedLogCleaner {
@@ -53,16 +52,18 @@ pub struct SegmentedLogCleaner {
     pub cleaner_tx: Sender<usize>,
     base_path: PathBuf,
     handle: Option<JoinHandle<()>>,
+    history: Arc<DashMap<usize, usize>>,
 }
 
 impl SegmentedLogCleaner {
-    pub fn new(base_path: PathBuf) -> Self {
+    pub fn new(base_path: PathBuf, history: Arc<DashMap<usize, usize>>) -> Self {
         let channel = flume::unbounded();
         Self {
             cleaner_rx: channel.1.clone(),
             cleaner_tx: channel.0.clone(),
             base_path,
             handle: None,
+            history,
         }
     }
 
@@ -73,14 +74,26 @@ impl SegmentedLogCleaner {
     pub fn start(&mut self) {
         let rx = self.cleaner_rx.clone();
         let base_path = self.base_path.clone();
+
+        let history = self.history.clone();
         let handle = thread::spawn(move || {
             let builder = Builder::new_current_thread().enable_all().build().unwrap();
             builder.block_on(async move {
                 loop {
                     if let Ok(segment_id) = rx.recv() {
-                        let path = base_path.join(format!("segment_{:06}.log", segment_id));
-                        fs::remove_file(path.clone()).await.unwrap();
-                        debug!("cleaned {}", path.display());
+                        let mut delete = false;
+                        if let Some(mut val) = history.get_mut(&segment_id) {
+                            *val -= 1;
+                            if *val <= 0 {
+                                delete = true;
+                            }
+                        }
+
+                        if delete {
+                            let path = base_path.join(format!("segment_{:06}.log", segment_id));
+                            fs::remove_file(path.clone()).await.unwrap();
+                            error!("cleaned {}", path.display());
+                        }
                     }
                 }
             });
@@ -90,25 +103,22 @@ impl SegmentedLogCleaner {
     }
 }
 
-const SEGMENT_SIZE: u64 = 10 * 1024 * 1024;
-
 impl<T: for<'a> speedy::Readable<'a, LittleEndian> + speedy::Writable<LittleEndian> + Identifiable>
     SegmentedLogWriter<T>
 {
-    pub async fn async_default() -> Result<Self, Box<dyn Error + Send + Sync>> {
-        Self::new("wal_segments", SEGMENT_SIZE).await // 10 MB segments
+    pub async fn async_default() -> anyhow::Result<Self> {
+        Self::new("wal_segments").await
     }
 
     pub async fn build_reader(
         &self,
-    ) -> Result<SegmentedLogReader<T>, Box<dyn Error + Send + Sync>> {
+    ) -> anyhow::Result<SegmentedLogReader<T>> {
         SegmentedLogReader::new(self.base_path.to_str().unwrap()).await
     }
 
     pub async fn new(
         base_path: &str,
-        segment_size: u64,
-    ) -> Result<Self, Box<dyn Error + Send + Sync>> {
+    ) -> anyhow::Result<Self> {
         let base = PathBuf::from(base_path);
         if base.exists() {
             fs::remove_dir_all(base.as_path()).await?
@@ -117,21 +127,22 @@ impl<T: for<'a> speedy::Readable<'a, LittleEndian> + speedy::Writable<LittleEndi
         fs::create_dir_all(&base).await?;
 
         let first_segment_id = 0;
-        let mmap = Self::map_segment(&base, first_segment_id, segment_size).await;
+        let mmap = Self::map_segment(&base, first_segment_id, SEGMENT_SIZE).await;
 
         Ok(Self {
             _p: Default::default(),
             base_path: base,
-            segment_size,
+            segment_size: SEGMENT_SIZE,
             current_segment_id: first_segment_id,
             mmap,
+            history: Default::default(),
             cursor: 0,
             batch: vec![],
         })
     }
 
     pub fn build_cleaner(&self) -> SegmentedLogCleaner {
-        let mut cleaner = SegmentedLogCleaner::new(self.base_path.clone());
+        let mut cleaner = SegmentedLogCleaner::new(self.base_path.clone(), self.history.clone());
         cleaner.start();
         cleaner
     }
@@ -161,10 +172,13 @@ impl<T: for<'a> speedy::Readable<'a, LittleEndian> + speedy::Writable<LittleEndi
         // Ensure data is synced before switching
         self.mmap.flush().unwrap();
 
+        self.history.entry(self.current_segment_id).and_modify(|v| *v += 1).or_insert(1);
+
         self.current_segment_id += 1;
         self.cursor = 0;
         self.mmap =
             Self::map_segment(&self.base_path, self.current_segment_id, self.segment_size).await;
+
         debug!("Rotated to segment {}", self.current_segment_id);
     }
 
@@ -188,21 +202,28 @@ impl<T: for<'a> speedy::Readable<'a, LittleEndian> + speedy::Writable<LittleEndi
     }
 
     pub async fn write_batch(&mut self) -> SegmentedIndex {
-        if self.cursor + self.batch.len() > self.segment_size as usize {
+        let len = self.batch.len();
+
+        if len > self.segment_size as usize {
+            panic!("Batch size {} exceeds maximum segment size {}", len, self.segment_size);
+        }
+
+        if self.cursor + len > self.segment_size as usize {
             self.rotate().await;
         }
 
         // Copy data to the memory-mapped region
-        self.mmap[self.cursor..self.cursor + self.batch.len()].copy_from_slice(&self.batch);
+        self.mmap[self.cursor..self.cursor + len].copy_from_slice(&self.batch);
+        self.batch.clear();
         let start_pointer = self.cursor;
 
         // handle current batch
-        let bytes = self.batch.len();
-        self.cursor += bytes;
+        self.cursor += len;
+        self.history.entry(self.current_segment_id).and_modify(|v| *v += 1).or_insert(1);
         SegmentedIndex {
             segment_id: self.current_segment_id,
             start_pointer,
-            bytes,
+            bytes: len,
         }
     }
 
@@ -220,14 +241,14 @@ impl<T: for<'a> speedy::Readable<'a, LittleEndian> + speedy::Writable<LittleEndi
 impl<T: for<'a> speedy::Readable<'a, LittleEndian> + speedy::Writable<LittleEndian> + Identifiable>
     SegmentedLogReader<T>
 {
-    pub async fn new(base_path: &str) -> Result<Self, Box<dyn Error + Send + Sync>> {
+    pub async fn new(base_path: &str) -> anyhow::Result<Self> {
         let base = PathBuf::from(base_path);
         fs::create_dir_all(&base).await?;
 
         Ok(Self {
             _p: Default::default(),
             base_path: base,
-            mmap_cache: Arc::new(Default::default()),
+            mmap_cache: Arc::new(RwLock::new(LruCache::new(NonZeroUsize::new(10).unwrap()))),
         })
     }
 
@@ -243,14 +264,26 @@ impl<T: for<'a> speedy::Readable<'a, LittleEndian> + speedy::Writable<LittleEndi
     }
 
     pub async fn read(&self, segment: &SegmentedIndex) -> Vec<u8> {
-        let mut values: Vec<u8> = vec![];
-
+        let key = (self.base_path.clone(), segment.segment_id);
         let end_pointer = segment.start_pointer + segment.bytes;
 
-        let mmap = Self::map_segment_read(&self.base_path, segment.segment_id).await;
-        values.append(mmap[segment.start_pointer..end_pointer].to_vec().as_mut());
+        {
+            let mut cache = self.mmap_cache.write().await;
+            // Note: LruCache::get requires a mutable reference to update "recency"
+            if let Some(mmap) = cache.get(&key) {
+                return mmap[segment.start_pointer..end_pointer].to_vec();
+            }
+        }
 
-        values
+        // 2. Cache miss: Map the segment
+        let mmap = Self::map_segment_read(&self.base_path, segment.segment_id).await;
+        let result = mmap[segment.start_pointer..end_pointer].to_vec();
+
+        // 3. Re-acquire WRITE lock to insert
+        let mut cache = self.mmap_cache.write().await;
+        cache.put(key, mmap);
+
+        result
     }
 
     pub async fn unlog(&self, batch: &SegmentedIndex) -> Vec<T> {
@@ -279,7 +312,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_one() {
-        let mut log = SegmentedLogWriter::new(&format!("temp/wals/wal_{}", 0), SEGMENT_SIZE)
+        let mut log = SegmentedLogWriter::new(&format!("temp/wals/wal_{}", 0))
             .await
             .unwrap();
         let values = vec![TimedRecord::from((
@@ -298,7 +331,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_multiple() {
-        let mut log = SegmentedLogWriter::new(&format!("temp/wals/wal_{}", 1), SEGMENT_SIZE)
+        let mut log = SegmentedLogWriter::new(&format!("temp/wals/wal_{}", 1))
             .await
             .unwrap();
         let values0 = vec![TimedRecord::from((
@@ -329,7 +362,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_parallel() {
-        let mut log = SegmentedLogWriter::new(&format!("temp/wals/wal_{}", 3), SEGMENT_SIZE)
+        let mut log = SegmentedLogWriter::new(&format!("temp/wals/wal_{}", 3))
             .await
             .unwrap();
         let values = vec![TimedRecord::from((

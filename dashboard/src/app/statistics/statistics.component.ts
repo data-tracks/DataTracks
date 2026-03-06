@@ -113,6 +113,15 @@ export class StatisticsComponent {
     protected getTp(name: string) {
         return this.tps().get(name) || {plain: 0, mapped: 0};
     }
+
+    formatNumber(val: string | number): string {
+        const num = typeof val === 'string' ? parseInt(val) : val;
+        if (isNaN(num)) return "0";
+
+        const number = num.toLocaleString('en-US').replace(/,/g, "'");
+
+        return ":" + number;
+    }
 }
 
 export type DefinitionId = number;
@@ -134,7 +143,9 @@ export enum Stage {
 
 export interface Delay {
     plain: number,
-    mapped: number
+    mapped: number,
+    max: number,
+    open_ids: number
 }
 
 export interface Throughput {

@@ -15,6 +15,7 @@ description = "DataTracks is an prototype system, which provides easy creation a
 bollard = "0.20.1"
 speedy = "0.8.7"
 rayon = "1.11.0"
+lru = "0.16.3"
 dashmap = { version = "7.0.0-rc2", features = ["serde"] }
 statistics = { path = "./statistics" }
 flume = "0.12.0"

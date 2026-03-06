@@ -204,7 +204,7 @@ pub async fn start_container(
 
     let mut status = docker.create_image(Some(options), None, None);
 
-    println!();
+    //println!();
 
     while let Some(msg) = status.try_next().await? {
         if let Some(progress) = msg.progress_detail {

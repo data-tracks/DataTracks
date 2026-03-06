@@ -1603,6 +1603,8 @@ version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100"
 dependencies = [
+ "allocator-api2",
+ "equivalent",
  "foldhash 0.2.0",
 ]
 
@@ -2227,6 +2229,15 @@ name = "log"
 version = "0.4.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e5032e24019045c762d3c0f28f5b6b8bbf38563a65908389bf7978758920897"
+
+[[package]]
+name = "lru"
+version = "0.16.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a1dc47f592c06f33f8e3aea9591776ec7c9f9e4124778ff8a3c3b87159f7e593"
+dependencies = [
+ "hashbrown 0.16.1",
+]
 
 [[package]]
 name = "lru-slab"
@@ -4066,6 +4077,7 @@ dependencies = [
  "axum 0.8.8",
  "axum-embed",
  "flume 0.12.0",
+ "indexmap 2.13.0",
  "rust-embed",
  "serde",
  "serde_json",
@@ -4806,6 +4818,7 @@ dependencies = [
  "dashmap",
  "flume 0.12.0",
  "futures-util",
+ "lru",
  "memmap2",
  "num-format",
  "serde",

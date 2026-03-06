@@ -47,7 +47,7 @@ impl WalManager {
         let handle = thread::spawn(move || {
             let rt = Builder::new_current_thread().enable_all().build().unwrap();
             rt.block_on(async {
-                let mut log = SegmentedLogWriter::new(&format!("temp/wals/wal_{}", id), 200 * 2048 * 2048)
+                let mut log = SegmentedLogWriter::new(&format!("temp/wals/wal_{}", id))
                     .await
                     .unwrap();
 

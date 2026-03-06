@@ -58,6 +58,9 @@ pub struct Delay {
     pub plain: Duration,
     #[serde_as(as = "DurationMilliSeconds<u64>")]
     pub mapped: Duration,
+    pub open_ids: usize,
+    #[serde_as(as = "DurationMilliSeconds<u64>")]
+    pub max: Duration
 }
 
 #[derive(Serialize, Clone, Debug, Default)]

@@ -5,6 +5,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::spawn;
 use std::time::{Duration};
+use indexmap::IndexMap;
 use tokio::runtime::{Builder, Handle};
 use tokio::select;
 use tokio::sync::broadcast;
@@ -19,7 +20,7 @@ pub struct Statistics {
     engines: HashMap<EngineId, EngineStatistic>,
     engine_names: HashMap<EngineId, String>,
     definitions: HashMap<DefinitionId, Definition>,
-    ids: HashMap<u64, Instant>,
+    ids: IndexMap<u64, Instant>,
     delay: Delay,
 }
 
@@ -50,18 +51,28 @@ impl Statistics {
                 );
 
                 match stage {
-                    Stage::Timer => {}
-                    Stage::WAL => {}
-                    Stage::Plain => {
+                    Stage::Timer => {
                         for id in ids {
                             self.ids.insert(id, first);
                         }
+                    }
+                    Stage::WAL => {}
+                    Stage::Plain => {
+                        self.delay.plain = ids.clone().into_iter().map(|id| {
+                            if let Some(old) = self.ids.get_mut(&id) {
+                                let duration = first.duration_since(old.clone());
+                                duration
+                            }else {
+                                error!("mapped without plain");
+                                Duration::from_secs(10000)
+                            }
+                        }).sum::<Duration>() / ids.len() as u32;
                     }
                     Stage::Mapped => {
                         self.delay.mapped = ids.clone().into_iter().map(|id| {
                             if let Some(old) = self.ids.get_mut(&id) {
                                 let duration = first.duration_since(old.clone());
-                                self.ids.remove(&id);
+                                self.ids.shift_remove(&id);
                                 duration
                             }else {
                                 error!("mapped without plain");
@@ -148,6 +159,7 @@ pub fn start(rt: Runtimes, tx: Sender<Event>, rx: Receiver<Event>, output: broad
             loop {
                 select! {
                     maybe_event = rx.recv_async() => {
+
                         if let Ok(event) = maybe_event {
                             let mut events = vec![event];
 
@@ -172,6 +184,8 @@ pub fn start(rt: Runtimes, tx: Sender<Event>, rx: Receiver<Event>, output: broad
                             debug!("Statistic throughput ticks", )
                         }
                         warn!("{:?}", statistics.delay);
+                        warn!("open ids: {:?}", statistics.ids.len());
+                        warn!("oldest: {:?}", statistics.ids.last().map(|id| id.1.clone()).unwrap_or(Instant::now()).elapsed());
                         last_time = Instant::now();
                         last = current.clone();
                         *last_shared_statistics_clone.lock().unwrap() = last.clone();

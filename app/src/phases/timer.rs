@@ -6,11 +6,12 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 use tokio::runtime::Builder;
 use tokio::task::JoinSet;
-use tokio::time::sleep;
+use tokio::time::{sleep, Instant};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 use util::Event::Heartbeat;
-use util::{InitialRecord, Runtimes, TimedMeta, TimedRecord, get_statistic_sender, log_channel};
+use util::{InitialRecord, Runtimes, TimedMeta, TimedRecord, get_statistic_sender, log_channel, Event};
+use util::definition::Stage;
 
 struct TimerWorker {
     handle: JoinHandle<()>,
@@ -122,6 +123,13 @@ impl TimerManager {
                                                 error!("Worker {} failed to send downstream: {}", id, err);
                                                 // If downstream is closed, we should probably stop
                                                 return;
+                                            }else {
+                                                statistics_sender.send(Event::Insert {
+                                                    id: Default::default(),
+                                                    first: Instant::now(),
+                                                    ids,
+                                                    source: Default::default(),
+                                                    stage: Stage::Timer,}).unwrap();
                                             }
                                         }
                                         Err(_) => {

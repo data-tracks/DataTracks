@@ -157,7 +157,7 @@ impl Postgres {
 
     pub(crate) async fn monitor(&self, statistic_tx: &Sender<Event>) -> anyhow::Result<()> {
         loop {
-            self.check_throughput(statistic_tx).await.unwrap();
+            self.check_throughput(statistic_tx).await?;
             sleep(Duration::from_secs(5)).await;
         }
     }
@@ -165,15 +165,15 @@ impl Postgres {
     async fn check_throughput(
         &self,
         statistic_tx: &Sender<Event>,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    ) -> anyhow::Result<()> {
         let interval_seconds = 5;
 
         // Initial read
-        let start_counts = self.get_tx_counts().await?;
+        let start_counts = self.get_tx_counts().await.map_err(|err| anyhow!(err))?;
         sleep(Duration::from_secs(interval_seconds)).await;
 
         // Second read
-        let end_counts = self.get_tx_counts().await?;
+        let end_counts = self.get_tx_counts().await.map_err(|err| anyhow!(err))?;
 
         // Calculation
         let total_tx = (end_counts.commit - start_counts.commit)
@@ -186,7 +186,7 @@ impl Postgres {
             _ => Load::High,
         };
 
-        *self.load.lock().unwrap() = load;
+        *self.load.lock().map_err(|_| anyhow!("Poisoned lock"))? = load;
 
         statistic_tx
             .send_async(Event::EngineStatus(format!(

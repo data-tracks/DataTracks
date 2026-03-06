@@ -93,6 +93,7 @@ async fn handle_socket_logic(mut socket: WebSocket, state: EventState, path: Str
     }
 
     loop {
+
         match rx.recv().await {
             Ok(event) => {
                 let msg = match (path.as_str(), event) {
