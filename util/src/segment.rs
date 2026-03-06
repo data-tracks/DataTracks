@@ -2,15 +2,24 @@ use crate::Identifiable;
 use flume::{Receiver, Sender};
 use memmap2::{Mmap, MmapMut, MmapOptions};
 use speedy::{LittleEndian, Readable, Writable};
+use std::collections::HashMap;
 use std::error::Error;
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::thread;
 use std::thread::JoinHandle;
 use tokio::fs;
 use tokio::fs::OpenOptions;
 use tokio::runtime::Builder;
+use tokio::sync::RwLock;
+use tokio::time::Instant;
 use tracing::{debug, error};
+
+struct CachedMmap {
+    mmap: Mmap,
+    last_used: Instant,
+}
 
 pub struct SegmentedLogWriter<T>
 where
@@ -36,6 +45,7 @@ where
 {
     _p: PhantomData<T>,
     base_path: PathBuf,
+    mmap_cache: Arc<RwLock<HashMap<usize, CachedMmap>>>,
 }
 
 pub struct SegmentedLogCleaner {
@@ -189,7 +199,6 @@ impl<T: for<'a> speedy::Readable<'a, LittleEndian> + speedy::Writable<LittleEndi
         // handle current batch
         let bytes = self.batch.len();
         self.cursor += bytes;
-        (self.cursor, self.current_segment_id);
         SegmentedIndex {
             segment_id: self.current_segment_id,
             start_pointer,
@@ -218,6 +227,7 @@ impl<T: for<'a> speedy::Readable<'a, LittleEndian> + speedy::Writable<LittleEndi
         Ok(Self {
             _p: Default::default(),
             base_path: base,
+            mmap_cache: Arc::new(Default::default()),
         })
     }
 
