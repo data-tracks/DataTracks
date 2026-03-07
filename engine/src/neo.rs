@@ -1,7 +1,7 @@
 use crate::engine::Load;
 use anyhow::{anyhow, bail};
 use flume::Sender;
-use neo4rs::{Graph, query};
+use neo4rs::{Graph, query, ConfigBuilder};
 use reqwest::Client;
 use serde::{Deserialize};
 use std::collections::HashMap;
@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use tokio::time::{Instant, sleep};
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 use util::Event::EngineStatus;
 use util::container::Mapping;
 use util::definition::{Definition, Stage};
@@ -74,9 +74,16 @@ impl Neo4j {
         &mut self,
         id: S,
     ) -> anyhow::Result<()> {
-        let uri = format!("{}:{}", self.host, self.port);
 
-        let graph = Graph::new(&uri, self.user.clone(), self.password.clone())?;
+        let config = ConfigBuilder::default()
+            .uri(format!("{}:{}", self.host, self.port))
+            .user(self.user.clone())
+            .password(self.password.clone())
+            .max_connections(32)
+            .build()?;
+
+        let graph = Graph::connect(config)?;
+
 
         let start_time = Instant::now();
 
