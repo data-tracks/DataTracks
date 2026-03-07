@@ -1,8 +1,6 @@
-# PolyStream Change & new Dashboard
+# Queue Visuals, Improved Thread Management
 
 ---
 
-- New engine based approach
-- Removed train and wagon logic
-- Removed core, threading, error
-- New dashboard with statistics, queues and event tracking
+- Improved queue visuals
+- Thread separation in separated runtimes

@@ -54,13 +54,13 @@ impl Manager {
         let ctrl_c_signal = tokio::signal::ctrl_c();
 
         let main_rt = Builder::new_multi_thread()
-            .worker_threads(16)
+            .worker_threads(8)
             .thread_name("main-rt")
             .enable_all()
             .build()?;
 
         let trash_rt = Builder::new_multi_thread()
-            .worker_threads(16)
+            .worker_threads(8)
             .thread_name("trash-rt")
             .enable_all()
             .build()?;

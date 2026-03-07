@@ -146,7 +146,9 @@ impl Persister {
 
             // Spawn a dedicated OS thread for this specific engine
             thread::spawn(move || {
-                let rt = Builder::new_multi_thread().worker_threads(5) // No work-stealing possible
+                let rt = Builder::new_multi_thread()
+                    .thread_name("persister")
+                    .worker_threads(5) // No work-stealing possible
                     .enable_all()
                     .build()
                     .unwrap();
