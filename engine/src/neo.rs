@@ -93,7 +93,7 @@ impl Neo4j {
             }
         }
         let id = id.into();
-        debug!("️️☑️ Connected to Neo4j {}", id);
+        info!("️️☑️ Connected to Neo4j {}", id);
         self.id = Some(id);
         self.graph = Some(graph);
 
@@ -176,7 +176,7 @@ impl Neo4j {
 
                 g.run(query(cypher_query).param("values", values)).await?;
 
-                warn!("inserted in neo4j {} {:?}", len, now.elapsed());
+                debug!("inserted in neo4j {} {:?}", len, now.elapsed());
                 Ok(())
             }
         }

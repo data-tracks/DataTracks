@@ -126,7 +126,7 @@ impl Postgres {
                 debug!("Inserted {} row(s) into postgres engine.", rows_affected);
             }
         }
-        info!("inserted in postgres {} {:?}", len, now.elapsed());
+        debug!("inserted in postgres {} {:?}", len, now.elapsed());
         Ok(())
     }
 

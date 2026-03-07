@@ -6,6 +6,7 @@ use engine::engine::Engine;
 use flume::{Receiver, Sender, unbounded};
 use std::collections::HashMap;
 use std::error::Error;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread;
 use std::time::Duration;
@@ -133,99 +134,100 @@ impl Persister {
         ))
     }
 
-    pub async fn start_distributor(&mut self, join_set: &mut JoinSet<()>, rt: Runtimes) {
+    pub async fn start_distributor(&mut self, _join_set: &mut JoinSet<()>, _rt: Runtimes) {
         let engines = self.catalog.engines().await;
-        let len = engines.len();
 
-        let rt_persister = Builder::new_multi_thread()
-            .worker_threads(3 * len)
-            .thread_name("persister")
-            .enable_all()
-            .build()
-            .unwrap();
-
-        let builder_id = AtomicU64::new(0);
+        let builder_id = Arc::new(AtomicU64::new(0));
 
         for engine in engines {
-            for i in 0..5 {
-                let worker_id = builder_id.fetch_add(1, Ordering::Relaxed).into();
-                let mut engine = engine.clone();
-                // actually make a new connection
-                engine.start(join_set).await.unwrap();
+            let engine_inner = engine.clone();
+            let definitions = self.catalog.definitions().await;
+            let builder_id = builder_id.clone();
 
-                let definitions = self
-                    .catalog
-                    .definitions()
-                    .await
-                    .into_iter()
-                    .map(|d| (d.id, d))
-                    .collect::<HashMap<_, _>>();
+            // Spawn a dedicated OS thread for this specific engine
+            thread::spawn(move || {
+                let rt = Builder::new_multi_thread().worker_threads(5) // No work-stealing possible
+                    .enable_all()
+                    .build()
+                    .unwrap();
+                rt.block_on(async {
+                    let mut join_set = JoinSet::new();
+                    for i in 0..5 {
+                        let worker_id = builder_id.fetch_add(1, Ordering::Relaxed).into();
+                        let mut engine = engine_inner.clone();
+                        // actually make a new connection
+                        engine.start(&mut join_set).await.unwrap();
 
-                rt_persister.spawn(async move {
-                    let mut buckets: HashMap<DefinitionId, Batch<TargetedRecord>> = HashMap::new();
-                    let mut count = 0;
+                        let definitions = definitions
+                            .clone()
+                            .into_iter()
+                            .map(|d| (d.id, d))
+                            .collect::<HashMap<_, _>>();
 
-                    let name = format!("Persister {} {}", engine, i);
+                        tokio::spawn(async move {
+                            let mut buckets: HashMap<DefinitionId, Batch<TargetedRecord>> = HashMap::new();
+                            let mut count = 0;
 
-                    // Create a 50ms ticker for the flush interval
-                    let mut flush_interval = tokio::time::interval(Duration::from_millis(500));
-                    // don't let ticks pile up if processing is slow
-                    flush_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+                            let name = format!("Persister {} {}", engine, i);
 
-                    let mut heartbeat_interval = tokio::time::interval(Duration::from_secs(5));
-                    heartbeat_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+                            // Create a 50ms ticker for the flush interval
+                            let mut flush_interval = tokio::time::interval(Duration::from_millis(500));
+                            // don't let ticks pile up if processing is slow
+                            flush_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
-                    loop {
-                        select! {
-                            biased;
-                             // Case C: Send Heartbeat
-                            _ = heartbeat_interval.tick() => {
-                                 let _ = engine.statistic_sender.send(Event::Heartbeat(name.clone()));
-                            }
-                            // Case A: The timer hit 200ms
-                            _ = flush_interval.tick() => {
-                                if !buckets.is_empty() {
-                                    let now = Instant::now();
-                                    flush_buckets(&worker_id, &mut buckets, &mut engine, &definitions).await;
-                                    error!("flush duration {}", now.elapsed().as_millis());
-                                    count = 0;
-                                }
-                            }
+                            let mut heartbeat_interval = tokio::time::interval(Duration::from_secs(5));
+                            heartbeat_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
-                            // Case B: A record arrived
-                            Ok(records) = engine.buffer_out.1.recv_async() => {
-                                for record in records {
-                                    buckets.entry(record.meta.definition).or_default().push(record);
-                                    count += 1;
-
-                                    // let's check if there is more
-                                    let mut batch =  vec![];
-                                    while batch.len() < 100_000 {
-                                        if let Ok(res) = engine.buffer_out.1.try_recv() {
-                                            batch.extend(res)
+                            loop {
+                                select! {
+                                    biased;
+                                     // Case C: Send Heartbeat
+                                    _ = heartbeat_interval.tick() => {
+                                         let _ = engine.statistic_sender.send(Event::Heartbeat(name.clone()));
+                                    }
+                                    // Case A: The timer hit 200ms
+                                    _ = flush_interval.tick() => {
+                                        if !buckets.is_empty() {
+                                            flush_buckets(&worker_id, &mut buckets, &mut engine, &definitions).await;
+                                            count = 0;
                                         }
                                     }
-                                    for record in batch {
-                                        buckets.entry(record.meta.definition).or_default().push(record);
-                                        count += 1;
-                                    }
 
+                                    // Case B: A record arrived
+                                    Ok(records) = engine.buffer_out.1.recv_async() => {
+                                        // Process the initial burst
+                                        for record in records {
+                                            buckets.entry(record.meta.definition).or_default().push(record);
+                                            count += 1;
+                                        }
 
-                                    // Immediate flush if we hit the batch size
-                                    if count >= BATCH_SIZE {
-                                        flush_buckets(&worker_id, &mut buckets, &mut engine, &definitions).await;
-                                        count = 0;
+                                        let mut extra_recvs = 0;
+                                        while extra_recvs < 100 && count < BATCH_SIZE {
+                                            if let Ok(extra_records) = engine.buffer_out.1.try_recv() {
+                                                for record in extra_records {
+                                                    buckets.entry(record.meta.definition).or_default().push(record);
+                                                    count += 1;
+                                                }
+                                                extra_recvs += 1;
+                                            } else {
+                                                break;
+                                            }
+                                        }
+
+                                        if count >= BATCH_SIZE {
+                                            flush_buckets(&worker_id, &mut buckets, &mut engine, &definitions).await;
+                                            count = 0;
+                                            flush_interval.reset();
+                                        }
                                     }
                                 }
-                                flush_interval.reset(); // Reset the timer since we just flushed
                             }
-                        }
+                        });
                     }
+                    std::future::pending::<()>().await;
                 });
-            }
+            });
         }
-
-        rt.add_runtime(rt_persister);
     }
 }
 
@@ -255,7 +257,7 @@ async fn flush_buckets(
         let ids: Vec<u64> = records.iter().map(|r| r.meta.id).collect();
 
         match engine
-            .store(partition_id, Stage::Plain, definition.id, &records)
+            .store(partition_id, Stage::Plain, definition.id, records.clone())
             .await
         {
             Ok(_) => {

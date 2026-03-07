@@ -56,13 +56,14 @@ impl MongoDB {
 
         let server_api = ServerApi::builder().version(ServerApiVersion::V1).build();
         client_options.server_api = Some(server_api);
-        client_options.max_connecting = Some(32);
-        client_options.max_pool_size = Some(32);
+        client_options.max_connecting = Some(24);
+        client_options.max_pool_size = Some(24);
+        client_options.server_selection_timeout = Some(Duration::from_secs(60));
 
         let client = Client::with_options(client_options)?;
 
         timeout(
-            Duration::from_secs(5),
+            Duration::from_secs(10),
             client.database("admin").run_command(doc! { "ping": 1 }),
         )
         .await??;

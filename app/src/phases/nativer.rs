@@ -84,7 +84,7 @@ impl Nativer {
 
                                 let partition_id = definition.partition_info.next(&id, &length).into();
 
-                                match engine.store(partition_id, Stage::Mapped, definition.id, &mapped_data).await {
+                                match engine.store(partition_id, Stage::Mapped, definition.id, mapped_data).await {
                                     Ok(_) => {
                                         let _ = engine.statistic_sender.send(Event::Insert {
                                             id: definition.id,

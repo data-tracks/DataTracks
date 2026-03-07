@@ -279,7 +279,7 @@ impl Engine {
         partition_id: PartitionId,
         stage: Stage,
         definition_id: DefinitionId,
-        values: &Batch<TargetedRecord>,
+        values: Batch<TargetedRecord>,
     ) -> anyhow::Result<()> {
         let ids = values
             .iter()
@@ -301,9 +301,9 @@ impl Engine {
         let entity_name = definition.entity_name(partition_id, &stage);
 
         match &self.engine_kind {
-            EngineKind::Postgres(p) => p.store(&stage, entity_name, values).await,
-            EngineKind::MongoDB(m) => m.store(&stage, entity_name, values).await,
-            EngineKind::Neo4j(n) => n.store(&stage, entity_name, values).await,
+            EngineKind::Postgres(p) => p.store(&stage, entity_name, &values).await,
+            EngineKind::MongoDB(m) => m.store(&stage, entity_name, &values).await,
+            EngineKind::Neo4j(n) => n.store(&stage, entity_name, &values).await,
         }
     }
 
