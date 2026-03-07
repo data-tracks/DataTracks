@@ -31,6 +31,8 @@ where
     mmap: MmapMut,
     // how many entries per segment_id exist
     history: Arc<DashMap<usize, usize>>,
+    done: Arc<RwLock<Vec<usize>>>,
+    is_cleaned: bool,
     cursor: usize,
     batch: Vec<u8>,
 }
@@ -53,10 +55,11 @@ pub struct SegmentedLogCleaner {
     base_path: PathBuf,
     handle: Option<JoinHandle<()>>,
     history: Arc<DashMap<usize, usize>>,
+    done: Arc<RwLock<Vec<usize>>>,
 }
 
 impl SegmentedLogCleaner {
-    pub fn new(base_path: PathBuf, history: Arc<DashMap<usize, usize>>) -> Self {
+    pub fn new(base_path: PathBuf, history: Arc<DashMap<usize, usize>>, done: Arc<RwLock<Vec<usize>>>) -> Self {
         let channel = flume::unbounded();
         Self {
             cleaner_rx: channel.1.clone(),
@@ -64,6 +67,7 @@ impl SegmentedLogCleaner {
             base_path,
             handle: None,
             history,
+            done,
         }
     }
 
@@ -76,6 +80,7 @@ impl SegmentedLogCleaner {
         let base_path = self.base_path.clone();
 
         let history = self.history.clone();
+        let done = self.done.clone();
         let handle = thread::spawn(move || {
             let builder = Builder::new_current_thread().enable_all().build().unwrap();
             builder.block_on(async move {
@@ -84,13 +89,20 @@ impl SegmentedLogCleaner {
                         let mut delete = false;
                         if let Some(mut val) = history.get_mut(&segment_id) {
                             *val -= 1;
-                            if *val <= 0 {
+                            if *val <= 0 && done.read().await.contains(&segment_id) {
                                 delete = true;
                             }
                         }
 
                         if delete {
                             let path = base_path.join(format!("segment_{:06}.log", segment_id));
+                            history.remove(&segment_id).unwrap();
+
+                            let mut done = done.write().await;
+
+                            if let Some(pos) = done.iter().position(|&x| x == segment_id) {
+                                done.remove(pos);
+                            }
                             fs::remove_file(path.clone()).await.unwrap();
                             error!("cleaned {}", path.display());
                         }
@@ -136,13 +148,16 @@ impl<T: for<'a> speedy::Readable<'a, LittleEndian> + speedy::Writable<LittleEndi
             current_segment_id: first_segment_id,
             mmap,
             history: Default::default(),
+            done: Arc::new(Default::default()),
+            is_cleaned: false,
             cursor: 0,
             batch: vec![],
         })
     }
 
-    pub fn build_cleaner(&self) -> SegmentedLogCleaner {
-        let mut cleaner = SegmentedLogCleaner::new(self.base_path.clone(), self.history.clone());
+    pub fn build_cleaner(&mut self) -> SegmentedLogCleaner {
+        self.is_cleaned = true;
+        let mut cleaner = SegmentedLogCleaner::new(self.base_path.clone(), self.history.clone(), self.done.clone());
         cleaner.start();
         cleaner
     }
@@ -172,7 +187,12 @@ impl<T: for<'a> speedy::Readable<'a, LittleEndian> + speedy::Writable<LittleEndi
         // Ensure data is synced before switching
         self.mmap.flush().unwrap();
 
-        self.history.entry(self.current_segment_id).and_modify(|v| *v += 1).or_insert(1);
+
+        if self.is_cleaned{
+            self.history.entry(self.current_segment_id).and_modify(|v| *v += 1).or_insert(1);
+            self.done.write().await.push(self.current_segment_id);
+        }
+
 
         self.current_segment_id += 1;
         self.cursor = 0;

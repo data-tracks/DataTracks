@@ -17,6 +17,7 @@ use util::container::Mapping;
 use util::definition::{Definition, Stage};
 use util::{Batch, DefinitionMapping, EngineId, Event, PartitionId, TargetedRecord, container};
 use value::Value;
+use speedy::Writable;
 
 pub struct Neo4j {
     pub(crate) id: Option<EngineId>,
@@ -92,7 +93,7 @@ impl Neo4j {
             }
         }
         let id = id.into();
-        info!("️️☑️ Connected to Neo4j {}", id);
+        debug!("️️☑️ Connected to Neo4j {}", id);
         self.id = Some(id);
         self.graph = Some(graph);
 
@@ -185,7 +186,7 @@ impl Neo4j {
         let now = Instant::now();
 
         let processed = values.records.par_iter()
-            .map(|r| vec![r.value.clone(), Value::int(r.meta.id as i64)])
+            .map(|r| vec![to_primitive(&r.value), Value::int(r.meta.id as i64)])
             .collect();
 
         debug!("inserted in neo4j ser {} {:?}", values.len(), now.elapsed());
@@ -308,6 +309,18 @@ impl Neo4j {
             WHERE p.id IN $values",
             entity
         )
+    }
+}
+
+fn to_primitive(value: &Value) -> Value {
+    match value {
+        Value::Node(n) => {
+            Value::text(String::from_utf8(n.write_to_vec().unwrap()).unwrap().as_str())
+        }
+        Value::Dict(d) => {
+            Value::text(String::from_utf8(d.write_to_vec().unwrap()).unwrap().as_str())
+        }
+        v => v.clone(),
     }
 }
 

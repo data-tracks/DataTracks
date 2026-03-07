@@ -63,6 +63,7 @@ impl WalManager {
                         rt.block_on(async {
                             loop {
                                 tokio::select! {
+                                    biased;
                                     _ = buff_token.cancelled() => {
                                         info!("WAL Buffer {} shutting down gracefully", id);
                                         return;
@@ -94,10 +95,28 @@ impl WalManager {
 
                 loop {
                     tokio::select! {
+                        biased;
                         // EXIT SIGNAL: The manager called for a shrink
                         _ = worker_token.cancelled() => {
                             info!("WAL Worker {} shutting down gracefully", id);
                             return;
+                        }
+                        _ = duration.tick() => {
+                            let len = tx.len();
+                            if !buff_rx.is_empty() && len < 100_000 {
+                                // empty old
+
+                                let count = 100_000usize.saturating_sub(buff_rx.len());
+                                for records in buff_rx.try_iter().take(count) {
+                                    delayed_length -= records.len();
+                                    tx.send(records).unwrap()
+                                }
+                            }
+
+                        }
+                        _ = delay_hb.tick() => {
+                            statistics.send_async(Event::Queue (QueueEvent{name: name.clone(), size: delayed_length})).await.unwrap();
+                            statistics.send_async(Event::Heartbeat(name.clone())).await.unwrap();
                         }
 
                         // WORK LOGIC
@@ -137,23 +156,6 @@ impl WalManager {
                                 }
                                 Err(_) => return, // Channel closed
                             }
-                        }
-                        _ = duration.tick() => {
-                            let len = tx.len();
-                            if !buff_rx.is_empty() && len < 100_000 {
-                                // empty old
-
-                                let count = 100_000usize.saturating_sub(buff_rx.len());
-                                for records in buff_rx.try_iter().take(count) {
-                                    delayed_length -= records.len();
-                                    tx.send(records).unwrap()
-                                }
-                            }
-
-                        }
-                        _ = delay_hb.tick() => {
-                            statistics.send_async(Event::Queue (QueueEvent{name: name.clone(), size: delayed_length})).await.unwrap();
-                            statistics.send_async(Event::Heartbeat(name.clone())).await.unwrap();
                         }
                     }
                 }

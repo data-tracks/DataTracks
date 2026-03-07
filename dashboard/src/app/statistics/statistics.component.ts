@@ -27,6 +27,7 @@ export class StatisticsComponent {
         this.service.initStatisticsConnection();
         // Subscribe to the stream passed from the parent
         this.service.$statistics.subscribe(data => {
+            console.log(data)
             this.processData(data);
         });
     }

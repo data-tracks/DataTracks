@@ -168,19 +168,26 @@ impl Persister {
                     let name = format!("Persister {} {}", engine, i);
 
                     // Create a 50ms ticker for the flush interval
-                    let mut flush_interval = tokio::time::interval(Duration::from_millis(50));
+                    let mut flush_interval = tokio::time::interval(Duration::from_millis(500));
                     // don't let ticks pile up if processing is slow
-                    flush_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+                    flush_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
-                    let mut heartbeat_interval = tokio::time::interval(Duration::from_millis(500));
-                    heartbeat_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+                    let mut heartbeat_interval = tokio::time::interval(Duration::from_secs(5));
+                    heartbeat_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
                     loop {
                         select! {
+                            biased;
+                             // Case C: Send Heartbeat
+                            _ = heartbeat_interval.tick() => {
+                                 let _ = engine.statistic_sender.send(Event::Heartbeat(name.clone()));
+                            }
                             // Case A: The timer hit 200ms
                             _ = flush_interval.tick() => {
                                 if !buckets.is_empty() {
+                                    let now = Instant::now();
                                     flush_buckets(&worker_id, &mut buckets, &mut engine, &definitions).await;
+                                    error!("flush duration {}", now.elapsed().as_millis());
                                     count = 0;
                                 }
                             }
@@ -211,11 +218,6 @@ impl Persister {
                                     }
                                 }
                                 flush_interval.reset(); // Reset the timer since we just flushed
-                            }
-
-                            // Case C: Send Heartbeat
-                            _ = heartbeat_interval.tick() => {
-                                 let _ = engine.statistic_sender.send(Event::Heartbeat(name.clone()));
                             }
                         }
                     }
@@ -293,7 +295,7 @@ async fn handle_error(
     error_count: &mut u64,
     last_log: &mut Instant,
 ) {
-    debug!("Distribution error for engine {:?}: {:?}", engine.id, err);
+    error!("Distribution error for engine {:?}: {:?}", engine.id, err);
     *error_count += 1;
 
     // 1. Backpressure/Sleep logic based on severity

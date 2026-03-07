@@ -20,3 +20,5 @@ tower-http = { workspace = true }
 rust-embed = { version = "8.5.0", features = ["interpolate-folder-path"] }
 axum-embed = "0.1.0"
 indexmap = { workspace = true }
+num-format = { workspace = true }
+rayon = {workspace = true}

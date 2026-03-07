@@ -1,14 +1,15 @@
-use axum::Router;
 use axum::extract::ws::Message::Binary;
 use axum::extract::ws::{Message, WebSocket};
 use axum::extract::{Path, State, WebSocketUpgrade};
 use axum::response::IntoResponse;
 use axum::routing::get;
+use axum::Router;
 use axum_embed::ServeEmbed;
 use rust_embed::RustEmbed;
 use std::sync::{Arc, Mutex};
+use rayon::iter::IntoParallelIterator;
+use rayon::iter::ParallelIterator;
 use tokio::net::TcpListener;
-use tokio::runtime::Runtime;
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::Sender;
 use tower_http::cors::CorsLayer;
@@ -20,7 +21,6 @@ use util::{Batch, Event, StatisticEvent, TargetedRecord, ThroughputEvent};
 #[derive(Clone)]
 struct Assets;
 
-
 #[derive(Clone)]
 struct EventState {
     sender: Sender<Event>,
@@ -29,13 +29,12 @@ struct EventState {
     last_tp: Arc<Mutex<ThroughputEvent>>,
 }
 pub fn start(
-    rt: &mut Runtime,
     tx: Sender<Event>,
     output: Sender<Batch<TargetedRecord>>,
     last_statistic: Arc<Mutex<StatisticEvent>>,
     last_tp: Arc<Mutex<ThroughputEvent>>,
 ) {
-    rt.spawn(async move {
+    tokio::spawn(async move {
         let shared_state = EventState {
             sender: tx,
             output,
@@ -93,31 +92,46 @@ async fn handle_socket_logic(mut socket: WebSocket, state: EventState, path: Str
     }
 
     loop {
-
         match rx.recv().await {
             Ok(event) => {
-                let msg = match (path.as_str(), event) {
-                    ("/events", e) => {
-                        if matches!(e, Event::Heartbeat(_)) || matches!(e, Event::Insert { .. }) {
-                            continue;
-                        }
-                        serde_json::to_string(&e).ok()
-                    }
-                    ("/queues", Event::Queue(q)) => serde_json::to_string(&q).ok(),
-                    ("/statistics", e)
-                        if matches!(e, Event::Statistics(_))
-                            || matches!(e, Event::Throughput(_)) =>
-                    {
-                        serde_json::to_string(&e).ok()
-                    }
-                    ("/threads", Event::Heartbeat(h)) => Some(h),
-                    _ => None,
-                };
+                let mut batch = vec![event];
 
-                if let Some(text) = msg
-                    && socket.send(Message::Text(text.into())).await.is_err()
-                {
-                    break;
+                for _ in 0..1_000 {
+                    match rx.try_recv() {
+                        Ok(event) => batch.push(event),
+                        Err(_) => break, // Buffer empty, stop looking
+                    }
+                }
+
+                // Clone the path to move it into the blocking closure
+                let path_clone = path.clone();
+
+                // Offload CPU-heavy serialization to Rayon's thread pool
+                let msgs: Vec<String> = batch
+                        .into_par_iter()
+                        .filter_map(|event| {
+                            match (path_clone.as_str(), event) {
+                                ("/events", e) => {
+                                    if matches!(e, Event::Heartbeat(_)) || matches!(e, Event::Insert { .. }) {
+                                        return None;
+                                    }
+                                    serde_json::to_string(&e).ok()
+                                }
+                                ("/queues", Event::Queue(q)) => serde_json::to_string(&q).ok(),
+                                ("/statistics", e) if matches!(e, Event::Statistics(_)) || matches!(e, Event::Throughput(_)) => {
+                                    serde_json::to_string(&e).ok()
+                                }
+                                ("/threads", Event::Heartbeat(h)) => Some(h),
+                                _ => None,
+                            }
+                        })
+                        .collect();
+
+                // Back on the async side: Send the serialized messages
+                for text in msgs {
+                    if socket.send(Message::Text(text.into())).await.is_err() {
+                        return; // Exit if socket closed
+                    }
                 }
             }
             Err(broadcast::error::RecvError::Lagged(n)) => {
@@ -146,7 +160,10 @@ async fn handle_socket(mut socket: WebSocket, topic: String, state: EventState) 
     let mut recv = state.output.subscribe();
     loop {
         if let Ok(records) = recv.recv().await {
-            let records = records.into_iter().filter(|rec| rec.meta.topics.contains(&topic)).collect::<Vec<_>>();
+            let records = records
+                .into_iter()
+                .filter(|rec| rec.meta.topics.contains(&topic))
+                .collect::<Vec<_>>();
             let values = records.into_iter().map(|msg| msg.value).collect::<Vec<_>>();
             let msg = value::message::Message {
                 topics: vec![],

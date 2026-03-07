@@ -56,8 +56,8 @@ impl MongoDB {
 
         let server_api = ServerApi::builder().version(ServerApiVersion::V1).build();
         client_options.server_api = Some(server_api);
-        client_options.max_connecting = Some(16);
-        client_options.max_pool_size = Some(16);
+        client_options.max_connecting = Some(32);
+        client_options.max_pool_size = Some(32);
 
         let client = Client::with_options(client_options)?;
 

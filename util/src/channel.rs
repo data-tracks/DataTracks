@@ -4,13 +4,24 @@ use num_format::{CustomFormat, ToFormattedString};
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
+use once_cell::sync::Lazy;
+use tokio::runtime::{Builder, Runtime};
 use tokio::sync::RwLock;
 use tokio::time::Instant;
-use tracing::{info, warn};
+use tracing::{debug, warn};
 
 const WARNING: usize = 10_000;
 
 static EVENT_SENDER: OnceLock<Sender<Event>> = OnceLock::new();
+
+static MONITOR_RUNTIME: Lazy<Runtime> = Lazy::new(|| {
+    Builder::new_multi_thread()
+        .worker_threads(2) // Keep it lean
+        .thread_name("log-monitor-runtime")
+        .enable_all()
+        .build()
+        .expect("Failed to create dedicated runtime")
+});
 
 pub fn get_statistic_sender() -> Option<Sender<Event>> {
     EVENT_SENDER.get().cloned()
@@ -35,7 +46,7 @@ pub async fn log_channel<S: AsRef<str>, P: Send + 'static>(
         return;
     };
 
-    tokio::spawn(async move {
+    MONITOR_RUNTIME.spawn(async move {
         let last_log = RwLock::new(Instant::now());
         let overwhelmed = AtomicBool::new(false);
 
@@ -56,7 +67,7 @@ pub async fn log_channel<S: AsRef<str>, P: Send + 'static>(
             if len > WARNING {
                 let do_log = last_log.read().await.elapsed() > Duration::from_secs(10);
                 if do_log {
-                    tracing::error!(
+                    debug!(
                         "Queue {} too big: {}",
                         name,
                         tx.len().to_formatted_string(&format)
@@ -69,7 +80,7 @@ pub async fn log_channel<S: AsRef<str>, P: Send + 'static>(
                     tx.send(len as u64).unwrap();
                 }
             } else if overwhelmed.load(Ordering::Relaxed) {
-                info!(
+                debug!(
                     "Queue {} relaxed: {}",
                     name,
                     tx.len().to_formatted_string(&format)

@@ -2,7 +2,6 @@ use std::sync::{Arc, Mutex};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::io::AsyncWriteExt;
 use serde::Serialize;
-use tokio::runtime::Runtime;
 use tokio::sync::broadcast::Sender;
 use tracing::{error, info};
 use tracing::log::warn;
@@ -16,7 +15,6 @@ struct EventState {
 }
 
 pub fn start(
-    rt: &mut Runtime,
     tx: Sender<Event>,
     last_statistic: Arc<Mutex<StatisticEvent>>,
     last_tp: Arc<Mutex<ThroughputEvent>>,
@@ -27,7 +25,7 @@ pub fn start(
         last_tp,
     };
 
-    rt.spawn(async move {
+    tokio::spawn(async move {
         // We bind to a port specifically for the raw TCP data stream
         let listener = TcpListener::bind("127.0.0.1:3132").await.unwrap();
         info!("TCP Event Server running on 127.0.0.1:3132");
