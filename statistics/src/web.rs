@@ -1,10 +1,10 @@
 use axum::extract::ws::Message::Binary;
 use axum::extract::ws::{Message, WebSocket};
 use axum::extract::{Path, State, WebSocketUpgrade};
-use axum::response::IntoResponse;
+use axum::response::{IntoResponse};
 use axum::routing::get;
 use axum::Router;
-use axum_embed::ServeEmbed;
+use axum_embed::{FallbackBehavior, ServeEmbed};
 use rust_embed::RustEmbed;
 use std::sync::{Arc, Mutex};
 use rayon::iter::IntoParallelIterator;
@@ -42,7 +42,7 @@ pub fn start(
             last_tp,
         };
 
-        let serve_assets = ServeEmbed::<Assets>::new();
+        let serve_assets = ServeEmbed::<Assets>::with_parameters(Some("index.html".to_string()), FallbackBehavior::Redirect, None);
 
         let app = Router::new()
             .route("/events", get(ws_handler))

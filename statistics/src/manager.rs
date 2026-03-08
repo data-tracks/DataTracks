@@ -67,21 +67,26 @@ impl Statistics {
                             self.ids.get(id).map(|old| first.duration_since(*old))
                                 .unwrap_or_else(|| {
                                     error!("Plain without Timer for ID: {}", id);
-                                    Duration::from_secs(0) // Don't skew average with 10k secs
+                                    Duration::from_secs(0)
                                 })
                         }).sum();
                         self.delay.plain = total_dur / count;
                     }
                     Stage::Mapped => {
-                        let total_dur: Duration = ids.iter().map(|id| {
+                        let (total_dur, max_dur) = ids.iter().fold(
+                            (Duration::from_secs(0), Duration::from_secs(0)),
+                            |(sum, max),id| {
                             // Use swap_remove for O(1) performance!
-                            self.ids.swap_remove(id).map(|old| first.duration_since(old))
+                            let dur = self.ids.swap_remove(id)
+                                .map(|old| first.duration_since(old))
                                 .unwrap_or_else(|| {
                                     error!("Mapped without Timer/Plain for ID: {}", id);
                                     Duration::from_secs(0)
-                                })
-                        }).sum();
+                                });
+                                (sum + dur, std::cmp::max(max, dur))
+                        });
                         self.delay.mapped = total_dur / count;
+                        self.delay.max = max_dur;
                     }
                     _ => {}
                 }
@@ -177,7 +182,7 @@ pub fn start(rt: Runtimes, tx: Sender<Event>, rx: Receiver<Event>, output: broad
                         _ = timer.tick() => {
                             let since = last_time.elapsed();
                             current = statistics.get_summary();
-                            let throughput = current.calculate(last.clone(), since);
+                            let throughput = current.calculate(since);
 
                             if let Err(_) = clone_bc_tx.send(Event::Statistics(last.clone())) {
                                 debug!("Statistic broadcast lag or no subscribers");

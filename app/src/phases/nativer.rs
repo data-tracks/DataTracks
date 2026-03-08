@@ -2,11 +2,12 @@ use std::thread;
 use crate::management::catalog::Catalog;
 use engine::engine::Engine;
 use std::time::Duration;
+use flume::unbounded;
 use tokio::runtime::Builder;
 use tokio::sync::broadcast::Sender;
 use tokio::task::JoinSet;
 use tokio::time::Instant;
-use tracing::error;
+use tracing::{error, info};
 use util::definition::Stage;
 use util::{Batch, Event, Runtimes, TargetedRecord, target};
 
@@ -14,15 +15,21 @@ pub struct Nativer {
     catalog: Catalog,
 }
 
+const DEFINITION_THREADS: u32 = 3;
+
 impl Nativer {
     pub(crate) async fn start(&self, _rt: Runtimes, output: Sender<Batch<TargetedRecord>>) {
         let definitions = self.catalog.definitions().await;
 
         let engines = self.catalog.engines().await;
         let mut id_counter = 0;
+        let (startup_tx, startup_rx) = unbounded();
+        let total_workers = DEFINITION_THREADS * definitions.len() as u32;
+
         //let catalog = self.catalog.clone();
         for definition in definitions {
 
+            let startup_tx = startup_tx.clone();
             let output = output.clone();
             let engines = engines.clone()
                 .into_iter()
@@ -38,11 +45,12 @@ impl Nativer {
                     .build()
                     .unwrap();
                 rt.block_on(async {
-                    for _ in 0..3 {
+                    for _ in 0..DEFINITION_THREADS {
                         let definition = definition.clone();
                         let engines = engines.clone();
                         let mut engine = engines.into_iter().next().unwrap();
                         let output = output.clone();
+                        let startup_tx = startup_tx.clone();
 
                         let id = id_counter;
                         id_counter += 1;
@@ -51,6 +59,7 @@ impl Nativer {
 
                             let rx = definition.native.1;
                             engine.start(&mut join_set).await.unwrap();
+                            startup_tx.send(true).unwrap();
 
                             let mapper = definition.mapping.build();
 
@@ -113,6 +122,11 @@ impl Nativer {
                 });
             });
         }
+
+        for _ in 0..total_workers {
+            startup_rx.recv().unwrap();
+        }
+        info!("All nativer started...");
     }
 
     pub fn new(catalog: Catalog) -> Self {

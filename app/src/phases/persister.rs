@@ -3,18 +3,19 @@ use crate::management::catalog::Catalog;
 use crate::phases::{timer, wal};
 use anyhow::anyhow;
 use engine::engine::Engine;
-use flume::{Receiver, Sender, unbounded};
+use flume::{Receiver, Sender, unbounded, bounded};
 use std::collections::HashMap;
 use std::error::Error;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::thread;
+use std::{fs, thread};
+use std::path::PathBuf;
 use std::time::Duration;
 use tokio::runtime::Builder;
 use tokio::select;
 use tokio::task::JoinSet;
 use tokio::time::Instant;
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info, warn};
 use util::definition::{Definition, Stage};
 use util::{
     Batch, DefinitionId, Event, InitialRecord, PartitionId, TargetedMeta, TargetedRecord,
@@ -27,6 +28,8 @@ pub struct Persister {
 }
 
 const BATCH_SIZE: i32 = 100_000; // between 50_000 and 100_000
+
+const ENGINE_THREADS: i32 = 5;
 
 impl Persister {
     pub fn new(catalog: Catalog, statistics_tx: Sender<Event>) -> anyhow::Result<Self> {
@@ -134,15 +137,27 @@ impl Persister {
         ))
     }
 
-    pub async fn start_distributor(&mut self, _join_set: &mut JoinSet<()>, _rt: Runtimes) {
+    pub async fn start_distributor(&mut self, _join_set: &mut JoinSet<()>, _rt: Runtimes) -> anyhow::Result<()> {
         let engines = self.catalog.engines().await;
 
         let builder_id = Arc::new(AtomicU64::new(0));
+
+        let total_workers = engines.len() * ENGINE_THREADS as usize;
+
+        let (startup_tx, startup_rx) = bounded(total_workers);
+
+        let path = PathBuf::from("temp/engine");
+
+        if path.exists() {
+            fs::remove_dir_all(path)?;
+            warn!("Removed engines folders...")
+        }
 
         for engine in engines {
             let engine_inner = engine.clone();
             let definitions = self.catalog.definitions().await;
             let builder_id = builder_id.clone();
+            let startup_tx = startup_tx.clone();
 
             // Spawn a dedicated OS thread for this specific engine
             thread::spawn(move || {
@@ -154,11 +169,12 @@ impl Persister {
                     .unwrap();
                 rt.block_on(async {
                     let mut join_set = JoinSet::new();
-                    for i in 0..5 {
+                    for i in 0..ENGINE_THREADS {
                         let worker_id = builder_id.fetch_add(1, Ordering::Relaxed).into();
                         let mut engine = engine_inner.clone();
                         // actually make a new connection
                         engine.start(&mut join_set).await.unwrap();
+                        startup_tx.send(()).unwrap();
 
                         let definitions = definitions
                             .clone()
@@ -177,7 +193,7 @@ impl Persister {
                             // don't let ticks pile up if processing is slow
                             flush_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
-                            let mut heartbeat_interval = tokio::time::interval(Duration::from_secs(5));
+                            let mut heartbeat_interval = tokio::time::interval(Duration::from_secs(ENGINE_THREADS as u64));
                             heartbeat_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
                             loop {
@@ -230,6 +246,11 @@ impl Persister {
                 });
             });
         }
+        for _ in 0..total_workers {
+            startup_rx.recv()?;
+        }
+        info!("All persisters started");
+        Ok(())
     }
 }
 

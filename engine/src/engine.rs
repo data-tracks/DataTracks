@@ -11,7 +11,7 @@ use std::fmt::{Display, Formatter};
 use std::ops::Mul;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::thread;
+use std::{thread};
 use std::thread::JoinHandle;
 use std::time::Duration;
 use tokio::runtime::Builder;

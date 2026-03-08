@@ -92,7 +92,7 @@ impl Neo4j {
                 Ok(_) => break,
                 Err(e) => {
                     let time = Instant::now();
-                    if time.duration_since(start_time).as_secs() > 30 {
+                    if time.duration_since(start_time).as_secs() > 60 {
                         bail!(e);
                     }
                     sleep(Duration::from_secs(2)).await;

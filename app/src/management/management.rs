@@ -83,7 +83,7 @@ impl Manager {
 
             self.init_definitions(statistic_tx.clone()).await?;
 
-            persister.start_distributor(&mut joins, rt.clone()).await;
+            persister.start_distributor(&mut joins, rt.clone()).await?;
 
             let sink = self.start_sinks(persister, rt.clone()).await?;
             //let kafka = sink::kafka::start(&mut self.joins, tx.clone()).await?;

@@ -72,29 +72,27 @@ pub struct ThroughputMeta {
 impl StatisticEvent {
     pub fn calculate(
         &self,
-        previous: StatisticEvent,
         since: Duration,
     ) -> HashMap<String, ThroughputMeta> {
         let current_amounts = self.get_amounts();
-        let last_amounts = previous.get_amounts();
 
         let mut tps = HashMap::new();
 
         for (id, amounts) in current_amounts {
             let mut tp = ThroughputMeta::default();
-            if let Some(amounts_last) = last_amounts.get(&id) {
-                let raw_tps = (amounts.plain - amounts_last.plain) / since.as_secs() as f64;
-                // Apply rounding to 3 decimal places
-                let rounded_tps = (raw_tps * 1000.0).round() / 1000.0;
 
-                tp.plain = rounded_tps;
+            let raw_tps = (amounts.plain) / since.as_secs() as f64;
+            // Apply rounding to 3 decimal places
+            let rounded_tps = (raw_tps * 1000.0).round() / 1000.0;
 
-                let raw_tps = (amounts.mapped - amounts_last.mapped) / since.as_secs() as f64;
-                // Apply rounding to 3 decimal places
-                let rounded_tps = (raw_tps * 1000.0).round() / 1000.0;
+            tp.plain = rounded_tps;
 
-                tp.mapped = rounded_tps;
-            }
+            let raw_tps = (amounts.mapped) / since.as_secs() as f64;
+            // Apply rounding to 3 decimal places
+            let rounded_tps = (raw_tps * 1000.0).round() / 1000.0;
+
+            tp.mapped = rounded_tps;
+
             tps.insert(id, tp);
         }
 

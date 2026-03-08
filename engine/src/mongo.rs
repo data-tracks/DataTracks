@@ -1,5 +1,5 @@
 use crate::engine::Load;
-use anyhow::bail;
+use anyhow::{bail, Context};
 use flume::Sender;
 use futures_util::StreamExt;
 use mongodb::bson::doc;
@@ -9,8 +9,6 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use rayon::iter::ParallelIterator;
-use rayon::iter::IntoParallelRefIterator;
 use tokio::time::{sleep, timeout, Instant};
 use tracing::{debug, error, info};
 use util::Event::EngineStatus;
@@ -99,28 +97,23 @@ impl MongoDB {
         values: &Batch<TargetedRecord>,
     ) -> anyhow::Result<()> {
         let now = Instant::now();
-        let len = values.len();
-        match &self.client {
-            None => bail!("No client"),
-            Some(client) => {
-                //let now = Instant::now();
-                client
-                    .database("public")
-                    .collection(&entity)
-                    .insert_many(values.records.par_iter().map(|TargetedRecord { value, meta }| {
-                        Value::dict_from_pairs(vec![
-                            ("value", value.clone()),
-                            ("id", Value::int(meta.id as i64)),
-                        ])
-                    }).collect::<Vec<_>>())
-                    .ordered(false)
-                    .bypass_document_validation(true)
-                    .await?;
+        let client = self.client.as_ref().context("No client")?;
+        let collection = client.database("public").collection::<mongodb::bson::Document>(&entity);
 
-                debug!("inserted in mongo {} {:?}", len, now.elapsed());
-                Ok(())
+        for chunk in values.records.chunks(10_000) {
+            let docs: Vec<mongodb::bson::Document> = chunk.iter().map(|rec| {
+                doc! {
+                "value": &rec.value,
+                "id": rec.meta.id as i64,
             }
+            }).collect();
+
+            // One chunk at a time keeps memory low and errors simple
+            collection.insert_many(docs).ordered(false).await?;
         }
+
+        debug!("Inserted 100k records in {:?}", now.elapsed());
+        Ok(())
     }
 
     pub async fn read(
