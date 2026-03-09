@@ -1,21 +1,25 @@
 use crate::{tpc, web};
-use flume::{unbounded, Receiver, Sender};
+use flume::{Receiver, Sender, unbounded};
+use indexmap::IndexMap;
+use num_format::{CustomFormat, ToFormattedString};
+use std::cmp;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::spawn;
-use std::time::{Duration};
-use indexmap::IndexMap;
-use num_format::{CustomFormat, ToFormattedString};
+use std::time::Duration;
 use tokio::runtime::{Builder, Handle};
 use tokio::select;
 use tokio::sync::broadcast;
-use tokio::time::{interval, sleep, Instant, MissedTickBehavior};
+use tokio::time::{Instant, MissedTickBehavior, interval, sleep};
+use tracing::log::debug;
 use tracing::{error, warn};
-use tracing::log::{debug};
-use util::definition::{Definition, Stage};
 use util::Event::Runtime;
-use util::{log_channel, set_statistic_sender, Batch, DefinitionId, Delay, EngineEvent, EngineId, Event, RuntimeEvent, Runtimes, StatisticEvent, TargetedRecord, ThroughputEvent};
+use util::definition::{Definition, Stage};
+use util::{
+    Batch, DefinitionId, Delay, EngineEvent, EngineId, Event, RuntimeEvent, Runtimes,
+    StatisticEvent, TargetedRecord, ThroughputEvent, log_channel, set_statistic_sender,
+};
 
 pub struct Statistics {
     engines: HashMap<EngineId, EngineStatistic>,
@@ -44,7 +48,13 @@ impl Statistics {
 
     async fn handle_event(&mut self, event: Event) {
         match event {
-            Event::Insert { id, first, source, ids, stage } => {
+            Event::Insert {
+                id,
+                first,
+                source,
+                ids,
+                stage,
+            } => {
                 // 1. Handle engine stats
                 self.engines.entry(source).or_default().handle_insert(
                     ids.len() as u64,
@@ -53,7 +63,9 @@ impl Statistics {
                 );
 
                 // 2. Early exit if ids is empty to prevent division by zero
-                if ids.is_empty() { return; }
+                if ids.is_empty() {
+                    return;
+                }
                 let count = ids.len() as u32;
 
                 match stage {
@@ -63,28 +75,36 @@ impl Statistics {
                         }
                     }
                     Stage::Plain => {
-                        let total_dur: Duration = ids.iter().map(|id| {
-                            self.ids.get(id).map(|old| first.duration_since(*old))
-                                .unwrap_or_else(|| {
-                                    error!("Plain without Timer for ID: {}", id);
-                                    Duration::from_secs(0)
-                                })
-                        }).sum();
+                        let total_dur: Duration = ids
+                            .iter()
+                            .map(|id| {
+                                self.ids
+                                    .get(id)
+                                    .map(|old| first.duration_since(*old))
+                                    .unwrap_or_else(|| {
+                                        error!("Plain without Timer for ID: {}", id);
+                                        Duration::from_secs(0)
+                                    })
+                            })
+                            .sum();
                         self.delay.plain = total_dur / count;
                     }
                     Stage::Mapped => {
                         let (total_dur, max_dur) = ids.iter().fold(
                             (Duration::from_secs(0), Duration::from_secs(0)),
-                            |(sum, max),id| {
-                            // Use swap_remove for O(1) performance!
-                            let dur = self.ids.swap_remove(id)
-                                .map(|old| first.duration_since(old))
-                                .unwrap_or_else(|| {
-                                    error!("Mapped without Timer/Plain for ID: {}", id);
-                                    Duration::from_secs(0)
-                                });
+                            |(sum, max), id| {
+                                // Use swap_remove for O(1) performance!
+                                let dur = self
+                                    .ids
+                                    .swap_remove(id)
+                                    .map(|old| first.duration_since(old))
+                                    .unwrap_or_else(|| {
+                                        error!("Mapped without Timer/Plain for ID: {}", id);
+                                        Duration::from_secs(0)
+                                    });
                                 (sum + dur, std::cmp::max(max, dur))
-                        });
+                            },
+                        );
                         self.delay.mapped = total_dur / count;
                         self.delay.max = max_dur;
                     }
@@ -120,7 +140,7 @@ impl Statistics {
                             *id,
                             (stat.to_stat(&definition_names), Some(name.to_string())),
                         ))
-                    }else {
+                    } else {
                         None
                     }
                 })
@@ -136,7 +156,12 @@ impl Statistics {
     }
 }
 
-pub fn start(rt: Runtimes, tx: Sender<Event>, rx: Receiver<Event>, output: broadcast::Sender<Batch<TargetedRecord>>) -> Sender<Event> {
+pub fn start(
+    rt: Runtimes,
+    tx: Sender<Event>,
+    rx: Receiver<Event>,
+    output: broadcast::Sender<Batch<TargetedRecord>>,
+) -> Sender<Event> {
     set_statistic_sender(tx.clone());
 
     let (status_tx, status_rx) = unbounded();
@@ -184,17 +209,17 @@ pub fn start(rt: Runtimes, tx: Sender<Event>, rx: Receiver<Event>, output: broad
                             current = statistics.get_summary();
                             let throughput = current.calculate(since);
 
-                            if let Err(_) = clone_bc_tx.send(Event::Statistics(last.clone())) {
+                            if clone_bc_tx.send(Event::Statistics(last.clone())).is_err() {
                                 debug!("Statistic broadcast lag or no subscribers");
                             }
 
-                            if let Err(_) = clone_bc_tx.send(Event::Throughput(ThroughputEvent{tps: throughput.clone()})) {
+                            if clone_bc_tx.send(Event::Throughput(ThroughputEvent{tps: throughput.clone()})).is_err() {
                                 debug!("Throughput broadcast lag");
                             }
 
                             warn!("Stats Update: {} open IDs | Oldest: {:?}",
                                 statistics.ids.len().to_formatted_string(&format),
-                                statistics.ids.last().map(|id| id.1.elapsed()).unwrap_or_default()
+                                statistics.ids.iter().map(|e| e.1.elapsed()).reduce(cmp::min).unwrap_or(Duration::from_millis(0))
                             );
 
                             last_time = Instant::now();

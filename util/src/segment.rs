@@ -1,15 +1,15 @@
-use crate::{Identifiable};
+use crate::Identifiable;
+use dashmap::DashMap;
 use flume::{Receiver, Sender};
+use lru::LruCache;
 use memmap2::{Mmap, MmapMut, MmapOptions};
 use speedy::{LittleEndian, Readable, Writable};
 use std::marker::PhantomData;
-use std::num::{NonZeroUsize};
+use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::thread;
 use std::thread::JoinHandle;
-use dashmap::DashMap;
-use lru::LruCache;
 use tokio::fs;
 use tokio::fs::OpenOptions;
 use tokio::runtime::Builder;
@@ -59,7 +59,11 @@ pub struct SegmentedLogCleaner {
 }
 
 impl SegmentedLogCleaner {
-    pub fn new(base_path: PathBuf, history: Arc<DashMap<usize, usize>>, done: Arc<RwLock<Vec<usize>>>) -> Self {
+    pub fn new(
+        base_path: PathBuf,
+        history: Arc<DashMap<usize, usize>>,
+        done: Arc<RwLock<Vec<usize>>>,
+    ) -> Self {
         let channel = flume::unbounded();
         Self {
             cleaner_rx: channel.1.clone(),
@@ -89,7 +93,7 @@ impl SegmentedLogCleaner {
                         let mut delete = false;
                         if let Some(mut val) = history.get_mut(&segment_id) {
                             *val -= 1;
-                            if *val <= 0 && done.read().await.contains(&segment_id) {
+                            if *val == 0 && done.read().await.contains(&segment_id) {
                                 delete = true;
                             }
                         }
@@ -122,15 +126,11 @@ impl<T: for<'a> speedy::Readable<'a, LittleEndian> + speedy::Writable<LittleEndi
         Self::new("wal_segments").await
     }
 
-    pub async fn build_reader(
-        &self,
-    ) -> anyhow::Result<SegmentedLogReader<T>> {
+    pub async fn build_reader(&self) -> anyhow::Result<SegmentedLogReader<T>> {
         SegmentedLogReader::new(self.base_path.to_str().unwrap()).await
     }
 
-    pub async fn new(
-        base_path: &str,
-    ) -> anyhow::Result<Self> {
+    pub async fn new(base_path: &str) -> anyhow::Result<Self> {
         let base = PathBuf::from(base_path);
         if base.exists() {
             fs::remove_dir_all(base.as_path()).await?
@@ -157,7 +157,11 @@ impl<T: for<'a> speedy::Readable<'a, LittleEndian> + speedy::Writable<LittleEndi
 
     pub fn build_cleaner(&mut self) -> SegmentedLogCleaner {
         self.is_cleaned = true;
-        let mut cleaner = SegmentedLogCleaner::new(self.base_path.clone(), self.history.clone(), self.done.clone());
+        let mut cleaner = SegmentedLogCleaner::new(
+            self.base_path.clone(),
+            self.history.clone(),
+            self.done.clone(),
+        );
         cleaner.start();
         cleaner
     }
@@ -187,12 +191,13 @@ impl<T: for<'a> speedy::Readable<'a, LittleEndian> + speedy::Writable<LittleEndi
         // Ensure data is synced before switching
         self.mmap.flush().unwrap();
 
-
-        if self.is_cleaned{
-            self.history.entry(self.current_segment_id).and_modify(|v| *v += 1).or_insert(1);
+        if self.is_cleaned {
+            self.history
+                .entry(self.current_segment_id)
+                .and_modify(|v| *v += 1)
+                .or_insert(1);
             self.done.write().await.push(self.current_segment_id);
         }
-
 
         self.current_segment_id += 1;
         self.cursor = 0;
@@ -225,7 +230,10 @@ impl<T: for<'a> speedy::Readable<'a, LittleEndian> + speedy::Writable<LittleEndi
         let len = self.batch.len();
 
         if len > self.segment_size as usize {
-            panic!("Batch size {} exceeds maximum segment size {}", len, self.segment_size);
+            panic!(
+                "Batch size {} exceeds maximum segment size {}",
+                len, self.segment_size
+            );
         }
 
         if self.cursor + len > self.segment_size as usize {
@@ -239,7 +247,10 @@ impl<T: for<'a> speedy::Readable<'a, LittleEndian> + speedy::Writable<LittleEndi
 
         // handle current batch
         self.cursor += len;
-        self.history.entry(self.current_segment_id).and_modify(|v| *v += 1).or_insert(1);
+        self.history
+            .entry(self.current_segment_id)
+            .and_modify(|v| *v += 1)
+            .or_insert(1);
         SegmentedIndex {
             segment_id: self.current_segment_id,
             start_pointer,
