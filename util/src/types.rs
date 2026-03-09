@@ -1,12 +1,16 @@
 use std::fmt::{Display};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum RelationalType {
+    #[serde(alias = "varchar", alias = "VARCHAR")]
     Varchar(u64),
+    #[serde(alias = "int", alias = "Int", alias = "INT", alias = "INTEGER", alias = "integer")]
     Integer,
+    #[serde(alias = "float", alias = "FLOAT")]
     Float,
     Bool,
+    #[serde(alias = "string", alias = "text", alias = "TEXT")]
     Text,
 }
 

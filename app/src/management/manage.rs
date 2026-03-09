@@ -1,17 +1,18 @@
 use crate::management::catalog::Catalog;
-use crate::phases::Persister;
+use crate::management::configuration::Config;
 use crate::phases::nativer::Nativer;
+use crate::phases::Persister;
 use engine::EngineKind;
-use flume::{Sender, unbounded};
+use flume::{unbounded, Sender};
 use std::thread;
 use tokio::runtime::Builder;
-use tokio::sync;
 use tokio::task::JoinSet;
+use tokio::{fs, sync};
 use tracing::{error, info};
-use util::definition::{Definition, DefinitionFilter, Model};
+use util::definition::{Definition};
 use util::runtimes::Runtimes;
 use util::{
-    Batch, DefinitionMapping, Event, InitialRecord, RelationalType, TargetedRecord, log_channel,
+    log_channel, Batch, Event, InitialRecord, TargetedRecord,
 };
 
 pub struct Manager {
@@ -81,7 +82,8 @@ impl Manager {
         main_rt.block_on(async move {
             let mut joins: JoinSet<()> = JoinSet::new();
 
-            self.init_definitions(statistic_tx.clone()).await?;
+            self.init_definitions_from_configs(statistic_tx.clone())
+                .await?;
 
             persister.start_distributor(&mut joins, rt.clone()).await?;
 
@@ -119,9 +121,43 @@ impl Manager {
         })
     }
 
-    async fn init_definitions(&mut self, statistic_tx: Sender<Event>) -> anyhow::Result<()> {
+    async fn init_definitions_from_configs(
+        &mut self,
+        statistic_tx: Sender<Event>,
+    ) -> anyhow::Result<()> {
+        let file_path = "default.toml";
+
+        let config = Manager::load_config(file_path).await?;
+
+        for (name, def) in config.def {
+            self.catalog
+                .add_definition(
+                    name,
+                    Definition::new(
+                        def.topic,
+                        def.filter,
+                        def.mapping,
+                        def.model,
+                        def.entity
+                    ).await,
+                    statistic_tx.clone(),
+                )
+                .await?;
+        }
+
+        Ok(())
+    }
+
+    async fn load_config(path: &str) -> anyhow::Result<Config> {
+        let content = fs::read_to_string(path).await?;
+        let config = toml::from_str(&content)?;
+        Ok(config)
+    }
+
+    /*async fn init_definitions(&mut self, statistic_tx: Sender<Event>) -> anyhow::Result<()> {
         self.catalog
             .add_definition(
+                "d"
                 Definition::new(
                     "Document test",
                     DefinitionFilter::Topic(String::from("doc")),
@@ -165,7 +201,7 @@ impl Manager {
             )
             .await?;
         Ok(())
-    }
+    }*/
 
     fn init_engines(&mut self, statistic_tx: Sender<Event>) -> anyhow::Result<()> {
         let mut catalog = self.catalog.clone();

@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use engine::engine::Engine;
 use flume::Sender;
 use futures::future::join_all;
@@ -13,7 +14,7 @@ pub struct Catalog {
 
 #[derive(Default)]
 pub struct State {
-    definitions: Vec<Definition>,
+    definitions: HashMap<String, Definition>,
     engines: Vec<Engine>,
 }
 
@@ -27,6 +28,7 @@ impl Catalog {
 
     pub async fn add_definition(
         &self,
+        name: String,
         definition: Definition,
         sender: Sender<Event>,
     ) -> anyhow::Result<()> {
@@ -41,12 +43,12 @@ impl Catalog {
             ))
             .await?;
 
-        state.definitions.push(definition);
+        state.definitions.insert(name, definition);
         Ok(())
     }
 
     pub async fn definitions(&self) -> Vec<Definition> {
-        self.state.lock().await.definitions.clone()
+        self.state.lock().await.definitions.clone().into_iter().map(|(_,v)|v).collect()
     }
 
     pub async fn engines(&self) -> Vec<Engine> {

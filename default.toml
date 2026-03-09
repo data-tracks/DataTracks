@@ -1,0 +1,27 @@
+[def.relational-default]
+topic = "Relational test"
+model = "relational"
+entity = "relational"
+filter.topic = "relational"
+mapping.relational = [
+    {name = "TEXT"}, {age = "INT"}
+]
+
+[def.document-default]
+topic = "Document test"
+model = "document"
+entity = "document"
+filter.topic = "doc"
+mapping.document = "document"
+
+[def.graph-default]
+topic = "Graph test"
+model = "graph"
+entity = "graph"
+filter.topic = "graph"
+mapping.graph = [
+    {id = {doc = {key = "id"}}},
+    {label = {doc = {key = "label"}}},
+    {properties = {doc = {key = "properties"}}}
+]
+

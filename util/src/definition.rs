@@ -3,7 +3,7 @@ use crate::mappings::DefinitionMapping;
 use crate::partition::PartitionInfo;
 use crate::{Batch, DefinitionId, EntityId, PartitionId, TargetedRecord, TimedMeta, log_channel};
 use flume::{Receiver, Sender, unbounded};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 use std::sync::atomic::{AtomicU64, Ordering};
 use value::Value;
@@ -88,17 +88,22 @@ impl Definition {
 
 /// incoming values are either accompanied by meta with name or wrapped in a document structure
 /// and have a matching value for the key
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum DefinitionFilter {
     AllMatch,
+    #[serde(alias = "topic")]
     Topic(String),
     KeyName(String, String),
 }
 
-#[derive(Ord, PartialOrd, Eq, PartialEq, Clone, Debug, Serialize)]
+#[derive(Ord, PartialOrd, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
 pub enum Model {
+    #[serde(alias = "document", alias = "DOCUMENT", alias = "DOC", alias = "doc")]
     Document,
+    #[serde(alias = "relational", alias = "RELATIONAL", alias = "REL", alias = "rel")]
     Relational,
+    #[serde(alias = "graph", alias = "GRAPH")]
     Graph,
 }
 

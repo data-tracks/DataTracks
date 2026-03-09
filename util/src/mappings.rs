@@ -1,38 +1,117 @@
+use std::collections::HashMap;
 use crate::RelationalType;
-use serde::Serialize;
-use value::Value;
-use value::Value::{Array, Dict};
+use serde::{Deserialize, Deserializer, Serialize};
 use value::edge::Edge;
 use value::node::Node;
+use value::Value;
+use value::Value::{Array, Dict};
 
 type ValueGenerator = Box<dyn Fn(&Value) -> Option<Value> + Sync + Send>;
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 /// The type of objects that can be produced by the definition, always of some specific data model
 pub enum DefinitionMapping {
     // can produce Nodes, or Edges or Subgraphs
+    #[serde(alias = "graph")]
+    #[serde(deserialize_with = "deserialize_document")]
     Graph(Mapping<GraphMapping>),
     // can produce Documents
+    #[serde(alias = "document")]
+    #[serde(deserialize_with = "deserialize_document")]
     Document(DocumentMapping),
     // can produce rows/tuples
+    #[serde(alias = "relational")]
     Relational(RelationalMapping),
     // can produce kv-pair
     KeyValue(KeyValueMapping),
 }
 
-#[derive(Clone, Debug, Serialize)]
+fn deserialize_document<'de, D>(deserializer: D) -> Result<DocumentMapping, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum DocumentHelper {
+        Default(HashMap<String, Value>),
+        Full(DocumentMapping),
+    }
+
+    match DocumentHelper::deserialize(deserializer)? {
+        // If TOML is `mapping = "document"`, return a default mapping
+        DocumentHelper::Default(_) => Ok(DocumentMapping::Document(Mapping {
+            initial: MappingSource::Document(DocumentSource::Whole),
+            manual: vec![],
+            auto: vec![],
+        })),
+        DocumentHelper::Full(mapping) => Ok(mapping),
+    }
+}
+
+fn deserialize_graph<'de, D>(deserializer: D) -> Result<Mapping<GraphMapping>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum DocumentHelper {
+        Default(HashMap<String, Value>),
+        Full(DocumentMapping),
+    }
+
+    match DocumentHelper::deserialize(deserializer)? {
+        // If TOML is `mapping = "document"`, return a default mapping
+        DocumentHelper::Default(_) => Ok(DocumentMapping::Document(Mapping {
+            initial: MappingSource::Document(DocumentSource::Whole),
+            manual: vec![],
+            auto: vec![],
+        })),
+        DocumentHelper::Full(mapping) => Ok(mapping),
+    }
+}
+
+
+#[derive(Deserialize)]
+#[serde(transparent)]
+pub struct RelationalTable {
+    pub relational: Vec<std::collections::BTreeMap<String, RelationalType>>,
+}
+
+impl From<RelationalTable> for RelationalMapping {
+    fn from(table: RelationalTable) -> Self {
+        let fields: Vec<(String, RelationalType)> = table.relational
+            .into_iter()
+            .flat_map(|map| map.into_iter())
+            .collect();
+
+        RelationalMapping::Tuple(
+            fields.clone(),
+            Mapping {
+                initial: MappingSource::List {
+                    keys: fields.into_iter().map(|(k, _)| k).collect(),
+                },
+                manual: vec![],
+                auto: vec![],
+            },
+        )
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum GraphMapping {
     Node(NodeMapping),
     Edge(EdgeMapping),
     SubGraph(Box<GraphMapping>),
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(untagged)]
 pub enum DocumentMapping {
     Document(Mapping<MappingSource>),
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(from = "RelationalTable")]
 pub enum RelationalMapping {
     Tuple(Vec<(String, RelationalType)>, Mapping<MappingSource>),
 }
@@ -45,7 +124,7 @@ impl RelationalMapping {
     }
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum KeyValueMapping {
     KV(Mapping<MappingSource>),
 }
@@ -227,21 +306,21 @@ impl DefinitionMapping {
     }
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Mapping<T> {
     pub initial: T,
     pub manual: Vec<T>,
     pub auto: Vec<T>,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NodeMapping {
     id: MappingSource,
     label: MappingSource,
     properties: MappingSource,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EdgeMapping {
     id: MappingSource,
     label: MappingSource,
@@ -250,13 +329,13 @@ pub struct EdgeMapping {
     target: MappingSource,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum MappingSource {
     Document(DocumentSource),
     List { keys: Vec<String> },
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum DocumentSource {
     Key(String),
     Whole,

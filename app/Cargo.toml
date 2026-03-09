@@ -26,6 +26,8 @@ sink = { workspace = true }
 futures = { workspace = true }
 statistics = { workspace = true }
 flume = { workspace = true }
+toml = { workspace = true }
+serde = { workspace = true }
 
 
 
