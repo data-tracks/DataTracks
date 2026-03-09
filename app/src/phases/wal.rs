@@ -5,7 +5,9 @@ use tokio::runtime::Builder;
 use tokio::time::{MissedTickBehavior, interval};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
-use util::{Event, QueueEvent, Runtimes, SegmentedIndex, SegmentedLogWriter, TimedRecord, log_channel};
+use util::{
+    Event, QueueEvent, Runtimes, SegmentedIndex, SegmentedLogWriter, TimedRecord, log_channel,
+};
 
 struct WalWorker {
     handle: thread::JoinHandle<()>,
@@ -131,8 +133,7 @@ impl WalManager {
                                         batch.clear();
                                         delayed_length += index.1 as usize;
                                         seg_id_tx.send_async(index).await.unwrap();
-                                    }else {
-                                        if !buff_rx.is_empty() {
+                                    }else if !buff_rx.is_empty() {
                                             // empty old
                                             let count = 100_000_usize.saturating_sub(buff_rx.len());
                                             for records in buff_rx.try_iter().take(count) {
@@ -146,13 +147,12 @@ impl WalManager {
                                                 delayed_length += index.1 as usize;
                                                 seg_id_tx.send_async(index).await.unwrap();
                                             }else {
-                                                tx.send(batch.drain(..).collect()).unwrap();
+                                                tx.send(std::mem::take(&mut batch)).unwrap();
                                             }
-                                        }else {
-                                            tx.send(batch.drain(..).collect()).unwrap();
-                                        }
-
+                                    }else {
+                                        tx.send(std::mem::take(&mut batch)).unwrap();
                                     }
+
                                 }
                                 Err(_) => return, // Channel closed
                             }

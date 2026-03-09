@@ -1,11 +1,11 @@
-use std::fmt::{Display, Formatter};
-use std::ops::{Deref, DerefMut};
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
+use std::fmt::{Display, Formatter};
+use std::ops::{Deref, DerefMut};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 #[derive(
-    Copy, Clone, Debug, Serialize, Deserialize, Readable, Writable, Hash, Eq, PartialEq, Default
+    Copy, Clone, Debug, Serialize, Deserialize, Readable, Writable, Hash, Eq, PartialEq, Default,
 )]
 pub struct EngineId(pub u64);
 
@@ -15,9 +15,9 @@ impl Display for EngineId {
     }
 }
 
-impl Into<EngineId> for u64 {
-    fn into(self) -> EngineId {
-        EngineId(self)
+impl From<u64> for EngineId {
+    fn from(value: u64) -> Self {
+        EngineId(value)
     }
 }
 
@@ -46,13 +46,11 @@ impl Deref for EntityId {
     }
 }
 
-
 impl DerefMut for EntityId {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
-
 
 #[derive(
     Copy, Clone, Debug, Serialize, Deserialize, Readable, Writable, Hash, Eq, PartialEq, Default,

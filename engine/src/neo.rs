@@ -1,15 +1,16 @@
 use crate::engine::Load;
 use anyhow::{anyhow, bail};
 use flume::Sender;
-use neo4rs::{Graph, query, ConfigBuilder};
+use neo4rs::{ConfigBuilder, Graph, query};
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use reqwest::Client;
-use serde::{Deserialize};
+use serde::Deserialize;
+use speedy::Writable;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use tokio::time::{Instant, sleep};
 use tracing::{debug, info};
 use util::Event::EngineStatus;
@@ -17,7 +18,6 @@ use util::container::Mapping;
 use util::definition::{Definition, Stage};
 use util::{Batch, DefinitionMapping, EngineId, Event, PartitionId, TargetedRecord, container};
 use value::Value;
-use speedy::Writable;
 
 pub struct Neo4j {
     pub(crate) id: Option<EngineId>,
@@ -38,7 +38,7 @@ impl Clone for Neo4j {
             name: self.name.clone(),
             load: Arc::new(Mutex::new(Load::Low)),
             host: self.host.clone(),
-            port: self.port.clone(),
+            port: self.port,
             user: self.user.clone(),
             password: self.password.clone(),
             graph: None,
@@ -70,11 +70,7 @@ struct TxMetrics {
 }
 
 impl Neo4j {
-    pub(crate) async fn start<S: Into<EngineId>>(
-        &mut self,
-        id: S,
-    ) -> anyhow::Result<()> {
-
+    pub(crate) async fn start<S: Into<EngineId>>(&mut self, id: S) -> anyhow::Result<()> {
         let config = ConfigBuilder::default()
             .uri(format!("{}:{}", self.host, self.port))
             .user(self.user.clone())
@@ -83,7 +79,6 @@ impl Neo4j {
             .build()?;
 
         let graph = Graph::connect(config)?;
-
 
         let start_time = Instant::now();
 
@@ -122,7 +117,8 @@ impl Neo4j {
                 },
             ],
             Some(vec![format!("NEO4J_AUTH=neo4j/{}", "neoneoneo")]),
-        ).await
+        )
+        .await
     }
 
     pub(crate) async fn init_entity(&mut self, definition: &Definition, partition_id: PartitionId) {
@@ -173,7 +169,10 @@ impl Neo4j {
                 let cypher_query = self
                     .prepared_queries
                     .get(&(stage.clone(), entity.clone()))
-                    .ok_or(anyhow!(format!("No prepared query in neo4j for {}", entity)))?;
+                    .ok_or(anyhow!(format!(
+                        "No prepared query in neo4j for {}",
+                        entity
+                    )))?;
 
                 let values = match &stage {
                     Stage::Plain => Self::wrap_value_plain(values),
@@ -192,7 +191,9 @@ impl Neo4j {
     fn wrap_value_plain(values: &Batch<TargetedRecord>) -> Vec<Vec<Value>> {
         let now = Instant::now();
 
-        let processed = values.records.par_iter()
+        let processed = values
+            .records
+            .par_iter()
             .map(|r| vec![to_primitive(&r.value), Value::int(r.meta.id as i64)])
             .collect();
 
@@ -201,17 +202,14 @@ impl Neo4j {
     }
 
     fn wrap_value_mapped(values: &Batch<TargetedRecord>) -> Vec<Vec<Value>> {
-        values.records
+        values
+            .records
             .par_iter()
             .map(|TargetedRecord { value, meta }| vec![value.clone(), Value::int(meta.id as i64)])
             .collect::<Vec<_>>()
     }
 
-    pub async fn read(
-        &self,
-        entity: String,
-        ids: Vec<u64>,
-    ) -> anyhow::Result<Vec<Value>> {
+    pub async fn read(&self, entity: String, ids: Vec<u64>) -> anyhow::Result<Vec<Value>> {
         match &self.graph {
             None => bail!("No graph"),
             Some(g) => {
@@ -321,12 +319,16 @@ impl Neo4j {
 
 fn to_primitive(value: &Value) -> Value {
     match value {
-        Value::Node(n) => {
-            Value::text(String::from_utf8(n.write_to_vec().unwrap()).unwrap().as_str())
-        }
-        Value::Dict(d) => {
-            Value::text(String::from_utf8(d.write_to_vec().unwrap()).unwrap().as_str())
-        }
+        Value::Node(n) => Value::text(
+            String::from_utf8(n.write_to_vec().unwrap())
+                .unwrap()
+                .as_str(),
+        ),
+        Value::Dict(d) => Value::text(
+            String::from_utf8(d.write_to_vec().unwrap())
+                .unwrap()
+                .as_str(),
+        ),
         v => v.clone(),
     }
 }
@@ -397,7 +399,7 @@ mod tests {
     async fn test_insert_node() {
         let mut neo = EngineKind::neo4j();
         neo.start_container().await.unwrap();
-        neo.start( 0).await.unwrap();
+        neo.start(0).await.unwrap();
 
         let definition = Definition::new(
             "test",

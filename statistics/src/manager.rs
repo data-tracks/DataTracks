@@ -135,14 +135,12 @@ impl Statistics {
                 .iter()
                 .clone()
                 .filter_map(|(id, stat)| {
-                    if let Some(name) = names.get(id) {
-                        Some((
+                    names.get(id).map(|name| {
+                        (
                             *id,
                             (stat.to_stat(&definition_names), Some(name.to_string())),
-                        ))
-                    } else {
-                        None
-                    }
+                        )
+                    })
                 })
                 .collect(),
             delay: self.delay,

@@ -1,5 +1,5 @@
-pub use management::Manager;
+pub use manage::Manager;
 pub mod catalog;
-mod management;
+mod manage;
 
 pub use util::runtimes::Runtimes;

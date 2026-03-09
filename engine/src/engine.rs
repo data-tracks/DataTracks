@@ -11,7 +11,7 @@ use std::fmt::{Display, Formatter};
 use std::ops::Mul;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::{thread};
+use std::thread;
 use std::thread::JoinHandle;
 use std::time::Duration;
 use tokio::runtime::Builder;
@@ -54,7 +54,7 @@ impl Clone for Engine {
             statistic_sender: self.statistic_sender.clone(),
             existing_partitions: vec![],
             engine_kind: self.engine_kind.clone(),
-            id: self.id.clone(),
+            id: self.id,
             definitions: self.definitions.clone(),
             handles: vec![],
             logged: self.logged.clone(),
@@ -110,12 +110,15 @@ impl Engine {
 
         let buffer_out_tx_skip = self.buffer_out.0.clone();
 
-        let mut log = SegmentedLogWriter::new(
-            format!("temp/engine/{}_{}", self.id.0, Uuid::new()).as_str(),
-        )
-        .await?;
+        let mut log =
+            SegmentedLogWriter::new(format!("temp/engine/{}_{}", self.id.0, Uuid::new()).as_str())
+                .await?;
 
-        if self.logged.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire).is_ok() {
+        if self
+            .logged
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+        {
             let name = format!("Engine-{}-{}", self.engine_kind, self.id);
             log_channel(self.buffer_out.0.clone(), name, None).await;
 
@@ -173,7 +176,6 @@ impl Engine {
                 let disk_semaphore = Arc::new(tokio::sync::Semaphore::new(100));
                 let mut report_interval = tokio::time::interval(Duration::from_secs(3));
                 report_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-
 
                 loop {
                     tokio::select! {

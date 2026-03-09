@@ -3,15 +3,15 @@ use crate::engine::Load;
 use anyhow::{anyhow, bail};
 use flume::Sender;
 use pin_utils::pin_mut;
+use rayon::iter::IntoParallelRefIterator;
+use rayon::iter::ParallelIterator;
 use std::collections::HashMap;
 use std::error::Error;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use rayon::iter::IntoParallelRefIterator;
-use rayon::iter::ParallelIterator;
 use tokio::task::JoinSet;
-use tokio::time::{sleep, timeout, Instant};
+use tokio::time::{Instant, sleep, timeout};
 use tokio_postgres::binary_copy::BinaryCopyInWriter;
 use tokio_postgres::types::{ToSql, Type};
 use tokio_postgres::{Client, Statement};
@@ -73,7 +73,6 @@ impl Postgres {
         join_set: &mut JoinSet<()>,
         id: S,
     ) -> anyhow::Result<()> {
-
         let client = self.connector.connect(join_set).await?;
         let id = id.into();
         info!("☑️ Connected to Postgres database {}", id);
@@ -95,7 +94,8 @@ impl Postgres {
                 host: self.connector.port,
             }],
             Some(vec![format!("POSTGRES_PASSWORD={}", "postgres")]),
-        ).await
+        )
+        .await
     }
 
     pub(crate) async fn stop(&self) -> anyhow::Result<()> {
@@ -119,7 +119,7 @@ impl Postgres {
             None => bail!("Could not create postgres database"),
             Some(client) => {
                 //let now = Instant::now();
-                let rows_affected = self.copy_in(&stage, client, &entity, values).await?;
+                let rows_affected = self.copy_in(stage, client, &entity, values).await?;
                 //let rows_affected = self.load_insert(client, entity, values).await?;
 
                 //info!("duration {} {}", values.len(), now.elapsed().as_millis());
@@ -130,11 +130,7 @@ impl Postgres {
         Ok(())
     }
 
-    pub async fn read(
-        &self,
-        entity: String,
-        ids: Vec<u64>,
-    ) -> anyhow::Result<Vec<Value>> {
+    pub async fn read(&self, entity: String, ids: Vec<u64>) -> anyhow::Result<Vec<Value>> {
         match &self.client {
             None => bail!("Could not create postgres database"),
             Some(client) => {
@@ -162,10 +158,7 @@ impl Postgres {
         }
     }
 
-    async fn check_throughput(
-        &self,
-        statistic_tx: &Sender<Event>,
-    ) -> anyhow::Result<()> {
+    async fn check_throughput(&self, statistic_tx: &Sender<Event>) -> anyhow::Result<()> {
         let interval_seconds = 5;
 
         // Initial read
@@ -209,8 +202,9 @@ impl Postgres {
                 .await?;
         }
 
-
-        if matches!(stage, Stage::Mapped) && let DefinitionMapping::Relational(m) = &definition.mapping {
+        if matches!(stage, Stage::Mapped)
+            && let DefinitionMapping::Relational(m) = &definition.mapping
+        {
             let name = definition.entity_name(partition_id, &Stage::Mapped);
             self.create_table_mapped(name.as_str(), m).await?;
         }
@@ -364,15 +358,15 @@ impl Postgres {
                     }
                     Stage::Mapped => {
                         if let Value::Array(a) = value {
-                            let row_params: Vec<&(dyn ToSql + Sync)> =
-                                a.values.par_iter().map(|v| v as &(dyn ToSql + Sync)).collect();
+                            let row_params: Vec<&(dyn ToSql + Sync)> = a
+                                .values
+                                .par_iter()
+                                .map(|v| v as &(dyn ToSql + Sync))
+                                .collect();
 
                             writer.as_mut().write(&row_params).await?;
                         } else {
-                            bail!(
-                                "Expected Array value for Mapped stage, got {:?}",
-                                value
-                            );
+                            bail!("Expected Array value for Mapped stage, got {:?}", value);
                         }
                     }
                     _ => panic!(),
@@ -418,7 +412,7 @@ pub mod tests {
     use crate::EngineKind;
     use tokio::task::JoinSet;
     use tracing_test::traced_test;
-    use util::definition::{Stage};
+    use util::definition::Stage;
     use util::{
         Mapping, MappingSource, RelationalMapping, RelationalType, TargetedMeta, batch, target,
     };

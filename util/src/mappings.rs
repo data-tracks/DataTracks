@@ -5,6 +5,8 @@ use value::Value::{Array, Dict};
 use value::edge::Edge;
 use value::node::Node;
 
+type ValueGenerator = Box<dyn Fn(&Value) -> Option<Value> + Sync + Send>;
+
 #[derive(Clone, Debug, Serialize)]
 /// The type of objects that can be produced by the definition, always of some specific data model
 pub enum DefinitionMapping {
@@ -83,7 +85,7 @@ impl DefinitionMapping {
     }
 
     pub fn build(&self) -> Box<dyn Fn(Value) -> Value + 'static + Send + Sync> {
-        let mut funcs: Vec<Box<dyn Fn(&Value) -> Option<Value> + Sync + Send>> = vec![];
+        let mut funcs: Vec<ValueGenerator> = vec![];
         match self {
             // we build a node, edge or subgraph
             DefinitionMapping::Graph(g) => funcs.push(Self::handle_graph_mapping(&g.initial)),
@@ -99,13 +101,7 @@ impl DefinitionMapping {
                         .map(|m| Self::handle_doc_mapping(m))
                         .collect(),
                 );
-                funcs.append(
-                    &mut m
-                        .auto
-                        .iter()
-                        .map(|m| Self::handle_doc_mapping(m))
-                        .collect(),
-                );
+                funcs.append(&mut m.auto.iter().map(|m| Self::handle_doc_mapping(m)).collect());
             }
             DefinitionMapping::Relational(r) => funcs.push(Self::handle_rel_mapping(r)),
             DefinitionMapping::KeyValue(_) => {
@@ -122,7 +118,7 @@ impl DefinitionMapping {
         })
     }
 
-    fn handle_doc_mapping(m: &MappingSource) -> Box<dyn Fn(&Value) -> Option<Value> + Send + Sync> {
+    fn handle_doc_mapping(m: &MappingSource) -> ValueGenerator {
         match m {
             // we get the data as a document
             MappingSource::Document(d) => match d {
@@ -160,9 +156,7 @@ impl DefinitionMapping {
         }
     }
 
-    fn handle_graph_mapping(
-        mapping: &GraphMapping,
-    ) -> Box<dyn Fn(&Value) -> Option<Value> + Sync + Send> {
+    fn handle_graph_mapping(mapping: &GraphMapping) -> ValueGenerator {
         match mapping {
             GraphMapping::Node(n) => {
                 let id = Self::handle_doc_mapping(&n.id);
@@ -216,9 +210,7 @@ impl DefinitionMapping {
         }
     }
 
-    fn handle_rel_mapping(
-        mapping: &RelationalMapping,
-    ) -> Box<dyn Fn(&Value) -> Option<Value> + Sync + Send> {
+    fn handle_rel_mapping(mapping: &RelationalMapping) -> ValueGenerator {
         match mapping {
             RelationalMapping::Tuple(_, m) => match &m.initial {
                 MappingSource::Document(_) => {
