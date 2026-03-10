@@ -232,7 +232,7 @@ pub fn start(
 
                             warn!("Stats Update: {} open IDs | Oldest: {:?}",
                                 statistics.ids.len().to_formatted_string(&format),
-                                statistics.ids.iter().map(|e| e.1.elapsed()).reduce(cmp::min).unwrap_or(Duration::from_millis(0))
+                                statistics.ids.iter().map(|e| e.1.elapsed()).reduce(cmp::max).unwrap_or(Duration::from_millis(0))
                             );
 
                             last_time = Instant::now();
