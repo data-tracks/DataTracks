@@ -1,88 +1,129 @@
 <div class="flex flex-col gap-4">
     <div class="card bg-base-100 border border-base-300 shadow-sm overflow-hidden">
-        <div class="bg-base-200/50 px-3 py-2 flex items-center gap-3 border-b border-base-300">
-            @if (delay(); as delay){
-                <div>Plain Delay: {{formatDuration(delay.plain)}}</div>
-                <div>Mapped Delay: {{formatDuration(delay.mapped)}}</div>
-                <div>Max Delay: {{formatDuration(delay.max)}}</div>
-                <div>Open IDs: {{formatNumber(delay.open_ids)}}</div>
-            }
+        @if (delay(); as delay) {
+            <div class="stats stats-vertical lg:stats-horizontal w-full rounded-none">
 
-        </div>
+                <div class="stat">
+                    <div class="stat-title text-xs uppercase font-bold">Plain Delay</div>
+                    <div class="stat-value text-2xl">{{ formatDuration(delay.plain) }}</div>
+                </div>
+
+                <div class="stat">
+                    <div class="stat-title text-xs uppercase font-bold">Native / Process</div>
+                    <div class="stat-value text-2xl text-secondary">{{ formatDuration(delay.native) }}</div>
+                    <div class="stat-desc font-mono">{{ formatDuration(delay.process) }} (proc)</div>
+                </div>
+
+                <div class="stat">
+                    <div class="stat-title text-xs uppercase font-bold">Max Delay</div>
+                    <div class="stat-value text-2xl text-error">{{ formatDuration(delay.max) }}</div>
+                </div>
+
+                <div class="stat">
+                    <div class="stat-title text-xs uppercase font-bold">Open IDs</div>
+                    <div class="stat-value">{{ formatNumber(delay.open_ids) }}</div>
+                </div>
+
+            </div>
+        } @else {
+            <div class="p-4 flex justify-center">
+                <span class="loading loading-dots loading-md"></span>
+            </div>
+        }
     </div>
 
     @for (entry of plainStatistics(); track entry[0]) {
         @let img = getImage(entry[0]);
+        @let tp = getTp(entry[0]);
         @let plainItems = plainStatistics().get(entry[0]);
-        @let mappedItems = mappedStatistics().get(entry[0]);
+        @let nativeItems = nativeStatistics().get(entry[0]);
+        @let processItems = processStatistics().get(entry[0]);
 
-        <div class="card bg-base-100 border border-base-300 shadow-sm overflow-hidden">
-            <div class="bg-base-200/50 px-3 py-2 flex items-center gap-3 border-b border-base-300">
+        <div class="card bg-base-100 border border-base-300 shadow-md mb-6 overflow-hidden transition-all hover:border-primary/30">
+
+            <div class="bg-base-200/40 px-4 py-3 flex items-center gap-4 border-b border-base-300">
                 @if (img) {
-                    <div class="avatar shrink-0">
-                        <div class="w-8 h-8 rounded bg-black/20 p-1">
-                            <img [ngSrc]="img" alt="" class="logo-outline object-contain" fill>
+                    <div class="avatar">
+                        <div class="w-10 h-10 rounded-lg bg-base-100 shadow-inner p-1.5 border border-base-300">
+                            <img [ngSrc]="img" alt="Logo" class="object-contain" fill>
                         </div>
                     </div>
                 }
-                @let tp = getTp(entry[0]);
-                <span class="text-sm font-bold truncate uppercase tracking-tight">{{ entry[0] }}</span>
-                <span class="grow"></span>
 
-                <div class="badge badge-outline badge-secondary gap-2">
-                    <span class="opacity-70 text-[10px]">PLAIN</span>
-                    @for (currentValue of [tp.plain]; track $index) {
-                        <span class="font-mono animate-update">{{ currentValue | number }} IDs/sec</span>
-                    }
+                <div class="flex flex-row justify-between grow">
+                    <span class="text-sm font-black uppercase tracking-widest text-base-content/70">{{ entry[0] }}</span>
+                    <span class="grow"></span>
+                    <div class="flex gap-3 mt-1">
+                      <span class="font-mono font-bold px-2 py-0.5 rounded primary/10 text-primary border border-primary/20">
+                        P: {{ tp.plain | number }} id/s
+                      </span>
+                        <span class="font-mono font-bold px-2 py-0.5 rounded secondary/10 text-secondary border border-secondary/20">
+                            N: {{ tp.native | number }} id/s
+                          </span>
+                        <span class="font-mono font-bold px-2 py-0.5 rounded bg-accent/10 text-accent border border-accent/20">
+                            P: {{ tp.process | number }} id/s
+                          </span>
+                    </div>
                 </div>
 
-                <div class="badge badge-soft badge-accent gap-2">
-                    <span class="opacity-70 text-[10px]">MAPPED</span>
-                    @for (currentValue of [tp.mapped]; track $index) {
-                        <span class="font-mono animate-update">{{ currentValue | number }} IDs/sec</span>
-                    }
-                </div>
             </div>
 
-            <div class="p-3 flex flex-col gap-4">
+            <div class="p-4 grid grid-cols-1 md:grid-cols-3 gap-6">
 
                 @if (plainItems?.length) {
-                    <div>
-                        <div class="text-[14px] font-black uppercase text-primary mb-2 flex items-center gap-2">
-                            <span>Plain</span>
-                            <div class="h-px grow bg-primary/10"></div>
+                    <section>
+                        <div class="divider divider-start divider-secondary m-0 mb-3 text-[11px] font-bold tracking-tighter opacity-60">
+                            PLAIN
                         </div>
-                        <div class="grid grid-cols-3 gap-2">
+                        <div class="space-y-3">
                             @for (value of plainItems; track value[0] + value[1]) {
-                                <div class="flex flex-col border-l-2 border-primary/30 pl-2">
-                                    <span class="text-[14px] opacity-60 truncate">{{ value[2] }}</span>
-                                    <span class="text-xl font-mono font-bold leading-none">{{ value[3] | number }}</span>
+                                <div class="flex flex-col group">
+                                    <span class="text-[11px] font-semibold text-base-content/50 uppercase">{{ value[2] }}</span>
+                                    <span class="text-2xl font-mono font-light tracking-tight group-hover:text-primary transition-colors">
+                                      {{ value[3] | number }}
+                                    </span>
                                 </div>
                             }
                         </div>
-                    </div>
+                    </section>
                 }
 
-                @if (mappedItems?.length) {
-                    <div>
-                        <div class="text-[14px] font-black uppercase text-accent mb-2 flex items-center gap-2">
-                            <span>Mapped</span>
-                            <div class="h-px grow bg-accent/10"></div>
+                @if (nativeItems?.length) {
+                    <section>
+                        <div class="divider divider-start divider-accent m-0 mb-3 text-[11px] font-bold tracking-tighter opacity-60">
+                            NAIVE
                         </div>
-                        <div class="grid grid-cols-2 gap-2">
-                            @for (value of mappedItems; track value[0] + value[1]) {
-                                <div class="flex flex-col border-l-2 border-accent/30 pl-2">
-                                    <span class="text-[14px] opacity-60 truncate">{{ value[2] }}</span>
-                                    @for (currentValue of [value[3]]; track $index) {
-                                        <span class="text-xl font-mono font-bold leading-none animate-update">
-                                            {{ currentValue | number }}
-                                        </span>
-                                    }
+                        <div class="space-y-3">
+                            @for (value of nativeItems; track value[0] + value[1]) {
+                                <div class="flex flex-col group">
+                                    <span class="text-[11px] font-semibold text-base-content/50 uppercase">{{ value[2] }}</span>
+                                    <span class="text-2xl font-mono font-light tracking-tight group-hover:text-primary transition-colors">
+                                      {{ value[3] | number }}
+                                    </span>
                                 </div>
                             }
                         </div>
-                    </div>
+                    </section>
                 }
+
+                @if (processItems?.length) {
+                    <section>
+                        <div class="divider divider-start divider-primary m-0 mb-3 text-[11px] font-bold tracking-tighter opacity-60">
+                            PROCESS
+                        </div>
+                        <div class="space-y-3">
+                            @for (value of processItems; track value[0] + value[1]) {
+                                <div class="flex flex-col group">
+                                    <span class="text-[11px] font-semibold text-base-content/50 uppercase">{{ value[2] }}</span>
+                                    <span class="text-2xl font-mono font-light tracking-tight group-hover:text-primary transition-colors">
+                                      {{ value[3] | number }}
+                                    </span>
+                                </div>
+                            }
+                        </div>
+                    </section>
+                }
+
             </div>
         </div>
     }

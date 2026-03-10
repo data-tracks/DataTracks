@@ -6,6 +6,7 @@ filter.topic = "relational"
 mapping.relational = [
     {name = "TEXT"}, {age = "INT"}
 ]
+processing = "SELECT age FROM $"
 
 [def.document-default]
 topic = "Document test"
@@ -13,15 +14,18 @@ model = "document"
 entity = "document"
 filter.topic = "doc"
 mapping.document = "document"
+processing = "db.$.find({}, {age:13})"
 
 [def.graph-default]
 topic = "Graph test"
 model = "graph"
 entity = "graph"
 filter.topic = "graph"
+processing = "MATCH (n:$:Person) RETURN n"
 [def.graph-default.mapping.graph.node]
 id = {doc.key = "id"}
 label = {doc.key = "label"}
 properties = {doc.key = "properties"}
+
 
 

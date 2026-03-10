@@ -5,11 +5,11 @@ use value::node::Node;
 use value::Value;
 use value::Value::{Array, Dict};
 
-type ValueGenerator = Box<dyn Fn(&Value) -> Option<Value> + Sync + Send>;
+pub type ValueProducer = Box<dyn Fn(&Value) -> Option<Value> + Sync + Send>;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 /// The type of objects that can be produced by the definition, always of some specific data model
-pub enum DefinitionMapping {
+pub enum NativeMapping {
     // can produce Nodes, or Edges or Subgraphs
     #[serde(alias = "graph")]
     Graph(Mapping<GraphMapping>),
@@ -126,9 +126,9 @@ pub enum KeyValueMapping {
     KV(Mapping<MappingSource>),
 }
 
-impl DefinitionMapping {
+impl NativeMapping {
     pub fn document() -> Self {
-        DefinitionMapping::Document(DocumentMapping::Document(Mapping {
+        NativeMapping::Document(DocumentMapping::Document(Mapping {
             initial: MappingSource::Document(DocumentSource::Whole),
             manual: vec![],
             auto: vec![],
@@ -136,7 +136,7 @@ impl DefinitionMapping {
     }
 
     pub fn tuple_to_relational(types: Vec<(String, RelationalType)>) -> Self {
-        DefinitionMapping::Relational(RelationalMapping::Tuple(
+        NativeMapping::Relational(RelationalMapping::Tuple(
             types.clone(),
             Mapping {
                 initial: MappingSource::List {
@@ -149,7 +149,7 @@ impl DefinitionMapping {
     }
 
     pub fn doc_to_graph() -> Self {
-        DefinitionMapping::Graph(Mapping {
+        NativeMapping::Graph(Mapping {
             initial: GraphMapping::Node(NodeMapping {
                 id: MappingSource::Document(DocumentSource::Key("id".to_string())),
                 label: MappingSource::Document(DocumentSource::Key("label".to_string())),
@@ -161,12 +161,12 @@ impl DefinitionMapping {
     }
 
     pub fn build(&self) -> Box<dyn Fn(Value) -> Value + 'static + Send + Sync> {
-        let mut funcs: Vec<ValueGenerator> = vec![];
+        let mut funcs: Vec<ValueProducer> = vec![];
         match self {
             // we build a node, edge or subgraph
-            DefinitionMapping::Graph(g) => funcs.push(Self::handle_graph_mapping(&g.initial)),
+            NativeMapping::Graph(g) => funcs.push(Self::handle_graph_mapping(&g.initial)),
             // we build a document in the end
-            DefinitionMapping::Document(d) => {
+            NativeMapping::Document(d) => {
                 let DocumentMapping::Document(m) = d;
 
                 funcs.push(Self::handle_doc_mapping(&m.initial));
@@ -179,8 +179,8 @@ impl DefinitionMapping {
                 );
                 funcs.append(&mut m.auto.iter().map(|m| Self::handle_doc_mapping(m)).collect());
             }
-            DefinitionMapping::Relational(r) => funcs.push(Self::handle_rel_mapping(r)),
-            DefinitionMapping::KeyValue(_) => {
+            NativeMapping::Relational(r) => funcs.push(Self::handle_rel_mapping(r)),
+            NativeMapping::KeyValue(_) => {
                 todo!()
             }
         }
@@ -194,7 +194,7 @@ impl DefinitionMapping {
         })
     }
 
-    fn handle_doc_mapping(m: &MappingSource) -> ValueGenerator {
+    fn handle_doc_mapping(m: &MappingSource) -> ValueProducer {
         match m {
             // we get the data as a document
             MappingSource::Document(d) => match d {
@@ -232,7 +232,7 @@ impl DefinitionMapping {
         }
     }
 
-    fn handle_graph_mapping(mapping: &GraphMapping) -> ValueGenerator {
+    fn handle_graph_mapping(mapping: &GraphMapping) -> ValueProducer {
         match mapping {
             GraphMapping::Node(n) => {
                 let id = Self::handle_doc_mapping(&n.id);
@@ -286,7 +286,7 @@ impl DefinitionMapping {
         }
     }
 
-    fn handle_rel_mapping(mapping: &RelationalMapping) -> ValueGenerator {
+    fn handle_rel_mapping(mapping: &RelationalMapping) -> ValueProducer {
         match mapping {
             RelationalMapping::Tuple(_, m) => match &m.initial {
                 MappingSource::Document(_) => {

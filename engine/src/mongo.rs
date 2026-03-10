@@ -15,7 +15,7 @@ use tracing::{debug, error, info};
 use util::container::Mapping;
 use util::definition::{Definition, Stage};
 use util::Event::EngineStatus;
-use util::{container, Batch, DefinitionMapping, EngineId, Event, PartitionId, TargetedRecord};
+use util::{container, Batch, NativeMapping, EngineId, Event, PartitionId, TargetedRecord};
 use value::Value;
 
 #[derive(Debug, Default)]
@@ -96,7 +96,7 @@ impl MongoDB {
         )
         .await??;
         let id = id.into();
-        info!("☑️ Connected to MongoDB database {}", id);
+        debug!("☑️ Connected to MongoDB database {}", id);
         self.id = Some(id);
 
         self.client = Some(client);
@@ -200,10 +200,17 @@ impl MongoDB {
             self.create_collection(name.as_str()).await?;
         }
 
-        if matches!(stage, Stage::Mapped)
-            && let DefinitionMapping::Document(_) = definition.mapping
+        if matches!(stage, Stage::Native)
+            && let NativeMapping::Document(_) = definition.mapping
         {
-            let name = definition.entity_name(partition_id, &Stage::Mapped);
+            let name = definition.entity_name(partition_id, &Stage::Native);
+            self.create_collection(name.as_str()).await?;
+        }
+
+        if matches!(stage, Stage::Process)
+            && let NativeMapping::Document(_) = definition.mapping
+        {
+            let name = definition.entity_name(partition_id, &Stage::Process);
             self.create_collection(name.as_str()).await?;
         }
 

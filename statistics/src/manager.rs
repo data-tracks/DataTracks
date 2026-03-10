@@ -89,24 +89,39 @@ impl Statistics {
                             .sum();
                         self.delay.plain = total_dur / count;
                     }
-                    Stage::Mapped => {
+                    Stage::Native => {
+                        let total_dur: Duration = ids
+                            .iter()
+                            .map(|id| {
+                                self.ids
+                                    .get(id)
+                                    .map(|old| first.duration_since(*old))
+                                    .unwrap_or_else(|| {
+                                        error!("Plain without Plain for ID: {}", id);
+                                        Duration::from_secs(0)
+                                    })
+                            })
+                            .sum();
+                        self.delay.native = total_dur / count;
+                    }
+                    Stage::Process => {
                         let (total_dur, max_dur) = ids.iter().fold(
                             (Duration::from_secs(0), Duration::from_secs(0)),
                             |(sum, max), id| {
-                                // Use swap_remove for O(1) performance!
                                 let dur = self
                                     .ids
                                     .swap_remove(id)
                                     .map(|old| first.duration_since(old))
                                     .unwrap_or_else(|| {
-                                        error!("Mapped without Timer/Plain for ID: {}", id);
+                                        error!("Processed without Mapped/Plain for ID: {}", id);
                                         Duration::from_secs(0)
                                     });
-                                (sum + dur, std::cmp::max(max, dur))
+                                (sum + dur, cmp::max(max, dur))
                             },
                         );
-                        self.delay.mapped = total_dur / count;
+                        self.delay.native = total_dur / count;
                         self.delay.max = max_dur;
+                        self.delay.open_ids = ids.iter().count()
                     }
                     _ => {}
                 }

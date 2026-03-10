@@ -57,7 +57,9 @@ pub struct Delay {
     #[serde_as(as = "DurationMilliSeconds<u64>")]
     pub plain: Duration,
     #[serde_as(as = "DurationMilliSeconds<u64>")]
-    pub mapped: Duration,
+    pub native: Duration,
+    #[serde_as(as = "DurationMilliSeconds<u64>")]
+    pub process: Duration,
     pub open_ids: usize,
     #[serde_as(as = "DurationMilliSeconds<u64>")]
     pub max: Duration
@@ -66,7 +68,8 @@ pub struct Delay {
 #[derive(Serialize, Clone, Debug, Default)]
 pub struct ThroughputMeta {
     plain: f64,
-    mapped: f64,
+    native: f64,
+    process: f64
 }
 
 impl StatisticEvent {
@@ -87,11 +90,17 @@ impl StatisticEvent {
 
             tp.plain = rounded_tps;
 
-            let raw_tps = (amounts.mapped) / since.as_secs() as f64;
+            let raw_tps = (amounts.native) / since.as_secs() as f64;
             // Apply rounding to 3 decimal places
             let rounded_tps = (raw_tps * 1000.0).round() / 1000.0;
 
-            tp.mapped = rounded_tps;
+            tp.native = rounded_tps;
+
+            let raw_tps = (amounts.process) / since.as_secs() as f64;
+            // Apply rounding to 3 decimal places
+            let rounded_tps = (raw_tps * 1000.0).round() / 1000.0;
+
+            tp.process = rounded_tps;
 
             tps.insert(id, tp);
         }
@@ -110,8 +119,11 @@ impl StatisticEvent {
                     Stage::Plain => {
                         tp.plain = *amount as f64;
                     }
-                    Stage::Mapped => {
-                        tp.mapped = *amount as f64;
+                    Stage::Native => {
+                        tp.native = *amount as f64;
+                    }
+                    Stage::Process => {
+                        tp.process = *amount as f64;
                     }
                     _ => {}
                 }

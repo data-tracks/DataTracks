@@ -17,7 +17,7 @@ use tracing::{debug, info};
 use util::Event::EngineStatus;
 use util::container::Mapping;
 use util::definition::{Definition, Stage};
-use util::{Batch, DefinitionMapping, EngineId, Event, PartitionId, TargetedRecord, container};
+use util::{Batch, NativeMapping, EngineId, Event, PartitionId, TargetedRecord, container};
 use value::Value;
 
 pub struct Neo4j {
@@ -129,7 +129,7 @@ impl Neo4j {
             }
         }
         let id = id.into();
-        info!("️️☑️ Connected to Neo4j {}", id);
+        debug!("️️☑️ Connected to Neo4j {}", id);
         self.id = Some(id);
         self.graph = Some(graph);
 
@@ -141,7 +141,7 @@ impl Neo4j {
             return Ok(());
         }
         container::start_container(
-            self.name.as_str(),
+            "engine-neo4j",
             "neo4j:latest",
             vec![
                 Mapping {
@@ -165,17 +165,24 @@ impl Neo4j {
         self.prepared_queries
             .insert((Stage::Plain, name.clone()), cypher_query);
 
-        if let DefinitionMapping::Graph(_) = definition.mapping {
-            let name = definition.entity_name(partition_id, &Stage::Mapped);
-            // mapped query
+        if let NativeMapping::Graph(_) = definition.mapping {
+            let name = definition.entity_name(partition_id, &Stage::Native);
+            // native query
             let cypher_query = self.create_node_query(name.as_str());
             self.prepared_queries
-                .insert((Stage::Mapped, name.clone()), cypher_query);
+                .insert((Stage::Native, name.clone()), cypher_query);
+
+            let name = definition.entity_name(partition_id, &Stage::Process);
+            // process query
+            let cypher_query = self.create_node_query(name.as_str());
+            self.prepared_queries
+                .insert((Stage::Process, name.clone()), cypher_query);
         }
+
     }
 
     pub(crate) async fn stop(&self) -> anyhow::Result<()> {
-        container::stop(self.name.as_str()).await
+        container::stop("engine-neo4j").await
     }
 
     pub(crate) fn cost(&self, _: &Value) -> f64 {
@@ -213,7 +220,8 @@ impl Neo4j {
 
                 let values = match &stage {
                     Stage::Plain => Self::wrap_value_plain(values),
-                    Stage::Mapped => Self::wrap_value_mapped(values),
+                    Stage::Native => Self::wrap_value_mapped(values),
+                    Stage::Process => Self::wrap_value_mapped(values),
                     _ => panic!(),
                 };
 
@@ -377,7 +385,7 @@ mod tests {
     use std::collections::{BTreeMap, HashMap};
     use std::vec;
     use util::definition::{Definition, DefinitionFilter, Model, Stage};
-    use util::{DefinitionMapping, PartitionId, TargetedMeta, batch, target};
+    use util::{NativeMapping, PartitionId, TargetedMeta, batch, target};
     use value::Value;
 
     //#[tokio::test]
@@ -390,7 +398,8 @@ mod tests {
         let definition = Definition::new(
             "test",
             DefinitionFilter::AllMatch,
-            DefinitionMapping::doc_to_graph(),
+            NativeMapping::doc_to_graph(),
+            "None".to_string(),
             Model::Document,
             "users".to_string(),
         )
@@ -414,7 +423,7 @@ mod tests {
         .unwrap();
 
         neo.store(
-            &Stage::Mapped,
+            &Stage::Native,
             String::from("users"),
             &batch![target!(
                 Value::node(
@@ -441,7 +450,8 @@ mod tests {
         let definition = Definition::new(
             "test",
             DefinitionFilter::AllMatch,
-            DefinitionMapping::doc_to_graph(),
+            NativeMapping::doc_to_graph(),
+            "None".to_string(),
             Model::Document,
             "users".to_string(),
         )

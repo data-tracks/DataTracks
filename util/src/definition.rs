@@ -1,7 +1,7 @@
 use crate::definition::DefinitionFilter::AllMatch;
-use crate::mappings::DefinitionMapping;
+use crate::mappings::NativeMapping;
 use crate::partition::PartitionInfo;
-use crate::{Batch, DefinitionId, EntityId, PartitionId, TargetedRecord, TimedMeta, log_channel};
+use crate::{Batch, DefinitionId, EntityId, PartitionId, TargetedRecord, TimedMeta, log_channel, ValueProducer};
 use flume::{Receiver, Sender, unbounded};
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
@@ -26,9 +26,16 @@ pub struct Definition {
         Sender<Batch<TargetedRecord>>,
         Receiver<Batch<TargetedRecord>>,
     ),
-    pub mapping: DefinitionMapping,
+    #[serde(skip)]
+    pub process: (
+        Sender<Batch<TargetedRecord>>,
+        Receiver<Batch<TargetedRecord>>,
+    ),
+    pub mapping: NativeMapping,
+    pub processing: String,
     pub partition_info: PartitionInfo,
 }
+
 
 impl Definition {
     pub fn entity_name(&self, id: PartitionId, stage: &Stage) -> String {
@@ -36,8 +43,11 @@ impl Definition {
             Stage::Plain => {
                 format!("{}_{}", self.entity.plain, *id)
             }
-            Stage::Mapped => {
-                format!("{}_{}", self.entity.mapped, *id)
+            Stage::Native => {
+                format!("{}_{}", self.entity.native, *id)
+            }
+            Stage::Process => {
+                format!("{}_{}", self.entity.native, *id)
             }
             _ => "undefined".to_string(),
         }
@@ -46,20 +56,29 @@ impl Definition {
     pub async fn new<S: AsRef<str>>(
         topic: S,
         filter: DefinitionFilter,
-        mapping: DefinitionMapping,
+        mapping: NativeMapping,
+        processing: String,
         model: Model,
         entity: String,
     ) -> Self {
         let id = DefinitionId(ID_BUILDER.fetch_add(1, Ordering::Relaxed));
 
-        let (tx, rx) = unbounded::<Batch<TargetedRecord>>();
+        let (native_tx, native_rx) = unbounded::<Batch<TargetedRecord>>();
+        let (process_tx, process_rx) = unbounded::<Batch<TargetedRecord>>();
 
         log_channel(
-            tx.clone(),
-            format!("Definition-{}-{}", id.0, topic.as_ref()),
+            native_tx.clone(),
+            format!("Native-{}-{}", id.0, topic.as_ref()),
             None,
         )
         .await;
+
+        log_channel(
+            process_tx.clone(),
+            format!("Native-{}-{}", id.0, topic.as_ref()),
+            None,
+        )
+            .await;
 
         Definition {
             topic: topic.as_ref().to_string(),
@@ -67,10 +86,16 @@ impl Definition {
             filter,
             model,
             entity: Entity::new(entity),
-            native: (tx, rx),
+            native: (native_tx, native_rx),
+            process: (process_tx, process_rx),
             mapping,
+            processing,
             partition_info: PartitionInfo::new(),
         }
+    }
+
+    pub fn processing(&self) -> ValueProducer {
+        Box::new(|v| {Some(v.clone())})
     }
 
     /// does our event match the defined definition
@@ -113,7 +138,8 @@ static ENTITY_ID_BUILDER: AtomicU64 = AtomicU64::new(0);
 pub struct Entity {
     pub id: EntityId,
     pub plain: String,
-    pub mapped: String,
+    pub native: String,
+    pub process: String,
 }
 
 impl Entity {
@@ -121,8 +147,9 @@ impl Entity {
         let id = EntityId(ENTITY_ID_BUILDER.fetch_add(1, Ordering::Relaxed));
         Self {
             id,
-            plain: name.as_ref().to_string() + "AsIs",
-            mapped: name.as_ref().to_string(),
+            plain: name.as_ref().to_string() + "_plain",
+            native: name.as_ref().to_string() + "_native",
+            process: "".to_string(),
         }
     }
 }
@@ -132,5 +159,6 @@ pub enum Stage {
     Timer,
     WAL,
     Plain,
-    Mapped,
+    Native,
+    Process
 }

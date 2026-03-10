@@ -1,6 +1,7 @@
-# Definition & Engines file
+# Processing Introduction
 
 ---
 
-- Adds definition file parsing
-- Adds engine file parsing
+- Added processing 
+- Adjusted frontend look
+- Adjusted queue visuals

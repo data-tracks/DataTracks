@@ -14,6 +14,7 @@ use util::runtimes::Runtimes;
 use util::{
     log_channel, Batch, Event, InitialRecord, TargetedRecord,
 };
+use crate::phases::processer::Processor;
 
 pub struct Manager {
     catalog: Catalog,
@@ -70,7 +71,7 @@ impl Manager {
 
         let mut persister = Persister::new(self.catalog.clone(), self.statistic_tx.clone())?;
         let nativer = Nativer::new(self.catalog.clone());
-
+        let processor = Processor::new(self.catalog.clone());
         self.init_engines(self.statistic_tx.clone())?;
 
         let rt = self.runtimes.clone();
@@ -92,7 +93,9 @@ impl Manager {
 
             sink_runner(&mut self.joins, sink, statistic_tx);
 
-            nativer.start(rt.clone(), output).await;
+            nativer.start(rt.clone()).await?;
+
+            processor.start(rt.clone(), output).await?;
 
             tokio::select! {
                     _ = ctrl_c_signal => {
@@ -137,6 +140,7 @@ impl Manager {
                         def.topic,
                         def.filter,
                         def.mapping,
+                        def.processing,
                         def.model,
                         def.entity
                     ).await,
@@ -230,7 +234,7 @@ impl Manager {
         self.runtimes.add_handle(engines);
 
         rx.recv()?;
-        info!("All engines added");
+        info!("All engines added...");
 
         Ok(())
     }
@@ -246,7 +250,7 @@ impl Manager {
 
         log_channel(tx.clone(), "Sink Input", Some(control_tx)).await;
 
-        persister.start(rx, rt, control_rx);
+        persister.start(rx, rt, control_rx)?;
 
         Ok(tx)
     }

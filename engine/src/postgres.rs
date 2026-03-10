@@ -20,7 +20,7 @@ use tracing::{debug, info};
 use util::container::Mapping;
 use util::definition::{Definition, Stage};
 use util::{
-    container, Batch, DefinitionMapping, EngineId, Event, PartitionId, RelationalMapping,
+    container, Batch, NativeMapping, EngineId, Event, PartitionId, RelationalMapping,
     RelationalType, TargetedRecord,
 };
 use value::Value;
@@ -117,7 +117,7 @@ impl Postgres {
     ) -> anyhow::Result<()> {
         let client = self.connector.connect(join_set).await?;
         let id = id.into();
-        info!("☑️ Connected to Postgres database {}", id);
+        debug!("☑️ Connected to Postgres database {}", id);
         self.id = Some(id);
 
         timeout(Duration::from_secs(5), client.check_connection()).await??;
@@ -132,7 +132,7 @@ impl Postgres {
             return Ok(());
         }
         container::start_container(
-            self.name.as_str(),
+            "engine-postgres",
             "postgres:latest",
             vec![Mapping {
                 container: 5432,
@@ -144,7 +144,7 @@ impl Postgres {
     }
 
     pub(crate) async fn stop(&self) -> anyhow::Result<()> {
-        container::stop(self.name.as_str()).await
+        container::stop("engine-postgres").await
     }
 
     pub(crate) fn cost(&self, _: &Value) -> f64 {
@@ -247,11 +247,18 @@ impl Postgres {
                 .await?;
         }
 
-        if matches!(stage, Stage::Mapped)
-            && let DefinitionMapping::Relational(m) = &definition.mapping
+        if matches!(stage, Stage::Native)
+            && let NativeMapping::Relational(m) = &definition.mapping
         {
-            let name = definition.entity_name(partition_id, &Stage::Mapped);
-            self.create_table_mapped(name.as_str(), m).await?;
+            let name = definition.entity_name(partition_id, &Stage::Native);
+            self.create_table_native(name.as_str(), m).await?;
+        }
+
+        if matches!(stage, Stage::Process)
+            && let NativeMapping::Relational(m) = &definition.mapping
+        {
+            let name = definition.entity_name(partition_id, &Stage::Process);
+            self.create_table_process(name.as_str(), m).await?;
         }
 
         Ok(())
@@ -286,7 +293,7 @@ impl Postgres {
         Ok(())
     }
 
-    async fn create_table_mapped(
+    async fn create_table_native(
         &mut self,
         name: &str,
         mapping: &RelationalMapping,
@@ -324,7 +331,57 @@ impl Postgres {
 
                 let statement = client.prepare(&copy_query).await?;
                 self.prepared_statements.insert(
-                    (name.to_string(), Stage::Mapped),
+                    (name.to_string(), Stage::Native),
+                    (
+                        statement,
+                        types.into_iter().map(|(_, t)| Self::pg_type(t)).collect(),
+                    ),
+                );
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn create_table_process(
+        &mut self,
+        name: &str,
+        mapping: &RelationalMapping,
+    ) -> anyhow::Result<()> {
+        let types = mapping.get_types();
+
+        match &self.client {
+            None => bail!("Could not create postgres database"),
+            Some(client) => {
+                let create_table_query = format!(
+                    "CREATE TABLE IF NOT EXISTS {} (
+                    _id SERIAL PRIMARY KEY,
+                    {})",
+                    name,
+                    types
+                        .iter()
+                        .map(|(name, t)| format!("{} {}", name, t))
+                        .collect::<Vec<_>>()
+                        .join(",\n")
+                );
+
+                //info!("{}", create_table_query);
+
+                client.execute(&create_table_query, &[]).await?;
+                //info!("Table '{}' ensured to exist.", name);
+                let copy_query = format!(
+                    "COPY {} ({}) FROM STDIN BINARY",
+                    name,
+                    types
+                        .iter()
+                        .map(|(n, _)| n.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+
+                let statement = client.prepare(&copy_query).await?;
+                self.prepared_statements.insert(
+                    (name.to_string(), Stage::Process),
                     (
                         statement,
                         types.into_iter().map(|(_, t)| Self::pg_type(t)).collect(),
@@ -401,7 +458,20 @@ impl Postgres {
                             .write(&[&id_val as &(dyn ToSql + Sync), value])
                             .await?;
                     }
-                    Stage::Mapped => {
+                    Stage::Native => {
+                        if let Value::Array(a) = value {
+                            let row_params: Vec<&(dyn ToSql + Sync)> = a
+                                .values
+                                .par_iter()
+                                .map(|v| v as &(dyn ToSql + Sync))
+                                .collect();
+
+                            writer.as_mut().write(&row_params).await?;
+                        } else {
+                            bail!("Expected Array value for Mapped stage, got {:?}", value);
+                        }
+                    }
+                    Stage::Process => {
                         if let Value::Array(a) = value {
                             let row_params: Vec<&(dyn ToSql + Sync)> = a
                                 .values
@@ -505,10 +575,10 @@ pub mod tests {
             },
         );
 
-        pg.create_table_mapped("users", &r).await.unwrap();
+        pg.create_table_native("users", &r).await.unwrap();
 
         pg.store(
-            &Stage::Mapped,
+            &Stage::Native,
             String::from("users"),
             &batch![target!(
                 Value::array(vec![Value::text("test"), Value::int(30)]),

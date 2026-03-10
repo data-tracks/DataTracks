@@ -1,6 +1,5 @@
-import {Component, inject, input, OnInit, signal, WritableSignal} from '@angular/core';
+import {Component, inject, signal, WritableSignal} from '@angular/core';
 import {DecimalPipe, NgOptimizedImage} from "@angular/common";
-import {Observable, Subject} from "rxjs";
 import {EventsService} from "../events.service";
 
 @Component({
@@ -14,12 +13,12 @@ import {EventsService} from "../events.service";
 })
 export class StatisticsComponent {
     service = inject(EventsService);
-    private queue$ = new Subject<any>();
 
     protected delay: WritableSignal<Delay | undefined> = signal(undefined);
 
     protected plainStatistics: WritableSignal<Map<string, [number, Stage, string, number][]>> = signal(new Map());
-    protected mappedStatistics: WritableSignal<Map<string, [number, Stage, string, number][]>> = signal(new Map());
+    protected nativeStatistics: WritableSignal<Map<string, [number, Stage, string, number][]>> = signal(new Map());
+    protected processStatistics: WritableSignal<Map<string, [number, Stage, string, number][]>> = signal(new Map());
 
     protected tps: WritableSignal<Map<string, Throughput>> = signal(new Map())
 
@@ -71,11 +70,21 @@ export class StatisticsComponent {
         });
         //console.log(this.plainStatistics())
 
-        this.mappedStatistics.update(m => {
+        this.nativeStatistics.update(m => {
             const d = new Map(m);
             for (const key in map.engines) {
                 const [entries, engineName] = map.engines[key];
-                const values = [...entries].filter(e => e[1] === Stage.Mapped).sort((a, b) => a[0] - b[0]);
+                const values = [...entries].filter(e => e[1] === Stage.Native).sort((a, b) => a[0] - b[0]);
+                d.set(engineName, values);
+            }
+            return d;
+        });
+
+        this.processStatistics.update(m => {
+            const d = new Map(m);
+            for (const key in map.engines) {
+                const [entries, engineName] = map.engines[key];
+                const values = [...entries].filter(e => e[1] === Stage.Process).sort((a, b) => a[0] - b[0]);
                 d.set(engineName, values);
             }
             return d;
@@ -112,16 +121,14 @@ export class StatisticsComponent {
     }
 
     protected getTp(name: string) {
-        return this.tps().get(name) || {plain: 0, mapped: 0};
+        return this.tps().get(name) || {plain: 0, native: 0, process: 0};
     }
 
     formatNumber(val: string | number): string {
         const num = typeof val === 'string' ? parseInt(val) : val;
         if (isNaN(num)) return "0";
 
-        const number = num.toLocaleString('en-US').replace(/,/g, "'");
-
-        return ":" + number;
+        return num.toLocaleString('en-US').replace(/,/g, "'");
     }
 }
 
@@ -139,17 +146,20 @@ export interface ThroughputEvent {
 
 export enum Stage {
     Plain = "Plain",
-    Mapped = "Mapped"
+    Native = "Native",
+    Process = "Process"
 }
 
 export interface Delay {
     plain: number,
-    mapped: number,
+    native: number,
+    process: number,
     max: number,
     open_ids: number
 }
 
 export interface Throughput {
     plain: number,
-    mapped: number,
+    native: number,
+    process: number
 }

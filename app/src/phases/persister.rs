@@ -55,7 +55,7 @@ impl Persister {
         Ok(())
     }
 
-    pub fn start(self, incoming: Receiver<InitialRecord>, rt: Runtimes, control_rx: Receiver<u64>) {
+    pub fn start(self, incoming: Receiver<InitialRecord>, rt: Runtimes, control_rx: Receiver<u64>) -> anyhow::Result<()> {
         let storer_workers = 8; // todo make dynamic
 
         let (sender, receiver) = unbounded();
@@ -102,6 +102,7 @@ impl Persister {
             });
         });
         rt.add_handle(storer);
+        Ok(())
     }
 
     async fn select_engine<'a>(
@@ -280,7 +281,7 @@ async fn flush_buckets(
         let ids: Vec<u64> = records.iter().map(|r| r.meta.id).collect();
 
         match engine
-            .store(partition_id, Stage::Plain, definition.id, records.clone())
+            .store(partition_id, Stage::Plain, definition.id, &records)
             .await
         {
             Ok(_) => {

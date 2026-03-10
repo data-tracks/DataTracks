@@ -336,9 +336,10 @@ export class CytoComponent implements AfterViewInit {
     let xDistance = 150;
     let yDistance = 200;
 
-    let xPersisterDistance = x + xDistance*3
-    let xNativerDistance = x + xDistance*4
-    let xEnd = x + xDistance*5
+    let xPersiste = x + xDistance*3
+    let xNative = x + xDistance*4
+    let xProcess = x + xDistance*5
+    let xEnd = x + xDistance*6
 
     let yFirst = yDistance + 200;
 
@@ -355,50 +356,60 @@ export class CytoComponent implements AfterViewInit {
       {data: {id: 'walBuffer', label: 'WAL Delay'}, position: {x: x + xDistance*2, y: 50}, classes: "save"},
 
       // Persisters
-      {data: {id: 'persister', label: 'Persister'}, position: {x: xPersisterDistance, y: y}},
+      {data: {id: 'persister', label: 'Persist'}, position: {x: xPersiste, y: y}},
 
       // buffers
       {
         data: {id: 'buffer-mongodb', label: '0'},
-        position: {x: xPersisterDistance - 50, y: yFirst},
+        position: {x: xPersiste - 50, y: yFirst},
         classes: "buffer rotate"
       },
       {
         data: {id: 'buffer-postgres', label: '0'},
-        position: {x: xPersisterDistance, y: yFirst},
+        position: {x: xPersiste, y: yFirst},
         classes: "buffer rotate"
       },
       {
         data: {id: 'buffer-neo4j', label: '0'},
-        position: {x: xPersisterDistance + 50, y: yFirst},
+        position: {x: xPersiste + 50, y: yFirst},
         classes: "buffer rotate"
       },
 
       {
         data: {id: 'engine-mongodb', label: 'Mongo'},
-        position: {x: xPersisterDistance - 50, y: ySecond},
+        position: {x: xPersiste - 50, y: ySecond},
         classes: "database"
       },
       {
         data: {id: 'engine-postgres', label: 'Postgres'},
-        position: {x: xPersisterDistance, y: ySecond},
+        position: {x: xPersiste, y: ySecond},
         classes: "database"
       },
       {
         data: {id: 'engine-neo4j', label: 'Neo4j'},
-        position: {x: xPersisterDistance + 50, y: ySecond},
+        position: {x: xPersiste + 50, y: ySecond},
         classes: "database"
       },
 
       // Nativers
-      {data: {id: 'nativer', label: 'Nativer'}, position: {x: xNativerDistance, y: y}},
-      {data: {id: 'nativer0', label: 'Definition 0'}, position: {x: xNativerDistance - 50, y: yFirst}, classes: "rotate"},
-      {data: {id: 'nativer1', label: 'Definition 1'}, position: {x: xNativerDistance, y: yFirst}, classes: "rotate"},
-      {data: {id: 'nativer2', label: 'Definition 2'}, position: {x: xNativerDistance + 50, y: yFirst}, classes: "rotate"},
+      {data: {id: 'nativer', label: 'Native'}, position: {x: xNative, y: y}},
+      {data: {id: 'nativer0', label: 'Definition 0'}, position: {x: xNative - 50, y: yFirst}, classes: "rotate"},
+      {data: {id: 'nativer1', label: 'Definition 1'}, position: {x: xNative, y: yFirst}, classes: "rotate"},
+      {data: {id: 'nativer2', label: 'Definition 2'}, position: {x: xNative + 50, y: yFirst}, classes: "rotate"},
 
-      {data: {id: 'nativer0engine', label: 'Mongo'}, position: {x: xNativerDistance - 50, y: ySecond}, classes: "database"},
-      {data: {id: 'nativer1engine', label: 'Postgres'}, position: {x: xNativerDistance, y: ySecond}, classes: "database"},
-      {data: {id: 'nativer2engine', label: 'Neo4j'}, position: {x: xNativerDistance + 50, y: ySecond}, classes: "database"},
+      {data: {id: 'nativer0engine', label: 'Mongo'}, position: {x: xNative - 50, y: ySecond}, classes: "database"},
+      {data: {id: 'nativer1engine', label: 'Postgres'}, position: {x: xNative, y: ySecond}, classes: "database"},
+      {data: {id: 'nativer2engine', label: 'Neo4j'}, position: {x: xNative + 50, y: ySecond}, classes: "database"},
+
+      // Processor
+      {data: {id: 'processor', label: 'Process'}, position: {x: xProcess, y: y}},
+      {data: {id: 'processor0', label: 'Definition 0'}, position: {x: xProcess - 50, y: yFirst}, classes: "rotate"},
+      {data: {id: 'processor1', label: 'Definition 1'}, position: {x: xProcess, y: yFirst}, classes: "rotate"},
+      {data: {id: 'processor2', label: 'Definition 2'}, position: {x: xProcess + 50, y: yFirst}, classes: "rotate"},
+
+      {data: {id: 'processor0engine', label: 'Mongo'}, position: {x: xProcess - 50, y: ySecond}, classes: "database"},
+      {data: {id: 'processor1engine', label: 'Postgres'}, position: {x: xProcess, y: ySecond}, classes: "database"},
+      {data: {id: 'processor2engine', label: 'Neo4j'}, position: {x: xProcess + 50, y: ySecond}, classes: "database"},
 
       // end
       {data: {id: 'end', label: 'Poly'}, position: {x: xEnd, y: y}},
@@ -468,7 +479,37 @@ export class CytoComponent implements AfterViewInit {
         data: {id: 'edge-nativer2engine', source: 'nativer2', target: 'nativer2engine', value: '0', color: '#fff'},
         classes: "rotate no-label"
       },
-
+      // Processor
+      {
+        data: {id: 'edge-nativer-processor', source: 'nativer', target: 'processor', value: '0', color: '#fff'},
+        classes: "no-label"
+      },
+      {
+        data: {id: 'edge-process0', source: 'processor', target: 'processor0', value: '0', color: '#fff'},
+        classes: "rotate"
+      },
+      {
+        data: {id: 'edge-process1', source: 'processor', target: 'processor1', value: '0', color: '#fff'},
+        classes: "rotate"
+      },
+      {
+        data: {id: 'edge-process2', source: 'processor', target: 'processor2', value: '0', color: '#fff'},
+        classes: "rotate"
+      },
+      // Processor engines
+      {
+        data: {id: 'edge-process0engine', source: 'processor0', target: 'processor0engine', value: '0', color: '#fff'},
+        classes: "rotate no-label"
+      },
+      {
+        data: {id: 'edge-process1engine', source: 'processor1', target: 'processor1engine', value: '0', color: '#fff'},
+        classes: "rotate no-label"
+      },
+      {
+        data: {id: 'edge-process2engine', source: 'processor2', target: 'processor2engine', value: '0', color: '#fff'},
+        classes: "rotate no-label"
+      },
+      // end
       {
         data: {id: 'edge-nativer-poly', source: 'nativer', target: 'end', value: '0', color: '#fff'},
         classes: "no-label"

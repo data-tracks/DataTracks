@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use std::collections::HashMap;
 use util::definition::{DefinitionFilter, Model};
-use util::DefinitionMapping;
+use util::NativeMapping;
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
@@ -14,7 +14,8 @@ pub struct DefinitionModel {
     pub model: Model,
     pub entity: String,
     pub filter: DefinitionFilter,
-    pub mapping: DefinitionMapping,
+    pub mapping: NativeMapping,
+    pub processing: String
 }
 
 #[cfg(test)]
@@ -26,13 +27,11 @@ mod tests {
     async fn relational() {
         let mapping = r#"relational = [{name = "TEXT"}, {age = "INT"}]"#;
 
-        let mapping: DefinitionMapping = toml::from_str(&mapping).unwrap();
-        if let DefinitionMapping::Relational(r) = mapping {
+        let mapping: NativeMapping = toml::from_str(&mapping).unwrap();
+        if let NativeMapping::Relational(r) = mapping {
             if let RelationalMapping::Tuple(val, _m) = r {
                 assert_eq!(val[0].0, "name" );
                 assert_eq!(val[1].0, "age" );
-            }else {
-                assert!(false);
             }
         }else {
             assert!(false);
@@ -47,6 +46,7 @@ mod tests {
         model = "relational"
         entity = "relational"
         filter.topic = "relational"
+        processing = "None"
         mapping.relational = [
             {name = "TEXT"}, {age = "INT"}
         ]
@@ -57,16 +57,19 @@ mod tests {
         entity = "document"
         filter.topic = "doc"
         mapping.document = "document"
+        processing = "None"
 
         [def.graph-default]
         topic = "Graph test"
         model = "graph"
         entity = "graph"
         filter.topic = "graph"
+        processing = "None"
         [def.graph-default.mapping.graph.node]
         id = {doc.key = "id"}
         label = {doc.key = "label"}
-        properties = {doc.key = "properties"}"#;
+        properties = {doc.key = "properties"}
+        "#;
 
         let config: Config = toml::from_str(&mapping).unwrap();
     }
@@ -79,7 +82,8 @@ mod tests {
         model = "document"
         entity = "document"
         filter.topic = "doc"
-        mapping.document = "document""#;
+        mapping.document = "document"
+        processing = "None""#;
 
         let config: Config = toml::from_str(&mapping).unwrap();
     }
@@ -90,8 +94,25 @@ mod tests {
         [graph.node]
         id = {doc.key = "id"}
         label = {doc.key = "label"}
-        properties = {doc.key = "properties"}"#;
+        properties = {doc.key = "properties"}
+        processing = "None""#;
 
-        let config: DefinitionMapping = toml::from_str(&mapping).unwrap();
+        let config: NativeMapping = toml::from_str(&mapping).unwrap();
+    }
+
+    #[tokio::test]
+    async fn relational_full() {
+        let mapping = r#"
+        [def.relational-default]
+        topic = "Relational test"
+        model = "relational"
+        entity = "relational"
+        filter.topic = "relational"
+        mapping.relational = [
+            {name = "TEXT"}, {age = "INT"}
+        ]
+        processing = "None""#;
+
+        let config: Config = toml::from_str(&mapping).unwrap();
     }
 }

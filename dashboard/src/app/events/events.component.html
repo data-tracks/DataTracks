@@ -1,20 +1,28 @@
-<div class="flex flex-wrap gap-2 mb-4">
-    @for (filter of filters(); track filter) {
-        <button
-                class="btn btn-sm rounded-full"
-                [class.btn-primary]="activeFilters().includes(filter)"
-                (click)="toggleFilter(filter)">
-            {{ filter }}
-        </button>
-    }
-</div>
-
-<ul class="list bg-base-100 rounded-box shadow-md">
-    @for (chan of msgs(); track $index) {
-        @if (chan) {
-            <li class="list-row">
-                <pre class="whitespace-pre-wrap wrap-break-word">{{ JSON.stringify(chan, null, 2) }}</pre>
-            </li>
+@if (service.connectedEvents()) {
+    <div class="flex flex-wrap gap-2 mb-4">
+        @for (filter of filters(); track filter) {
+            <button
+                    class="btn btn-sm rounded-full"
+                    [class.btn-primary]="activeFilters().includes(filter)"
+                    (click)="toggleFilter(filter)">
+                {{ filter }}
+            </button>
         }
-    }
-</ul>
+    </div>
+
+    <ul class="list bg-base-100 rounded-box shadow-md">
+        @for (chan of msgs(); track $index) {
+            @if (chan) {
+                <li class="list-row">
+                    <pre class="whitespace-pre-wrap wrap-break-word">{{ JSON.stringify(chan, null, 2) }}</pre>
+                </li>
+            }
+        }
+    </ul>
+} @else {
+    <div class="card bg-base-100 border border-base-300 shadow-sm overflow-hidden">
+        <div class="p-4 flex justify-center">
+            <span class="loading loading-dots loading-md"></span>
+        </div>
+    </div>
+}
