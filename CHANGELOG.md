@@ -1,8 +1,6 @@
-# Queue Visuals, Improved Thread Management
+# Definition & Engines file
 
 ---
 
-- Improved queue visuals
-- Thread separation in separated runtimes
-- added delay and open ids metrics
-- improved ingestion of plain, mapped
+- Adds definition file parsing
+- Adds engine file parsing

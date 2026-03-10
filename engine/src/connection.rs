@@ -1,10 +1,11 @@
 use anyhow::bail;
 use std::time::Duration;
+use serde::Deserialize;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
 use tokio_postgres::{Client, NoTls};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct PostgresConnection {
     pub(crate) url: String,
     pub(crate) port: u16,

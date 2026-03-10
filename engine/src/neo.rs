@@ -11,6 +11,7 @@ use std::error::Error;
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use mongodb::bson::uuid;
 use tokio::time::{Instant, sleep};
 use tracing::{debug, info};
 use util::Event::EngineStatus;
@@ -29,6 +30,38 @@ pub struct Neo4j {
     pub(crate) password: String,
     pub(crate) graph: Option<Graph>,
     pub(crate) prepared_queries: HashMap<(Stage, String), String>,
+    pub(crate) deploy: bool,
+}
+
+impl<'de> Deserialize<'de> for Neo4j {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct Raw {
+            host: String,
+            port: u16,
+            user: String,
+            password: String,
+            deploy: bool,
+        }
+
+        let raw = Raw::deserialize(deserializer)?;
+
+        Ok(Neo4j {
+            id: None,
+            name: uuid::Uuid::new().to_string(),
+            load: Arc::new(Mutex::new(Load::Low)),
+            host: raw.host.clone(),
+            port: raw.port,
+            user: raw.user.clone(),
+            password: raw.password.clone(),
+            graph: None,
+            prepared_queries: Default::default(),
+            deploy: raw.deploy,
+        })
+    }
 }
 
 impl Clone for Neo4j {
@@ -43,6 +76,7 @@ impl Clone for Neo4j {
             password: self.password.clone(),
             graph: None,
             prepared_queries: Default::default(),
+            deploy: false,
         }
     }
 }
@@ -103,6 +137,9 @@ impl Neo4j {
     }
 
     pub(crate) async fn start_container(&self) -> anyhow::Result<()> {
+        if !self.deploy {
+            return Ok(());
+        }
         container::start_container(
             self.name.as_str(),
             "neo4j:latest",

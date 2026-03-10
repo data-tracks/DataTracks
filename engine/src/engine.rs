@@ -3,9 +3,10 @@ use crate::mongo::MongoDB;
 use crate::neo::Neo4j;
 use crate::postgres::Postgres;
 use derive_more::From;
-use flume::{Receiver, Sender, bounded, unbounded};
+use flume::{bounded, unbounded, Receiver, Sender};
 use futures_util::future::join_all;
 use mongodb::bson::uuid;
+use serde::{Deserialize};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::ops::Mul;
@@ -14,14 +15,15 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::JoinHandle;
 use std::time::Duration;
+use tokio::fs;
 use tokio::runtime::Builder;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
 use tracing::warn;
 use util::definition::{Definition, Model, Stage};
 use util::{
-    Batch, DefinitionId, EngineId, Event, PartitionId, QueueEvent, SegmentedLogWriter,
-    TargetedRecord, log_channel,
+    log_channel, Batch, DefinitionId, EngineId, Event, PartitionId, QueueEvent,
+    SegmentedLogWriter, TargetedRecord,
 };
 use uuid::Uuid;
 use value::Value;
@@ -318,11 +320,22 @@ impl Engine {
     }
 }
 
-#[derive(Clone, From, Debug)]
+#[derive(Clone, From, Debug, Deserialize)]
+#[serde(tag = "type")]
+#[serde(rename_all = "lowercase")]
 pub enum EngineKind {
     Postgres(Postgres),
     MongoDB(MongoDB),
     Neo4j(Neo4j),
+}
+
+impl EngineKind {
+    async fn read_from_config() -> Vec<EngineKind> {
+        let content = fs::read_to_string("engines.toml").await.unwrap();
+        let map: HashMap<String, EngineKind> = toml::from_str(&content).unwrap();
+
+        map.into_values().collect()
+    }
 }
 
 impl Display for EngineKind {
@@ -362,11 +375,13 @@ impl EngineKind {
     }
 
     pub async fn get_all(statistic_tx: Sender<Event>) -> anyhow::Result<Vec<Engine>> {
-        let engine_kinds: Vec<EngineKind> = vec![
+        /*let engine_kinds: Vec<EngineKind> = vec![
             EngineKind::postgres().into(),
             EngineKind::mongo_db().into(),
             EngineKind::neo4j().into(),
-        ];
+        ];*/
+        
+        let engine_kinds = EngineKind::read_from_config().await;
 
         let init_futures = engine_kinds
             .into_iter()
@@ -423,22 +438,29 @@ impl EngineKind {
             client: None,
             prepared_statements: Default::default(),
             join: None,
+            deploy: true,
         }
     }
 
+    #[cfg(test)]
     fn mongo_db() -> MongoDB {
         MongoDB {
             id: None,
             load: Arc::new(Mutex::new(Load::Low)),
             client: None,
+            host: "localhost".to_string(),
+            port: 27017,
             names: Default::default(),
+            deploy: true,
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn neo4j() -> Neo4j {
         Self::neo4j_with_port(7687)
     }
 
+    #[cfg(test)]
     pub(crate) fn neo4j_with_port(port: u16) -> Neo4j {
         Neo4j {
             id: None,
@@ -450,13 +472,77 @@ impl EngineKind {
             password: "neoneoneo".to_string(),
             graph: None,
             prepared_queries: Default::default(),
+            deploy: true,
         }
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub enum Load {
+    #[default]
     Low,
     Middle,
     High,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn postgres() {
+        let mapping = r#"
+        [postgres]
+        type = "postgres"
+        host = "localhost"
+        port = 5432
+        db = "postgres"
+        user = "postgres"
+        password = "postgres"
+        deploy = true"#;
+
+        let engine:HashMap<String, EngineKind>  = toml::from_str(&mapping).unwrap();
+        if let Some (pg) = engine.get("postgres") {
+            assert!(matches!(pg, EngineKind::Postgres(_)))
+        }else {
+            assert!(false);
+        }
+
+    }
+
+    #[tokio::test]
+    async fn mongo() {
+        let mapping = r#"
+        [mongodb]
+        type = "mongodb"
+        host = "localhost"
+        port = 27017
+        deploy = true"#;
+
+        let engine:HashMap<String, EngineKind>  = toml::from_str(&mapping).unwrap();
+        if let Some (pg) = engine.get("mongodb") {
+            assert!(matches!(pg, EngineKind::MongoDB(_)))
+        }else {
+            assert!(false);
+        }
+    }
+
+    #[tokio::test]
+    async fn neo4j() {
+        let mapping = r#"
+        [neo4j]
+        type = "neo4j"
+        host = "localhost"
+        port = 7687
+        user = "neo4j"
+        password = "neoneoneo"
+        deploy = true"#;
+
+        let engine:HashMap<String, EngineKind>  = toml::from_str(&mapping).unwrap();
+        if let Some (neo) = engine.get("neo4j") {
+            assert!(matches!(neo, EngineKind::Neo4j(_)))
+        }else {
+            assert!(false);
+        }
+    }
 }

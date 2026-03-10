@@ -48,7 +48,7 @@ impl Catalog {
     }
 
     pub async fn definitions(&self) -> Vec<Definition> {
-        self.state.lock().await.definitions.clone().into_iter().map(|(_,v)|v).collect()
+        self.state.lock().await.definitions.clone().into_values().collect()
     }
 
     pub async fn engines(&self) -> Vec<Engine> {

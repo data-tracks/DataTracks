@@ -5,13 +5,14 @@ use flume::Sender;
 use pin_utils::pin_mut;
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
+use serde::Deserialize;
 use std::collections::HashMap;
 use std::error::Error;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::task::JoinSet;
-use tokio::time::{Instant, sleep, timeout};
+use tokio::time::{sleep, timeout, Instant};
 use tokio_postgres::binary_copy::BinaryCopyInWriter;
 use tokio_postgres::types::{ToSql, Type};
 use tokio_postgres::{Client, Statement};
@@ -19,8 +20,8 @@ use tracing::{debug, info};
 use util::container::Mapping;
 use util::definition::{Definition, Stage};
 use util::{
-    Batch, DefinitionMapping, EngineId, Event, PartitionId, RelationalMapping, RelationalType,
-    TargetedRecord, container,
+    container, Batch, DefinitionMapping, EngineId, Event, PartitionId, RelationalMapping,
+    RelationalType, TargetedRecord,
 };
 use value::Value;
 
@@ -36,6 +37,7 @@ pub struct Postgres {
     pub(crate) client: Option<Arc<Client>>,
     pub(crate) prepared_statements: HashMap<(String, Stage), (Statement, Vec<Type>)>,
     pub(crate) join: Option<Arc<Mutex<JoinSet<()>>>>,
+    pub(crate) deploy: bool,
 }
 
 impl Clone for Postgres {
@@ -49,7 +51,47 @@ impl Clone for Postgres {
             client: None,
             prepared_statements: Default::default(),
             join: None,
+            deploy: self.deploy,
         }
+    }
+}
+
+impl<'de> Deserialize<'de> for Postgres {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct RawPostgres {
+            host: String,
+            port: u16,
+            db: String,
+            user: String,
+            password: String,
+            deploy: bool,
+        }
+
+        let raw = RawPostgres::deserialize(deserializer)?;
+
+        let id = ID_BUILDER.fetch_add(1, Ordering::Relaxed);
+
+        Ok(Postgres {
+            id: None,
+            pg_id: id,
+            name: format!("postgres-{}", id),
+            load: Arc::new(Mutex::new(Load::Low)),
+            connector: PostgresConnection {
+                url: raw.host.clone(),
+                port: raw.port,
+                db: raw.db.clone(),
+                user: raw.user.clone(),
+                password: raw.password.clone(),
+            },
+            client: None,
+            prepared_statements: HashMap::new(),
+            join: None,
+            deploy: raw.deploy,
+        })
     }
 }
 
@@ -86,6 +128,9 @@ impl Postgres {
     }
 
     pub(crate) async fn start_container(&self) -> anyhow::Result<()> {
+        if !self.deploy {
+            return Ok(());
+        }
         container::start_container(
             self.name.as_str(),
             "postgres:latest",
@@ -414,7 +459,7 @@ pub mod tests {
     use tracing_test::traced_test;
     use util::definition::Stage;
     use util::{
-        Mapping, MappingSource, RelationalMapping, RelationalType, TargetedMeta, batch, target,
+        batch, target, Mapping, MappingSource, RelationalMapping, RelationalType, TargetedMeta,
     };
     use value::Value;
 

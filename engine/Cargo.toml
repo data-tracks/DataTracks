@@ -25,5 +25,5 @@ flume = { workspace = true }
 pin-utils = "0.1.0"
 tracing-test = { workspace = true }
 anyhow = { workspace = true }
-indexmap = {workspace = true}
 speedy = { workspace = true }
+toml = { workspace = true }

@@ -1,0 +1,25 @@
+[postgres]
+type = "postgres"
+host = "localhost"
+port = 5432
+db = "postgres"
+user = "postgres"
+password = "postgres"
+deploy = true
+
+
+
+[mongodb]
+type = "mongodb"
+host = "localhost"
+port = 27017
+deploy = true
+
+
+[neo4j]
+type = "neo4j"
+host = "localhost"
+port = 7687
+user = "neo4j"
+password = "neoneoneo"
+deploy = true
