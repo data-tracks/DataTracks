@@ -125,7 +125,7 @@ impl Manager {
         &mut self,
         statistic_tx: Sender<Event>,
     ) -> anyhow::Result<()> {
-        let file_path = "default.toml";
+        let file_path = "definitions.toml";
 
         let config = Manager::load_config(file_path).await?;
 

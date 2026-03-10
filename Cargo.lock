@@ -1031,7 +1031,7 @@ checksum = "d7a1e2f27636f116493b8b860f5546edb47c8d8f8ea73e1d2a20be88e28d1fea"
 
 [[package]]
 name = "data-tracks"
-version = "0.6.1"
+version = "0.6.2"
 dependencies = [
  "anyhow",
  "engine",
@@ -1234,7 +1234,7 @@ dependencies = [
 
 [[package]]
 name = "engine"
-version = "0.6.1"
+version = "0.6.2"
 dependencies = [
  "anyhow",
  "derive_more",
@@ -3975,7 +3975,7 @@ checksum = "e320a6c5ad31d271ad523dcf3ad13e2767ad8b1cb8f047f75a8aeaf8da139da2"
 
 [[package]]
 name = "sink"
-version = "0.6.1"
+version = "0.6.2"
 dependencies = [
  "anyhow",
  "crossbeam",
@@ -4084,7 +4084,7 @@ checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
 
 [[package]]
 name = "statistics"
-version = "0.6.1"
+version = "0.6.2"
 dependencies = [
  "axum 0.8.8",
  "axum-embed",
@@ -4854,7 +4854,7 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
 name = "util"
-version = "0.6.1"
+version = "0.6.2"
 dependencies = [
  "anyhow",
  "bollard",
@@ -4868,6 +4868,7 @@ dependencies = [
  "num-format",
  "once_cell",
  "serde",
+ "serde_json",
  "serde_with",
  "speedy",
  "tokio",
@@ -4896,7 +4897,7 @@ checksum = "ba73ea9cf16a25df0c8caa16c51acb937d5712a8429db78a3ee29d5dcacd3a65"
 
 [[package]]
 name = "value"
-version = "0.6.1"
+version = "0.6.2"
 dependencies = [
  "anyhow",
  "bytes",

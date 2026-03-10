@@ -56,18 +56,30 @@ mod tests {
         model = "document"
         entity = "document"
         filter.topic = "doc"
-        mapping.document = {}
+        mapping.document = "document"
 
         [def.graph-default]
         topic = "Graph test"
         model = "graph"
         entity = "graph"
         filter.topic = "graph"
-        mapping.graph = [
-            {id = {doc = {key = "id"}}},
-            {label = {doc = {key = "label"}}},
-            {properties = {doc = {key = "properties"}}}
-        ]"#;
+        [def.graph-default.mapping.graph.node]
+        id = {doc.key = "id"}
+        label = {doc.key = "label"}
+        properties = {doc.key = "properties"}"#;
+
+        let config: Config = toml::from_str(&mapping).unwrap();
+    }
+
+    #[tokio::test]
+    async fn document() {
+        let mapping = r#"
+        [def.document-default]
+        topic = "Document test"
+        model = "document"
+        entity = "document"
+        filter.topic = "doc"
+        mapping.document = "document""#;
 
         let config: Config = toml::from_str(&mapping).unwrap();
     }
@@ -75,17 +87,11 @@ mod tests {
     #[tokio::test]
     async fn graph() {
         let mapping = r#"
-        [def.graph-default]
-        topic = "Graph test"
-        model = "graph"
-        entity = "graph"
-        filter.topic = "graph"
-        mapping.graph.node = [
-            {id = {doc = {key = "id"}}},
-            {label = {doc = {key = "label"}}},
-            {properties = {doc = {key = "properties"}}}
-        ]"#;
+        [graph.node]
+        id = {doc.key = "id"}
+        label = {doc.key = "label"}
+        properties = {doc.key = "properties"}"#;
 
-        let config: Config = toml::from_str(&mapping).unwrap();
+        let config: DefinitionMapping = toml::from_str(&mapping).unwrap();
     }
 }

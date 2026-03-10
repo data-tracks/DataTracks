@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use crate::RelationalType;
 use serde::{Deserialize, Deserializer, Serialize};
 use value::edge::Edge;
@@ -13,7 +12,6 @@ type ValueGenerator = Box<dyn Fn(&Value) -> Option<Value> + Sync + Send>;
 pub enum DefinitionMapping {
     // can produce Nodes, or Edges or Subgraphs
     #[serde(alias = "graph")]
-    #[serde(deserialize_with = "deserialize_document")]
     Graph(Mapping<GraphMapping>),
     // can produce Documents
     #[serde(alias = "document")]
@@ -33,40 +31,19 @@ where
     #[derive(Deserialize)]
     #[serde(untagged)]
     enum DocumentHelper {
-        Default(HashMap<String, Value>),
+        Single(String),
         Full(DocumentMapping),
     }
 
     match DocumentHelper::deserialize(deserializer)? {
         // If TOML is `mapping = "document"`, return a default mapping
-        DocumentHelper::Default(_) => Ok(DocumentMapping::Document(Mapping {
+        DocumentHelper::Single(d) if d.to_lowercase() == "document" => Ok(DocumentMapping::Document(Mapping {
             initial: MappingSource::Document(DocumentSource::Whole),
             manual: vec![],
             auto: vec![],
         })),
         DocumentHelper::Full(mapping) => Ok(mapping),
-    }
-}
-
-fn deserialize_graph<'de, D>(deserializer: D) -> Result<Mapping<GraphMapping>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum DocumentHelper {
-        Default(HashMap<String, Value>),
-        Full(DocumentMapping),
-    }
-
-    match DocumentHelper::deserialize(deserializer)? {
-        // If TOML is `mapping = "document"`, return a default mapping
-        DocumentHelper::Default(_) => Ok(DocumentMapping::Document(Mapping {
-            initial: MappingSource::Document(DocumentSource::Whole),
-            manual: vec![],
-            auto: vec![],
-        })),
-        DocumentHelper::Full(mapping) => Ok(mapping),
+        DocumentHelper::Single(_) => Err(serde::de::Error::custom("invalid document mapping")),
     }
 }
 
@@ -99,15 +76,35 @@ impl From<RelationalTable> for RelationalMapping {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum GraphMapping {
+    #[serde(alias = "node")]
     Node(NodeMapping),
+    #[serde(alias = "edge")]
     Edge(EdgeMapping),
+    #[serde(alias = "subgraph")]
     SubGraph(Box<GraphMapping>),
+}
+
+impl Default for GraphMapping {
+    fn default() -> Self {
+        // You must provide a default NodeMapping here
+        GraphMapping::Node(NodeMapping::default())
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum DocumentMapping {
     Document(Mapping<MappingSource>),
+}
+
+impl Default for DocumentMapping {
+    fn default() -> Self {
+        DocumentMapping::Document(Mapping {
+            initial: MappingSource::Document(DocumentSource::Whole),
+            manual: vec![],
+            auto: vec![],
+        })
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -307,17 +304,72 @@ impl DefinitionMapping {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Mapping<T> {
+#[serde(from = "MappingHelper<T>", into = "MappingHelper<T>")]
+pub struct Mapping<T: Clone + Default> {
     pub initial: T,
     pub manual: Vec<T>,
     pub auto: Vec<T>,
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(untagged)]
+enum MappingHelper<T> {
+    Single(T),
+    Full {
+        initial: T,
+        #[serde(default)]
+        manual: Vec<T>,
+        #[serde(default)]
+        auto: Vec<T>,
+    },
+    Unknown(serde_json::Value),
+}
+
+// Convert from the helper back to your main struct
+impl<T: Clone + Default> From<MappingHelper<T>> for Mapping<T> {
+    fn from(helper: MappingHelper<T>) -> Self {
+        match helper {
+            MappingHelper::Single(val) => Mapping {
+                initial: val,
+                manual: Vec::new(),
+                auto: Vec::new(),
+            },
+            MappingHelper::Full { initial, manual, auto } => Mapping { initial, manual, auto },
+            MappingHelper::Unknown(e) => panic!("{}", e)
+        }
+    }
+}
+
+// Convert from your struct to the helper (for serialization)
+impl<T: Clone + Default> From<Mapping<T>> for MappingHelper<T> {
+    fn from(m: Mapping<T>) -> Self {
+        if m.manual.is_empty() && m.auto.is_empty() {
+            MappingHelper::Single(m.initial)
+        } else {
+            MappingHelper::Full {
+                initial: m.initial,
+                manual: m.manual,
+                auto: m.auto,
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NodeMapping {
-    id: MappingSource,
-    label: MappingSource,
-    properties: MappingSource,
+    pub id: MappingSource,
+    pub label: MappingSource,
+    pub properties: MappingSource,
+}
+
+impl Default for NodeMapping {
+    fn default() -> Self {
+        Self {
+            id: MappingSource::Document(DocumentSource::Key("id".to_string())),
+            label: MappingSource::Document(DocumentSource::Key("label".to_string())),
+            properties: MappingSource::Document(DocumentSource::Key("properties".to_string()))
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -330,13 +382,22 @@ pub struct EdgeMapping {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum MappingSource {
+    #[serde(alias = "doc")]
     Document(DocumentSource),
     List { keys: Vec<String> },
 }
 
+impl Default for MappingSource {
+    fn default() -> Self {
+        MappingSource::Document(DocumentSource::Whole)
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum DocumentSource {
+    #[serde(alias = "key")]
     Key(String),
     Whole,
 }
