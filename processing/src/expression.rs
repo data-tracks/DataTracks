@@ -33,8 +33,8 @@ impl Expression {
 
 #[derive(Clone)]
 pub struct Field {
-    name: String,
-    f_type: Option<ValType>,
+    pub(crate) name: String,
+    pub(crate) f_type: Option<ValType>,
 }
 
 impl Field {
@@ -45,7 +45,7 @@ impl Field {
 
 #[derive(Clone)]
 pub struct Literal {
-    value: Value,
+    pub(crate) value: Value,
 }
 
 impl Literal {
@@ -57,8 +57,8 @@ impl Literal {
 
 #[derive(Clone)]
 pub struct Call {
-    operator: Operator,
-    expressions: Vec<Expression>,
+    pub(crate) operator: Operator,
+    pub(crate) expressions: Vec<Expression>,
 }
 
 impl Call {
@@ -85,7 +85,7 @@ mod test {
     #[test]
     fn test_plus() {
         let func = Call {
-            operator: Operator::binary(Binary::Plus),
+            operator: Operator::binary(Binary::Add),
             expressions: vec![
                 Expression::literal(Literal {
                     value: Value::int(3),
@@ -105,7 +105,7 @@ mod test {
     #[test]
     fn test_plus_sql() {
         let func = Call {
-            operator: Operator::binary(Binary::Plus),
+            operator: Operator::binary(Binary::Add),
             expressions: vec![Expression::field(Field {
                 name: "var".to_string(),
                 f_type: None,

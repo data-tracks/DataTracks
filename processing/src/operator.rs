@@ -29,7 +29,7 @@ impl Operator {
 
 #[derive(Clone)]
 pub enum Binary {
-    Plus,
+    Add,
     Minus,
 }
 
@@ -39,7 +39,7 @@ impl Binary {
         let val2 = expressions[1].eval(expressions.clone());
 
         match self {
-            Binary::Plus => Box::new(move |v| &val1(v) + &val2(v)),
+            Binary::Add => Box::new(move |v| &val1(v) + &val2(v)),
             Binary::Minus => Box::new(move |v| &val1(v) - &val2(v)),
         }
     }
