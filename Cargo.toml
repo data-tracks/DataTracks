@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["app", "value", "macro", "engine", "util", "sink", "statistics"]
+members = ["app", "value", "macro", "engine", "util", "sink", "statistics", "processing"]
 
 
 [workspace.package]
@@ -12,55 +12,55 @@ repository = "https://github.com/data-tracks/DataTracks"
 description = "DataTracks is an prototype system, which provides easy creation and management of complex data streaming workloads for various degrees of structured and unstructured data."
 
 [workspace.dependencies]
+anyhow = "1.0.102"
+axum = { version = "0.8.8", features = ["ws"] }
 bollard = "0.20.1"
-speedy = "0.8.7"
-rayon = "1.11.0"
-lru = "0.16.3"
-toml = "1.0.6"
-once_cell = "1.21.3"
-dashmap = { version = "7.0.0-rc2", features = ["serde"] }
-statistics = { path = "./statistics" }
-flume = "0.12.0"
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.149"
-serde_with = "3.17.0"
-indexmap = { version = "2.13.0", features = ["serde"] }
 bytes = "1.11.1"
-tracing = "0.1.44"
+capnp = "0.25.1"
+capnpc = "0.25.0"
 chrono = "0.4.44"
-flatbuffers = "25.12.19"
-postgres = { version = "0.19.12" }
-tokio-postgres = "0.7.16"
-rusqlite = { version = "0.38.0", features = ["bundled"] }
+comfy-table = "7.2.2"
 criterion = "0.8.2"
+crossbeam = "0.8.4"
+dashmap = { version = "7.0.0-rc2", features = ["serde"] }
+derive_more = "2.1.1"
+engine = { path = "engine" }
+flatbuffers = "25.12.19"
+flume = "0.12.0"
+futures = "0.3.32"
+indexmap = { version = "2.13.0", features = ["serde"] }
+lru = "0.16.3"
+memmap2 = "0.9.10"
+mongodb = { version = "3.5.1" }
+neo4rs = "0.9.0-rc.9"
+num-format = "0.4.4"
+once_cell = "1.21.3"
+parking_lot = "0.12.5"
+postgres = { version = "0.19.12" }
+rand = "0.10.0"
+rayon = "1.11.0"
 redb = "3.1.1"
 rumqttc = "0.25.1"
 rumqttd = "0.20.0"
-tracing-test = "0.2.6"
+rusqlite = { version = "0.38.0", features = ["bundled"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+serde_with = "3.17.0"
+sink = { path = "./sink" }
+speedy = "0.8.7"
+statistics = { path = "./statistics" }
+thiserror = "2.0.18"
 tokio = { version = "1.50.0", features = ["full"] }
+tokio-postgres = "0.7.16"
 tokio-stream = "0.1.18"
 tokio-util = "0.7.18"
-mongodb = { version = "3.5.1" }
-crossbeam = "0.8.4"
-value = { path = "./value" }
-util = { path = "./util" }
-sink = { path = "./sink" }
-engine = { path = "engine" }
-uuid = { version = "1.22.0", features = ["v4"] }
-rand = "0.10.0"
-parking_lot = "0.12.5"
-thiserror = "2.0.18"
-neo4rs = "0.9.0-rc.9"
-futures = "0.3.32"
-derive_more = "2.1.1"
-num-format = "0.4.4"
-comfy-table = "7.2.2"
-memmap2 = "0.9.10"
-axum = { version = "0.8.8", features = ["ws"] }
+toml = "1.0.6"
 tower-http = { version = "0.6.8", features = ["full"] }
-anyhow = "1.0.102"
-capnp = "0.25.1"
-capnpc = "0.25.0"
+tracing = "0.1.44"
+tracing-test = "0.2.6"
+util = { path = "./util" }
+uuid = { version = "1.22.0", features = ["v4"] }
+value = { path = "./value" }
 
 
 # The profile that 'cargo dist' will build with
