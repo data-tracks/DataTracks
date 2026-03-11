@@ -1,4 +1,4 @@
 mod algebra;
 mod expression;
-mod jit;
+mod program;
 mod operator;
