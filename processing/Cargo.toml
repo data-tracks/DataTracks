@@ -9,3 +9,5 @@ description.workspace = true
 
 [dependencies]
 value = { workspace = true }
+anyhow = { workspace = true }
+sqlparser = "0.61.0"

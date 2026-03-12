@@ -1,12 +1,13 @@
 use crate::expression::Expression;
 use crate::operator::Op;
+use anyhow::anyhow;
 use std::collections::HashMap;
 use value::Value;
 
 pub struct VM {
-    pub stack: Vec<Value>,
-    pub current_record: Vec<Value>,
-    pub constants: Vec<Value>, // The "Pool" for literals
+    pub(crate) stack: Vec<Value>,
+    current_record: Vec<Value>,
+    constants: Vec<Value>, // The "Pool" for literals
 }
 
 pub struct Instruction {
@@ -17,11 +18,11 @@ pub struct Instruction {
 pub struct Program {
     instructions: Vec<Instruction>,
     expression: Expression,
-    vm: VM
+    compiler: Compiler,
+    vm: VM,
 }
 
 impl Program {
-
     pub fn new(expression: Expression) -> Program {
         let mut compiler = Compiler::new();
         let mut instructions = vec![];
@@ -30,13 +31,28 @@ impl Program {
         let vm = VM {
             stack: Vec::with_capacity(16),
             current_record: vec![],
-            constants: compiler.constants,
+            constants: compiler.constants.clone(),
         };
 
-        Self { instructions, expression, vm }
+        Self {
+            instructions,
+            expression,
+            compiler,
+            vm,
+        }
     }
 
-    fn run(&mut self) -> impl Iterator<Item=Value> {
+    pub(crate) fn set_record(&mut self, name: &str, value: Value) -> anyhow::Result<()> {
+        let index = self
+            .compiler
+            .field_map
+            .get(name)
+            .ok_or(anyhow!("No named field in compiler"))?;
+        self.vm.current_record.insert(*index, value);
+        Ok(())
+    }
+
+    fn run(&mut self) -> impl Iterator<Item = Value> {
         self.vm.stack.clear();
         for instr in &self.instructions {
             (instr.op)(&mut self.vm, instr.arg);
@@ -45,14 +61,11 @@ impl Program {
     }
 }
 
-
-
 pub struct Compiler {
     pub field_map: HashMap<String, usize>,
     pub constants: Vec<Value>,
     pub next_slot: usize,
 }
-
 
 impl Compiler {
     pub fn new() -> Self {
@@ -81,7 +94,10 @@ impl Compiler {
                 for e in &call.expressions {
                     self.compile_expr(e, out);
                 }
-                out.push(Instruction { op: call.operator.compile(), arg: 0 });
+                out.push(Instruction {
+                    op: call.operator.compile(),
+                    arg: 0,
+                });
             }
         }
     }
@@ -133,7 +149,7 @@ mod test {
         });
 
         let mut program = Program::new(expr);
-        program.vm.current_record.push(Value::int(100));
+        program.set_record("price", Value::int(100)).unwrap();
 
         assert_eq!(program.run().next().unwrap(), Value::int(110));
     }
@@ -151,10 +167,10 @@ mod test {
                             name: "array".into(),
                             f_type: None,
                         }),
-                        Expression::L(Literal{
+                        Expression::L(Literal {
                             value: Value::int(0),
-                        })
-                    ]
+                        }),
+                    ],
                 }),
                 Expression::C(Call {
                     operator: Operator::binary(Binary::Index),
@@ -163,16 +179,16 @@ mod test {
                             name: "array".into(),
                             f_type: None,
                         }),
-                        Expression::L(Literal{
+                        Expression::L(Literal {
                             value: Value::int(1),
-                        })
-                    ]
+                        }),
+                    ],
                 }),
             ],
         });
 
         let mut program = Program::new(expr);
-        program.vm.current_record.push(Value::text("text"));
+        program.set_record("array", Value::text("text")).unwrap();
 
         assert_eq!(program.run().next().unwrap(), Value::text("te"));
     }
