@@ -6,7 +6,7 @@ filter.topic = "relational"
 mapping.relational = [
     { name = "TEXT" }, { age = "INT" }, { price = "FLOAT" }
 ]
-processing = "SELECT age + 3 FROM $" # INSERT INTO $target SELECT age + 3 FROM $source
+processing = "SELECT price + 3 FROM $$source" # INSERT INTO $target SELECT age + 3 FROM $source
 # db.$.aggregate([$project: { age: ["$age", 3] }])
 # MATCH (n:$) CREATE (n {age:age + 3})
 

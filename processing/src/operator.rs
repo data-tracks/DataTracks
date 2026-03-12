@@ -1,50 +1,37 @@
+use sqlparser::ast::BinaryOperator;
 use crate::program::VM;
-use crate::operator::Operator::{B, S};
 use value::Value;
+use crate::expression::Expression;
+use crate::language::Sql;
 
 pub enum Step {
     Next, // IP + 1
     Stay // We stay
 }
 
-pub type Op = fn(&mut VM, arg: usize);
-
 #[derive(Clone)]
 pub enum Operator {
-    S(Single),
-    B(Binary),
+    Add,
+    Minus,
+    Multiply,
+    Gt,
+    Index,
+    Explode
 }
 
 impl Operator {
-    pub(crate) fn compile(&self) -> Op {
+    pub(crate) fn sql(&self, expressions: Vec<Expression>) -> String {
         match self {
-            S(s) => s.compile(),
-            B(b) => b.compile()
+            Operator::Add => format!("{} + {}", expressions[0].sql(), expressions[1].sql()),
+            Operator::Minus => format!("{} - {}", expressions[0].sql(), expressions[1].sql()),
+            Operator::Multiply => format!("{} * {}", expressions[0].sql(), expressions[1].sql()),
+            Operator::Gt => format!("{} > {}", expressions[0].sql(), expressions[1].sql()),
+            Operator::Index => format!("{}[{}]", expressions[0].sql(), expressions[1].sql()),
+            Operator::Explode => format!("explode({})", expressions[0].sql()),
         }
     }
-
-    pub fn single(s: Single) -> Self {
-        S(s)
-    }
-
-    pub fn binary(binary: Binary) -> Self {
-        B(binary)
-    }
 }
 
-fn op_add(vm: &mut VM, _: usize) {
-    let b = vm.stack.pop().expect("Stack underflow");
-    let a = vm.stack.pop().expect("Stack underflow");
-
-    vm.stack.push(&a + &b);
-}
-
-fn op_sub(vm: &mut VM, _: usize) {
-    let b = vm.stack.pop().expect("Stack underflow");
-    let a = vm.stack.pop().expect("Stack underflow");
-
-    vm.stack.push(&a - &b);
-}
 
 fn op_index(vm: &mut VM, _: usize) {
     let index = vm.stack.pop().expect("Stack underflow").as_int().unwrap().0 as usize;
@@ -61,14 +48,38 @@ pub enum Binary {
     Add,
     Sub,
     Index,
+    Multiply,
 }
 
 impl Binary {
-    pub(crate) fn compile(&self) -> Op {
+    pub(crate) fn sql(&self, s0: Expression, s1: Expression) -> String {
+        let s0 = s0.sql();
+        let s1 = s1.sql();
+
         match self {
-            Binary::Add => op_add,
-            Binary::Sub => op_sub,
-            Binary::Index => op_index
+            Binary::Add => {
+                format!("{}+{}", s0, s1)
+            }
+            Binary::Sub => {
+                format!("{}-{}", s0, s1)
+            }
+            Binary::Index => {
+                format!("{}[{}]", s0, s1)
+            }
+            Binary::Multiply => {
+                format!("{}*{}", s0, s1)
+            }
+        }
+    }
+}
+
+impl From<&BinaryOperator> for Operator {
+    fn from(value: &BinaryOperator) -> Self {
+        match value {
+            BinaryOperator::Plus => Operator::Add,
+            BinaryOperator::Minus => Operator::Minus,
+            BinaryOperator::Multiply => Operator::Multiply,
+            _ => todo!("unsupported binary operator"),
         }
     }
 }
@@ -78,10 +89,11 @@ pub enum Single {
     Length,
 }
 
-impl Single {
-    pub(crate) fn compile(&self) -> Op {
+
+impl Sql for Single {
+    fn sql(&self) -> String {
         match self {
-            Single::Length => op_len
+            Single::Length => String::from("LENGTH"),
         }
     }
 }
