@@ -17,7 +17,7 @@ pub enum Operator {
     Multiply,
     Gt,
     Index,
-    Explode,
+    Explode
 }
 
 impl Operator {
@@ -39,7 +39,7 @@ impl Operator {
             Operator::Multiply => Scope::Tuple,
             Operator::Gt => Scope::Tuple,
             Operator::Index => Scope::Tuple,
-            Operator::Explode => Scope::Multi,
+            Operator::Explode => Scope::Tuple
         }
     }
 }

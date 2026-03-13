@@ -1,9 +1,38 @@
-use crate::algebra::{Algebra, Op};
-use crate::expression::{Call, Expression};
+use crate::algebra::{Algebra};
+use crate::expression::Expression;
 use crate::operator::Operator;
 use anyhow::anyhow;
 use std::collections::HashMap;
 use value::Value;
+
+#[derive(Clone, Debug)]
+pub enum Op {
+    // Scalar Ops
+    LoadField(usize), // load value from record
+    StoreField(usize),
+    PushConst(usize),
+    Add,
+    Greater,
+    Equal,
+    Index,
+    Minus,
+    Multiply,
+
+    // Explode
+    NextOrPop,
+    LoadExplodeElement,
+    InitExplode(usize),
+
+    // Ops (The Algebra)
+    NextTuple { resource_id: usize }, // holds the "raw" data so that multiple different expressions (filters, math, etc.) can all look at the same row simultaneously without fighting over the stack.
+    JumpIfFalse { target: usize },    // jump if top is false
+    Jump { target: usize },
+
+    // The "Materialize" Op
+    // arg = how many items to pop from stack to form the result row
+    Yield(usize),
+}
+
 
 pub struct ExplodeState {
     pub array: Vec<Value>,
@@ -30,6 +59,7 @@ impl From<Expression> for Program {
     fn from(expression: Expression) -> Self {
         let mut compiler = Compiler::new();
         let mut instructions = vec![];
+
         compiler.compile_expr(&expression.clone(), &mut instructions);
 
         instructions.push(Op::Yield(1));
@@ -42,7 +72,18 @@ impl From<Algebra> for Program {
     fn from(algebra: Algebra) -> Self {
         let mut compiler = Compiler::new();
         let mut instructions = vec![];
-        compiler.compile_algebra(&algebra, &mut instructions);
+        let mut ends = vec![];
+
+        let mut tuples = 1;
+        compiler.compile_algebra(&algebra, &mut tuples, &mut instructions, &mut ends);
+        instructions.push(Op::Yield(tuples));
+
+        let mut instructions = [instructions, ends].concat();
+
+        // we go back to the iterator
+        if let Some(parent_pc) = compiler.loop_stack.last() {
+            instructions.push(Op::Jump { target: *parent_pc });
+        }
 
         Self::new(compiler, instructions)
     }
@@ -216,6 +257,10 @@ impl Iterator for Program {
                         });
                     }
                 }
+                Op::StoreField(idx) => {
+                    let value = self.vm.stack.last().unwrap();
+                    self.vm.current_record[*idx] = value.clone()
+                }
             }
             self.vm.pc += 1;
         }
@@ -244,122 +289,126 @@ impl Compiler {
 
     pub fn compile_expr(&mut self, expr: &Expression, out: &mut Vec<Op>) {
         match expr {
-            Expression::L(lit) => {
+            Expression::Literal(value) => {
                 let idx = self.constants.len();
-                self.constants.push(lit.value.clone());
+                self.constants.push(value.clone());
                 out.push(Op::PushConst(idx));
             }
-            Expression::F(field) => {
-                let op = self.compile_field(&field.name);
+            Expression::Field(name) => {
+                let op = self.compile_field(name);
                 out.push(op);
             }
-            Expression::C(call) => {
-                for e in &call.expressions {
+            Expression::Call {
+                operator,
+                expressions,
+            } => {
+                for e in expressions {
                     self.compile_expr(e, out);
                 }
                 // Map your operators to the enum
-                match call.operator {
-                    Operator::Add => out.push(Op::Add),
-                    Operator::Gt => out.push(Op::Greater),
-                    Operator::Index => out.push(Op::Index),
-                    Operator::Minus => out.push(Op::Minus),
-                    Operator::Multiply => out.push(Op::Multiply),
-                    Operator::Explode => out.push(Op::InitExplode(0)),
-                }
+                out.push(Self::compile_op(operator))
             }
         }
     }
 
-    pub fn compile_algebra(&mut self, algebra: &Algebra, out: &mut Vec<Op>) {
+    pub fn compile_op(op: &Operator) -> Op {
+        match op {
+            Operator::Add => Op::Add,
+            Operator::Gt => Op::Greater,
+            Operator::Index => Op::Index,
+            Operator::Minus => Op::Minus,
+            Operator::Multiply => Op::Multiply,
+            Operator::Explode => Op::InitExplode(0),
+        }
+    }
+
+    pub fn compile_algebra(
+        &mut self,
+        algebra: &Algebra,
+        tuples: &mut usize,
+        ops: &mut Vec<Op>,
+        ends: &mut Vec<Op>,
+    ) {
         match algebra {
-            Algebra::S(s) => {
-                let start_pc = out.len();
+            Algebra::Scan{source} => {
+                let start_pc = ops.len();
 
                 let slot = self.resource_map.len();
                 let slot = *self
                     .resource_map
-                    .entry(s.resource.to_string())
+                    .entry(source.to_string())
                     .or_insert_with(|| slot);
 
-                out.push(Op::NextTuple { resource_id: slot }); // Start the loop
+                ops.push(Op::NextTuple { resource_id: slot }); // Start the loop
                 self.loop_stack.push(start_pc);
             }
             Algebra::F(filter) => {
                 // 1. First, compile the source (Scan)
-                self.compile_algebra(&filter.input, out);
+                self.compile_algebra(&filter.input, tuples, ops, ends);
 
                 // 2. Compile the condition (e.g., x > 10)
-                self.compile_expr(&filter.predicate, out);
+                self.compile_expr(&filter.predicate, ops);
 
                 // 3. Jump to the start if condition is false (skips Yield)
                 let start_pc = *self.loop_stack.last().unwrap();
-                out.push(Op::JumpIfFalse { target: start_pc });
+                ops.push(Op::JumpIfFalse { target: start_pc });
             }
             Algebra::P(project) => {
                 // 1. Compile input (e.g., Scan)
-                self.compile_algebra(&project.input, out);
+                self.compile_algebra(&project.input, tuples, ops, ends);
 
-                // 2. Identify the explode
-                let explode_idx = project.expressions.iter().position(|e| {
-                    if let Expression::C(Call { operator, .. }) = e {
-                        matches!(operator, Operator::Explode)
-                    } else {
-                        false
-                    }
-                });
-
-                if let Some(idx) = explode_idx {
-                    // --- LOOP SETUP ---
-                    // A. Push "stable" fields (before the explode) to the stack
-                    for i in 0..idx {
-                        self.compile_expr(&project.expressions[i], out);
-                    }
-
-                    // B. Compile the array expression
-                    if let Expression::C(c) = &project.expressions[idx] {
-                        self.compile_expr(&c.expressions[0], out);
-                    }
-
-                    // C. Instruction to move the array from Stack -> VM.explode_stack
-                    let loop_start_pc = out.len();
-                    out.push(Op::InitExplode(loop_start_pc + 1));
-
-                    // --- LOOP BODY ---
-                    // D. Load current element of the latest explode onto the stack
-                    out.push(Op::LoadExplodeElement);
-
-                    // E. Compile "suffix" fields (after the explode)
-                    for i in (idx + 1)..project.expressions.len() {
-                        self.compile_expr(&project.expressions[i], out);
-                    }
-
-                    // F. Yield the row
-                    out.push(Op::Yield(project.expressions.len()));
-
-                    // G. Advance the explode loop
-                    // If has next: jumps to loop_start_pc + 1 (LoadExplodeElement)
-                    // If done: pops explode_stack and continues to next instruction
-                    out.push(Op::NextOrPop);
-
-                    // H. After the explode is totally done, we need to loop the SCAN
-                    let scan_pc = *self.loop_stack.first().unwrap();
-                    out.push(Op::Jump { target: scan_pc });
-                } else {
-                    // --- STANDARD PROJECTION ---
-                    for expr in &project.expressions {
-                        self.compile_expr(expr, out);
-                    }
-                    out.push(Op::Yield(project.expressions.len()));
-                    let jump_target = *self.loop_stack.last().unwrap();
-                    out.push(Op::Jump {
-                        target: jump_target,
-                    });
+                for (_, expr) in &project.expressions {
+                    self.compile_expr(expr, ops);
                 }
+
+                *tuples = project.expressions.len();
+                /*let jump_target = *self.loop_stack.last().unwrap();
+                ops.push(Op::Jump {
+                    target: jump_target,
+                });*/
             }
             Algebra::T(_) => {
                 panic!("T algebra not yet implemented");
             }
-            Algebra::C(_) | Algebra::U(_) => todo!(),
+            Algebra::U(unwind) => {
+                self.compile_algebra(&unwind.input, tuples, ops, ends);
+                // --- LOOP SETUP ---
+
+                ops.push(self.compile_field(&unwind.key));
+
+                // C. Instruction to move the array from Stack -> VM.explode_stack
+                let loop_start_pc = ops.len() + 1;
+
+                ops.push(match unwind.func {
+                    Operator::Explode => Op::InitExplode(loop_start_pc),
+                    _ => panic!("Unwind algebra not yet implemented"),
+                });
+
+                self.loop_stack.push(loop_start_pc);
+
+                // --- LOOP BODY ---
+                // D. Load current element of the latest explode onto the stack
+                ops.push(Op::LoadExplodeElement);
+
+                // F. Yield the row
+                //ops.push(Op::Yield(tuples.clone()));
+
+                let idx = self.field_map.get(&unwind.key).unwrap();
+                ops.push(Op::StoreField(idx.clone()));
+
+                // G. Advance the explode loop
+                // If has next: jumps to loop_start_pc + 1 (LoadExplodeElement)
+                // If done: pops explode_stack and continues to next instruction
+                ends.push(Op::NextOrPop);
+
+                self.loop_stack.pop(); // Done with this level
+
+                // 5. Jump back to the PARENT loop (the Scan or the outer Unwind)
+                /*if let Some(parent_pc) = self.loop_stack.last() {
+                    ops.push(Op::Jump { target: *parent_pc });
+                }*/
+            }
+            Algebra::C(_) => todo!(),
         }
     }
 
@@ -377,24 +426,18 @@ impl Compiler {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::expression::{Call, Field, Literal};
     use crate::operator::Operator;
 
     #[test]
     fn test_vm_execution_add() {
         // Simulate: price + 10
-        let expr = Expression::C(Call {
+        let expr = Expression::Call {
             operator: Operator::Add,
             expressions: vec![
-                Expression::F(Field {
-                    name: "price".into(),
-                    f_type: None,
-                }),
-                Expression::L(Literal {
-                    value: Value::int(10),
-                }),
+                Expression::Field("price".to_string()),
+                Expression::Literal(Value::int(10)),
             ],
-        });
+        };
 
         let mut program = Program::from(expr);
         program.set_record("price", Value::int(100)).unwrap();
@@ -405,15 +448,11 @@ mod test {
     #[test]
     fn test_vm_execution_explode() {
         // Simulate: explode
-        let expr = Expression::C(Call {
-            operator: Operator::Explode,
-            expressions: vec![Expression::F(Field {
-                name: "name".into(),
-                f_type: None,
-            })],
-        });
-
-        let mut program = Program::from(Algebra::project(Algebra::scan("test"), expr));
+        let mut program = Program::from(Algebra::unwind(
+            Algebra::scan("test"),
+            "name",
+            Operator::Explode,
+        ));
 
         program
             .set_resource("test", [Value::text("David")].into_iter())
@@ -427,37 +466,53 @@ mod test {
     }
 
     #[test]
+    fn test_vm_execution_explode_nested() {
+        // Simulate: explode
+        let mut program = Program::from(Algebra::project(
+            Algebra::unwind(Algebra::scan("test"), "name", Operator::Explode),
+            "name",
+            Expression::Call {
+                operator: Operator::Add,
+                expressions: vec![
+                    Expression::Field("name".to_string()),
+                    Expression::Literal(Value::text("test")),
+                ],
+            },
+        ));
+
+        program
+            .set_resource("test", [Value::text("David")].into_iter())
+            .unwrap();
+
+        assert_eq!(program.next().unwrap(), Value::text("Dtest"));
+        assert_eq!(program.next().unwrap(), Value::text("atest"));
+        assert_eq!(program.next().unwrap(), Value::text("vtest"));
+        assert_eq!(program.next().unwrap(), Value::text("itest"));
+        assert_eq!(program.next().unwrap(), Value::text("dtest"));
+    }
+
+    #[test]
     fn test_vm_execution_array() {
         // Simulate: array[0] + array[1]
-        let expr = Expression::C(Call {
+        let expr = Expression::Call {
             operator: Operator::Add,
             expressions: vec![
-                Expression::C(Call {
+                Expression::Call {
                     operator: Operator::Index,
                     expressions: vec![
-                        Expression::F(Field {
-                            name: "array".into(),
-                            f_type: None,
-                        }),
-                        Expression::L(Literal {
-                            value: Value::int(0),
-                        }),
+                        Expression::Field("array".to_string()),
+                        Expression::Literal(Value::int(0)),
                     ],
-                }),
-                Expression::C(Call {
+                },
+                Expression::Call {
                     operator: Operator::Index,
                     expressions: vec![
-                        Expression::F(Field {
-                            name: "array".into(),
-                            f_type: None,
-                        }),
-                        Expression::L(Literal {
-                            value: Value::int(1),
-                        }),
+                        Expression::Field("array".to_string()),
+                        Expression::Literal(Value::int(1)),
                     ],
-                }),
+                },
             ],
-        });
+        };
 
         let mut program = Program::from(expr);
         program.set_record("array", Value::text("text")).unwrap();

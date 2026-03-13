@@ -2,36 +2,12 @@ use crate::expression::Expression;
 use crate::language::Sql;
 use sqlparser::dialect::Dialect;
 use std::cmp;
+use std::collections::HashMap;
+use crate::operator::Operator;
 
-#[derive(Clone, Debug)]
-pub enum Op {
-    // Scalar Ops
-    LoadField(usize), // load value from record
-    PushConst(usize),
-    Add,
-    Greater,
-    Equal,
-    Index,
-    Minus,
-    Multiply,
-
-    // Explode
-    NextOrPop,
-    LoadExplodeElement,
-    InitExplode(usize),
-
-    // Ops (The Algebra)
-    NextTuple { resource_id: usize }, // holds the "raw" data so that multiple different expressions (filters, math, etc.) can all look at the same row simultaneously without fighting over the stack.
-    JumpIfFalse { target: usize },    // jump if top is false
-    Jump { target: usize },
-
-    // The "Materialize" Op
-    // arg = how many items to pop from stack to form the result row
-    Yield(usize),
-}
 
 pub enum Algebra {
-    S(Scan),
+    Scan{source: String},
     P(Project),
     F(Filter),
     C(Collect),
@@ -47,27 +23,35 @@ pub enum Scope {
 }
 
 impl Algebra {
-    pub(crate) fn project(child: Algebra, expression: Expression) -> Self {
+    pub(crate) fn project<S: AsRef<str>>(child: Algebra, key: S, expression: Expression) -> Self {
         Algebra::P(Project {
-            expressions: vec![expression],
+            expressions: HashMap::from([(key.as_ref().to_string(), expression)]),
             input: Box::new(child),
         })
     }
 
     pub(crate) fn scan<S: AsRef<str>>(resource: S) -> Self {
-        Algebra::S(Scan {
-            resource: resource.as_ref().to_string(),
+        Algebra::Scan {
+            source: resource.as_ref().to_string(),
+        }
+    }
+
+    pub(crate) fn unwind<S: AsRef<str>>(child: Algebra, key: S, func: Operator) -> Self {
+        Algebra::U(Unwind{
+            input: Box::new(child),
+            key: key.as_ref().to_string(),
+            func,
         })
     }
 
     pub(crate) fn scope(&self) -> Scope {
         match self {
-            Algebra::S(s) => Scope::Tuple,
+            Algebra::Scan{..} => Scope::Tuple,
             Algebra::P(p) => cmp::max(
                 p.input.scope(),
                 p.expressions
                     .iter()
-                    .map(|e| e.scope())
+                    .map(|(_,e)| e.scope())
                     .fold(Scope::Tuple, |a, b| cmp::max(a, b)),
             ),
             Algebra::F(f) => cmp::max(f.input.scope(), f.predicate.scope()),
@@ -81,7 +65,7 @@ impl Algebra {
 impl Sql for Algebra {
     fn sql(&self) -> String {
         match self {
-            Algebra::S(s) => s.sql(),
+            Algebra::Scan{source} => format!("FROM {}", source),
             Algebra::P(p) => p.sql(),
             Algebra::F(f) => f.sql(),
             Algebra::T(_) => panic!(),
@@ -91,22 +75,19 @@ impl Sql for Algebra {
     }
 }
 
-pub struct Collect {}
-
-pub struct Unwind {}
-
-pub struct Scan {
-    pub resource: String,
+pub struct Collect {
+    input: Box<Algebra>,
 }
 
-impl Sql for Scan {
-    fn sql(&self) -> String {
-        format!("FROM {}", self.resource)
-    }
+pub struct Unwind {
+    pub(crate) input: Box<Algebra>,
+    pub(crate) key: String,
+    pub(crate) func: Operator
 }
+
 
 pub struct Project {
-    pub expressions: Vec<Expression>,
+    pub expressions: HashMap<String, Expression>,
     pub input: Box<Algebra>,
 }
 
@@ -116,7 +97,7 @@ impl Sql for Project {
             "SELECT {}",
             self.expressions
                 .iter()
-                .map(|e| e.sql())
+                .map(|(n, e)| e.sql())
                 .collect::<Vec<_>>()
                 .join(", ")
         );

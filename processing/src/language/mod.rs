@@ -1,8 +1,9 @@
-use crate::algebra::Algebra::{P, S};
-use crate::algebra::{Algebra, Project, Scan};
+use crate::algebra::Algebra::P;
+use crate::algebra::{Algebra, Project};
 use crate::expression::Expression;
 use sqlparser::ast::{Select, SetExpr, Statement, TableFactor};
 use sqlparser::dialect::Dialect;
+use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct StreamDialect {}
@@ -39,13 +40,13 @@ pub fn parse_alg(statements: Vec<Statement>) -> Algebra {
         match statement {
             Statement::Query(q) => {
                 if let SetExpr::Select(s) = *q.body {
-                    let mut expressions = vec![];
+                    let mut expressions = HashMap::new();
 
-                    for item in &s.projection {
-                        expressions.push(Expression::from(item));
+                    for (k, item) in s.projection.iter().enumerate() {
+                        expressions.insert(format!("field{}", k), Expression::from(item));
                     }
 
-                    let scan = S(handle_scan(&s));
+                    let scan = handle_scan(&s);
 
                     return P(Project {
                         expressions,
@@ -59,11 +60,11 @@ pub fn parse_alg(statements: Vec<Statement>) -> Algebra {
     panic!("No answer")
 }
 
-fn handle_scan(s: &Box<Select>) -> Scan {
+fn handle_scan(s: &Box<Select>) -> Algebra {
     if s.from.len() == 1 {
         if let TableFactor::Table { name, .. } = &s.from[0].relation {
-            return Scan {
-                resource: name.to_string(),
+            return Algebra::Scan {
+                source: name.to_string(),
             };
         }
         todo!()
