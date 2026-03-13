@@ -1,7 +1,8 @@
 use serde::Deserialize;
 use std::collections::HashMap;
 use util::definition::{DefinitionFilter, Model};
-use util::{NativeMapping, Query};
+use util::{NativeMapping};
+use util::query::Query;
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
@@ -111,7 +112,7 @@ mod tests {
         mapping.relational = [
             {name = "TEXT"}, {age = "INT"}
         ]
-        processing = "None""#;
+        processing.sql = "None""#;
 
         let config: Config = toml::from_str(&mapping).unwrap();
     }

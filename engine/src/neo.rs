@@ -385,6 +385,7 @@ mod tests {
     use std::vec;
     use util::definition::{Definition, DefinitionFilter, Model, Stage};
     use util::{NativeMapping, PartitionId, TargetedMeta, batch, target};
+    use util::query::Query;
     use value::Value;
 
     //#[tokio::test]
@@ -398,7 +399,7 @@ mod tests {
             "test",
             DefinitionFilter::AllMatch,
             NativeMapping::doc_to_graph(),
-            util::Query::Cypher("None".to_string()),
+            Query::Cypher("None".to_string()),
             Model::Document,
             "users".to_string(),
         )
@@ -450,7 +451,7 @@ mod tests {
             "test",
             DefinitionFilter::AllMatch,
             NativeMapping::doc_to_graph(),
-            util::Query::Cypher("None".to_string()),
+            Query::Cypher("None".to_string()),
             Model::Document,
             "users".to_string(),
         )

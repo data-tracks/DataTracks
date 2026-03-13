@@ -1,13 +1,14 @@
 use crate::expression::Expression;
-use crate::language::Sql;
+use crate::language::{parse_alg, Sql, StreamDialect};
+use crate::operator::Operator;
+use sqlparser::ast::Query;
 use sqlparser::dialect::Dialect;
 use std::cmp;
 use std::collections::HashMap;
-use crate::operator::Operator;
-
+use sqlparser::parser::Parser;
 
 pub enum Algebra {
-    Scan{source: String},
+    Scan { source: String },
     P(Project),
     F(Filter),
     C(Collect),
@@ -37,7 +38,7 @@ impl Algebra {
     }
 
     pub(crate) fn unwind<S: AsRef<str>>(child: Algebra, key: S, func: Operator) -> Self {
-        Algebra::U(Unwind{
+        Algebra::U(Unwind {
             input: Box::new(child),
             key: key.as_ref().to_string(),
             func,
@@ -46,12 +47,12 @@ impl Algebra {
 
     pub(crate) fn scope(&self) -> Scope {
         match self {
-            Algebra::Scan{..} => Scope::Tuple,
+            Algebra::Scan { .. } => Scope::Tuple,
             Algebra::P(p) => cmp::max(
                 p.input.scope(),
                 p.expressions
                     .iter()
-                    .map(|(_,e)| e.scope())
+                    .map(|(_, e)| e.scope())
                     .fold(Scope::Tuple, |a, b| cmp::max(a, b)),
             ),
             Algebra::F(f) => cmp::max(f.input.scope(), f.predicate.scope()),
@@ -62,10 +63,26 @@ impl Algebra {
     }
 }
 
+impl From<util::query::Query> for Algebra {
+    fn from(value: util::query::Query) -> Self {
+        match value {
+            util::query::Query::SQL(s) => {
+                let dialect = StreamDialect {};
+
+                let ast = Parser::parse_sql(&dialect, &s).unwrap();
+
+                parse_alg(ast)
+            }
+            util::query::Query::MQL(m) => Algebra::T(m.clone()),
+            util::query::Query::Cypher(c) => Algebra::T(c.clone()),
+        }
+    }
+}
+
 impl Sql for Algebra {
     fn sql(&self) -> String {
         match self {
-            Algebra::Scan{source} => format!("FROM {}", source),
+            Algebra::Scan { source } => format!("FROM {}", source),
             Algebra::P(p) => p.sql(),
             Algebra::F(f) => f.sql(),
             Algebra::T(_) => panic!(),
@@ -82,9 +99,8 @@ pub struct Collect {
 pub struct Unwind {
     pub(crate) input: Box<Algebra>,
     pub(crate) key: String,
-    pub(crate) func: Operator
+    pub(crate) func: Operator,
 }
-
 
 pub struct Project {
     pub expressions: HashMap<String, Expression>,
@@ -119,7 +135,7 @@ impl Sql for Filter {
 
 #[cfg(test)]
 mod test {
-    use crate::language::{Sql, StreamDialect, parse_alg};
+    use crate::language::{parse_alg, Sql, StreamDialect};
     use sqlparser::parser::Parser;
 
     #[test]
@@ -146,11 +162,11 @@ mod test {
     fn nexmark_q1_mongodb() {
         let q1_mql = "db.$source.aggregate([ $$project: {auction: 1, price: {$multiply: [\"$price\", 1.1]}, bidder, datetime}])";
 
-        let dialect = StreamDialect {};
+        //let dialect = StreamDialect {};
 
-        let ast = Parser::parse_sql(&dialect, q1_mql).unwrap();
+        //let ast = Parser::parse_sql(&dialect, q1_mql).unwrap();
 
-        println!("{:?}", ast);
+        //println!("{:?}", ast);
     }
 
     #[test]

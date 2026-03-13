@@ -3,3 +3,6 @@ mod expression;
 mod program;
 mod operator;
 mod language;
+
+pub use algebra::*;
+

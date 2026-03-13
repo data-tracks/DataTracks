@@ -1,17 +1,14 @@
 use crate::definition::DefinitionFilter::AllMatch;
 use crate::mappings::NativeMapping;
 use crate::partition::PartitionInfo;
-use crate::query::Query;
-use crate::{
-    Batch, DefinitionId, EntityId, PartitionId, TargetedRecord, TimedMeta, ValueProducer,
-    log_channel,
-};
+use crate::{Batch, DefinitionId, EntityId, PartitionId, TargetedRecord, TimedMeta, ValueProducer, log_channel};
 use flume::{Receiver, Sender, unbounded};
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 use std::sync::atomic::{AtomicU64, Ordering};
 use value::Value;
 use value::Value::Dict;
+use crate::query::Query;
 
 static ID_BUILDER: AtomicU64 = AtomicU64::new(0);
 

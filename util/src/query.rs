@@ -9,3 +9,4 @@ pub enum Query {
     #[serde(alias = "cypher")]
     Cypher(String),
 }
+

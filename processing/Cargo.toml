@@ -11,3 +11,5 @@ description.workspace = true
 value = { workspace = true }
 anyhow = { workspace = true }
 sqlparser = "0.61.0"
+serde = { workspace = true }
+util = { workspace = true }
