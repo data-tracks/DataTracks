@@ -5,7 +5,7 @@ use anyhow::anyhow;
 use std::collections::HashMap;
 use value::Value;
 
-pub struct ExplodeState{
+pub struct ExplodeState {
     pub array: Vec<Value>,
     pub index: usize,
     pub loop_pc: usize, // Where to jump back to for the next element
@@ -16,40 +16,68 @@ pub struct VM {
     current_record: Vec<Value>,
     constants: Vec<Value>, // The "Pool" for literals
     pub pc: usize,         // Program Counter
-    pub cursor: usize,     // Data Cursor
     explode_stack: Vec<ExplodeState>,
+    pub resources: Vec<Box<dyn Iterator<Item = Value>>>,
 }
 
 pub struct Program {
     instructions: Vec<Op>,
-    expression: Expression,
     compiler: Compiler,
     vm: VM,
 }
 
-impl Program {
-    pub fn new(expression: Expression) -> Program {
+impl From<Expression> for Program {
+    fn from(expression: Expression) -> Self {
         let mut compiler = Compiler::new();
         let mut instructions = vec![];
         compiler.compile_expr(&expression.clone(), &mut instructions);
 
         instructions.push(Op::Yield(1));
 
+        Self::new(compiler, instructions)
+    }
+}
+
+impl From<Algebra> for Program {
+    fn from(algebra: Algebra) -> Self {
+        let mut compiler = Compiler::new();
+        let mut instructions = vec![];
+        compiler.compile_algebra(&algebra, &mut instructions);
+
+        Self::new(compiler, instructions)
+    }
+}
+
+impl Program {
+    pub fn new(compiler: Compiler, instructions: Vec<Op>) -> Program {
         let vm = VM {
             stack: Vec::with_capacity(16),
+            resources: vec![],
             current_record: vec![],
             constants: compiler.constants.clone(),
             pc: 0,
-            cursor: 0,
             explode_stack: vec![],
         };
 
         Self {
             instructions,
-            expression,
             compiler,
             vm,
         }
+    }
+
+    pub(crate) fn set_resource<S: AsRef<str>>(
+        &mut self,
+        name: S,
+        iter: impl Iterator<Item = Value> + 'static,
+    ) -> anyhow::Result<()> {
+        let index = self
+            .compiler
+            .resource_map
+            .get(name.as_ref())
+            .ok_or(anyhow!("No named resource in compiler"))?;
+        self.vm.resources.insert(*index, Box::new(iter));
+        Ok(())
     }
 
     pub(crate) fn set_record(&mut self, name: &str, value: Value) -> anyhow::Result<()> {
@@ -63,7 +91,7 @@ impl Program {
     }
 }
 
-impl<'a> Iterator for Program {
+impl Iterator for Program {
     type Item = Value;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -100,14 +128,20 @@ impl<'a> Iterator for Program {
                         row.pop()
                     } else {
                         Some(Value::array(row))
-                    }
+                    };
                 }
                 Op::Equal => {
                     let r = self.vm.stack.pop().unwrap();
                     let l = self.vm.stack.pop().unwrap();
                     self.vm.stack.push(&l + &r);
                 }
-                Op::NextRow { .. } => {}
+                Op::NextTuple { resource_id } => {
+                    if let Some(resource) = self.vm.resources.get_mut(*resource_id)
+                        && let Some(value) = resource.next()
+                    {
+                        self.vm.current_record.push(value)
+                    }
+                }
                 Op::Jump { target } => {
                     self.vm.pc = *target;
                     continue; // Skip the standard pc += 1
@@ -115,7 +149,7 @@ impl<'a> Iterator for Program {
                 Op::Greater => {
                     let r = self.vm.stack.pop().unwrap();
                     let l = self.vm.stack.pop().unwrap();
-                    self.vm.stack.push(Value::bool(&l > &r));
+                    self.vm.stack.push(Value::bool(l > r));
                 }
 
                 Op::Index => {
@@ -144,16 +178,8 @@ impl<'a> Iterator for Program {
                     let l = self.vm.stack.pop().unwrap();
                     self.vm.stack.push(&l * &r);
                 }
-                Op::Explode => {
-                    let v = self.vm.stack.pop().unwrap();
-                    if let Value::Text(mut t) = v {
-                        while let Some(c) = t.0.pop() {
-                            self.vm.stack.push(Value::text(&format!("{}",c)));
-                        }
-                    }
-                }
                 Op::NextOrPop => {
-                    if let Some(mut state) = self.vm.explode_stack.last_mut() {
+                    if let Some(state) = self.vm.explode_stack.last_mut() {
                         state.index += 1;
                         if state.index < state.array.len() {
                             // Keep looping this array
@@ -178,6 +204,16 @@ impl<'a> Iterator for Program {
                             index: 0,
                             loop_pc: *start_pc,
                         });
+                    } else if let Value::Text(text) = array_val {
+                        self.vm.explode_stack.push(ExplodeState {
+                            array: text
+                                .0
+                                .chars()
+                                .map(|c| Value::text(&c.to_string()))
+                                .collect(),
+                            index: 0,
+                            loop_pc: *start_pc,
+                        });
                     }
                 }
             }
@@ -189,6 +225,7 @@ impl<'a> Iterator for Program {
 
 pub struct Compiler {
     pub field_map: HashMap<String, usize>,
+    pub resource_map: HashMap<String, usize>,
     pub constants: Vec<Value>,
     pub next_slot: usize,
     pub loop_stack: Vec<usize>,
@@ -198,6 +235,7 @@ impl Compiler {
     pub fn new() -> Self {
         Self {
             field_map: HashMap::new(),
+            resource_map: HashMap::new(),
             constants: Vec::new(),
             loop_stack: Vec::new(),
             next_slot: 0,
@@ -226,7 +264,7 @@ impl Compiler {
                     Operator::Index => out.push(Op::Index),
                     Operator::Minus => out.push(Op::Minus),
                     Operator::Multiply => out.push(Op::Multiply),
-                    Operator::Explode => out.push(Op::Explode),
+                    Operator::Explode => out.push(Op::InitExplode(0)),
                 }
             }
         }
@@ -234,9 +272,16 @@ impl Compiler {
 
     pub fn compile_algebra(&mut self, algebra: &Algebra, out: &mut Vec<Op>) {
         match algebra {
-            Algebra::S(scan) => {
+            Algebra::S(s) => {
                 let start_pc = out.len();
-                out.push(Op::NextRow { table_id: 0 }); // Start the loop
+
+                let slot = self.resource_map.len();
+                let slot = *self
+                    .resource_map
+                    .entry(s.resource.to_string())
+                    .or_insert_with(|| slot);
+
+                out.push(Op::NextTuple { resource_id: slot }); // Start the loop
                 self.loop_stack.push(start_pc);
             }
             Algebra::F(filter) => {
@@ -256,7 +301,7 @@ impl Compiler {
 
                 // 2. Identify the explode
                 let explode_idx = project.expressions.iter().position(|e| {
-                    return if let Expression::C(Call { operator, .. }) = e {
+                    if let Expression::C(Call { operator, .. }) = e {
                         matches!(operator, Operator::Explode)
                     } else {
                         false
@@ -272,12 +317,12 @@ impl Compiler {
 
                     // B. Compile the array expression
                     if let Expression::C(c) = &project.expressions[idx] {
-                        self.compile_expr(&project.expressions[idx], out);
+                        self.compile_expr(&c.expressions[0], out);
                     }
 
                     // C. Instruction to move the array from Stack -> VM.explode_stack
                     let loop_start_pc = out.len();
-                    out.push(Op::InitExplode(loop_start_pc));
+                    out.push(Op::InitExplode(loop_start_pc + 1));
 
                     // --- LOOP BODY ---
                     // D. Load current element of the latest explode onto the stack
@@ -298,20 +343,23 @@ impl Compiler {
 
                     // H. After the explode is totally done, we need to loop the SCAN
                     let scan_pc = *self.loop_stack.first().unwrap();
-                    out.push(Op::Jump{target: scan_pc});
-                }else {
+                    out.push(Op::Jump { target: scan_pc });
+                } else {
                     // --- STANDARD PROJECTION ---
                     for expr in &project.expressions {
                         self.compile_expr(expr, out);
                     }
                     out.push(Op::Yield(project.expressions.len()));
                     let jump_target = *self.loop_stack.last().unwrap();
-                    out.push(Op::Jump{target: jump_target});
+                    out.push(Op::Jump {
+                        target: jump_target,
+                    });
                 }
             }
             Algebra::T(_) => {
                 panic!("T algebra not yet implemented");
             }
+            Algebra::C(_) | Algebra::U(_) => todo!(),
         }
     }
 
@@ -324,26 +372,6 @@ impl Compiler {
 
         Op::LoadField(slot)
     }
-
-    fn load_field(&mut self, name: &str) -> Op {
-        let slot = *self.field_map.entry(name.to_string()).or_insert_with(|| {
-            let id = self.next_slot;
-            self.next_slot += 1;
-            id
-        });
-
-        Op::LoadField(slot)
-    }
-}
-
-fn op_push_const(vm: &mut VM, idx: usize) {
-    let val = vm.constants[idx].clone();
-    vm.stack.push(val);
-}
-
-fn op_load_field(vm: &mut VM, idx: usize) {
-    let val = vm.current_record[idx].clone();
-    vm.stack.push(val);
 }
 
 #[cfg(test)]
@@ -368,34 +396,34 @@ mod test {
             ],
         });
 
-        let mut program = Program::new(expr);
+        let mut program = Program::from(expr);
         program.set_record("price", Value::int(100)).unwrap();
 
-        assert_eq!(program.into_iter().next().unwrap(), Value::int(110));
+        assert_eq!(program.next().unwrap(), Value::int(110));
     }
 
     #[test]
     fn test_vm_execution_explode() {
-        // Simulate: price + 10
+        // Simulate: explode
         let expr = Expression::C(Call {
             operator: Operator::Explode,
-            expressions: vec![
-                Expression::F(Field {
-                    name: "name".into(),
-                    f_type: None,
-                }),
-            ],
+            expressions: vec![Expression::F(Field {
+                name: "name".into(),
+                f_type: None,
+            })],
         });
 
-        let mut program = Program::new(expr);
-        program.set_record("name", Value::text("David")).unwrap();
+        let mut program = Program::from(Algebra::project(Algebra::scan("test"), expr));
 
-        let mut iter = program.into_iter();
-        assert_eq!(iter.next().unwrap(), Value::text("D"));
-        assert_eq!(iter.next().unwrap(), Value::text("a"));
-        assert_eq!(iter.next().unwrap(), Value::text("v"));
-        assert_eq!(iter.next().unwrap(), Value::text("i"));
-        assert_eq!(iter.next().unwrap(), Value::text("d"));
+        program
+            .set_resource("test", [Value::text("David")].into_iter())
+            .unwrap();
+
+        assert_eq!(program.next().unwrap(), Value::text("D"));
+        assert_eq!(program.next().unwrap(), Value::text("a"));
+        assert_eq!(program.next().unwrap(), Value::text("v"));
+        assert_eq!(program.next().unwrap(), Value::text("i"));
+        assert_eq!(program.next().unwrap(), Value::text("d"));
     }
 
     #[test]
@@ -431,9 +459,9 @@ mod test {
             ],
         });
 
-        let mut program = Program::new(expr);
+        let mut program = Program::from(expr);
         program.set_record("array", Value::text("text")).unwrap();
 
-        assert_eq!(program.into_iter().next().unwrap(), Value::text("te"));
+        assert_eq!(program.next().unwrap(), Value::text("te"));
     }
 }

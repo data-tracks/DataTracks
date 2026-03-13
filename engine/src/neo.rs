@@ -1,6 +1,7 @@
 use crate::engine::Load;
 use anyhow::{anyhow, bail};
 use flume::Sender;
+use mongodb::bson::uuid;
 use neo4rs::{ConfigBuilder, Graph, query};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use reqwest::Client;
@@ -11,13 +12,12 @@ use std::error::Error;
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use mongodb::bson::uuid;
 use tokio::time::{Instant, sleep};
 use tracing::{debug, info};
 use util::Event::EngineStatus;
 use util::container::Mapping;
 use util::definition::{Definition, Stage};
-use util::{Batch, NativeMapping, EngineId, Event, PartitionId, TargetedRecord, container};
+use util::{Batch, EngineId, Event, NativeMapping, PartitionId, TargetedRecord, container};
 use value::Value;
 
 pub struct Neo4j {
@@ -178,7 +178,6 @@ impl Neo4j {
             self.prepared_queries
                 .insert((Stage::Process, name.clone()), cypher_query);
         }
-
     }
 
     pub(crate) async fn stop(&self) -> anyhow::Result<()> {
@@ -399,7 +398,7 @@ mod tests {
             "test",
             DefinitionFilter::AllMatch,
             NativeMapping::doc_to_graph(),
-            "None".to_string(),
+            util::Query::Cypher("None".to_string()),
             Model::Document,
             "users".to_string(),
         )
@@ -451,7 +450,7 @@ mod tests {
             "test",
             DefinitionFilter::AllMatch,
             NativeMapping::doc_to_graph(),
-            "None".to_string(),
+            util::Query::Cypher("None".to_string()),
             Model::Document,
             "users".to_string(),
         )

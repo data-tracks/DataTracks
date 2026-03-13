@@ -6,6 +6,7 @@ pub mod id;
 mod mappings;
 mod meta;
 mod partition;
+mod query;
 pub mod queue;
 mod record;
 pub mod runtimes;
@@ -32,3 +33,4 @@ pub use record::*;
 
 pub use partition::*;
 
+pub use query::*;

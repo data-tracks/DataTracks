@@ -1,9 +1,3 @@
 [build]
 rustflags = ["--cfg", "tokio_unstable"] # unstable for tokio metrics
 
-
-[target.aarch64-apple-darwin]
-rustflags = [
-    "--cfg", "tokio_unstable",
-    "-C", "link-arg=-Wl,-ld_new"
-]

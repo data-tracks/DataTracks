@@ -1,8 +1,8 @@
+use crate::algebra::Algebra::{P, S};
+use crate::algebra::{Algebra, Project, Scan};
+use crate::expression::Expression;
 use sqlparser::ast::{Select, SetExpr, Statement, TableFactor};
 use sqlparser::dialect::Dialect;
-use crate::algebra::{Algebra, Project, Scan};
-use crate::algebra::Algebra::{P, S};
-use crate::expression::Expression;
 
 #[derive(Debug)]
 pub struct StreamDialect {}
@@ -22,7 +22,6 @@ impl Dialect for StreamDialect {
     }
 }
 
-
 pub trait Sql {
     fn sql(&self) -> String;
 }
@@ -31,12 +30,11 @@ pub trait Mql {
     fn mql(&self) -> String;
 }
 
-pub trait  Cypher {
+pub trait Cypher {
     fn cypher(&self) -> String;
 }
 
-
-pub fn parse_alg(statements: Vec<Statement> ) -> Algebra {
+pub fn parse_alg(statements: Vec<Statement>) -> Algebra {
     for statement in statements {
         match statement {
             Statement::Query(q) => {
@@ -49,7 +47,7 @@ pub fn parse_alg(statements: Vec<Statement> ) -> Algebra {
 
                     let scan = S(handle_scan(&s));
 
-                    return P(Project{
+                    return P(Project {
                         expressions,
                         input: Box::new(scan),
                     });
@@ -65,8 +63,8 @@ fn handle_scan(s: &Box<Select>) -> Scan {
     if s.from.len() == 1 {
         if let TableFactor::Table { name, .. } = &s.from[0].relation {
             return Scan {
-                entity: name.to_string(),
-            }
+                resource: name.to_string(),
+            };
         }
         todo!()
     } else {

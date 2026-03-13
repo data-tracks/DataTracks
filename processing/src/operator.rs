@@ -1,12 +1,13 @@
-use sqlparser::ast::BinaryOperator;
-use crate::program::VM;
-use value::Value;
+use crate::algebra::Scope;
 use crate::expression::Expression;
 use crate::language::Sql;
+use crate::program::VM;
+use sqlparser::ast::BinaryOperator;
+use value::Value;
 
 pub enum Step {
     Next, // IP + 1
-    Stay // We stay
+    Stay, // We stay
 }
 
 #[derive(Clone)]
@@ -16,7 +17,7 @@ pub enum Operator {
     Multiply,
     Gt,
     Index,
-    Explode
+    Explode,
 }
 
 impl Operator {
@@ -30,15 +31,25 @@ impl Operator {
             Operator::Explode => format!("explode({})", expressions[0].sql()),
         }
     }
-}
 
+    pub(crate) fn scope(&self) -> Scope {
+        match self {
+            Operator::Add => Scope::Tuple,
+            Operator::Minus => Scope::Tuple,
+            Operator::Multiply => Scope::Tuple,
+            Operator::Gt => Scope::Tuple,
+            Operator::Index => Scope::Tuple,
+            Operator::Explode => Scope::Multi,
+        }
+    }
+}
 
 fn op_index(vm: &mut VM, _: usize) {
     let index = vm.stack.pop().expect("Stack underflow").as_int().unwrap().0 as usize;
     let array = vm.stack.pop().expect("Stack underflow");
     if let Value::Array(a) = array {
         vm.stack.push(a.values[index].clone());
-    }else if let Value::Text(t) = array{
+    } else if let Value::Text(t) = array {
         vm.stack.push(Value::text(&t.0[index..index + 1]))
     }
 }
@@ -88,7 +99,6 @@ impl From<&BinaryOperator> for Operator {
 pub enum Single {
     Length,
 }
-
 
 impl Sql for Single {
     fn sql(&self) -> String {

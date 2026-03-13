@@ -6,7 +6,7 @@ filter.topic = "relational"
 mapping.relational = [
     { name = "TEXT" }, { age = "INT" }, { price = "FLOAT" }
 ]
-processing = "SELECT price + 3 FROM $$source" # INSERT INTO $target SELECT age + 3 FROM $source
+processing.sql = "SELECT price + 3 FROM $$source" # INSERT INTO $target SELECT age + 3 FROM $source
 # db.$.aggregate([$project: { age: ["$age", 3] }])
 # MATCH (n:$) CREATE (n {age:age + 3})
 
@@ -23,7 +23,7 @@ model = "document"
 entity = "document"
 filter.topic = "doc"
 mapping.document = "document"
-processing = "db.$.find({age: 1})"
+processing.todo = "db.$.find({age: 1})"
 # SELECT age FROM $source
 # MATCH (n:$) RETURN n.age
 
@@ -32,7 +32,7 @@ topic = "Graph test"
 model = "graph"
 entity = "graph"
 filter.topic = "graph"
-processing = "MATCH (n:$:Person) RETURN n.age"
+processing.todo = "MATCH (n:$:Person) RETURN n.age"
 # SELECT age FROM $ WHERE label = "Person"
 # db.$.aggregate([$filter: { label: "Person" }])
 [def.graph-default.mapping.graph.node]

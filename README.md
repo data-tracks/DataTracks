@@ -30,15 +30,11 @@ various degrees of structured and unstructured data.
 
 ## Documentation
 
-DataTracks uses an abstraction model based on train and track logic.
+*comming soon*
 
 ## License
 
 [GPLv3](https://www.gnu.org/licenses/)
 
 ## Credits ##
-
-* [KyuGraph (kyu-parser)](https://github.com/offbit-ai/kyugraph): KyuGraph is a high-performance embedded property graph
-  database
-
 

@@ -1,7 +1,11 @@
 use crate::definition::DefinitionFilter::AllMatch;
 use crate::mappings::NativeMapping;
 use crate::partition::PartitionInfo;
-use crate::{Batch, DefinitionId, EntityId, PartitionId, TargetedRecord, TimedMeta, log_channel, ValueProducer};
+use crate::query::Query;
+use crate::{
+    Batch, DefinitionId, EntityId, PartitionId, TargetedRecord, TimedMeta, ValueProducer,
+    log_channel,
+};
 use flume::{Receiver, Sender, unbounded};
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
@@ -32,10 +36,9 @@ pub struct Definition {
         Receiver<Batch<TargetedRecord>>,
     ),
     pub mapping: NativeMapping,
-    pub processing: String,
+    pub processing: Query,
     pub partition_info: PartitionInfo,
 }
-
 
 impl Definition {
     pub fn entity_name(&self, id: PartitionId, stage: &Stage) -> String {
@@ -57,7 +60,7 @@ impl Definition {
         topic: S,
         filter: DefinitionFilter,
         mapping: NativeMapping,
-        processing: String,
+        processing: Query,
         model: Model,
         entity: String,
     ) -> Self {
@@ -78,7 +81,7 @@ impl Definition {
             format!("Native-{}-{}", id.0, topic.as_ref()),
             None,
         )
-            .await;
+        .await;
 
         Definition {
             topic: topic.as_ref().to_string(),
@@ -95,7 +98,7 @@ impl Definition {
     }
 
     pub fn processing(&self) -> ValueProducer {
-        Box::new(|v| {Some(v.clone())})
+        Box::new(|v| Some(v.clone()))
     }
 
     /// does our event match the defined definition
@@ -126,7 +129,12 @@ pub enum DefinitionFilter {
 pub enum Model {
     #[serde(alias = "document", alias = "DOCUMENT", alias = "DOC", alias = "doc")]
     Document,
-    #[serde(alias = "relational", alias = "RELATIONAL", alias = "REL", alias = "rel")]
+    #[serde(
+        alias = "relational",
+        alias = "RELATIONAL",
+        alias = "REL",
+        alias = "rel"
+    )]
     Relational,
     #[serde(alias = "graph", alias = "GRAPH")]
     Graph,
@@ -160,5 +168,5 @@ pub enum Stage {
     WAL,
     Plain,
     Native,
-    Process
+    Process,
 }

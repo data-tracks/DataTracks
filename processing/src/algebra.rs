@@ -1,7 +1,7 @@
-use sqlparser::dialect::Dialect;
 use crate::expression::Expression;
 use crate::language::Sql;
-
+use sqlparser::dialect::Dialect;
+use std::cmp;
 
 #[derive(Clone, Debug)]
 pub enum Op {
@@ -14,16 +14,15 @@ pub enum Op {
     Index,
     Minus,
     Multiply,
-    Explode,
 
     // Explode
     NextOrPop,
     LoadExplodeElement,
     InitExplode(usize),
 
-    // Relational Ops (The Algebra)
-    NextRow { table_id: usize }, // holds the "raw" data so that multiple different expressions (filters, math, etc.) can all look at the same row simultaneously without fighting over the stack.
-    JumpIfFalse { target: usize }, // jump if top is false
+    // Ops (The Algebra)
+    NextTuple { resource_id: usize }, // holds the "raw" data so that multiple different expressions (filters, math, etc.) can all look at the same row simultaneously without fighting over the stack.
+    JumpIfFalse { target: usize },    // jump if top is false
     Jump { target: usize },
 
     // The "Materialize" Op
@@ -31,13 +30,52 @@ pub enum Op {
     Yield(usize),
 }
 
-
-
 pub enum Algebra {
     S(Scan),
     P(Project),
     F(Filter),
-    T(String)
+    C(Collect),
+    U(Unwind),
+    T(String),
+}
+
+#[derive(Ord, PartialOrd, Eq, PartialEq)]
+pub enum Scope {
+    Tuple = 0,
+    Multi = 1,
+    Join = 2,
+}
+
+impl Algebra {
+    pub(crate) fn project(child: Algebra, expression: Expression) -> Self {
+        Algebra::P(Project {
+            expressions: vec![expression],
+            input: Box::new(child),
+        })
+    }
+
+    pub(crate) fn scan<S: AsRef<str>>(resource: S) -> Self {
+        Algebra::S(Scan {
+            resource: resource.as_ref().to_string(),
+        })
+    }
+
+    pub(crate) fn scope(&self) -> Scope {
+        match self {
+            Algebra::S(s) => Scope::Tuple,
+            Algebra::P(p) => cmp::max(
+                p.input.scope(),
+                p.expressions
+                    .iter()
+                    .map(|e| e.scope())
+                    .fold(Scope::Tuple, |a, b| cmp::max(a, b)),
+            ),
+            Algebra::F(f) => cmp::max(f.input.scope(), f.predicate.scope()),
+            Algebra::C(_) => Scope::Multi,
+            Algebra::U(_) => Scope::Multi,
+            Algebra::T(_) => panic!(),
+        }
+    }
 }
 
 impl Sql for Algebra {
@@ -46,19 +84,24 @@ impl Sql for Algebra {
             Algebra::S(s) => s.sql(),
             Algebra::P(p) => p.sql(),
             Algebra::F(f) => f.sql(),
-            Algebra::T(_) => panic!()
+            Algebra::T(_) => panic!(),
+            Algebra::C(_) => panic!(),
+            Algebra::U(_) => panic!(),
         }
     }
 }
 
+pub struct Collect {}
+
+pub struct Unwind {}
 
 pub struct Scan {
-    pub entity: String,
+    pub resource: String,
 }
 
 impl Sql for Scan {
     fn sql(&self) -> String {
-        format!("FROM {}", self.entity)
+        format!("FROM {}", self.resource)
     }
 }
 
@@ -69,7 +112,14 @@ pub struct Project {
 
 impl Sql for Project {
     fn sql(&self) -> String {
-        let select = format!("SELECT {}", self.expressions.iter().map(|e| e.sql()).collect::<Vec<_>>().join(", "));
+        let select = format!(
+            "SELECT {}",
+            self.expressions
+                .iter()
+                .map(|e| e.sql())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
         let child = self.input.sql();
         format!("{} {}", select, child)
     }
@@ -86,11 +136,10 @@ impl Sql for Filter {
     }
 }
 
-
 #[cfg(test)]
 mod test {
+    use crate::language::{Sql, StreamDialect, parse_alg};
     use sqlparser::parser::Parser;
-    use crate::language::{parse_alg, Sql, StreamDialect};
 
     #[test]
     // SELECT Istream(auction, DOLTOEUR(price), bidder, datetime) FROM bid [ROWS UNBOUNDED]

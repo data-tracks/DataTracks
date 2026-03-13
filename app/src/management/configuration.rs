@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use std::collections::HashMap;
 use util::definition::{DefinitionFilter, Model};
-use util::NativeMapping;
+use util::{NativeMapping, Query};
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
@@ -15,13 +15,13 @@ pub struct DefinitionModel {
     pub entity: String,
     pub filter: DefinitionFilter,
     pub mapping: NativeMapping,
-    pub processing: String
+    pub processing: Query,
 }
 
 #[cfg(test)]
 mod tests {
-    use util::RelationalMapping;
     use super::*;
+    use util::RelationalMapping;
 
     #[tokio::test]
     async fn relational() {
@@ -30,10 +30,10 @@ mod tests {
         let mapping: NativeMapping = toml::from_str(&mapping).unwrap();
         if let NativeMapping::Relational(r) = mapping {
             if let RelationalMapping::Tuple(val, _m) = r {
-                assert_eq!(val[0].0, "name" );
-                assert_eq!(val[1].0, "age" );
+                assert_eq!(val[0].0, "name");
+                assert_eq!(val[1].0, "age");
             }
-        }else {
+        } else {
             assert!(false);
         }
     }
@@ -46,7 +46,7 @@ mod tests {
         model = "relational"
         entity = "relational"
         filter.topic = "relational"
-        processing = "None"
+        processing.sql = "None"
         mapping.relational = [
             {name = "TEXT"}, {age = "INT"}
         ]
@@ -57,14 +57,14 @@ mod tests {
         entity = "document"
         filter.topic = "doc"
         mapping.document = "document"
-        processing = "None"
+        processing.mql = "None"
 
         [def.graph-default]
         topic = "Graph test"
         model = "graph"
         entity = "graph"
         filter.topic = "graph"
-        processing = "None"
+        processing.cypher = "None"
         [def.graph-default.mapping.graph.node]
         id = {doc.key = "id"}
         label = {doc.key = "label"}
@@ -83,7 +83,7 @@ mod tests {
         entity = "document"
         filter.topic = "doc"
         mapping.document = "document"
-        processing = "None""#;
+        processing.mql = "None""#;
 
         let config: Config = toml::from_str(&mapping).unwrap();
     }
