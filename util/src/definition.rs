@@ -6,6 +6,7 @@ use flume::{Receiver, Sender, unbounded};
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 use std::sync::atomic::{AtomicU64, Ordering};
+use processing::Algebra;
 use value::Value;
 use value::Value::Dict;
 use crate::query::Query;
@@ -34,6 +35,7 @@ pub struct Definition {
     ),
     pub mapping: NativeMapping,
     pub processing: Query,
+    pub algebra: Algebra,
     pub partition_info: PartitionInfo,
 }
 
@@ -89,7 +91,8 @@ impl Definition {
             native: (native_tx, native_rx),
             process: (process_tx, process_rx),
             mapping,
-            processing,
+            processing: processing.clone(),
+            algebra: processing.into(),
             partition_info: PartitionInfo::new(),
         }
     }
@@ -110,6 +113,7 @@ impl Definition {
         }
     }
 }
+
 
 /// incoming values are either accompanied by meta with name or wrapped in a document structure
 /// and have a matching value for the key

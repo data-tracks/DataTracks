@@ -1046,6 +1046,7 @@ dependencies = [
  "engine",
  "flume 0.12.0",
  "futures",
+ "processing",
  "serde",
  "sink",
  "statistics",
@@ -3059,9 +3060,9 @@ name = "processing"
 version = "0.6.2"
 dependencies = [
  "anyhow",
+ "indexmap 2.13.0",
  "serde",
  "sqlparser",
- "util",
  "value",
 ]
 
@@ -4945,6 +4946,7 @@ dependencies = [
  "memmap2",
  "num-format",
  "once_cell",
+ "processing",
  "serde",
  "serde_json",
  "serde_with",

@@ -68,7 +68,7 @@ impl From<&JsonValue> for Value {
                 elements
                     .iter()
                     .map(|arg0: &JsonValue| arg0.into())
-                    .collect(),
+                    .collect::<Vec<_>>(),
             ),
         }
     }

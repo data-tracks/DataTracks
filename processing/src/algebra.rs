@@ -1,12 +1,12 @@
 use crate::expression::Expression;
-use crate::language::{parse_alg, Sql, StreamDialect};
+use crate::language::Sql;
 use crate::operator::Operator;
-use sqlparser::ast::Query;
+use indexmap::IndexMap;
 use sqlparser::dialect::Dialect;
 use std::cmp;
-use std::collections::HashMap;
-use sqlparser::parser::Parser;
+use serde::Serialize;
 
+#[derive(Clone, Debug, Serialize)]
 pub enum Algebra {
     Scan { source: String },
     P(Project),
@@ -24,9 +24,9 @@ pub enum Scope {
 }
 
 impl Algebra {
-    pub(crate) fn project<S: AsRef<str>>(child: Algebra, key: S, expression: Expression) -> Self {
+    pub(crate) fn project<M: Into<IndexMap<String, Expression>>>(child: Algebra, expressions: M) -> Self {
         Algebra::P(Project {
-            expressions: HashMap::from([(key.as_ref().to_string(), expression)]),
+            expressions: expressions.into(),
             input: Box::new(child),
         })
     }
@@ -63,21 +63,6 @@ impl Algebra {
     }
 }
 
-impl From<util::query::Query> for Algebra {
-    fn from(value: util::query::Query) -> Self {
-        match value {
-            util::query::Query::SQL(s) => {
-                let dialect = StreamDialect {};
-
-                let ast = Parser::parse_sql(&dialect, &s).unwrap();
-
-                parse_alg(ast)
-            }
-            util::query::Query::MQL(m) => Algebra::T(m.clone()),
-            util::query::Query::Cypher(c) => Algebra::T(c.clone()),
-        }
-    }
-}
 
 impl Sql for Algebra {
     fn sql(&self) -> String {
@@ -92,18 +77,21 @@ impl Sql for Algebra {
     }
 }
 
+#[derive(Clone, Debug, Serialize)]
 pub struct Collect {
     input: Box<Algebra>,
 }
 
+#[derive(Clone, Debug, Serialize)]
 pub struct Unwind {
     pub(crate) input: Box<Algebra>,
     pub(crate) key: String,
     pub(crate) func: Operator,
 }
 
+#[derive(Clone, Debug, Serialize)]
 pub struct Project {
-    pub expressions: HashMap<String, Expression>,
+    pub expressions: IndexMap<String, Expression>,
     pub input: Box<Algebra>,
 }
 
@@ -122,6 +110,7 @@ impl Sql for Project {
     }
 }
 
+#[derive(Clone, Debug, Serialize)]
 pub struct Filter {
     pub predicate: Expression,
     pub input: Box<Algebra>,
@@ -135,8 +124,7 @@ impl Sql for Filter {
 
 #[cfg(test)]
 mod test {
-    use crate::language::{parse_alg, Sql, StreamDialect};
-    use sqlparser::parser::Parser;
+    use crate::language::{parse_sql, Sql};
 
     #[test]
     // SELECT Istream(auction, DOLTOEUR(price), bidder, datetime) FROM bid [ROWS UNBOUNDED]
@@ -144,13 +132,7 @@ mod test {
     fn nexmark_q1_sql() {
         let q1_sql = "SELECT auction, price * 1.1, bidder, datetime FROM $$source";
 
-        let dialect = StreamDialect {};
-
-        let ast = Parser::parse_sql(&dialect, q1_sql).unwrap();
-
-        println!("{:?}", ast);
-
-        let algebra = parse_alg(ast);
+        let algebra = parse_sql(q1_sql);
 
         let sql = algebra.sql();
         println!("{:?}", sql);

@@ -86,8 +86,8 @@ impl Value {
         }))
     }
 
-    pub fn array(tuple: Vec<Value>) -> Value {
-        Value::Array(Array::new(tuple))
+    pub fn array<V: Into<Vec<Value>>>(tuple: V) -> Value {
+        Value::Array(Array::new(tuple.into()))
     }
 
     pub fn dict(values: BTreeMap<String, Value>) -> Value {

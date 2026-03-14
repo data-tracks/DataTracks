@@ -1,7 +1,7 @@
-use std::collections::HashMap;
 use engine::engine::Engine;
 use flume::Sender;
 use futures::future::join_all;
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use util::definition::Definition;

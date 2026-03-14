@@ -3,9 +3,10 @@ use crate::language::Sql;
 use crate::operator::Operator;
 use sqlparser::ast::{Expr, SelectItem};
 use std::{cmp, vec};
+use serde::Serialize;
 use value::{ValType, Value};
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Serialize)]
 pub enum Expression {
     Field(String),
     Literal(Value),

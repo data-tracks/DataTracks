@@ -15,6 +15,7 @@ eula = false
 
 [dependencies]
 value = { workspace = true }
+processing = { workspace = true }
 anyhow = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }

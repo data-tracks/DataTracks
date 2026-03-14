@@ -1,9 +1,10 @@
 use crate::algebra::Algebra::P;
 use crate::algebra::{Algebra, Project};
 use crate::expression::Expression;
-use sqlparser::ast::{Select, SetExpr, Statement, TableFactor};
+use indexmap::IndexMap;
+use sqlparser::ast::{Query, Select, SetExpr, Statement, TableFactor};
 use sqlparser::dialect::Dialect;
-use std::collections::HashMap;
+use sqlparser::parser::Parser;
 
 #[derive(Debug)]
 pub struct StreamDialect {}
@@ -35,12 +36,12 @@ pub trait Cypher {
     fn cypher(&self) -> String;
 }
 
-pub fn parse_alg(statements: Vec<Statement>) -> Algebra {
+fn parse_alg(statements: Vec<Statement>) -> Algebra {
     for statement in statements {
         match statement {
             Statement::Query(q) => {
                 if let SetExpr::Select(s) = *q.body {
-                    let mut expressions = HashMap::new();
+                    let mut expressions = IndexMap::new();
 
                     for (k, item) in s.projection.iter().enumerate() {
                         expressions.insert(format!("field{}", k), Expression::from(item));
@@ -58,6 +59,16 @@ pub fn parse_alg(statements: Vec<Statement>) -> Algebra {
         }
     }
     panic!("No answer")
+}
+
+pub fn parse_sql(query: &str) -> Algebra {
+    let dialect = StreamDialect {};
+
+    let ast = Parser::parse_sql(&dialect, query).unwrap();
+
+    println!("{:?}", ast);
+
+    parse_alg(ast)
 }
 
 fn handle_scan(s: &Box<Select>) -> Algebra {

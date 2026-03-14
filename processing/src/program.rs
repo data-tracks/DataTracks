@@ -1,4 +1,4 @@
-use crate::algebra::{Algebra};
+use crate::algebra::Algebra;
 use crate::expression::Expression;
 use crate::operator::Operator;
 use anyhow::anyhow;
@@ -32,7 +32,6 @@ pub enum Op {
     // arg = how many items to pop from stack to form the result row
     Yield(usize),
 }
-
 
 pub struct ExplodeState {
     pub array: Vec<Value>,
@@ -305,7 +304,7 @@ impl Compiler {
                 for e in expressions {
                     self.compile_expr(e, out);
                 }
-                // Map your operators to the enum
+                // Map the operators to the enum
                 out.push(Self::compile_op(operator))
             }
         }
@@ -330,7 +329,7 @@ impl Compiler {
         ends: &mut Vec<Op>,
     ) {
         match algebra {
-            Algebra::Scan{source} => {
+            Algebra::Scan { source } => {
                 let start_pc = ops.len();
 
                 let slot = self.resource_map.len();
@@ -362,10 +361,6 @@ impl Compiler {
                 }
 
                 *tuples = project.expressions.len();
-                /*let jump_target = *self.loop_stack.last().unwrap();
-                ops.push(Op::Jump {
-                    target: jump_target,
-                });*/
             }
             Algebra::T(_) => {
                 panic!("T algebra not yet implemented");
@@ -390,8 +385,6 @@ impl Compiler {
                 // D. Load current element of the latest explode onto the stack
                 ops.push(Op::LoadExplodeElement);
 
-                // F. Yield the row
-                //ops.push(Op::Yield(tuples.clone()));
 
                 let idx = self.field_map.get(&unwind.key).unwrap();
                 ops.push(Op::StoreField(idx.clone()));
@@ -402,11 +395,6 @@ impl Compiler {
                 ends.push(Op::NextOrPop);
 
                 self.loop_stack.pop(); // Done with this level
-
-                // 5. Jump back to the PARENT loop (the Scan or the outer Unwind)
-                /*if let Some(parent_pc) = self.loop_stack.last() {
-                    ops.push(Op::Jump { target: *parent_pc });
-                }*/
             }
             Algebra::C(_) => todo!(),
         }
@@ -446,6 +434,34 @@ mod test {
     }
 
     #[test]
+    fn test_vm_execution_multiple() {
+        // Simulate: price + 10
+        let mut program = Program::from(Algebra::project(
+            Algebra::scan("test"),
+            [
+                (
+                    "name".to_string(),
+                    Expression::Call {
+                        operator: Operator::Add,
+                        expressions: vec![
+                            Expression::Field("name".to_string()),
+                            Expression::Literal(Value::int(10)),
+                        ],
+                    },
+                ),
+                (
+                    "name1".to_string(),
+                    Expression::Field("name".to_string()),
+                ),
+            ],
+        ));
+
+        program.set_resource("test", [Value::int(100)].into_iter()).unwrap();
+
+        assert_eq!(program.next().unwrap(), Value::array([Value::int(110), Value::int(100)]));
+    }
+
+    #[test]
     fn test_vm_execution_explode() {
         // Simulate: explode
         let mut program = Program::from(Algebra::unwind(
@@ -470,14 +486,16 @@ mod test {
         // Simulate: explode
         let mut program = Program::from(Algebra::project(
             Algebra::unwind(Algebra::scan("test"), "name", Operator::Explode),
-            "name",
-            Expression::Call {
-                operator: Operator::Add,
-                expressions: vec![
-                    Expression::Field("name".to_string()),
-                    Expression::Literal(Value::text("test")),
-                ],
-            },
+            [(
+                "name".to_string(),
+                Expression::Call {
+                    operator: Operator::Add,
+                    expressions: vec![
+                        Expression::Field("name".to_string()),
+                        Expression::Literal(Value::text("test")),
+                    ],
+                },
+            )],
         ));
 
         program

@@ -1,3 +1,4 @@
+use serde::Serialize;
 use crate::algebra::Scope;
 use crate::expression::Expression;
 use crate::language::Sql;
@@ -10,7 +11,7 @@ pub enum Step {
     Stay, // We stay
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Serialize)]
 pub enum Operator {
     Add,
     Minus,
