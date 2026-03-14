@@ -108,13 +108,3 @@ impl Sql for Single {
         }
     }
 }
-
-fn op_len(vm: &mut VM, _: usize) {
-    let val = vm.stack.pop().expect("Stack underflow");
-
-    match val {
-        Value::Text(t) => vm.stack.push(Value::int(t.0.len() as i64)),
-        Value::Array(a) => vm.stack.push(Value::int(a.values.len() as i64)),
-        _ => {}
-    }
-}

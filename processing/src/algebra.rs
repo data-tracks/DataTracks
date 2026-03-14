@@ -5,6 +5,7 @@ use indexmap::IndexMap;
 use sqlparser::dialect::Dialect;
 use std::cmp;
 use serde::Serialize;
+use value::ValType;
 
 #[derive(Clone, Debug, Serialize)]
 pub enum Algebra {
@@ -45,7 +46,7 @@ impl Algebra {
         })
     }
 
-    pub(crate) fn scope(&self) -> Scope {
+    pub fn scope(&self) -> Scope {
         match self {
             Algebra::Scan { .. } => Scope::Tuple,
             Algebra::P(p) => cmp::max(
@@ -61,6 +62,15 @@ impl Algebra {
             Algebra::T(_) => panic!(),
         }
     }
+
+    pub fn schema(&self) -> Schema {
+        todo!()
+    }
+}
+
+pub enum Schema{
+    Dynamic,
+    Fixed(Vec<(String, ValType)>),
 }
 
 

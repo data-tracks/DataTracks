@@ -29,9 +29,14 @@ pub struct Definition {
         Receiver<Batch<TargetedRecord>>,
     ),
     #[serde(skip)]
-    pub process: (
+    pub process_single: (
         Sender<Batch<TargetedRecord>>,
         Receiver<Batch<TargetedRecord>>,
+    ),
+    #[serde(skip)]
+    pub process_full: (
+        Sender<Vec<u64>>,
+        Receiver<Vec<u64>>,
     ),
     pub mapping: NativeMapping,
     pub processing: Query,
@@ -66,7 +71,8 @@ impl Definition {
         let id = DefinitionId(ID_BUILDER.fetch_add(1, Ordering::Relaxed));
 
         let (native_tx, native_rx) = unbounded::<Batch<TargetedRecord>>();
-        let (process_tx, process_rx) = unbounded::<Batch<TargetedRecord>>();
+        let (process_tx_full, process_rx_full) = unbounded::<Vec<u64>>();
+        let (process_tx_single, process_rx_single) = unbounded::<Batch<TargetedRecord>>();
 
         log_channel(
             native_tx.clone(),
@@ -76,7 +82,7 @@ impl Definition {
         .await;
 
         log_channel(
-            process_tx.clone(),
+            process_tx_single.clone(),
             format!("Native-{}-{}", id.0, topic.as_ref()),
             None,
         )
@@ -89,7 +95,8 @@ impl Definition {
             model,
             entity: Entity::new(entity),
             native: (native_tx, native_rx),
-            process: (process_tx, process_rx),
+            process_full: (process_tx_full, process_rx_full),
+            process_single: (process_tx_single, process_rx_single),
             mapping,
             processing: processing.clone(),
             algebra: processing.into(),

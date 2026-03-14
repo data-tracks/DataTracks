@@ -7,8 +7,9 @@ use tokio::runtime::Builder;
 use tokio::task::JoinSet;
 use tokio::time::Instant;
 use tracing::{error, info};
-use util::definition::Stage;
-use util::{Batch, Event, Runtimes, target};
+use processing::Scope;
+use util::definition::{Definition, Stage};
+use util::{Batch, Event, Runtimes, target, TargetedRecord};
 
 pub struct Nativer {
     catalog: Catalog,
@@ -34,7 +35,6 @@ impl Nativer {
                 .filter(|e| e.model() == definition.model)
                 .collect::<Vec<Engine>>();
 
-            // Spawn a dedicated OS thread for this specific engine
             thread::spawn(move || {
                 let rt = Builder::new_multi_thread()
                     .worker_threads(3)
@@ -49,13 +49,28 @@ impl Nativer {
                         let mut engine = engines.into_iter().next().unwrap();
                         let startup_tx = startup_tx.clone();
 
+
                         let id = id_counter;
                         id_counter += 1;
                         tokio::spawn(async move {
                             let mut join_set = JoinSet::new();
 
+                            let tx:Box<dyn Fn(Batch<TargetedRecord>) -> () + Send> = match definition.algebra.scope() {
+                                Scope::Tuple => {
+                                    let tx = definition.process_single.0.clone();
+                                    Box::new(move |records: Batch<TargetedRecord>| {
+                                        tx.send(records).unwrap();
+                                    })
+                                },
+                                Scope::Multi | Scope::Join => {
+                                    let tx = definition.process_full.0;
+                                    Box::new(move |records: Batch<TargetedRecord>| {
+                                        tx.send(records.iter().map(|r| r.id()).collect()).unwrap();
+                                    })
+                                }
+                            };
+
                             let rx = definition.native.1;
-                            let tx = definition.process.0;
                             engine.start(&mut join_set).await.unwrap();
                             startup_tx.send(true).unwrap();
 
@@ -105,7 +120,7 @@ impl Nativer {
                                                 });
 
                                                 // Send original records to next phase
-                                                let _ = tx.send(mapped_data);
+                                                tx(mapped_data);
 
                                                 tokio::task::yield_now().await;
                                             }
@@ -131,4 +146,8 @@ impl Nativer {
     pub fn new(catalog: Catalog) -> Self {
         Self { catalog }
     }
+}
+
+fn single_handler(definition: &Definition, records: Batch<TargetedRecord>){
+
 }

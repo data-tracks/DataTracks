@@ -13,7 +13,8 @@ impl<'a> postgres::types::FromSql<'a> for Value {
                 Ok(Value::text(postgres::types::FromSql::from_sql(ty, raw)?))
             }
             Type::INT2 | Type::INT4 | Type::INT8 => {
-                Ok(Value::int(postgres::types::FromSql::from_sql(ty, raw)?))
+                let val:i64 = postgres::types::FromSql::from_sql(ty, raw)?;
+                Ok(Value::int(val))
             }
             Type::FLOAT4 | Type::FLOAT8 => {
                 Ok(Value::float(postgres::types::FromSql::from_sql(ty, raw)?))

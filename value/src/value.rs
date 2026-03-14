@@ -38,8 +38,8 @@ impl Value {
     pub fn text(string: &str) -> Value {
         Value::Text(Text(string.parse().unwrap()))
     }
-    pub fn int(int: i64) -> Value {
-        Value::Int(Int(int))
+    pub fn int<I: Into<i64>>(int: I) -> Value {
+        Value::Int(Int(int.into()))
     }
 
     pub fn float(float: f64) -> Value {

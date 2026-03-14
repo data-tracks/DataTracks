@@ -17,6 +17,7 @@ pub enum Op {
     Index,
     Minus,
     Multiply,
+    Length,
 
     // Explode
     NextOrPop,
@@ -212,6 +213,19 @@ impl Iterator for Program {
                     let r = self.vm.stack.pop().unwrap();
                     let l = self.vm.stack.pop().unwrap();
                     self.vm.stack.push(&l - &r);
+                }
+                Op::Length => {
+                    let val = self.vm.stack.pop().unwrap();
+
+                    match val {
+                        Value::Array(a) => {
+                            self.vm.stack.push(Value::int(a.values.len() as i64));
+                        }
+                        Value::Text(t) => {
+                            self.vm.stack.push(Value::int(t.0.len() as i64))
+                        }
+                        _ => {}
+                    }
                 }
                 Op::Multiply => {
                     let r = self.vm.stack.pop().unwrap();
