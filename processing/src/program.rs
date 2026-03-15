@@ -34,6 +34,7 @@ pub enum Op {
     Yield(usize),
 }
 
+#[derive(Clone)]
 pub struct ExplodeState {
     pub array: Vec<Value>,
     pub index: usize,
@@ -46,17 +47,33 @@ pub struct VM {
     constants: Vec<Value>, // The "Pool" for literals
     pub pc: usize,         // Program Counter
     explode_stack: Vec<ExplodeState>,
-    pub resources: Vec<Box<dyn Iterator<Item = Value>>>,
+    pub resources: Vec<Box<dyn Iterator<Item = Value> + Send + Sync> >,
 }
 
+impl Clone for VM {
+    fn clone(&self) -> Self {
+        Self{
+            stack: self.stack.clone(),
+            current_record: self.current_record.clone(),
+            constants: self.constants.clone(),
+            pc: self.pc.clone(),
+            explode_stack: self.explode_stack.clone(),
+            resources: vec![],
+        }
+    }
+}
+
+
+
+#[derive(Clone)]
 pub struct Program {
     instructions: Vec<Op>,
     compiler: Compiler,
     vm: VM,
 }
 
-impl From<Expression> for Program {
-    fn from(expression: Expression) -> Self {
+impl From<&Expression> for Program {
+    fn from(expression: &Expression) -> Self {
         let mut compiler = Compiler::new();
         let mut instructions = vec![];
 
@@ -68,8 +85,8 @@ impl From<Expression> for Program {
     }
 }
 
-impl From<Algebra> for Program {
-    fn from(algebra: Algebra) -> Self {
+impl From<&Algebra> for Program {
+    fn from(algebra: &Algebra) -> Self {
         let mut compiler = Compiler::new();
         let mut instructions = vec![];
         let mut ends = vec![];
@@ -107,10 +124,10 @@ impl Program {
         }
     }
 
-    pub(crate) fn set_resource<S: AsRef<str>>(
+    pub fn set_resource<S: AsRef<str>>(
         &mut self,
         name: S,
-        iter: impl Iterator<Item = Value> + 'static,
+        iter: impl Iterator<Item = Value> + Send + Sync + 'static,
     ) -> anyhow::Result<()> {
         let index = self
             .compiler
@@ -129,6 +146,13 @@ impl Program {
             .ok_or(anyhow!("No named field in compiler"))?;
         self.vm.current_record.insert(*index, value);
         Ok(())
+    }
+
+    pub fn reset(&mut self) {
+        self.vm.pc = 0;
+        self.vm.stack.clear();
+        self.vm.current_record.clear();
+        self.vm.explode_stack.clear();
     }
 }
 
@@ -181,6 +205,9 @@ impl Iterator for Program {
                         && let Some(value) = resource.next()
                     {
                         self.vm.current_record.push(value)
+                    }else {
+                        // we end the iterator
+                        return None
                     }
                 }
                 Op::Jump { target } => {
@@ -277,10 +304,11 @@ impl Iterator for Program {
             }
             self.vm.pc += 1;
         }
-        panic!()
+        None
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct Compiler {
     pub field_map: HashMap<String, usize>,
     pub resource_map: HashMap<String, usize>,
@@ -377,7 +405,18 @@ impl Compiler {
                 *tuples = project.expressions.len();
             }
             Algebra::T(_) => {
-                panic!("T algebra not yet implemented");
+                let start_pc = ops.len();
+
+                let slot = self.resource_map.len();
+                let slot = *self
+                    .resource_map
+                    .entry("$$source".to_string())
+                    .or_insert_with(|| slot);
+
+                ops.push(Op::NextTuple { resource_id: slot }); // Start the loop
+                self.loop_stack.push(start_pc);
+                //panic!("T algebra not yet implemented");
+                ops.push(Op::Yield(1));
             }
             Algebra::U(unwind) => {
                 self.compile_algebra(&unwind.input, tuples, ops, ends);

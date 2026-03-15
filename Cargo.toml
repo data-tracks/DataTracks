@@ -62,6 +62,8 @@ util = { path = "./util" }
 uuid = { version = "1.22.0", features = ["v4"] }
 value = { path = "./value" }
 processing = { path = "./processing" }
+async-trait = "0.1.89"
+enum_dispatch = "0.3.13"
 
 
 # The profile that 'cargo dist' will build with

@@ -13,3 +13,4 @@ anyhow = { workspace = true }
 sqlparser = "0.61.0"
 serde = { workspace = true }
 indexmap = { workspace = true }
+tracing = { workspace = true }

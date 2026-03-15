@@ -91,7 +91,7 @@ impl MongoDB {
         let client = Client::with_options(client_options)?;
 
         timeout(
-            Duration::from_secs(10),
+            Duration::from_secs(20),
             client.database("admin").run_command(doc! { "ping": 1 }),
         )
         .await??;

@@ -27,3 +27,4 @@ tracing-test = { workspace = true }
 anyhow = { workspace = true }
 speedy = { workspace = true }
 toml = { workspace = true }
+processing = { workspace = true }

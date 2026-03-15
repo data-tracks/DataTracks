@@ -1,12 +1,12 @@
 use crate::definition::DefinitionFilter::AllMatch;
 use crate::mappings::NativeMapping;
 use crate::partition::PartitionInfo;
-use crate::{Batch, DefinitionId, EntityId, PartitionId, TargetedRecord, TimedMeta, ValueProducer, log_channel};
+use crate::{Batch, DefinitionId, EntityId, PartitionId, TargetedRecord, TimedMeta, log_channel};
 use flume::{Receiver, Sender, unbounded};
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 use std::sync::atomic::{AtomicU64, Ordering};
-use processing::Algebra;
+use processing::{Algebra, Program};
 use value::Value;
 use value::Value::Dict;
 use crate::query::Query;
@@ -54,7 +54,7 @@ impl Definition {
                 format!("{}_{}", self.entity.native, *id)
             }
             Stage::Process => {
-                format!("{}_{}", self.entity.native, *id)
+                format!("{}_{}", self.entity.process, *id)
             }
             _ => "undefined".to_string(),
         }
@@ -104,8 +104,8 @@ impl Definition {
         }
     }
 
-    pub fn processing(&self) -> ValueProducer {
-        Box::new(|v| Some(v.clone()))
+    pub fn processing(&self) -> Program {
+        self.algebra.processing()
     }
 
     /// does our event match the defined definition
@@ -165,7 +165,7 @@ impl Entity {
             id,
             plain: name.as_ref().to_string() + "_plain",
             native: name.as_ref().to_string() + "_native",
-            process: "".to_string(),
+            process: name.as_ref().to_string(),
         }
     }
 }

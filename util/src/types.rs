@@ -1,5 +1,6 @@
 use std::fmt::{Display};
 use serde::{Deserialize, Serialize};
+use value::ValType;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum RelationalType {
@@ -22,6 +23,18 @@ impl Display for RelationalType {
             RelationalType::Float => fmt.write_str("FLOAT"),
             RelationalType::Bool => fmt.write_str("BOOLEAN"),
             RelationalType::Text => fmt.write_str("TEXT"),
+        }
+    }
+}
+
+impl From<&ValType> for RelationalType {
+    fn from(t: &ValType) -> Self {
+        match t {
+            ValType::Integer => RelationalType::Integer,
+            ValType::Float => RelationalType::Float,
+            ValType::Text => RelationalType::Text,
+            ValType::Bool => RelationalType::Bool,
+            _ => todo!()
         }
     }
 }

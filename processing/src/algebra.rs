@@ -2,10 +2,10 @@ use crate::expression::Expression;
 use crate::language::Sql;
 use crate::operator::Operator;
 use indexmap::IndexMap;
-use sqlparser::dialect::Dialect;
 use std::cmp;
 use serde::Serialize;
 use value::ValType;
+use crate::program::Program;
 
 #[derive(Clone, Debug, Serialize)]
 pub enum Algebra {
@@ -17,6 +17,12 @@ pub enum Algebra {
     T(String),
 }
 
+impl Algebra {
+    pub fn processing(&self) -> Program {
+        Program::from(self)
+    }
+}
+
 #[derive(Ord, PartialOrd, Eq, PartialEq)]
 pub enum Scope {
     Tuple = 0,
@@ -25,6 +31,8 @@ pub enum Scope {
 }
 
 impl Algebra {
+
+    #[cfg(test)]
     pub(crate) fn project<M: Into<IndexMap<String, Expression>>>(child: Algebra, expressions: M) -> Self {
         Algebra::P(Project {
             expressions: expressions.into(),
@@ -32,12 +40,14 @@ impl Algebra {
         })
     }
 
+    #[cfg(test)]
     pub(crate) fn scan<S: AsRef<str>>(resource: S) -> Self {
         Algebra::Scan {
             source: resource.as_ref().to_string(),
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn unwind<S: AsRef<str>>(child: Algebra, key: S, func: Operator) -> Self {
         Algebra::U(Unwind {
             input: Box::new(child),
@@ -59,12 +69,12 @@ impl Algebra {
             Algebra::F(f) => cmp::max(f.input.scope(), f.predicate.scope()),
             Algebra::C(_) => Scope::Multi,
             Algebra::U(_) => Scope::Multi,
-            Algebra::T(_) => panic!(),
+            Algebra::T(_) => Scope::Tuple,
         }
     }
 
     pub fn schema(&self) -> Schema {
-        todo!()
+        Schema::Fixed(vec![("price".to_string(), ValType::Float)])
     }
 }
 
@@ -111,7 +121,7 @@ impl Sql for Project {
             "SELECT {}",
             self.expressions
                 .iter()
-                .map(|(n, e)| e.sql())
+                .map(|(_, e)| e.sql())
                 .collect::<Vec<_>>()
                 .join(", ")
         );
@@ -134,6 +144,7 @@ impl Sql for Filter {
 
 #[cfg(test)]
 mod test {
+    use tracing::debug;
     use crate::language::{parse_sql, Sql};
 
     #[test]
@@ -145,7 +156,7 @@ mod test {
         let algebra = parse_sql(q1_sql);
 
         let sql = algebra.sql();
-        println!("{:?}", sql);
+        debug!("{:?}", sql);
     }
 
     #[test]

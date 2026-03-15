@@ -29,6 +29,8 @@ statistics = { workspace = true }
 flume = { workspace = true }
 toml = { workspace = true }
 serde = { workspace = true }
+async-trait = { workspace = true }
+enum_dispatch = { workspace = true }
 
 
 

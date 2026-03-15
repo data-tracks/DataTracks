@@ -8,7 +8,7 @@ use tokio::task::JoinSet;
 use tokio::time::Instant;
 use tracing::{error, info};
 use processing::Scope;
-use util::definition::{Definition, Stage};
+use util::definition::Stage;
 use util::{Batch, Event, Runtimes, target, TargetedRecord};
 
 pub struct Nativer {
@@ -148,6 +148,3 @@ impl Nativer {
     }
 }
 
-fn single_handler(definition: &Definition, records: Batch<TargetedRecord>){
-
-}

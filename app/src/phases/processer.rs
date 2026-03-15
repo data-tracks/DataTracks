@@ -1,21 +1,55 @@
 use crate::management::catalog::Catalog;
+use anyhow::{anyhow, bail};
+use async_trait::async_trait;
 use engine::engine::Engine;
-use flume::unbounded;
-use processing::Scope;
+use flume::{unbounded, Receiver};
+use processing::{Program, Scope};
 use std::thread;
 use std::time::Duration;
 use tokio::runtime::Builder;
 use tokio::task::JoinSet;
 use tokio::time::Instant;
 use tracing::{error, info};
-use util::definition::Stage;
-use util::{target, Batch, Event, Runtimes, TargetedRecord};
+use util::definition::{Definition, Model, Stage};
+use util::{
+    target, Batch, Event, Runtimes, TargetedRecord,
+};
 
 pub struct Processor {
     catalog: Catalog,
 }
 
 const DEFINITIONS_THREADS: u32 = 5;
+
+#[async_trait]
+trait RecordProcessor: Send + Sync {
+    async fn process(
+        &mut self,
+        id: u64,
+        worker_id: u64,
+        engine: Engine,
+        definition: Definition,
+    ) -> anyhow::Result<()>;
+}
+
+#[async_trait]
+impl RecordProcessor for ProcessorType {
+    async fn process(
+        &mut self,
+        id: u64,
+        worker_id: u64,
+        engine: Engine,
+        definition: Definition,
+    ) -> anyhow::Result<()> {
+        match self {
+            ProcessorType::Tuple(t) => t.process(id, worker_id, engine, definition).await,
+        }
+    }
+}
+
+enum ProcessorType {
+    Tuple(TupleProcessor),
+}
 
 impl Processor {
     pub fn new(catalog: Catalog) -> Self {
@@ -25,7 +59,7 @@ impl Processor {
     pub async fn start(
         self,
         _rt: Runtimes,
-        outgoing: tokio::sync::broadcast::Sender<Batch<TargetedRecord>>,
+        _outgoing: tokio::sync::broadcast::Sender<Batch<TargetedRecord>>,
     ) -> anyhow::Result<()> {
         let definitions = self.catalog.definitions().await;
 
@@ -41,103 +75,53 @@ impl Processor {
                 .into_iter()
                 .filter(|e| e.model() == definition.model)
                 .collect::<Vec<Engine>>();
-            let outgoing = outgoing.clone();
+            //let outgoing = outgoing.clone();
+
+            if !matches!(definition.model, Model::Relational ) {
+                continue
+            }
 
             // Spawn a dedicated OS thread for this specific engine
             thread::spawn(move || {
                 let rt = Builder::new_multi_thread()
                     .worker_threads(3)
-                    .thread_name("processor") // No work-stealing possible
+                    .thread_name("processor")
                     .enable_all()
                     .build()
                     .unwrap();
                 rt.block_on(async {
-                    for _ in 0..DEFINITIONS_THREADS {
+                    for i in 0..DEFINITIONS_THREADS {
                         let definition = definition.clone();
                         let engines = engines.clone();
                         let mut engine = engines.into_iter().next().unwrap();
                         let startup_tx = startup_tx.clone();
-                        let outgoing = outgoing.clone();
 
                         let id = id_counter;
                         id_counter += 1;
                         tokio::spawn(async move {
                             let mut join_set = JoinSet::new();
 
-                            let processing = definition.processing();
-
-                            let (next, rx) = match definition.algebra.scope() {
+                            let mut strategy: ProcessorType = match definition.algebra.scope() {
                                 Scope::Tuple => {
-                                    (async |engine: &mut Engine , partition_id, processed_data, records: Batch<TargetedRecord>| {
-                                        match engine.store(partition_id, Stage::Process, definition.id, &processed_data).await {
-                                            Ok(_) => {
-                                                let ids: Vec<u64> = records.records.iter().map(|r| r.meta.id).collect();
-                                                let _ = engine.statistic_sender.send(Event::Insert {
-                                                    id: definition.id,
-                                                    source: engine.id,
-                                                    stage: Stage::Process,
-                                                    ids,
-                                                    first: Instant::now()
-                                                });
-
-                                                // Send original records to next phase
-                                                let _ = outgoing.send(records);
-
-                                                tokio::task::yield_now().await;
-                                            }
-                                            Err(err) => error!("Processing Store Error: {:?}", err),
-                                        }
-                                    }, definition.process_single.1.clone())
-                                }
-                                Scope::Multi | Scope::Join => {
-                                    todo!("not yet added case for processing")
-                                }
+                                    ProcessorType::Tuple(TupleProcessor {
+                                        processing_engine: definition.processing(),
+                                        rx: definition.process_single.1.clone(),
+                                    })
+                                },
+                                Scope::Multi => todo!("MultiProcessor implementation"),
+                                Scope::Join => todo!("JoinProcessor implementation"),
                             };
 
-
                             engine.start(&mut join_set).await.unwrap();
-                            startup_tx.send(true).unwrap();
-
-                            let name = format!("Processor {} {}", engine.engine_kind, id);
-
-                            let mut hb_ticker = tokio::time::interval(Duration::from_secs(5));
-                            let hb_name = name.clone();
-                            let id = id.into();
-
-                            loop {
-                                tokio::select! {
-                                    _ = hb_ticker.tick() => {
-                                        let _ = engine.statistic_sender.send(Event::Heartbeat(hb_name.clone()));
-                                    }
-
-                                    res = rx.recv_async() => {
-                                        let mut records = match res {
-                                            Ok(r) => r,
-                                            Err(_) => break, // Channel closed
-                                        };
-
-                                        // Efficiently drain pending records without over-allocating
-                                        while let Ok(more) = rx.try_recv() {
-                                            records.records.extend(more);
-                                            if records.len() >= 100_000 { break; }
-                                        }
-
-                                        let length = records.len() as u64;
-
-                                        let processed_data: Batch<_> = records.iter().flat_map(|r| {
-                                            if let Some(v) = processing(&r.value) {
-                                                Some(target!(v, r.meta.clone()))
-                                            }else {
-                                                None
-                                            }
-                                        }).collect();
-
-                                        let partition_id = definition.partition_info.next(&id, &length).into();
-
-                                        next(&mut engine, partition_id, processed_data, records).await;
-                                    }
-                                }
+                            match startup_tx.send(true) {
+                                Ok(_) => {}
+                                Err(err) => error!("{}", err)
                             }
+
+                            strategy
+                                .process(i as u64, id, engine, definition)
+                                .await
+                                .unwrap();
                         });
                     }
                     std::future::pending::<()>().await;
@@ -150,5 +134,92 @@ impl Processor {
         }
         info!("All processors started...");
         Ok(())
+    }
+}
+
+struct TupleProcessor {
+    processing_engine: Program,
+    rx: Receiver<Batch<TargetedRecord>>,
+}
+
+#[async_trait]
+impl RecordProcessor for TupleProcessor {
+    async fn process(
+        &mut self,
+        id: u64,
+        worker_id: u64,
+        mut engine: Engine,
+        definition: Definition,
+    ) -> anyhow::Result<()> {
+        let name = format!("Processor {} {}", engine.engine_kind, worker_id);
+
+        let mut hb_ticker = tokio::time::interval(Duration::from_secs(5));
+        let hb_name = name.clone();
+        let id = id.into();
+
+        let definition_id = definition.id;
+        loop {
+            let mut processing_engine = self.processing_engine.clone();
+            tokio::select! {
+                _ = hb_ticker.tick() => {
+                    let _ = engine.statistic_sender.send(Event::Heartbeat(hb_name.clone()));
+                }
+
+                res = self.rx.recv_async() => {
+                    let mut records = match res {
+                        Ok(r) => r,
+                        Err(_) => bail!("Could not receive"), // Channel closed
+                    };
+
+                    // Efficiently drain pending records without over-allocating
+                    while let Ok(more) = self.rx.try_recv() {
+                        records.records.extend(more);
+                        if records.len() >= 100_000 { break; }
+                    }
+
+                    processing_engine.reset();
+
+                     // Set the resource
+                    processing_engine
+                        .set_resource(
+                            "$$source",
+                            records.records.clone().into_iter().map(|d| d.value),
+                        )?;
+                    let meta = records.last().unwrap().meta.clone();
+
+                    let processed_data = processing_engine.collect::<Vec<_>>();
+                    info!("{}", processed_data.first().unwrap());
+                    let processed_data = processed_data.into_iter()
+                        .map(|d| {
+                            target!(
+                                d,
+                                meta.clone()
+                            )
+                        })
+                        .collect();
+                    let partition_id = definition.partition_info.next(&id, &(records.len() as u64)).into();
+
+                    // Store and notify
+                    engine
+                        .store(partition_id, Stage::Process, definition_id, &processed_data)
+                        .await
+                        .map_err(|e| anyhow!(e))?;
+
+                    let ids: Vec<u64> = records.records.iter().map(|r| r.meta.id).collect();
+                    let _ = engine.statistic_sender.send(Event::Insert {
+                        id: definition_id,
+                        source: engine.id,
+                        stage: Stage::Process,
+                        ids,
+                        first: Instant::now(),
+                    });
+
+                    // Send original records to next phase
+                    //let _ = outgoing.send(records);
+
+                    tokio::task::yield_now().await;
+                }
+            }
+        }
     }
 }

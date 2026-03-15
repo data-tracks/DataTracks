@@ -2,9 +2,10 @@ use crate::algebra::Algebra::P;
 use crate::algebra::{Algebra, Project};
 use crate::expression::Expression;
 use indexmap::IndexMap;
-use sqlparser::ast::{Query, Select, SetExpr, Statement, TableFactor};
+use sqlparser::ast::{Select, SetExpr, Statement, TableFactor};
 use sqlparser::dialect::Dialect;
 use sqlparser::parser::Parser;
+use tracing::debug;
 
 #[derive(Debug)]
 pub struct StreamDialect {}
@@ -66,7 +67,7 @@ pub fn parse_sql(query: &str) -> Algebra {
 
     let ast = Parser::parse_sql(&dialect, query).unwrap();
 
-    println!("{:?}", ast);
+    debug!("{:?}", ast);
 
     parse_alg(ast)
 }
@@ -80,7 +81,7 @@ fn handle_scan(s: &Box<Select>) -> Algebra {
         }
         todo!()
     } else {
-        for table in &s.from {
+        for _ in &s.from {
             todo!()
         }
         todo!()

@@ -1043,7 +1043,9 @@ name = "data-tracks"
 version = "0.6.2"
 dependencies = [
  "anyhow",
+ "async-trait",
  "engine",
+ "enum_dispatch",
  "flume 0.12.0",
  "futures",
  "processing",
@@ -1253,6 +1255,7 @@ dependencies = [
  "mongodb",
  "neo4rs",
  "pin-utils",
+ "processing",
  "rayon",
  "reqwest",
  "serde",
@@ -1274,6 +1277,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a1e6a265c649f3f5979b601d26f1d05ada116434c87741c9493cb56218f76cbc"
 dependencies = [
  "heck",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
+name = "enum_dispatch"
+version = "0.3.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aa18ce2bc66555b3218614519ac839ddb759a7d6720732f979ef8d13be147ecd"
+dependencies = [
+ "once_cell",
  "proc-macro2",
  "quote",
  "syn 2.0.117",
@@ -3063,6 +3078,7 @@ dependencies = [
  "indexmap 2.13.0",
  "serde",
  "sqlparser",
+ "tracing",
  "value",
 ]
 

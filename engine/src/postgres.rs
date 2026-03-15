@@ -17,6 +17,7 @@ use tokio_postgres::binary_copy::BinaryCopyInWriter;
 use tokio_postgres::types::{ToSql, Type};
 use tokio_postgres::{Client, Statement};
 use tracing::{debug, info};
+use processing::{Algebra, Schema};
 use util::container::Mapping;
 use util::definition::{Definition, Stage};
 use util::{
@@ -255,10 +256,10 @@ impl Postgres {
         }
 
         if matches!(stage, Stage::Process)
-            && let NativeMapping::Relational(m) = &definition.mapping
+            && let NativeMapping::Relational(_) = &definition.mapping
         {
             let name = definition.entity_name(partition_id, &Stage::Process);
-            self.create_table_process(name.as_str(), m).await?;
+            self.create_table_process(name.as_str(),Algebra::from(definition.processing.clone()).schema()).await?;
         }
 
         Ok(())
@@ -346,9 +347,13 @@ impl Postgres {
     async fn create_table_process(
         &mut self,
         name: &str,
-        mapping: &RelationalMapping,
+        schema: Schema,
     ) -> anyhow::Result<()> {
-        let types = mapping.get_types();
+        let types: Vec<_> = if let Schema::Fixed(types) = schema {
+            types.into_iter().map(|(n, t)| (n, RelationalType::from(&t))).collect()
+        }else {
+            todo!()
+        };
 
         match &self.client {
             None => bail!("Could not create postgres database"),
