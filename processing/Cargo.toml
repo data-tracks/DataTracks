@@ -14,3 +14,7 @@ sqlparser = "0.61.0"
 serde = { workspace = true }
 indexmap = { workspace = true }
 tracing = { workspace = true }
+nom = { workspace = true }
+serde_json = { workspace = true }
+mongodb = { workspace = true }
+json5 = { workspace = true }

@@ -1,3 +1,5 @@
+mod mql;
+
 use crate::Schema;
 use crate::algebra::Algebra::P;
 use crate::algebra::{Algebra, Project};
@@ -7,6 +9,8 @@ use sqlparser::ast::{Select, SetExpr, Statement, TableFactor};
 use sqlparser::dialect::Dialect;
 use sqlparser::parser::Parser;
 use tracing::debug;
+
+pub use mql::*;
 
 #[derive(Debug)]
 pub struct StreamDialect {}

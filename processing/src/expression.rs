@@ -16,6 +16,7 @@ pub enum Expression {
     },
 }
 
+
 impl Expression {
     pub(crate) fn scope(&self) -> Scope {
         match self {
@@ -32,6 +33,10 @@ impl Expression {
                     .fold(Scope::Tuple, cmp::max),
             ),
         }
+    }
+
+    pub(crate) fn field(name: &str) -> Self {
+        Self::Field(name.to_string())
     }
 }
 
