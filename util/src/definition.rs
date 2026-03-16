@@ -1,15 +1,15 @@
 use crate::definition::DefinitionFilter::AllMatch;
 use crate::mappings::NativeMapping;
 use crate::partition::PartitionInfo;
+use crate::query::Query;
 use crate::{Batch, DefinitionId, EntityId, PartitionId, TargetedRecord, TimedMeta, log_channel};
 use flume::{Receiver, Sender, unbounded};
+use processing::{Algebra, Program};
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 use std::sync::atomic::{AtomicU64, Ordering};
-use processing::{Algebra, Program};
 use value::Value;
 use value::Value::Dict;
-use crate::query::Query;
 
 static ID_BUILDER: AtomicU64 = AtomicU64::new(0);
 
@@ -34,10 +34,7 @@ pub struct Definition {
         Receiver<Batch<TargetedRecord>>,
     ),
     #[serde(skip)]
-    pub process_full: (
-        Sender<Vec<u64>>,
-        Receiver<Vec<u64>>,
-    ),
+    pub process_full: (Sender<Vec<u64>>, Receiver<Vec<u64>>),
     pub mapping: NativeMapping,
     pub processing: Query,
     pub algebra: Algebra,
@@ -104,7 +101,9 @@ impl Definition {
         }
     }
 
-    pub fn processing(&self) -> Program {
+    pub fn processing(&mut self) -> Program {
+        self.algebra.set_schema(self.mapping.schema());
+
         self.algebra.processing()
     }
 
@@ -120,7 +119,6 @@ impl Definition {
         }
     }
 }
-
 
 /// incoming values are either accompanied by meta with name or wrapped in a document structure
 /// and have a matching value for the key

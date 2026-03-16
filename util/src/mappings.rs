@@ -1,9 +1,11 @@
 use crate::RelationalType;
+use indexmap::IndexMap;
+use processing::Schema;
 use serde::{Deserialize, Deserializer, Serialize};
-use value::edge::Edge;
-use value::node::Node;
 use value::Value;
 use value::Value::{Array, Dict};
+use value::edge::Edge;
+use value::node::Node;
 
 pub type ValueProducer = Box<dyn Fn(&Value) -> Option<Value> + Sync + Send>;
 
@@ -24,6 +26,21 @@ pub enum NativeMapping {
     KeyValue(KeyValueMapping),
 }
 
+impl NativeMapping {
+    pub(crate) fn schema(&self) -> Schema {
+        match self {
+            NativeMapping::Relational(r) => {
+                let mut map = IndexMap::new();
+                for (name, t) in r.get_types() {
+                    map.insert(name, t.into());
+                }
+                Schema::fixed(map)
+            }
+            _ => Schema::Dynamic,
+        }
+    }
+}
+
 fn deserialize_document<'de, D>(deserializer: D) -> Result<DocumentMapping, D::Error>
 where
     D: Deserializer<'de>,
@@ -37,16 +54,17 @@ where
 
     match DocumentHelper::deserialize(deserializer)? {
         // If TOML is `mapping = "document"`, return a default mapping
-        DocumentHelper::Single(d) if d.to_lowercase() == "document" => Ok(DocumentMapping::Document(Mapping {
-            initial: MappingSource::Document(DocumentSource::Whole),
-            manual: vec![],
-            auto: vec![],
-        })),
+        DocumentHelper::Single(d) if d.to_lowercase() == "document" => {
+            Ok(DocumentMapping::Document(Mapping {
+                initial: MappingSource::Document(DocumentSource::Whole),
+                manual: vec![],
+                auto: vec![],
+            }))
+        }
         DocumentHelper::Full(mapping) => Ok(mapping),
         DocumentHelper::Single(_) => Err(serde::de::Error::custom("invalid document mapping")),
     }
 }
-
 
 #[derive(Deserialize)]
 #[serde(transparent)]
@@ -56,7 +74,8 @@ pub struct RelationalTable {
 
 impl From<RelationalTable> for RelationalMapping {
     fn from(table: RelationalTable) -> Self {
-        let fields: Vec<(String, RelationalType)> = table.relational
+        let fields: Vec<(String, RelationalType)> = table
+            .relational
             .into_iter()
             .flat_map(|map| map.into_iter())
             .collect();
@@ -334,8 +353,16 @@ impl<T: Clone + Default> From<MappingHelper<T>> for Mapping<T> {
                 manual: Vec::new(),
                 auto: Vec::new(),
             },
-            MappingHelper::Full { initial, manual, auto } => Mapping { initial, manual, auto },
-            MappingHelper::Unknown(e) => panic!("{}", e)
+            MappingHelper::Full {
+                initial,
+                manual,
+                auto,
+            } => Mapping {
+                initial,
+                manual,
+                auto,
+            },
+            MappingHelper::Unknown(e) => panic!("{}", e),
         }
     }
 }
@@ -367,7 +394,7 @@ impl Default for NodeMapping {
         Self {
             id: MappingSource::Document(DocumentSource::Key("id".to_string())),
             label: MappingSource::Document(DocumentSource::Key("label".to_string())),
-            properties: MappingSource::Document(DocumentSource::Key("properties".to_string()))
+            properties: MappingSource::Document(DocumentSource::Key("properties".to_string())),
         }
     }
 }
@@ -386,7 +413,9 @@ pub struct EdgeMapping {
 pub enum MappingSource {
     #[serde(alias = "doc")]
     Document(DocumentSource),
-    List { keys: Vec<String> },
+    List {
+        keys: Vec<String>,
+    },
 }
 
 impl Default for MappingSource {

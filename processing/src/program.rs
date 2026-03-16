@@ -1,9 +1,10 @@
+use crate::Schema;
 use crate::algebra::Algebra;
 use crate::expression::Expression;
 use crate::operator::Operator;
 use anyhow::anyhow;
 use std::collections::HashMap;
-use value::Value;
+use value::{ValType, Value};
 
 #[derive(Clone, Debug)]
 pub enum Op {
@@ -18,6 +19,9 @@ pub enum Op {
     Minus,
     Multiply,
     Length,
+
+    // Flatten
+    Flatten,
 
     // Explode
     NextOrPop,
@@ -47,23 +51,21 @@ pub struct VM {
     constants: Vec<Value>, // The "Pool" for literals
     pub pc: usize,         // Program Counter
     explode_stack: Vec<ExplodeState>,
-    pub resources: Vec<Box<dyn Iterator<Item = Value> + Send + Sync> >,
+    pub resources: Vec<Box<dyn Iterator<Item = Value> + Send + Sync>>,
 }
 
 impl Clone for VM {
     fn clone(&self) -> Self {
-        Self{
+        Self {
             stack: self.stack.clone(),
             current_record: self.current_record.clone(),
             constants: self.constants.clone(),
-            pc: self.pc.clone(),
+            pc: self.pc,
             explode_stack: self.explode_stack.clone(),
             resources: vec![],
         }
     }
 }
-
-
 
 #[derive(Clone)]
 pub struct Program {
@@ -92,7 +94,7 @@ impl From<&Algebra> for Program {
         let mut ends = vec![];
 
         let mut tuples = 1;
-        compiler.compile_algebra(&algebra, &mut tuples, &mut instructions, &mut ends);
+        compiler.compile_algebra(algebra, &mut tuples, &mut instructions, &mut ends);
         instructions.push(Op::Yield(tuples));
 
         let mut instructions = [instructions, ends].concat();
@@ -138,13 +140,14 @@ impl Program {
         Ok(())
     }
 
+    #[cfg(test)]
     pub(crate) fn set_record(&mut self, name: &str, value: Value) -> anyhow::Result<()> {
         let index = self
             .compiler
-            .field_map
+            .current_schema
             .get(name)
             .ok_or(anyhow!("No named field in compiler"))?;
-        self.vm.current_record.insert(*index, value);
+        self.vm.current_record.insert(index, value);
         Ok(())
     }
 
@@ -190,7 +193,7 @@ impl Iterator for Program {
 
                     self.vm.pc += 1; // Move past Yield for the next call
                     return if amount == &1 {
-                        row.pop()
+                        row.pop().map(|v| Value::array(vec![v]))
                     } else {
                         Some(Value::array(row))
                     };
@@ -204,10 +207,10 @@ impl Iterator for Program {
                     if let Some(resource) = self.vm.resources.get_mut(*resource_id)
                         && let Some(value) = resource.next()
                     {
-                        self.vm.current_record.push(value)
-                    }else {
+                        self.vm.current_record = vec![value]
+                    } else {
                         // we end the iterator
-                        return None
+                        return None;
                     }
                 }
                 Op::Jump { target } => {
@@ -248,9 +251,7 @@ impl Iterator for Program {
                         Value::Array(a) => {
                             self.vm.stack.push(Value::int(a.values.len() as i64));
                         }
-                        Value::Text(t) => {
-                            self.vm.stack.push(Value::int(t.0.len() as i64))
-                        }
+                        Value::Text(t) => self.vm.stack.push(Value::int(t.0.len() as i64)),
                         _ => {}
                     }
                 }
@@ -301,6 +302,19 @@ impl Iterator for Program {
                     let value = self.vm.stack.last().unwrap();
                     self.vm.current_record[*idx] = value.clone()
                 }
+                Op::Flatten => {
+                    let value = self.vm.current_record.pop();
+                    if let Some(value) = value {
+                        match value {
+                            Value::Array(a) => {
+                                for val in a.values {
+                                    self.vm.current_record.push(val);
+                                }
+                            }
+                            _ => panic!(),
+                        }
+                    }
+                }
             }
             self.vm.pc += 1;
         }
@@ -310,21 +324,27 @@ impl Iterator for Program {
 
 #[derive(Clone, Debug)]
 pub struct Compiler {
-    pub field_map: HashMap<String, usize>,
+    //pub field_map: HashMap<String, usize>,
     pub resource_map: HashMap<String, usize>,
     pub constants: Vec<Value>,
-    pub next_slot: usize,
     pub loop_stack: Vec<usize>,
+    pub current_schema: Schema,
+}
+
+impl Default for Compiler {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Compiler {
     pub fn new() -> Self {
         Self {
-            field_map: HashMap::new(),
+            //field_map: HashMap::new(),
             resource_map: HashMap::new(),
             constants: Vec::new(),
             loop_stack: Vec::new(),
-            next_slot: 0,
+            current_schema: Schema::Dynamic,
         }
     }
 
@@ -371,7 +391,7 @@ impl Compiler {
         ends: &mut Vec<Op>,
     ) {
         match algebra {
-            Algebra::Scan { source } => {
+            Algebra::Scan { source, schema } => {
                 let start_pc = ops.len();
 
                 let slot = self.resource_map.len();
@@ -380,8 +400,15 @@ impl Compiler {
                     .entry(source.to_string())
                     .or_insert_with(|| slot);
 
+                self.current_schema = schema.clone();
+
                 ops.push(Op::NextTuple { resource_id: slot }); // Start the loop
                 self.loop_stack.push(start_pc);
+
+                // we do not only have one field aka doc, but named fields
+                if let Schema::Fixed(_) = &self.current_schema {
+                    ops.push(Op::Flatten);
+                }
             }
             Algebra::F(filter) => {
                 // 1. First, compile the source (Scan)
@@ -429,7 +456,7 @@ impl Compiler {
 
                 ops.push(match unwind.func {
                     Operator::Explode => Op::InitExplode(loop_start_pc),
-                    _ => panic!("Unwind algebra not yet implemented"),
+                    _ => panic!("Unwind algebra operator not yet implemented"),
                 });
 
                 self.loop_stack.push(loop_start_pc);
@@ -438,9 +465,8 @@ impl Compiler {
                 // D. Load current element of the latest explode onto the stack
                 ops.push(Op::LoadExplodeElement);
 
-
-                let idx = self.field_map.get(&unwind.key).unwrap();
-                ops.push(Op::StoreField(idx.clone()));
+                let idx = self.current_schema.get(&unwind.key).unwrap();
+                ops.push(Op::StoreField(idx));
 
                 // G. Advance the explode loop
                 // If has next: jumps to loop_start_pc + 1 (LoadExplodeElement)
@@ -454,11 +480,13 @@ impl Compiler {
     }
 
     fn compile_field(&mut self, name: &str) -> Op {
-        let slot = *self.field_map.entry(name.to_string()).or_insert_with(|| {
-            let id = self.next_slot;
-            self.next_slot += 1;
-            id
-        });
+        let slot = if let Schema::Fixed(f) = &mut self.current_schema {
+            f.insert(name.to_string(), ValType::Any);
+            f.len() - 1
+        } else {
+            Schema::fixed([(name.to_string(), ValType::Any)]);
+            0
+        };
 
         Op::LoadField(slot)
     }
@@ -467,7 +495,10 @@ impl Compiler {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::Schema;
     use crate::operator::Operator;
+    use std::vec;
+    use value::ValType;
 
     #[test]
     fn test_vm_execution_add() {
@@ -480,8 +511,10 @@ mod test {
             ],
         };
 
-        let mut program = Program::from(expr);
+        let mut program = Program::from(&expr);
         program.set_record("price", Value::int(100)).unwrap();
+
+        let mut program = program.map(|v| v.as_array().unwrap().values[0].clone());
 
         assert_eq!(program.next().unwrap(), Value::int(110));
     }
@@ -489,8 +522,8 @@ mod test {
     #[test]
     fn test_vm_execution_multiple() {
         // Simulate: price + 10
-        let mut program = Program::from(Algebra::project(
-            Algebra::scan("test"),
+        let mut program = Program::from(&Algebra::project(
+            Algebra::scan("test", Schema::fixed([("name".to_string(), ValType::Text)])),
             [
                 (
                     "name".to_string(),
@@ -502,30 +535,73 @@ mod test {
                         ],
                     },
                 ),
-                (
-                    "name1".to_string(),
-                    Expression::Field("name".to_string()),
-                ),
+                ("name1".to_string(), Expression::Field("name".to_string())),
             ],
         ));
 
-        program.set_resource("test", [Value::int(100)].into_iter()).unwrap();
+        program
+            .set_resource("test", [Value::array([Value::int(100)])].into_iter())
+            .unwrap();
 
-        assert_eq!(program.next().unwrap(), Value::array([Value::int(110), Value::int(100)]));
+        assert_eq!(
+            program.next().unwrap(),
+            Value::array([Value::int(110), Value::int(100)])
+        );
+    }
+
+    #[test]
+    fn test_vm_execution_sql() {
+        // Simulate: price + 10
+        let values = vec![
+            Value::array([Value::int(3), Value::text("David"), Value::float(3.3)]),
+            Value::array([Value::int(3), Value::text("David"), Value::float(5.2)]),
+        ];
+
+        let mut program = Program::from(&Algebra::project(
+            Algebra::scan(
+                "$$source",
+                Schema::fixed([
+                    ("id".to_string(), ValType::Integer),
+                    ("name".to_string(), ValType::Text),
+                    ("price".to_string(), ValType::Float),
+                ]),
+            ),
+            [(
+                "price".to_string(),
+                Expression::Call {
+                    operator: Operator::Add,
+                    expressions: vec![
+                        Expression::Field("price".to_string()),
+                        Expression::Literal(Value::float(3.3)),
+                    ],
+                },
+            )],
+        ));
+
+        program
+            .set_resource("$$source", values.into_iter())
+            .unwrap();
+
+        let mut program = program.map(|v| v.as_array().unwrap().values[0].clone());
+
+        assert_eq!(program.next().unwrap(), Value::float(6.6));
+        assert_eq!(program.next().unwrap(), Value::float(8.5));
     }
 
     #[test]
     fn test_vm_execution_explode() {
         // Simulate: explode
-        let mut program = Program::from(Algebra::unwind(
-            Algebra::scan("test"),
+        let mut program = Program::from(&Algebra::unwind(
+            Algebra::scan("test", Schema::fixed([("name".to_string(), ValType::Text)])),
             "name",
             Operator::Explode,
         ));
 
         program
-            .set_resource("test", [Value::text("David")].into_iter())
+            .set_resource("test", [Value::array([Value::text("David")])].into_iter())
             .unwrap();
+
+        let mut program = program.map(|v| v.as_array().unwrap().values[0].clone());
 
         assert_eq!(program.next().unwrap(), Value::text("D"));
         assert_eq!(program.next().unwrap(), Value::text("a"));
@@ -537,8 +613,12 @@ mod test {
     #[test]
     fn test_vm_execution_explode_nested() {
         // Simulate: explode
-        let mut program = Program::from(Algebra::project(
-            Algebra::unwind(Algebra::scan("test"), "name", Operator::Explode),
+        let mut program = Program::from(&Algebra::project(
+            Algebra::unwind(
+                Algebra::scan("test", Schema::fixed([("name".to_string(), ValType::Text)])),
+                "name",
+                Operator::Explode,
+            ),
             [(
                 "name".to_string(),
                 Expression::Call {
@@ -552,8 +632,10 @@ mod test {
         ));
 
         program
-            .set_resource("test", [Value::text("David")].into_iter())
+            .set_resource("test", [Value::array([Value::text("David")])].into_iter())
             .unwrap();
+
+        let mut program = program.map(|v| v.as_array().unwrap().values[0].clone());
 
         assert_eq!(program.next().unwrap(), Value::text("Dtest"));
         assert_eq!(program.next().unwrap(), Value::text("atest"));
@@ -585,8 +667,10 @@ mod test {
             ],
         };
 
-        let mut program = Program::from(expr);
+        let mut program = Program::from(&expr);
         program.set_record("array", Value::text("text")).unwrap();
+
+        let mut program = program.map(|v| v.as_array().unwrap().values[0].clone());
 
         assert_eq!(program.next().unwrap(), Value::text("te"));
     }

@@ -1,5 +1,5 @@
+use processing::{Algebra, parse_sql};
 use serde::{Deserialize, Serialize};
-use processing::{parse_sql, Algebra};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum Query {

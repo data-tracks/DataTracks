@@ -1,10 +1,10 @@
 use crate::algebra::Scope;
 use crate::language::Sql;
 use crate::operator::Operator;
+use serde::Serialize;
 use sqlparser::ast::{Expr, SelectItem};
 use std::{cmp, vec};
-use serde::Serialize;
-use value::{ValType, Value};
+use value::Value;
 
 #[derive(Clone, Debug, Serialize)]
 pub enum Expression {
@@ -43,7 +43,10 @@ impl From<&SelectItem> for Expression {
             } else if let Expr::BinaryOp { left, op, right } = f {
                 return Expression::Call {
                     operator: Operator::from(op),
-                    expressions: vec![ Expression::from(left.clone()), Expression::from(right.clone())],
+                    expressions: vec![
+                        Expression::from(left.clone()),
+                        Expression::from(right.clone()),
+                    ],
                 };
             } else {
                 panic!("Expected identifier, found {:?}", f);
@@ -73,25 +76,10 @@ impl Sql for Expression {
         match self {
             Expression::Field(f) => f.clone(),
             Expression::Literal(l) => l.to_string(),
-            Expression::Call { operator, expressions } => operator.sql(expressions.clone())
+            Expression::Call {
+                operator,
+                expressions,
+            } => operator.sql(expressions.clone()),
         }
     }
 }
-
-#[derive(Clone)]
-pub struct Field {
-    pub(crate) name: String,
-    pub(crate) f_type: Option<ValType>,
-}
-
-#[derive(Clone)]
-pub struct Literal {
-    pub(crate) value: Value,
-}
-
-#[derive(Clone)]
-pub struct Call {
-    pub(crate) operator: Operator,
-    pub(crate) expressions: Vec<Expression>,
-}
-

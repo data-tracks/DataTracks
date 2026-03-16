@@ -1,3 +1,4 @@
+use crate::Schema;
 use crate::algebra::Algebra::P;
 use crate::algebra::{Algebra, Project};
 use crate::expression::Expression;
@@ -39,24 +40,21 @@ pub trait Cypher {
 
 fn parse_alg(statements: Vec<Statement>) -> Algebra {
     for statement in statements {
-        match statement {
-            Statement::Query(q) => {
-                if let SetExpr::Select(s) = *q.body {
-                    let mut expressions = IndexMap::new();
+        if let Statement::Query(q) = statement {
+            if let SetExpr::Select(s) = *q.body {
+                let mut expressions = IndexMap::new();
 
-                    for (k, item) in s.projection.iter().enumerate() {
-                        expressions.insert(format!("field{}", k), Expression::from(item));
-                    }
-
-                    let scan = handle_scan(&s);
-
-                    return P(Project {
-                        expressions,
-                        input: Box::new(scan),
-                    });
+                for (k, item) in s.projection.iter().enumerate() {
+                    expressions.insert(format!("field{}", k), Expression::from(item));
                 }
+
+                let scan = handle_scan(&s);
+
+                return P(Project {
+                    expressions,
+                    input: Box::new(scan),
+                });
             }
-            _ => {}
         }
     }
     panic!("No answer")
@@ -72,11 +70,12 @@ pub fn parse_sql(query: &str) -> Algebra {
     parse_alg(ast)
 }
 
-fn handle_scan(s: &Box<Select>) -> Algebra {
+fn handle_scan(s: &Select) -> Algebra {
     if s.from.len() == 1 {
         if let TableFactor::Table { name, .. } = &s.from[0].relation {
             return Algebra::Scan {
                 source: name.to_string(),
+                schema: Schema::Dynamic,
             };
         }
         todo!()

@@ -1,12 +1,18 @@
-use std::fmt::{Display};
 use serde::{Deserialize, Serialize};
+use std::fmt::Display;
 use value::ValType;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum RelationalType {
     #[serde(alias = "varchar", alias = "VARCHAR")]
     Varchar(u64),
-    #[serde(alias = "int", alias = "Int", alias = "INT", alias = "INTEGER", alias = "integer")]
+    #[serde(
+        alias = "int",
+        alias = "Int",
+        alias = "INT",
+        alias = "INTEGER",
+        alias = "integer"
+    )]
     Integer,
     #[serde(alias = "float", alias = "FLOAT")]
     Float,
@@ -27,6 +33,18 @@ impl Display for RelationalType {
     }
 }
 
+impl Into<ValType> for RelationalType {
+    fn into(self) -> ValType {
+        match self {
+            RelationalType::Varchar(_) => ValType::Text,
+            RelationalType::Integer => ValType::Integer,
+            RelationalType::Float => ValType::Float,
+            RelationalType::Bool => ValType::Bool,
+            RelationalType::Text => ValType::Text,
+        }
+    }
+}
+
 impl From<&ValType> for RelationalType {
     fn from(t: &ValType) -> Self {
         match t {
@@ -34,7 +52,7 @@ impl From<&ValType> for RelationalType {
             ValType::Float => RelationalType::Float,
             ValType::Text => RelationalType::Text,
             ValType::Bool => RelationalType::Bool,
-            _ => todo!()
+            _ => todo!(),
         }
     }
 }

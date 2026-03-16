@@ -1,15 +1,15 @@
 use crate::expression::Expression;
 use crate::language::Sql;
 use crate::operator::Operator;
-use indexmap::IndexMap;
-use std::cmp;
-use serde::Serialize;
-use value::ValType;
 use crate::program::Program;
+use indexmap::IndexMap;
+use serde::Serialize;
+use std::cmp;
+use value::ValType;
 
 #[derive(Clone, Debug, Serialize)]
 pub enum Algebra {
-    Scan { source: String },
+    Scan { source: String, schema: Schema },
     P(Project),
     F(Filter),
     C(Collect),
@@ -18,6 +18,17 @@ pub enum Algebra {
 }
 
 impl Algebra {
+    pub fn set_schema(&mut self, s: Schema) {
+        match self {
+            Algebra::Scan { schema, .. } => *schema = s,
+            Algebra::P(p) => p.input.set_schema(s),
+            Algebra::F(f) => f.input.set_schema(s),
+            Algebra::C(c) => c.input.set_schema(s),
+            Algebra::U(u) => u.input.set_schema(s),
+            Algebra::T(_) => {}
+        }
+    }
+
     pub fn processing(&self) -> Program {
         Program::from(self)
     }
@@ -31,9 +42,11 @@ pub enum Scope {
 }
 
 impl Algebra {
-
     #[cfg(test)]
-    pub(crate) fn project<M: Into<IndexMap<String, Expression>>>(child: Algebra, expressions: M) -> Self {
+    pub(crate) fn project<M: Into<IndexMap<String, Expression>>>(
+        child: Algebra,
+        expressions: M,
+    ) -> Self {
         Algebra::P(Project {
             expressions: expressions.into(),
             input: Box::new(child),
@@ -41,9 +54,10 @@ impl Algebra {
     }
 
     #[cfg(test)]
-    pub(crate) fn scan<S: AsRef<str>>(resource: S) -> Self {
+    pub(crate) fn scan<S: AsRef<str>>(resource: S, schema: Schema) -> Self {
         Algebra::Scan {
             source: resource.as_ref().to_string(),
+            schema,
         }
     }
 
@@ -74,20 +88,33 @@ impl Algebra {
     }
 
     pub fn schema(&self) -> Schema {
-        Schema::Fixed(vec![("price".to_string(), ValType::Float)])
+        Schema::Fixed(IndexMap::from([("price".to_string(), ValType::Float)]))
     }
 }
 
-pub enum Schema{
+#[derive(Clone, Debug, Serialize)]
+pub enum Schema {
     Dynamic,
-    Fixed(Vec<(String, ValType)>),
+    Fixed(IndexMap<String, ValType>),
 }
 
+impl Schema {
+    pub fn fixed<M: Into<IndexMap<String, ValType>>>(fields: M) -> Self {
+        Schema::Fixed(fields.into())
+    }
+
+    pub fn get(&self, name: &str) -> Option<usize> {
+        match self {
+            Schema::Dynamic => Some(0),
+            Schema::Fixed(f) => f.get_index_of(name),
+        }
+    }
+}
 
 impl Sql for Algebra {
     fn sql(&self) -> String {
         match self {
-            Algebra::Scan { source } => format!("FROM {}", source),
+            Algebra::Scan { source, .. } => format!("FROM {}", source),
             Algebra::P(p) => p.sql(),
             Algebra::F(f) => f.sql(),
             Algebra::T(_) => panic!(),
@@ -144,8 +171,8 @@ impl Sql for Filter {
 
 #[cfg(test)]
 mod test {
+    use crate::language::{Sql, parse_sql};
     use tracing::debug;
-    use crate::language::{parse_sql, Sql};
 
     #[test]
     // SELECT Istream(auction, DOLTOEUR(price), bidder, datetime) FROM bid [ROWS UNBOUNDED]

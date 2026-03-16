@@ -2,7 +2,7 @@ use crate::management::catalog::Catalog;
 use anyhow::{anyhow, bail};
 use async_trait::async_trait;
 use engine::engine::Engine;
-use flume::{unbounded, Receiver};
+use flume::{Receiver, unbounded};
 use processing::{Program, Scope};
 use std::thread;
 use std::time::Duration;
@@ -11,9 +11,7 @@ use tokio::task::JoinSet;
 use tokio::time::Instant;
 use tracing::{error, info};
 use util::definition::{Definition, Model, Stage};
-use util::{
-    target, Batch, Event, Runtimes, TargetedRecord,
-};
+use util::{Batch, Event, Runtimes, TargetedRecord, target};
 
 pub struct Processor {
     catalog: Catalog,
@@ -77,8 +75,8 @@ impl Processor {
                 .collect::<Vec<Engine>>();
             //let outgoing = outgoing.clone();
 
-            if !matches!(definition.model, Model::Relational ) {
-                continue
+            if !matches!(definition.model, Model::Relational) {
+                continue;
             }
 
             // Spawn a dedicated OS thread for this specific engine
@@ -91,7 +89,7 @@ impl Processor {
                     .unwrap();
                 rt.block_on(async {
                     for i in 0..DEFINITIONS_THREADS {
-                        let definition = definition.clone();
+                        let mut definition = definition.clone();
                         let engines = engines.clone();
                         let mut engine = engines.into_iter().next().unwrap();
                         let startup_tx = startup_tx.clone();
@@ -102,12 +100,10 @@ impl Processor {
                             let mut join_set = JoinSet::new();
 
                             let mut strategy: ProcessorType = match definition.algebra.scope() {
-                                Scope::Tuple => {
-                                    ProcessorType::Tuple(TupleProcessor {
-                                        processing_engine: definition.processing(),
-                                        rx: definition.process_single.1.clone(),
-                                    })
-                                },
+                                Scope::Tuple => ProcessorType::Tuple(TupleProcessor {
+                                    processing_engine: definition.processing(),
+                                    rx: definition.process_single.1.clone(),
+                                }),
                                 Scope::Multi => todo!("MultiProcessor implementation"),
                                 Scope::Join => todo!("JoinProcessor implementation"),
                             };
@@ -115,7 +111,7 @@ impl Processor {
                             engine.start(&mut join_set).await.unwrap();
                             match startup_tx.send(true) {
                                 Ok(_) => {}
-                                Err(err) => error!("{}", err)
+                                Err(err) => error!("{}", err),
                             }
 
                             strategy
@@ -188,8 +184,8 @@ impl RecordProcessor for TupleProcessor {
                     let meta = records.last().unwrap().meta.clone();
 
                     let processed_data = processing_engine.collect::<Vec<_>>();
-                    info!("{}", processed_data.first().unwrap());
-                    let processed_data = processed_data.into_iter()
+
+                    let processed_data: Batch<_> = processed_data.into_iter()
                         .map(|d| {
                             target!(
                                 d,
@@ -198,6 +194,7 @@ impl RecordProcessor for TupleProcessor {
                         })
                         .collect();
                     let partition_id = definition.partition_info.next(&id, &(records.len() as u64)).into();
+                    //info!("{:?}", processed_data.records[0]);
 
                     // Store and notify
                     engine
