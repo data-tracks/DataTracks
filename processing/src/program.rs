@@ -186,22 +186,26 @@ impl Iterator for Program {
                 }
                 Op::Yield(amount) => {
                     let mut row = Vec::with_capacity(*amount);
-                    for _ in 0..*amount {
-                        row.push(self.vm.stack.pop().expect("Stack underflow at yield"));
+                    if self.vm.stack.is_empty() {
+                        assert_eq!(&self.vm.current_record.len(), amount);
+                        for value in &self.vm.current_record {
+                            row.push(value.clone());
+                        }
+                    }else {
+                        for _ in 0..*amount {
+                            row.push(self.vm.stack.pop().expect("Stack underflow at yield"));
+                        }
                     }
+
                     row.reverse();
 
                     self.vm.pc += 1; // Move past Yield for the next call
-                    return if amount == &1 {
-                        row.pop().map(|v| Value::array(vec![v]))
-                    } else {
-                        Some(Value::array(row))
-                    };
+                    return Some(Value::array(row));
                 }
                 Op::Equal => {
                     let r = self.vm.stack.pop().unwrap();
                     let l = self.vm.stack.pop().unwrap();
-                    self.vm.stack.push(&l + &r);
+                    self.vm.stack.push(Value::bool(&l == &r));
                 }
                 Op::NextTuple { resource_id } => {
                     if let Some(resource) = self.vm.resources.get_mut(*resource_id)
@@ -268,7 +272,7 @@ impl Iterator for Program {
                             self.vm.pc = state.loop_pc;
                             continue;
                         } else {
-                            // This array is done!
+                            // This array is done
                             self.vm.explode_stack.pop();
                         }
                     }

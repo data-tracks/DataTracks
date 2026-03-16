@@ -194,7 +194,6 @@ impl RecordProcessor for TupleProcessor {
                         })
                         .collect();
                     let partition_id = definition.partition_info.next(&id, &(records.len() as u64)).into();
-                    //info!("{:?}", processed_data.records[0]);
 
                     // Store and notify
                     engine
