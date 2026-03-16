@@ -380,6 +380,7 @@ impl Compiler {
             Operator::Minus => Op::Minus,
             Operator::Multiply => Op::Multiply,
             Operator::Explode => Op::InitExplode(0),
+            Operator::Equal => Op::Equal,
         }
     }
 
@@ -517,6 +518,37 @@ mod test {
         let mut program = program.map(|v| v.as_array().unwrap().values[0].clone());
 
         assert_eq!(program.next().unwrap(), Value::int(110));
+    }
+
+    #[test]
+    fn test_vm_execution_filter() {
+        // Simulate: price + 10
+        let mut program = Program::from(&Algebra::filter(
+            Algebra::scan("test", Schema::fixed([("name".to_string(), ValType::Text)])),
+            Expression::Call {
+                operator: Operator::Equal,
+                expressions: vec![
+                    Expression::Field("name".to_string()),
+                    Expression::Literal(Value::int(10)),
+                ],
+            },
+        ));
+
+        program
+            .set_resource(
+                "test",
+                [
+                    Value::array([Value::int(10)]),
+                    Value::array([Value::int(100)]),
+                ]
+                .into_iter(),
+            )
+            .unwrap();
+
+        let mut program = program.map(|v| v.as_array().unwrap().values[0].clone());
+
+        assert_eq!(program.next().unwrap(), Value::int(10));
+        assert!(program.next().is_none());
     }
 
     #[test]

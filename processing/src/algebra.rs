@@ -17,23 +17,6 @@ pub enum Algebra {
     T(String),
 }
 
-impl Algebra {
-    pub fn set_schema(&mut self, s: Schema) {
-        match self {
-            Algebra::Scan { schema, .. } => *schema = s,
-            Algebra::P(p) => p.input.set_schema(s),
-            Algebra::F(f) => f.input.set_schema(s),
-            Algebra::C(c) => c.input.set_schema(s),
-            Algebra::U(u) => u.input.set_schema(s),
-            Algebra::T(_) => {}
-        }
-    }
-
-    pub fn processing(&self) -> Program {
-        Program::from(self)
-    }
-}
-
 #[derive(Ord, PartialOrd, Eq, PartialEq)]
 pub enum Scope {
     Tuple = 0,
@@ -49,6 +32,13 @@ impl Algebra {
     ) -> Self {
         Algebra::P(Project {
             expressions: expressions.into(),
+            input: Box::new(child),
+        })
+    }
+
+    pub(crate) fn filter(child: Algebra, predicate: Expression) -> Self {
+        Algebra::F(Filter {
+            predicate,
             input: Box::new(child),
         })
     }
@@ -89,6 +79,21 @@ impl Algebra {
 
     pub fn schema(&self) -> Schema {
         Schema::Fixed(IndexMap::from([("price".to_string(), ValType::Float)]))
+    }
+
+    pub fn set_schema(&mut self, s: Schema) {
+        match self {
+            Algebra::Scan { schema, .. } => *schema = s,
+            Algebra::P(p) => p.input.set_schema(s),
+            Algebra::F(f) => f.input.set_schema(s),
+            Algebra::C(c) => c.input.set_schema(s),
+            Algebra::U(u) => u.input.set_schema(s),
+            Algebra::T(_) => {}
+        }
+    }
+
+    pub fn processing(&self) -> Program {
+        Program::from(self)
     }
 }
 

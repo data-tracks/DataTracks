@@ -7,6 +7,7 @@ use sqlparser::ast::BinaryOperator;
 #[derive(Clone, Debug, Serialize)]
 pub enum Operator {
     Add,
+    Equal,
     Minus,
     Multiply,
     Gt,
@@ -23,6 +24,7 @@ impl Operator {
             Operator::Gt => format!("{} > {}", expressions[0].sql(), expressions[1].sql()),
             Operator::Index => format!("{}[{}]", expressions[0].sql(), expressions[1].sql()),
             Operator::Explode => format!("explode({})", expressions[0].sql()),
+            Operator::Equal => format!("{} = {}", expressions[0].sql(), expressions[1].sql()),
         }
     }
 
@@ -34,6 +36,7 @@ impl Operator {
             Operator::Gt => Scope::Tuple,
             Operator::Index => Scope::Tuple,
             Operator::Explode => Scope::Tuple,
+            Operator::Equal => Scope::Tuple,
         }
     }
 }
