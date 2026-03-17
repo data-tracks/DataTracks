@@ -23,7 +23,7 @@ model = "document"
 entity = "document"
 filter.topic = "doc"
 mapping.document = "document"
-processing.mql = "db.$.find({age: 1})"
+processing.mql = "db.$$source.aggregate([{$project: {age: 1}}])"
 # SELECT age FROM $source
 # MATCH (n:$) RETURN n.age
 
@@ -32,7 +32,7 @@ topic = "Graph test"
 model = "graph"
 entity = "graph"
 filter.topic = "graph"
-processing.cypher = "MATCH (n:$:Person) RETURN n.age"
+processing.cypher = "MATCH (n:$$source:Person) RETURN n.age"
 # SELECT age FROM $ WHERE label = "Person"
 # db.$.aggregate([$filter: { label: "Person" }])
 [def.graph-default.mapping.graph.node]

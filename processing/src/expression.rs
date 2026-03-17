@@ -1,6 +1,7 @@
 use crate::algebra::Scope;
 use crate::language::Sql;
 use crate::operator::Operator;
+use mongodb::bson::Bson;
 use serde::Serialize;
 use sqlparser::ast::{Expr, SelectItem};
 use std::{cmp, vec};
@@ -10,6 +11,7 @@ use value::Value;
 pub enum Expression {
     Field(String),
     Literal(Value),
+    Exclude(String),
     Call {
         operator: Operator,
         expressions: Vec<Expression>,
@@ -32,6 +34,7 @@ impl Expression {
                     .map(|e| e.scope())
                     .fold(Scope::Tuple, cmp::max),
             ),
+            Expression::Exclude(_) => Scope::Tuple
         }
     }
 
@@ -76,6 +79,28 @@ impl From<Box<Expr>> for Expression {
     }
 }
 
+impl From<(&str, &Bson)> for Expression {
+    fn from(value: (&str, &Bson)) -> Self {
+        if let Some(num) = value.1.as_i64() {
+            if num == 1 {
+                Expression::Field(value.0.to_string())
+            } else {
+                Expression::Exclude(value.0.to_string())
+            }
+        }else if let Some (field) = value.1.as_str() {
+            Expression::Field(field.to_string())
+        }else {
+            Expression::from(value.1)
+        }
+    }
+}
+
+impl From<&Bson> for Expression {
+    fn from(value: &Bson) -> Self {
+        todo!()
+    }
+}
+
 impl Sql for Expression {
     fn sql(&self) -> String {
         match self {
@@ -85,6 +110,7 @@ impl Sql for Expression {
                 operator,
                 expressions,
             } => operator.sql(expressions.clone()),
+            Expression::Exclude(_) => unreachable!()
         }
     }
 }

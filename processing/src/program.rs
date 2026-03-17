@@ -373,6 +373,9 @@ impl Compiler {
                 // Map the operators to the enum
                 out.push(Self::compile_op(operator))
             }
+            Expression::Exclude(_) => {
+                todo!()
+            }
         }
     }
 
@@ -436,7 +439,7 @@ impl Compiler {
 
                 *tuples = project.expressions.len();
             }
-            Algebra::T(_) => {
+            Algebra::Todo(_) => {
                 let start_pc = ops.len();
 
                 let slot = self.resource_map.len();

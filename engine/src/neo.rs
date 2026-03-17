@@ -174,7 +174,7 @@ impl Neo4j {
 
             let name = definition.entity_name(partition_id, &Stage::Process);
             // process query
-            let cypher_query = self.create_node_query(name.as_str());
+            let cypher_query = self.create_node_query_processed(name.as_str());
             self.prepared_queries
                 .insert((Stage::Process, name.clone()), cypher_query);
         }
@@ -347,6 +347,14 @@ impl Neo4j {
     fn create_node_query(&self, entity: &str) -> String {
         format!(
             "UNWIND $values AS row CREATE (n:db_{}:$(row[0].labels)) SET n = row[0].props SET n._id = row[1]",
+            entity
+        )
+    }
+
+    fn create_node_query_processed(&self, entity: &str) -> String {
+        // todo second [0] for row is due to processing
+        format!(
+            "UNWIND $values AS row CREATE (n:db_{}:$(row[0][0].labels)) SET n = row[0][0].props SET n._id = row[1]",
             entity
         )
     }

@@ -10,7 +10,7 @@ use tokio::runtime::Builder;
 use tokio::task::JoinSet;
 use tokio::time::Instant;
 use tracing::{error, info};
-use util::definition::{Definition, Model, Stage};
+use util::definition::{Definition, Stage};
 use util::{Batch, Event, Runtimes, TargetedRecord, target};
 
 pub struct Processor {
@@ -75,9 +75,6 @@ impl Processor {
                 .collect::<Vec<Engine>>();
             //let outgoing = outgoing.clone();
 
-            if !matches!(definition.model, Model::Relational) {
-                continue;
-            }
 
             // Spawn a dedicated OS thread for this specific engine
             thread::spawn(move || {

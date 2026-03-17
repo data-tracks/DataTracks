@@ -14,7 +14,7 @@ pub enum Algebra {
     F(Filter),
     C(Collect),
     U(Unwind),
-    T(String),
+    Todo(String),
 }
 
 #[derive(Ord, PartialOrd, Eq, PartialEq)]
@@ -73,7 +73,7 @@ impl Algebra {
             Algebra::F(f) => cmp::max(f.input.scope(), f.predicate.scope()),
             Algebra::C(_) => Scope::Multi,
             Algebra::U(_) => Scope::Multi,
-            Algebra::T(_) => Scope::Tuple,
+            Algebra::Todo(_) => Scope::Tuple,
         }
     }
 
@@ -88,7 +88,7 @@ impl Algebra {
             Algebra::F(f) => f.input.set_schema(s),
             Algebra::C(c) => c.input.set_schema(s),
             Algebra::U(u) => u.input.set_schema(s),
-            Algebra::T(_) => {}
+            Algebra::Todo(_) => {}
         }
     }
 
@@ -122,7 +122,7 @@ impl Sql for Algebra {
             Algebra::Scan { source, .. } => format!("FROM {}", source),
             Algebra::P(p) => p.sql(),
             Algebra::F(f) => f.sql(),
-            Algebra::T(_) => panic!(),
+            Algebra::Todo(_) => panic!(),
             Algebra::C(_) => panic!(),
             Algebra::U(_) => panic!(),
         }

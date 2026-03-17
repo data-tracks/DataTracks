@@ -59,7 +59,7 @@ fn setup_inputs(joins: &mut JoinSet<()>, tx: Sender<InitialRecord>, statistics_t
             let mut dummy = DummySink::interval(
                 Value::dict_from_pairs(vec![
                     ("test", Value::text("test")),
-                    ("key2", Value::text("test2")),
+                    ("age", Value::text("test2")),
                 ]),
                 Duration::from_millis(10),
             );

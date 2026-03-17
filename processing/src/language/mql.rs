@@ -1,23 +1,18 @@
+use crate::expression::Expression;
+use crate::Algebra::Scan;
+use crate::{Algebra, Project, Schema};
 use anyhow::anyhow;
 use mongodb::bson;
-use mongodb::bson::{Document, extjson, Array};
+use mongodb::bson::Array;
 use nom::bytes::complete::{tag, take, take_until};
 use nom::character::complete::char;
 use nom::{IResult, Input};
 use serde_json::Value;
-use crate::{Algebra, Project, Schema};
-use crate::Algebra::Scan;
-use crate::expression::Expression;
 
 #[derive(Debug, PartialEq)]
 struct MongoCommand {
     collection: String,
     payload: Array,
-}
-
-// Checks if a character is valid for your variable name (letters and $)
-fn is_var_char(c: char) -> bool {
-    c.is_alphanumeric() || c == '$' || c == '_'
 }
 
 fn parse_db_call(input: &str) -> IResult<&str, MongoCommand, nom::error::Error<&str>> {
@@ -36,8 +31,12 @@ fn parse_db_call(input: &str) -> IResult<&str, MongoCommand, nom::error::Error<&
     Ok((input, MongoCommand{ collection: collection.to_string(), payload: payload.as_array().unwrap().clone() }))
 }
 
-pub fn parse_mql<S: AsRef<str>>(input: S) -> anyhow::Result<MongoCommand> {
+fn parse_call<S: AsRef<str>>(input: S) -> anyhow::Result<MongoCommand> {
     parse_db_call(input.as_ref()).map(|(_,command)|command).map_err(|e| anyhow!(e.to_string()))
+}
+
+pub fn parse_mql<S: AsRef<str>>(input: S) -> anyhow::Result<Algebra> {
+    Ok(parse_call(input.as_ref())?.into())
 }
 
 
@@ -49,10 +48,12 @@ impl Into<Algebra> for MongoCommand {
             let (key, value) = value.as_document().unwrap().into_iter().next().unwrap();
 
             if key == "$project"{
-                let keys = value.as_document().unwrap().keys().into_iter().map(|k| (k.to_string(), Expression::field(k))).collect();
+                let expressions = value.as_document().unwrap().into_iter().map(|(k,v)| {
+                    (k.to_string(), Expression::from((k.as_str(),v)))
+                }).collect();
 
                 node = Algebra::P(Project{
-                    expressions: keys,
+                    expressions,
                     input: Box::new(node),
                 });
             }
@@ -68,7 +69,7 @@ mod tests {
     #[test]
     fn test_parse_db_call() {
         let input = "db.$$source.aggregate([{$project: {}}])";
-        if let Ok(command) = parse_mql(input) {
+        if let Ok(command) = parse_call(input) {
             assert_eq!(command.collection, "$$source");
             println!("payload:  {:?}", command.payload);
         }else {
@@ -79,7 +80,7 @@ mod tests {
     #[test]
     fn test_parse_db_call_alg() {
         let input = "db.$$source.aggregate([{$project: {name: 1}}])";
-        if let Ok(alg) = parse_mql(input).map(|c| c.into()) {
+        if let Ok(alg) = parse_mql(input) {
             let alg: Algebra = alg;
             println!("{:?}", alg)
         }else {
