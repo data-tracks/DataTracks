@@ -7,6 +7,7 @@ use processing::{Program, Scope};
 use std::thread;
 use std::time::Duration;
 use tokio::runtime::Builder;
+use tokio::sync::broadcast::Sender;
 use tokio::task::JoinSet;
 use tokio::time::Instant;
 use tracing::{error, info};
@@ -27,6 +28,7 @@ trait RecordProcessor: Send + Sync {
         worker_id: u64,
         engine: Engine,
         definition: Definition,
+        outgoing: Sender<Batch<TargetedRecord>>,
     ) -> anyhow::Result<()>;
 }
 
@@ -38,9 +40,10 @@ impl RecordProcessor for ProcessorType {
         worker_id: u64,
         engine: Engine,
         definition: Definition,
+        outgoing: Sender<Batch<TargetedRecord>>,
     ) -> anyhow::Result<()> {
         match self {
-            ProcessorType::Tuple(t) => t.process(id, worker_id, engine, definition).await,
+            ProcessorType::Tuple(t) => t.process(id, worker_id, engine, definition, outgoing).await,
         }
     }
 }
@@ -57,7 +60,7 @@ impl Processor {
     pub async fn start(
         self,
         _rt: Runtimes,
-        _outgoing: tokio::sync::broadcast::Sender<Batch<TargetedRecord>>,
+        outgoing: Sender<Batch<TargetedRecord>>,
     ) -> anyhow::Result<()> {
         let definitions = self.catalog.definitions().await;
 
@@ -73,7 +76,7 @@ impl Processor {
                 .into_iter()
                 .filter(|e| e.model() == definition.model)
                 .collect::<Vec<Engine>>();
-            //let outgoing = outgoing.clone();
+            let outgoing = outgoing.clone();
 
 
             // Spawn a dedicated OS thread for this specific engine
@@ -91,6 +94,7 @@ impl Processor {
                         let mut engine = engines.into_iter().next().unwrap();
                         let startup_tx = startup_tx.clone();
 
+                        let outgoing = outgoing.clone();
                         let id = id_counter;
                         id_counter += 1;
                         tokio::spawn(async move {
@@ -112,7 +116,7 @@ impl Processor {
                             }
 
                             strategy
-                                .process(i as u64, id, engine, definition)
+                                .process(i as u64, id, engine, definition, outgoing)
                                 .await
                                 .unwrap();
                         });
@@ -143,6 +147,7 @@ impl RecordProcessor for TupleProcessor {
         worker_id: u64,
         mut engine: Engine,
         definition: Definition,
+        outgoing: Sender<Batch<TargetedRecord>>,
     ) -> anyhow::Result<()> {
         let name = format!("Processor {} {}", engine.engine_kind, worker_id);
 
@@ -151,6 +156,7 @@ impl RecordProcessor for TupleProcessor {
         let id = id.into();
 
         let definition_id = definition.id;
+
         loop {
             let mut processing_engine = self.processing_engine.clone();
             tokio::select! {
@@ -208,7 +214,7 @@ impl RecordProcessor for TupleProcessor {
                     });
 
                     // Send original records to next phase
-                    //let _ = outgoing.send(records);
+                    let _ = outgoing.send(records);
 
                     tokio::task::yield_now().await;
                 }

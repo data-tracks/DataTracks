@@ -1,11 +1,10 @@
+use crate::expression::Expression;
+use crate::{Algebra, Project, Scan, Schema};
 use indexmap::IndexMap;
 use sqlparser::ast::{Select, SetExpr, Statement, TableFactor};
 use sqlparser::dialect::Dialect;
 use sqlparser::parser::Parser;
 use tracing::debug;
-use crate::{Algebra, Project, Schema};
-use crate::Algebra::P;
-use crate::expression::Expression;
 
 #[derive(Debug)]
 pub struct StreamDialect {}
@@ -41,7 +40,7 @@ fn parse_alg(statements: Vec<Statement>) -> Algebra {
 
                 let scan = handle_scan(&s);
 
-                return P(Project {
+                return Algebra::Project(Project {
                     expressions,
                     input: Box::new(scan),
                 });
@@ -64,10 +63,10 @@ pub fn parse_sql(query: &str) -> Algebra {
 fn handle_scan(s: &Select) -> Algebra {
     if s.from.len() == 1 {
         if let TableFactor::Table { name, .. } = &s.from[0].relation {
-            return Algebra::Scan {
+            return Algebra::Scan(Scan {
                 source: name.to_string(),
                 schema: Schema::Dynamic,
-            };
+            });
         }
         todo!()
     } else {

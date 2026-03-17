@@ -9,11 +9,11 @@ use value::ValType;
 
 #[derive(Clone, Debug, Serialize)]
 pub enum Algebra {
-    Scan { source: String, schema: Schema },
-    P(Project),
-    F(Filter),
-    C(Collect),
-    U(Unwind),
+    Scan(Scan),
+    Project(Project),
+    Filter(Filter),
+    Collect(Collect),
+    Unwind(Unwind),
     Todo(String),
 }
 
@@ -25,19 +25,53 @@ pub enum Scope {
 }
 
 impl Algebra {
+    /// Recursively calculate the scope.
+    /// Note the use of .fold() for cleaner iterator logic.
+    pub fn scope(&self) -> Scope {
+        match self {
+            Algebra::Scan(_) | Algebra::Todo(_) => Scope::Tuple,
+            Algebra::Collect(_) | Algebra::Unwind(_) => Scope::Multi,
+            Algebra::Project(p) => {
+                let expr_max = p.expressions.values()
+                    .map(|e| e.scope())
+                    .max()
+                    .unwrap_or(Scope::Tuple);
+                cmp::max(p.input.scope(), expr_max)
+            }
+            Algebra::Filter(f) => cmp::max(f.input.scope(), f.predicate.scope()),
+        }
+    }
+
+    /// Fixed the schema recursion logic.
+    /// Usually, you want to transform the schema as it moves up the tree.
+    pub fn set_schema(&mut self, s: Schema) {
+        let input = match self {
+            Algebra::Scan(scan) => { scan.schema = s; return; },
+            Algebra::Project(p) => &mut p.input,
+            Algebra::Filter(f) => &mut f.input,
+            Algebra::Collect(c) => &mut c.input,
+            Algebra::Unwind(u) => &mut u.input,
+            Algebra::Todo(_) => return,
+        };
+        input.set_schema(s);
+    }
+}
+
+impl Algebra {
     #[cfg(test)]
     pub(crate) fn project<M: Into<IndexMap<String, Expression>>>(
         child: Algebra,
         expressions: M,
     ) -> Self {
-        Algebra::P(Project {
+        Algebra::Project(Project {
             expressions: expressions.into(),
             input: Box::new(child),
         })
     }
 
+    #[cfg(test)]
     pub(crate) fn filter(child: Algebra, predicate: Expression) -> Self {
-        Algebra::F(Filter {
+        Algebra::Filter(Filter {
             predicate,
             input: Box::new(child),
         })
@@ -45,52 +79,28 @@ impl Algebra {
 
     #[cfg(test)]
     pub(crate) fn scan<S: AsRef<str>>(resource: S, schema: Schema) -> Self {
-        Algebra::Scan {
-            source: resource.as_ref().to_string(),
-            schema,
-        }
+        Algebra::Scan (
+            Scan{
+                source: resource.as_ref().to_string(),
+                schema,
+            }
+        )
     }
 
     #[cfg(test)]
     pub(crate) fn unwind<S: AsRef<str>>(child: Algebra, key: S, func: Operator) -> Self {
-        Algebra::U(Unwind {
+        Algebra::Unwind(Unwind {
             input: Box::new(child),
             key: key.as_ref().to_string(),
             func,
         })
     }
 
-    pub fn scope(&self) -> Scope {
-        match self {
-            Algebra::Scan { .. } => Scope::Tuple,
-            Algebra::P(p) => cmp::max(
-                p.input.scope(),
-                p.expressions
-                    .iter()
-                    .map(|(_, e)| e.scope())
-                    .fold(Scope::Tuple, |a, b| cmp::max(a, b)),
-            ),
-            Algebra::F(f) => cmp::max(f.input.scope(), f.predicate.scope()),
-            Algebra::C(_) => Scope::Multi,
-            Algebra::U(_) => Scope::Multi,
-            Algebra::Todo(_) => Scope::Tuple,
-        }
-    }
 
     pub fn schema(&self) -> Schema {
         Schema::Fixed(IndexMap::from([("price".to_string(), ValType::Float)]))
     }
 
-    pub fn set_schema(&mut self, s: Schema) {
-        match self {
-            Algebra::Scan { schema, .. } => *schema = s,
-            Algebra::P(p) => p.input.set_schema(s),
-            Algebra::F(f) => f.input.set_schema(s),
-            Algebra::C(c) => c.input.set_schema(s),
-            Algebra::U(u) => u.input.set_schema(s),
-            Algebra::Todo(_) => {}
-        }
-    }
 
     pub fn processing(&self) -> Program {
         Program::from(self)
@@ -119,14 +129,20 @@ impl Schema {
 impl Sql for Algebra {
     fn sql(&self) -> String {
         match self {
-            Algebra::Scan { source, .. } => format!("FROM {}", source),
-            Algebra::P(p) => p.sql(),
-            Algebra::F(f) => f.sql(),
+            Algebra::Scan(s) => format!("FROM {}", s.source),
+            Algebra::Project(p) => p.sql(),
+            Algebra::Filter(f) => f.sql(),
             Algebra::Todo(_) => panic!(),
-            Algebra::C(_) => panic!(),
-            Algebra::U(_) => panic!(),
+            Algebra::Collect(_) => panic!(),
+            Algebra::Unwind(_) => panic!(),
         }
     }
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct Scan {
+    pub source: String,
+    pub schema: Schema,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -196,12 +212,6 @@ mod test {
     // simple multiplier
     fn nexmark_q1_mongodb() {
         let q1_mql = "db.$source.aggregate([ $$project: {auction: 1, price: {$multiply: [\"$price\", 1.1]}, bidder, datetime}])";
-
-        //let dialect = StreamDialect {};
-
-        //let ast = Parser::parse_sql(&dialect, q1_mql).unwrap();
-
-        //println!("{:?}", ast);
     }
 
     #[test]
@@ -209,9 +219,19 @@ mod test {
     // simple multiplier
     fn nexmark_q1_cypher() {
         let q1_cypher = "MATCH (n:$$source) RETURN n.auction, n.price * 1.1, n.bidder, n.datetime";
-
-        //let ast = parse(q1_cypher).ast.unwrap();
-
-        //println!("{:?}", ast);
     }
+
+    #[test]
+    // SELECT Istream(auction, DOLTOEUR(price), bidder, datetime) FROM bid [ROWS UNBOUNDED]
+    // simple multiplier
+    fn nexmark_q2_sql() {
+        let q1_sql = "SELECT auction, price * 1.1, bidder, datetime FROM $$source";
+
+        let algebra = parse_sql(q1_sql);
+
+        let sql = algebra.sql();
+        debug!("{:?}", sql);
+    }
+
+
 }

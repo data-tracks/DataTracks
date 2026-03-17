@@ -96,7 +96,7 @@ impl From<(&str, &Bson)> for Expression {
 }
 
 impl From<&Bson> for Expression {
-    fn from(value: &Bson) -> Self {
+    fn from(_: &Bson) -> Self {
         todo!()
     }
 }

@@ -1,7 +1,7 @@
+use crate::expression::Expression;
+use crate::{Algebra, Project, Scan, Schema};
 use anyhow::anyhow;
 use indexmap::IndexMap;
-use crate::Algebra::Scan;
-use crate::{Algebra, Project, Schema};
 use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::character::complete::{alpha1, alphanumeric1, multispace1};
@@ -10,7 +10,6 @@ use nom::multi::many0;
 use nom::sequence::{delimited, pair};
 use nom::IResult;
 use nom::Parser;
-use crate::expression::Expression;
 
 #[derive(Debug, PartialEq)]
 pub struct MatchQuery {
@@ -48,12 +47,15 @@ fn parse_pattern(input: &str) -> IResult<&str, (&str, &str, &str)> {
 
 impl Into<Algebra> for MatchQuery {
     fn into(self) -> Algebra {
-        let scan = Scan {
+        let scan = Algebra::Scan(Scan {
             source: self.src,
             schema: Schema::Dynamic,
-        };
-        Algebra::P(Project {
-            expressions: IndexMap::from([(self.return_field.to_string(), Expression::field(&self.return_field))]),
+        });
+        Algebra::Project(Project {
+            expressions: IndexMap::from([(
+                self.return_field.to_string(),
+                Expression::field(&self.return_field),
+            )]),
             input: Box::new(scan),
         })
     }

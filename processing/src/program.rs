@@ -1,4 +1,4 @@
-use crate::Schema;
+use crate::{Scan, Schema};
 use crate::algebra::Algebra;
 use crate::expression::Expression;
 use crate::operator::Operator;
@@ -399,7 +399,7 @@ impl Compiler {
         ends: &mut Vec<Op>,
     ) {
         match algebra {
-            Algebra::Scan { source, schema } => {
+            Algebra::Scan(Scan { source, schema }) => {
                 let start_pc = ops.len();
 
                 let slot = self.resource_map.len();
@@ -418,7 +418,7 @@ impl Compiler {
                     ops.push(Op::Flatten);
                 }
             }
-            Algebra::F(filter) => {
+            Algebra::Filter(filter) => {
                 // 1. First, compile the source (Scan)
                 self.compile_algebra(&filter.input, tuples, ops, ends);
 
@@ -429,7 +429,7 @@ impl Compiler {
                 let start_pc = *self.loop_stack.last().unwrap();
                 ops.push(Op::JumpIfFalse { target: start_pc });
             }
-            Algebra::P(project) => {
+            Algebra::Project(project) => {
                 // 1. Compile input (e.g., Scan)
                 self.compile_algebra(&project.input, tuples, ops, ends);
 
@@ -453,7 +453,7 @@ impl Compiler {
                 //panic!("T algebra not yet implemented");
                 ops.push(Op::Yield(1));
             }
-            Algebra::U(unwind) => {
+            Algebra::Unwind(unwind) => {
                 self.compile_algebra(&unwind.input, tuples, ops, ends);
                 // --- LOOP SETUP ---
 
@@ -483,7 +483,7 @@ impl Compiler {
 
                 self.loop_stack.pop(); // Done with this level
             }
-            Algebra::C(_) => todo!(),
+            Algebra::Collect(_) => todo!(),
         }
     }
 

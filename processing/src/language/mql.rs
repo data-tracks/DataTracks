@@ -1,6 +1,5 @@
 use crate::expression::Expression;
-use crate::Algebra::Scan;
-use crate::{Algebra, Project, Schema};
+use crate::{Algebra, Project, Scan, Schema};
 use anyhow::anyhow;
 use mongodb::bson;
 use mongodb::bson::Array;
@@ -28,36 +27,47 @@ fn parse_db_call(input: &str) -> IResult<&str, MongoCommand, nom::error::Error<&
     let value: Value = json5::from_str(payload).unwrap();
     let payload = bson::to_bson(&value).unwrap();
 
-    Ok((input, MongoCommand{ collection: collection.to_string(), payload: payload.as_array().unwrap().clone() }))
+    Ok((
+        input,
+        MongoCommand {
+            collection: collection.to_string(),
+            payload: payload.as_array().unwrap().clone(),
+        },
+    ))
 }
 
 fn parse_call<S: AsRef<str>>(input: S) -> anyhow::Result<MongoCommand> {
-    parse_db_call(input.as_ref()).map(|(_,command)|command).map_err(|e| anyhow!(e.to_string()))
+    parse_db_call(input.as_ref())
+        .map(|(_, command)| command)
+        .map_err(|e| anyhow!(e.to_string()))
 }
 
 pub fn parse_mql<S: AsRef<str>>(input: S) -> anyhow::Result<Algebra> {
     Ok(parse_call(input.as_ref())?.into())
 }
 
-
 impl Into<Algebra> for MongoCommand {
     fn into(self) -> Algebra {
-        let mut node = Scan {source: self.collection.clone(), schema: Schema::Dynamic};
+        let mut node = Algebra::Scan(Scan {
+            source: self.collection.clone(),
+            schema: Schema::Dynamic,
+        });
         for value in self.payload {
-
             let (key, value) = value.as_document().unwrap().into_iter().next().unwrap();
 
-            if key == "$project"{
-                let expressions = value.as_document().unwrap().into_iter().map(|(k,v)| {
-                    (k.to_string(), Expression::from((k.as_str(),v)))
-                }).collect();
+            if key == "$project" {
+                let expressions = value
+                    .as_document()
+                    .unwrap()
+                    .into_iter()
+                    .map(|(k, v)| (k.to_string(), Expression::from((k.as_str(), v))))
+                    .collect();
 
-                node = Algebra::P(Project{
+                node = Algebra::Project(Project {
                     expressions,
                     input: Box::new(node),
                 });
             }
-
         }
         node
     }
@@ -72,7 +82,7 @@ mod tests {
         if let Ok(command) = parse_call(input) {
             assert_eq!(command.collection, "$$source");
             println!("payload:  {:?}", command.payload);
-        }else {
+        } else {
             assert!(false);
         }
     }
@@ -83,7 +93,7 @@ mod tests {
         if let Ok(alg) = parse_mql(input) {
             let alg: Algebra = alg;
             println!("{:?}", alg)
-        }else {
+        } else {
             assert!(false);
         }
     }
