@@ -13,7 +13,7 @@ impl From<&Bson> for Value {
             Bson::Int32(i) => Value::int(*i as i64),
             Bson::Int64(i) => Value::int(*i),
             Bson::Undefined => Value::null(),
-            Bson::ObjectId(id) => Value::text(&id.to_string()),
+            Bson::ObjectId(id) => Value::text(id.to_string()),
             _ => todo!(),
         }
     }

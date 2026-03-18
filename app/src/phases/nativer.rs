@@ -55,7 +55,7 @@ impl Nativer {
                         tokio::spawn(async move {
                             let mut join_set = JoinSet::new();
 
-                            let tx:Box<dyn Fn(Batch<TargetedRecord>) -> () + Send> = match definition.algebra.scope() {
+                            let tx:Box<dyn Fn(Batch<TargetedRecord>) + Send> = match definition.algebra.scope() {
                                 Scope::Tuple => {
                                     let tx = definition.process_single.0.clone();
                                     Box::new(move |records: Batch<TargetedRecord>| {

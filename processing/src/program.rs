@@ -205,7 +205,7 @@ impl Iterator for Program {
                 Op::Equal => {
                     let r = self.vm.stack.pop().unwrap();
                     let l = self.vm.stack.pop().unwrap();
-                    self.vm.stack.push(Value::bool(&l == &r));
+                    self.vm.stack.push(Value::bool(l == r));
                 }
                 Op::NextTuple { resource_id } => {
                     if let Some(resource) = self.vm.resources.get_mut(*resource_id)
@@ -295,7 +295,7 @@ impl Iterator for Program {
                             array: text
                                 .0
                                 .chars()
-                                .map(|c| Value::text(&c.to_string()))
+                                .map(|c| Value::text(c.to_string()))
                                 .collect(),
                             index: 0,
                             loop_pc: *start_pc,

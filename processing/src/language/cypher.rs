@@ -45,16 +45,16 @@ fn parse_pattern(input: &str) -> IResult<&str, (&str, &str, &str)> {
     .map(|(next, (alias, _, src, _, label))| (next, (alias, src, label)))
 }
 
-impl Into<Algebra> for MatchQuery {
-    fn into(self) -> Algebra {
+impl From<MatchQuery> for Algebra {
+    fn from(m: MatchQuery) -> Self {
         let scan = Algebra::Scan(Scan {
-            source: self.src,
+            source: m.src,
             schema: Schema::Dynamic,
         });
         Algebra::Project(Project {
             expressions: IndexMap::from([(
-                self.return_field.to_string(),
-                Expression::field(&self.return_field),
+                m.return_field.to_string(),
+                Expression::field(&m.return_field),
             )]),
             input: Box::new(scan),
         })

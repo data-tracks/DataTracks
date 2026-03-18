@@ -19,7 +19,7 @@ impl Add for &Value {
             // text
             (Value::Text(a), b) => {
                 let b = b.as_text().unwrap();
-                Value::text(&format!("{}{}", a.0, b.0))
+                Value::text(format!("{}{}", a.0, b.0))
             }
             // time
             (Value::Time(a), b) => {
@@ -69,7 +69,7 @@ impl Mul for &Value {
             (Value::Float(a), Value::Float(b)) => {
                 Value::float(a.0.0 * b.0.0)
             }
-            (Value::Text(text), Value::Int(b)) => Value::text(&text.0.repeat(b.0 as usize)),
+            (Value::Text(text), Value::Int(b)) => Value::text(text.0.repeat(b.0 as usize)),
             (lhs, rhs) => panic!("Cannot multiply {:?} with {:?}.", lhs, rhs),
         }
     }

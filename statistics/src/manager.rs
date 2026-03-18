@@ -121,7 +121,7 @@ impl Statistics {
                         );
                         self.delay.native = total_dur / count;
                         self.delay.max = max_dur;
-                        self.delay.open_ids = ids.iter().count()
+                        self.delay.open_ids = ids.len()
                     }
                     _ => {}
                 }

@@ -30,21 +30,21 @@ pub trait Sql {
 
 fn parse_alg(statements: Vec<Statement>) -> Algebra {
     for statement in statements {
-        if let Statement::Query(q) = statement {
-            if let SetExpr::Select(s) = *q.body {
-                let mut expressions = IndexMap::new();
+        if let Statement::Query(q) = statement
+            && let SetExpr::Select(s) = *q.body
+        {
+            let mut expressions = IndexMap::new();
 
-                for (k, item) in s.projection.iter().enumerate() {
-                    expressions.insert(format!("field{}", k), Expression::from(item));
-                }
-
-                let scan = handle_scan(&s);
-
-                return Algebra::Project(Project {
-                    expressions,
-                    input: Box::new(scan),
-                });
+            for (k, item) in s.projection.iter().enumerate() {
+                expressions.insert(format!("field{}", k), Expression::from(item));
             }
+
+            let scan = handle_scan(&s);
+
+            return Algebra::Project(Project {
+                expressions,
+                input: Box::new(scan),
+            });
         }
     }
     panic!("No answer")

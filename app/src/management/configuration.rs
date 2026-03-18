@@ -1,8 +1,8 @@
 use serde::Deserialize;
 use std::collections::HashMap;
 use util::definition::{DefinitionFilter, Model};
-use util::{NativeMapping};
 use util::query::Query;
+use util::NativeMapping;
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
@@ -29,11 +29,11 @@ mod tests {
         let mapping = r#"relational = [{name = "TEXT"}, {age = "INT"}]"#;
 
         let mapping: NativeMapping = toml::from_str(&mapping).unwrap();
-        if let NativeMapping::Relational(r) = mapping {
-            if let RelationalMapping::Tuple(val, _m) = r {
-                assert_eq!(val[0].0, "name");
-                assert_eq!(val[1].0, "age");
-            }
+        if let NativeMapping::Relational(r) = mapping
+            && let RelationalMapping::Tuple(val, _m) = r
+        {
+            assert_eq!(val[0].0, "name");
+            assert_eq!(val[1].0, "age");
         } else {
             assert!(false);
         }

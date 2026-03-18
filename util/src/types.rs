@@ -33,9 +33,9 @@ impl Display for RelationalType {
     }
 }
 
-impl Into<ValType> for RelationalType {
-    fn into(self) -> ValType {
-        match self {
+impl From<RelationalType> for ValType{
+    fn from(relational_type: RelationalType) -> ValType{
+        match relational_type {
             RelationalType::Varchar(_) => ValType::Text,
             RelationalType::Integer => ValType::Integer,
             RelationalType::Float => ValType::Float,

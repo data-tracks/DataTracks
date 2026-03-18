@@ -46,13 +46,13 @@ pub fn parse_mql<S: AsRef<str>>(input: S) -> anyhow::Result<Algebra> {
     Ok(parse_call(input.as_ref())?.into())
 }
 
-impl Into<Algebra> for MongoCommand {
-    fn into(self) -> Algebra {
+impl From<MongoCommand> for Algebra {
+    fn from(command: MongoCommand) -> Self {
         let mut node = Algebra::Scan(Scan {
-            source: self.collection.clone(),
+            source: command.collection.clone(),
             schema: Schema::Dynamic,
         });
-        for value in self.payload {
+        for value in command.payload {
             let (key, value) = value.as_document().unwrap().into_iter().next().unwrap();
 
             if key == "$project" {
