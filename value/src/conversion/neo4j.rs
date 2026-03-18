@@ -7,9 +7,9 @@ impl From<Value> for BoltType {
     fn from(value: Value) -> Self {
         match value {
             Value::Int(i) => BoltType::Integer(BoltInteger::new(i.0)),
-            Value::Float(f) => BoltType::Float(BoltFloat::new(f.as_f64())),
+            Value::Float(f) => BoltType::Float(BoltFloat::new(f.0.0)),
             Value::Bool(b) => BoltType::Boolean(BoltBoolean::new(b.0)),
-            Value::Text(t) => BoltType::String(BoltString::new(&t.0)),
+            Value::Text(t) => BoltType::String(BoltString::new(t.0.as_ref())),
             Value::Node(n) => {
                 let mut map = HashMap::<BoltString, BoltType>::new();
                 map.insert(

@@ -9,13 +9,6 @@ use std::fmt::Formatter;
 )]
 pub struct Bool(pub bool);
 
-impl Bool {
-    pub(crate) fn new(bool: bool) -> Bool {
-        Bool(bool)
-    }
-
-}
-
 impl PartialEq<&Int> for &Bool {
     fn eq(&self, other: &&Int) -> bool {
         other == self

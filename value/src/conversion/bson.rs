@@ -30,9 +30,9 @@ impl From<Value> for Bson {
     fn from(value: Value) -> Self {
         match value {
             Value::Int(i) => Bson::Int32(i.0 as i32),
-            Value::Float(f) => Bson::Double(f.as_f64()),
+            Value::Float(f) => Bson::Double(f.0.0),
             Value::Bool(b) => Bson::Boolean(b.0),
-            Value::Text(t) => Bson::String(t.0),
+            Value::Text(t) => Bson::String(t.0.to_string()),
             Value::Time(t) => Bson::Timestamp(Timestamp {
                 time: t.ms as u32,
                 increment: 0,

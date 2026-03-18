@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 use std::fmt::{Debug, Formatter};
 use std::ops::{Add, Div, Sub};
+use ordered_float::OrderedFloat;
 
 #[derive(
     Eq,
@@ -57,7 +58,7 @@ impl Add<Float> for Int {
     type Output = Float;
 
     fn add(self, other: Float) -> Float {
-        Float::new(self.0 as f64 + other.as_f64())
+        Float(OrderedFloat(self.0 as f64 + other.0.0))
     }
 }
 
@@ -66,7 +67,7 @@ impl Sub<Float> for Int {
     type Output = Float;
 
     fn sub(self, other: Float) -> Float {
-        Float::new(self.0 as f64 - other.as_f64())
+        Float(OrderedFloat(self.0 as f64 - other.0.0))
     }
 }
 
@@ -88,7 +89,7 @@ impl Add<Box<Text>> for Int {
 
 impl PartialEq<Float> for Int {
     fn eq(&self, other: &Float) -> bool {
-        self.0 == other.as_f64() as i64
+        self.0 == other.0.0 as i64
     }
 }
 

@@ -79,8 +79,7 @@ impl Value {
             Value::Null => (fb::ValueData::NONE, WIPOffset::new(0)),
             Value::Float(f) => {
                 let data = fb::Float::create(fbb, &fb::FloatArgs {
-                    number: f.number,
-                    shift: f.shift
+                    value: f.0.0
                 });
                 (
                     fb::ValueData::Float,
@@ -107,7 +106,7 @@ impl Value {
                 )
             }
             Value::Edge(e) => {
-                let label = e.label.clone().map(|label| fbb.create_string(label.0.as_str()) );
+                let label = e.label.clone().map(|label| fbb.create_string(label.0.as_ref()) );
 
                 // Properties for Edge (following the same DictEntry logic)
                 let mut props_off = Vec::new();
@@ -154,7 +153,7 @@ impl<'a> TryFrom<fb::Value<'a>> for Value {
             fb::ValueData::Text => {
                 let table = fb_val.data_as_text().context("Missing Text table")?;
                 let s = table.value().context("Null string in Text table")?;
-                Ok(Value::Text(Text(s.to_string())))
+                Ok(Value::Text(Text(s.to_string().into_boxed_str())))
             }
             fb::ValueData::Bool => {
                 let table = fb_val.data_as_bool().context("Missing Bool table")?;
@@ -167,7 +166,7 @@ impl<'a> TryFrom<fb::Value<'a>> for Value {
                 for item in fb_list.iter() {
                     vals.push(Value::try_from(item)?);
                 }
-                Ok(Value::Array(Array::new(vals)))
+                Ok(Value::Array(Box::new(Array::new(vals))))
             }
             fb::ValueData::Dict => {
                 let table = fb_val.data_as_dict().context("Missing Dict table")?;
@@ -185,7 +184,7 @@ impl<'a> TryFrom<fb::Value<'a>> for Value {
 
                 let mut labels = Vec::new();
                 if let Some(fb_labels) = table.labels() {
-                    for l in fb_labels.iter() { labels.push(Text(l.to_string())); }
+                    for l in fb_labels.iter() { labels.push(Text(l.to_string().into_boxed_str())); }
                 }
 
                 let mut props = BTreeMap::new();
@@ -201,7 +200,7 @@ impl<'a> TryFrom<fb::Value<'a>> for Value {
             fb::ValueData::NONE => Ok(Value::Null),
             fb::ValueData::Float => {
                 let table = fb_val.data_as_float().context("Missing Float table")?;
-                Ok(Value::float_parts(table.number(), table.shift()))
+                Ok(Value::float(table.value()))
             }
             fb::ValueData::Time => {
                 let table = fb_val.data_as_time().context("Missing Time table")?;
@@ -213,7 +212,7 @@ impl<'a> TryFrom<fb::Value<'a>> for Value {
             }
             fb::ValueData::Edge => {
                 let table = fb_val.data_as_edge().context("Missing Edge table")?;
-                let label = table.label().map(|label| Text(label.to_string()));
+                let label = table.label().map(|label| Text(label.to_string().into_boxed_str()));
 
                 let mut props = BTreeMap::new();
                 if let Some(fb_props) = table.properties() {
@@ -250,7 +249,7 @@ mod tests {
 
         let original_node = Value::node(
             Int(42),
-            vec![Text("User".to_string()), Text("Admin".to_string())],
+            vec![Text("User".to_string().into_boxed_str()), Text("Admin".to_string().into_boxed_str())],
             properties,
         );
 
@@ -273,10 +272,10 @@ mod tests {
         // 5. Manual check for specific fields in the payload
         if let Value::Node(n) = &decoded_msg.payload[0] {
             assert_eq!(n.id.0, 42);
-            assert_eq!(n.labels[0].0, "User");
+            assert_eq!(n.labels[0].0.as_ref(), "User");
 
             let email = n.properties.get("email").unwrap().as_text().unwrap();
-            assert_eq!(email.0, "alice@example.com");
+            assert_eq!(email.0.as_ref(), "alice@example.com");
         } else {
             panic!("Decoded payload was not a Node");
         }

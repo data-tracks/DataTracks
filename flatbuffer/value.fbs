@@ -7,7 +7,7 @@ namespace DataModel;
 // u8    -> uint8 / byte
 
 table Int { value: long; }
-table Float { number: long; shift: uint8; }
+table Float { value: float64; }
 table Bool { value: bool; }
 table Text { value: string; }
 table Time { ms: long; ns: uint; }

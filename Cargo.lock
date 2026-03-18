@@ -559,24 +559,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "capnp"
-version = "0.25.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c982cc37b8f646c753f3b0a24d4d40ca2eac8a9c2b9ea6fff524be67ddc184cb"
-dependencies = [
- "embedded-io",
-]
-
-[[package]]
-name = "capnpc"
-version = "0.25.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6cdfa6b0df161a71201367910265b97180541ecdb48bd08e05ef8694c295d1f"
-dependencies = [
- "capnp",
-]
-
-[[package]]
 name = "cast"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1040,7 +1022,7 @@ checksum = "d7a1e2f27636f116493b8b860f5546edb47c8d8f8ea73e1d2a20be88e28d1fea"
 
 [[package]]
 name = "data-tracks"
-version = "0.6.2"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1230,12 +1212,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "48c757948c5ede0e46177b7add2e67155f70e33c07fea8284df6576da70b3719"
 
 [[package]]
-name = "embedded-io"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9eb1aa714776b75c7e67e1da744b81a129b3ff919c8712b5e1b32252c1f07cc7"
-
-[[package]]
 name = "encoding_rs"
 version = "0.8.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1246,7 +1222,7 @@ dependencies = [
 
 [[package]]
 name = "engine"
-version = "0.6.2"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "derive_more",
@@ -2783,6 +2759,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 
 [[package]]
+name = "ordered-float"
+version = "5.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f4779c6901a562440c3786d08192c6fbda7c1c2060edd10006b05ee35d10f2d"
+dependencies = [
+ "num-traits",
+ "rand 0.8.5",
+ "serde",
+ "speedy",
+]
+
+[[package]]
 name = "ordered-multimap"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3091,7 +3079,7 @@ dependencies = [
 
 [[package]]
 name = "processing"
-version = "0.6.2"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "indexmap 2.13.0",
@@ -3222,6 +3210,7 @@ dependencies = [
  "libc",
  "rand_chacha 0.3.1",
  "rand_core 0.6.4",
+ "serde",
 ]
 
 [[package]]
@@ -3272,6 +3261,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
 dependencies = [
  "getrandom 0.2.17",
+ "serde",
 ]
 
 [[package]]
@@ -4079,7 +4069,7 @@ checksum = "e320a6c5ad31d271ad523dcf3ad13e2767ad8b1cb8f047f75a8aeaf8da139da2"
 
 [[package]]
 name = "sink"
-version = "0.6.2"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "crossbeam",
@@ -4211,7 +4201,7 @@ dependencies = [
 
 [[package]]
 name = "statistics"
-version = "0.6.2"
+version = "0.7.0"
 dependencies = [
  "axum 0.8.8",
  "axum-embed",
@@ -4972,7 +4962,7 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
 name = "util"
-version = "0.6.2"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "bollard",
@@ -5016,18 +5006,17 @@ checksum = "ba73ea9cf16a25df0c8caa16c51acb937d5712a8429db78a3ee29d5dcacd3a65"
 
 [[package]]
 name = "value"
-version = "0.6.2"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "bytes",
- "capnp",
- "capnpc",
  "chrono",
  "criterion",
  "flatbuffers",
  "json",
  "mongodb",
  "neo4rs",
+ "ordered-float",
  "postgres",
  "redb",
  "rumqttc",

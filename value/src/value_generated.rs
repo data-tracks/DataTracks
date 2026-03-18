@@ -245,8 +245,7 @@ impl<'a> ::flatbuffers::Follow<'a> for Float<'a> {
 }
 
 impl<'a> Float<'a> {
-  pub const VT_NUMBER: ::flatbuffers::VOffsetT = 4;
-  pub const VT_SHIFT: ::flatbuffers::VOffsetT = 6;
+  pub const VT_VALUE: ::flatbuffers::VOffsetT = 4;
 
   #[inline]
   pub unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
@@ -258,25 +257,17 @@ impl<'a> Float<'a> {
     args: &'args FloatArgs
   ) -> ::flatbuffers::WIPOffset<Float<'bldr>> {
     let mut builder = FloatBuilder::new(_fbb);
-    builder.add_number(args.number);
-    builder.add_shift(args.shift);
+    builder.add_value(args.value);
     builder.finish()
   }
 
 
   #[inline]
-  pub fn number(&self) -> i64 {
+  pub fn value(&self) -> f64 {
     // Safety:
     // Created from valid Table for this object
     // which contains a valid value in this slot
-    unsafe { self._tab.get::<i64>(Float::VT_NUMBER, Some(0)).unwrap()}
-  }
-  #[inline]
-  pub fn shift(&self) -> u8 {
-    // Safety:
-    // Created from valid Table for this object
-    // which contains a valid value in this slot
-    unsafe { self._tab.get::<u8>(Float::VT_SHIFT, Some(0)).unwrap()}
+    unsafe { self._tab.get::<f64>(Float::VT_VALUE, Some(0.0)).unwrap()}
   }
 }
 
@@ -286,22 +277,19 @@ impl ::flatbuffers::Verifiable for Float<'_> {
     v: &mut ::flatbuffers::Verifier, pos: usize
   ) -> Result<(), ::flatbuffers::InvalidFlatbuffer> {
     v.visit_table(pos)?
-     .visit_field::<i64>("number", Self::VT_NUMBER, false)?
-     .visit_field::<u8>("shift", Self::VT_SHIFT, false)?
+     .visit_field::<f64>("value", Self::VT_VALUE, false)?
      .finish();
     Ok(())
   }
 }
 pub struct FloatArgs {
-    pub number: i64,
-    pub shift: u8,
+    pub value: f64,
 }
 impl<'a> Default for FloatArgs {
   #[inline]
   fn default() -> Self {
     FloatArgs {
-      number: 0,
-      shift: 0,
+      value: 0.0,
     }
   }
 }
@@ -312,12 +300,8 @@ pub struct FloatBuilder<'a: 'b, 'b, A: ::flatbuffers::Allocator + 'a> {
 }
 impl<'a: 'b, 'b, A: ::flatbuffers::Allocator + 'a> FloatBuilder<'a, 'b, A> {
   #[inline]
-  pub fn add_number(&mut self, number: i64) {
-    self.fbb_.push_slot::<i64>(Float::VT_NUMBER, number, 0);
-  }
-  #[inline]
-  pub fn add_shift(&mut self, shift: u8) {
-    self.fbb_.push_slot::<u8>(Float::VT_SHIFT, shift, 0);
+  pub fn add_value(&mut self, value: f64) {
+    self.fbb_.push_slot::<f64>(Float::VT_VALUE, value, 0.0);
   }
   #[inline]
   pub fn new(_fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>) -> FloatBuilder<'a, 'b, A> {
@@ -337,8 +321,7 @@ impl<'a: 'b, 'b, A: ::flatbuffers::Allocator + 'a> FloatBuilder<'a, 'b, A> {
 impl ::core::fmt::Debug for Float<'_> {
   fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
     let mut ds = f.debug_struct("Float");
-      ds.field("number", &self.number());
-      ds.field("shift", &self.shift());
+      ds.field("value", &self.value());
       ds.finish()
   }
 }

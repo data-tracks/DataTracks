@@ -8,7 +8,7 @@ use std::fmt::Formatter;
 #[derive(
     Eq, Hash, Debug, PartialEq, Clone, Serialize, Deserialize, Ord, PartialOrd, Readable, Writable,
 )]
-pub struct Text(pub String);
+pub struct Text(pub Box<str>);
 
 
 impl PartialEq<Int> for Text {

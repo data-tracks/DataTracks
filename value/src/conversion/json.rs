@@ -5,7 +5,7 @@ use crate::value::Value;
 
 impl From<&serde_json::Map<String, serde_json::Value>> for Value {
     fn from(value: &serde_json::Map<String, serde_json::Value>) -> Self {
-        Value::Dict(value.into())
+        Value::Dict(Box::new(value.into()))
     }
 }
 

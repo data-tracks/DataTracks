@@ -24,11 +24,8 @@ criterion = { workspace = true }
 mongodb = { workspace = true }
 neo4rs = { workspace = true }
 anyhow = { workspace = true }
-capnp = { workspace = true }
-flatbuffers = {workspace = true}
-
-[build-dependencies]
-capnpc = { workspace = true }
+flatbuffers = { workspace = true }
+ordered-float = { workspace = true }
 
 [[bench]]
 name = "value_bench"

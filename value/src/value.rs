@@ -3,12 +3,11 @@ use crate::date::Date;
 use crate::dict::Dict;
 use crate::edge::Edge;
 use crate::node::Node;
-use crate::text::Text;
-use crate::time::Time;
 use crate::r#type::ValType;
-use crate::{Bool, Float, Int, bool};
+use crate::time::Time;
+use crate::{Bool, Float, Int, Text};
 use anyhow::{anyhow, bail};
-use core::fmt::Pointer;
+use ordered_float::OrderedFloat;
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 use std::cmp::PartialEq;
@@ -18,36 +17,58 @@ use std::hash::{Hash, Hasher};
 use std::str;
 use tracing::debug;
 
-#[derive(Clone, Debug, Serialize, Deserialize, Ord, PartialOrd, Readable, Writable, Default)]
+#[derive(
+    Clone,
+    Debug,
+    Serialize,
+    Deserialize,
+    Ord,
+    PartialOrd,
+    Readable,
+    Writable,
+    Default,
+    Eq)]
 pub enum Value {
+    #[default]
+    Null,
     Int(Int),
     Float(Float),
     Bool(Bool),
     Text(Text),
-    Time(Time),
-    Date(Date),
-    Array(Array),
-    Dict(Dict),
+    Time(Box<Time>),
+    Date(Box<Date>),
+    Array(Box<Array>),
+    Dict(Box<Dict>),
     Node(Box<Node>),
     Edge(Box<Edge>),
-    #[default]
-    Null,
 }
 
+macro_rules! impl_value_conv {
+    ($newtype:ident, $variant:ident) => {
+        impl From<$newtype> for Value {
+            fn from(v: $newtype) -> Self {
+                Value::$variant(v)
+            }
+        }
+    };
+}
+
+impl_value_conv!(Int, Int);
+impl_value_conv!(Text, Text);
+impl_value_conv!(Float, Float);
+impl_value_conv!(Bool, Bool);
+
+
 impl Value {
-    pub fn text(string: &str) -> Value {
-        Value::Text(Text(string.parse().unwrap()))
+    pub fn text<S: AsRef<str>>(string: S) -> Value {
+        Value::Text(Text(string.as_ref().to_owned().into_boxed_str()))
     }
     pub fn int<I: Into<i64>>(int: I) -> Value {
         Value::Int(Int(int.into()))
     }
 
     pub fn float(float: f64) -> Value {
-        Value::Float(Float::new(float))
-    }
-
-    pub fn float_parts(number: i64, shift: u8) -> Value {
-        Value::Float(Float { number, shift })
+        Value::Float(Float(OrderedFloat::from(float)))
     }
 
     pub fn bool(bool: bool) -> Value {
@@ -55,11 +76,11 @@ impl Value {
     }
 
     pub fn time(ms: i64, ns: u32) -> Value {
-        Value::Time(Time::new(ms, ns))
+        Value::Time(Box::new(Time::new(ms, ns)))
     }
 
     pub fn date(days: i64) -> Value {
-        Value::Date(Date::new(days))
+        Value::Date(Box::new(Date::new(days)))
     }
 
     pub fn node(id: Int, labels: Vec<Text>, properties: BTreeMap<String, Value>) -> Value {
@@ -87,7 +108,7 @@ impl Value {
     }
 
     pub fn array<V: Into<Vec<Value>>>(tuple: V) -> Value {
-        Value::Array(Array::new(tuple.into()))
+        Value::Array(Box::new(Array::new(tuple.into())))
     }
 
     pub fn dict(values: BTreeMap<String, Value>) -> Value {
@@ -96,7 +117,7 @@ impl Value {
         values.into_iter().for_each(|(k, v)| {
             match v {
                 Value::Dict(d) => {
-                    flatten(d, vec![k]).into_iter().for_each(|(k, v)| {
+                    flatten(*d, vec![k]).into_iter().for_each(|(k, v)| {
                         map.insert(k, v);
                     });
                 }
@@ -106,7 +127,7 @@ impl Value {
             };
         });
 
-        Value::Dict(Dict::new(map))
+        Value::Dict(Box::new(Dict::new(map)))
     }
 
     pub fn dict_from_kv<S: AsRef<str>>(key: S, value: Value) -> Value {
@@ -118,7 +139,7 @@ impl Value {
         pairs.into_iter().for_each(|(k, v)| {
             map.insert(k.to_string(), v);
         });
-        Value::Dict(Dict::new(map))
+        Value::Dict(Box::new(Dict::new(map)))
     }
 
     pub fn null() -> Value {
@@ -144,14 +165,14 @@ impl Value {
     pub fn as_int(&self) -> anyhow::Result<Int> {
         match self {
             Value::Int(i) => Ok(*i),
-            Value::Float(f) => Ok(Int(f.as_f64() as i64)),
+            Value::Float(f) => Ok(Int(f.0.0 as i64)),
             Value::Bool(b) => Ok(if b.0 { Int(1) } else { Int(0) }),
             Value::Text(t) => t.0.parse::<i64>().map(Int).map_err(|e| anyhow!(e)),
             Value::Array(_) => bail!("Array cannot be converted"),
             Value::Dict(_) => bail!("Dict cannot be converted"),
             Value::Null => bail!("Null cannot be converted"),
             Value::Time(t) => Ok(Int(t.ms)),
-            Value::Date(d) => Ok(Int::new(d.as_epoch())),
+            Value::Date(d) => Ok(Int(d.as_epoch())),
             Value::Node(_) => bail!("Node cannot be converted"),
             Value::Edge(_) => bail!("Edge cannot be converted"),
         }
@@ -159,27 +180,28 @@ impl Value {
 
     pub fn as_float(&self) -> anyhow::Result<Float> {
         match self {
-            Value::Int(i) => Ok(Float::new(i.0 as f64)),
+            Value::Int(i) => Ok(Float(OrderedFloat(i.0 as f64))),
             Value::Float(f) => Ok(*f),
             Value::Bool(b) => Ok(if b.0 {
-                Float::new(1f64)
+                Float(OrderedFloat(1f64))
             } else {
-                Float::new(0f64)
+                Float(OrderedFloat(0f64))
             }),
             Value::Text(t) => {
                 t.0.parse::<f64>()
-                    .map(Float::new)
+                    .map(OrderedFloat)
+                    .map(Float)
                     .map_err(|err| anyhow!(err))
             }
             Value::Array(_) => bail!("Array cannot be converted"),
             Value::Dict(_) => bail!("Dict cannot be converted"),
             Value::Null => bail!("Null cannot be converted"),
             Value::Time(t) => Ok(if t.ns != 0 {
-                Float::new(t.ms as f64 + t.ns as f64 / 1e6)
+                Float(OrderedFloat(t.ms as f64 + t.ns as f64 / 1e6))
             } else {
-                Float::new(t.ms as f64)
+                Float(OrderedFloat(t.ms as f64))
             }),
-            Value::Date(d) => Ok(Float::new(d.as_epoch() as f64)),
+            Value::Date(d) => Ok(Float(OrderedFloat(d.as_epoch() as f64))),
             Value::Node(_) => bail!("Node cannot be converted"),
             Value::Edge(_) => bail!("Edge cannot be converted"),
         }
@@ -203,14 +225,14 @@ impl Value {
         match self {
             Value::Int(i) => Ok(Time::new(i.0, 0)),
             Value::Float(f) => {
-                let num = f.number.to_string();
-                let (ms, partial_ns) = num.split_at(num.len() - f.shift as usize);
+                let num = f.0.to_string();
+                let (ms, partial_ns) = num.split_once(".").ok_or(anyhow!("Invalid time format"))?;
                 let ns = format!("{:0<6}", partial_ns.chars().take(6).collect::<String>());
-                Ok(Time::new(ms.parse().unwrap(), ns.parse().unwrap()))
+                Ok(Time::new(ms.parse()?, ns.parse()?))
             }
             Value::Bool(b) => Ok(Time::new(b.0 as i64, 0)),
             Value::Text(t) => Ok(Time::from(t.clone())),
-            Value::Time(t) => Ok(*t),
+            Value::Time(t) => Ok(**t),
             Value::Array(_) => bail!("Array cannot be converted"),
             Value::Dict(_) => bail!("Dict cannot be converted"),
             Value::Null => bail!("Null cannot be converted"),
@@ -223,11 +245,11 @@ impl Value {
     pub fn as_date(&self) -> anyhow::Result<Date> {
         match self {
             Value::Int(i) => Ok(Date::new(i.0)),
-            Value::Float(f) => Ok(Date::new(f.as_f64() as i64)),
+            Value::Float(f) => Ok(Date::new(f.0.0 as i64)),
             Value::Bool(b) => Ok(Date::new(b.0 as i64)),
-            Value::Text(t) => Ok(Date::from(t.0.clone())),
+            Value::Text(t) => Ok(Date::from(t.0.to_string())),
             Value::Time(_) => bail!("Time cannot be converted"),
-            Value::Date(d) => Ok(d.clone()),
+            Value::Date(d) => Ok(*d.clone()),
             Value::Array(_) => bail!("Array cannot be converted"),
             Value::Dict(_) => bail!("Dict cannot be converted"),
             Value::Null => bail!("Null cannot be converted"),
@@ -248,7 +270,7 @@ impl Value {
             | Value::Node(_)
             | Value::Edge(_)
             | Value::Null => bail!("Dict cannot be converted"),
-            Value::Dict(d) => Ok(d.clone()),
+            Value::Dict(d) => Ok(*d.clone()),
         }
     }
 
@@ -264,13 +286,13 @@ impl Value {
             | Value::Node(_)
             | Value::Edge(_)
             | Value::Null => bail!("Array cannot be converted"),
-            Value::Array(a) => Ok(a.clone()),
+            Value::Array(a) => Ok(*a.clone()),
         }
     }
     pub fn as_bool(&self) -> anyhow::Result<Bool> {
         match self {
             Value::Int(i) => Ok(if i.0 > 0 { Bool(true) } else { Bool(false) }),
-            Value::Float(f) => Ok(if f.number <= 0 {
+            Value::Float(f) => Ok(if f.0.0 <= 0f64 {
                 Bool(false)
             } else {
                 Bool(true)
@@ -284,7 +306,7 @@ impl Value {
             Value::Array(a) => Ok(Bool(!a.values.is_empty())),
             Value::Dict(d) => Ok(Bool(!d.is_empty())),
             Value::Null => Ok(Bool(false)),
-            Value::Date(d) => Ok(Bool::new(d.days > 0)),
+            Value::Date(d) => Ok(Bool(d.days > 0)),
             Value::Node(_) => bail!("Node cannot be converted"),
             Value::Edge(_) => bail!("Edge cannot be converted"),
         }
@@ -292,28 +314,28 @@ impl Value {
 
     pub fn as_text(&self) -> anyhow::Result<Text> {
         match self {
-            Value::Int(i) => Ok(Text(i.0.to_string())),
-            Value::Float(f) => Ok(Text(f.as_f64().to_string())),
-            Value::Bool(b) => Ok(Text(b.0.to_string())),
+            Value::Int(i) => Ok(Text(i.to_string().into_boxed_str())),
+            Value::Float(f) => Ok(Text(f.0.0.to_string().into_boxed_str())),
+            Value::Bool(b) => Ok(Text(b.to_string().into_boxed_str())),
             Value::Text(t) => Ok(t.clone()),
             Value::Array(a) => Ok(Text(format!(
                 "[{}]",
                 a.values
                     .iter()
-                    .map(|v| v.as_text().unwrap().0)
+                    .map(|v| v.as_text().unwrap().0.to_string())
                     .collect::<Vec<String>>()
                     .join(",")
-            ))),
+            ).into_boxed_str())),
             Value::Dict(d) => Ok(Text(format!(
                 "[{}]",
                 d.iter()
                     .map(|(k, v)| format!("{}:{}", k, v.as_text().unwrap().0))
                     .collect::<Vec<String>>()
                     .join(",")
-            ))),
-            Value::Null => Ok(Text("null".to_owned())),
-            Value::Time(t) => Ok(Text(t.to_string())),
-            Value::Date(d) => Ok(Text(d.to_string())),
+            ).into_boxed_str())),
+            Value::Null => Ok(Text("null".to_owned().into_boxed_str())),
+            Value::Time(t) => Ok(Text(t.to_string().into_boxed_str())),
+            Value::Date(d) => Ok(Text(d.to_string().into_boxed_str())),
             Value::Node(_) => bail!("Node cannot be converted"),
             Value::Edge(_) => bail!("Edge cannot be converted"),
         }
@@ -344,7 +366,7 @@ fn flatten(dict: Dict, prefix: Vec<String>) -> Vec<(String, Value)> {
         Value::Dict(d) => {
             let mut prefix = prefix.clone();
             prefix.push(k);
-            values.append(&mut flatten(d, prefix))
+            values.append(&mut flatten(*d, prefix))
         }
         _ => values.push((k, v)),
     });
@@ -363,8 +385,6 @@ macro_rules! value_display {
     };
 }
 
-impl Eq for Value {}
-
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         debug!("{} == {}", self, other);
@@ -378,9 +398,7 @@ impl PartialEq for Value {
                 .unwrap_or(false),
             (Value::Int(i), _) => other.as_int().map(|v| i.0 == v.0).unwrap_or(false),
             (Value::Float(f), Value::Float(other_f)) => {
-                let a = f.normalize();
-                let b = other_f.normalize();
-                a.number == b.number && a.shift == b.shift
+                f.0 == other_f.0
             }
             (Value::Float(_), _) => other
                 .as_float()
@@ -410,9 +428,9 @@ impl PartialEq for Value {
                 })
                 .unwrap_or(false),
             (Value::Time(t1), Value::Time(t2)) => t1 == t2,
-            (Value::Time(t), _) => t == &other.as_time().unwrap(),
+            (Value::Time(t), _) => **t == other.as_time().unwrap(),
             (Value::Date(d1), Value::Date(d2)) => d1 == d2,
-            (Value::Date(d), _) => d == &other.as_date().unwrap(),
+            (Value::Date(d), _) => **d == other.as_date().unwrap(),
             (Value::Node(n1), Value::Node(n2)) => n1 == n2,
             (Value::Edge(n1), Value::Edge(n2)) => n1 == n2,
             (Value::Node(n), o) => o.as_node().map(|node| n.as_ref() == node).unwrap_or(false),
@@ -425,17 +443,16 @@ impl Hash for Value {
     fn hash<H: Hasher>(&self, state: &mut H) {
         match self {
             Value::Int(i) => {
-                i.0.hash(state);
+                i.hash(state);
             }
             Value::Float(f) => {
-                state.write_i64(f.number);
-                state.write_u8(f.shift);
+                state.write(&f.0.to_bits().to_le_bytes());
             }
             Value::Bool(b) => {
-                b.0.hash(state);
+                b.hash(state);
             }
             Value::Text(t) => {
-                t.0.hash(state);
+                t.hash(state);
             }
             Value::Array(a) => {
                 for val in &(*a.values) {
@@ -479,13 +496,13 @@ impl Display for Value {
             Value::Float(float) => float.fmt(f),
             Value::Bool(b) => b.fmt(f),
             Value::Text(t) => t.fmt(f),
-            Value::Time(t) => t.fmt(f),
-            Value::Array(a) => a.fmt(f),
-            Value::Dict(d) => d.fmt(f),
+            Value::Time(t) => Display::fmt(&t, f),
+            Value::Array(a) => Display::fmt(&a, f),
+            Value::Dict(d) => Display::fmt(&d, f),
             Value::Null => write!(f, "null"),
-            Value::Date(d) => d.fmt(f),
-            Value::Node(n) => n.fmt(f),
-            Value::Edge(e) => e.fmt(f),
+            Value::Date(d) => Display::fmt(d, f),
+            Value::Node(n) => Display::fmt(n, f),
+            Value::Edge(e) => Display::fmt(e, f),
         }
     }
 }
@@ -504,13 +521,13 @@ impl From<f64> for Value {
 
 impl From<&str> for Value {
     fn from(value: &str) -> Self {
-        Value::text(value)
+        Value::Text(Text(value.to_string().into_boxed_str()))
     }
 }
 
 impl From<String> for Value {
     fn from(value: String) -> Self {
-        Value::text(&value)
+        Value::Text(Text(value.into_boxed_str()))
     }
 }
 
@@ -522,15 +539,15 @@ impl From<bool> for Value {
 
 impl From<Dict> for Value {
     fn from(value: Dict) -> Self {
-        Value::Dict(value)
+        Value::Dict(Box::new(value))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::value::Value;
-    use std::collections::HashMap;
     use std::collections::hash_map::DefaultHasher;
+    use std::collections::HashMap;
     use std::hash::{Hash, Hasher};
     use std::vec;
 
@@ -741,5 +758,10 @@ mod tests {
 
     fn div(a: Value, b: Value) -> Value {
         &a / &b
+    }
+
+    #[test]
+    fn test_size() {
+        println!("{}", size_of::<Value>());
     }
 }

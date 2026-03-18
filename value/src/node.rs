@@ -1,9 +1,11 @@
-use crate::{Int, Text};
+use crate::value::Value;
+use core::fmt::Display;
 use serde::{Deserialize, Serialize};
 use speedy::Readable;
 use speedy::Writable;
 use std::collections::BTreeMap;
-use crate::value::Value;
+use std::fmt::Formatter;
+use crate::{Int, Text};
 
 #[derive(
     Eq,
@@ -16,10 +18,18 @@ use crate::value::Value;
     PartialOrd,
     Readable,
     Writable,
-    PartialEq,
+    PartialEq
 )]
 pub struct Node {
     pub id: Int,
     pub labels: Vec<Text>,
     pub properties: BTreeMap<String, Value>,
+}
+
+impl Display for Node {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "{}", self.id)?;
+        write!(f, "{:?}", self.labels)?;
+        write!(f, "{:?}", self.properties)
+    }
 }

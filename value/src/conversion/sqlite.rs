@@ -36,9 +36,9 @@ impl rusqlite::types::ToSql for Value {
     fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
         match self {
             Value::Int(i) => Ok(ToSqlOutput::from(i.0)),
-            Value::Float(f) => Ok(ToSqlOutput::from(f.as_f64())),
+            Value::Float(f) => Ok(ToSqlOutput::from(f.0.0)),
             Value::Bool(b) => Ok(ToSqlOutput::from(b.0)),
-            Value::Text(t) => Ok(ToSqlOutput::from(t.0.clone())),
+            Value::Text(t) => Ok(ToSqlOutput::from(t.0.to_string())),
             Value::Time(t) => Ok(ToSqlOutput::from(t.ms)),
             Value::Array(_) => Err(rusqlite::Error::InvalidQuery),
             Value::Dict(_) => Err(rusqlite::Error::InvalidQuery),

@@ -1,10 +1,10 @@
 use crate::int::Int;
 use crate::{Bool, Text};
+use ordered_float::OrderedFloat;
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
-use std::cmp::min;
 use std::fmt::{Display, Formatter};
-use std::ops::{Add, Div, Sub};
+use std::ops::{Add, Sub};
 
 #[derive(
     Eq,
@@ -20,92 +20,11 @@ use std::ops::{Add, Div, Sub};
     Readable,
     Writable,
 )]
-pub struct Float {
-    pub number: i64,
-    pub shift: u8,
-}
+pub struct Float (pub OrderedFloat<f64>);
 
-impl Float {
-    pub(crate) fn as_f64(&self) -> f64 {
-        self.number as f64 / 10_f64.powi(self.shift as i32)
-    }
-
-    pub(crate) fn new(value: f64) -> Self {
-        let parsed = value.to_string();
-        let number = parsed.replace('.', "");
-        let split = parsed.find('.');
-
-        match split {
-            None => Float {
-                number: value as i64,
-                shift: 0,
-            },
-            Some(i) => Float {
-                number: number.parse().unwrap(),
-                shift: (number.len() - i) as u8,
-            },
-        }
-    }
-
-    pub(crate) fn normalize(&self) -> Self {
-        let nulls = min(self.number.trailing_zeros() as u8, self.shift);
-        if nulls > 0 {
-            let number = self
-                .number
-                .to_string()
-                .trim_end_matches('0')
-                .parse()
-                .unwrap();
-            let shift = self.shift - nulls;
-            Float { number, shift }
-        } else {
-            *self
-        }
-    }
-}
-
-impl Add for Float {
-    type Output = Self;
-
-    fn add(self, other: Self) -> Self {
-        let mut shift = self.shift as i64 - other.shift as i64;
-        let mut left = self.number;
-        let mut right = other.number;
-
-        match shift {
-            s if s > 0 => {
-                // self is bigger fract
-                right *= shift * 10;
-                shift = self.shift as i64;
-            }
-            s if s < 0 => {
-                // other is bigger fract
-                left *= shift * -10;
-                shift = other.shift as i64;
-            }
-            _ => shift = self.shift as i64,
-        }
-
-        Float {
-            number: left + right,
-            shift: shift as u8,
-        }
-    }
-}
-
-impl Sub for Float {
-    type Output = Self;
-
-    fn sub(self, other: Self) -> Self {
-        Float::new(self.as_f64() - other.as_f64())
-    }
-}
-
-impl Div for Float {
-    type Output = Self;
-
-    fn div(self, other: Self) -> Self {
-        Float::new(self.as_f64() / other.as_f64())
+impl From<f64> for Float {
+    fn from(x: f64) -> Float {
+        Float(OrderedFloat(x))
     }
 }
 
@@ -114,10 +33,15 @@ impl Add<Int> for Float {
     type Output = Float;
 
     fn add(self, other: Int) -> Float {
-        Float {
-            number: self.number + other.0,
-            shift: self.shift,
-        }
+        Float(OrderedFloat(self.0.0 + other.0 as f64))
+    }
+}
+
+impl Add<Float> for Float {
+    type Output = Float;
+
+    fn add(self, other: Float) -> Float {
+        Float(OrderedFloat(self.0.0 + other.0.0))
     }
 }
 
@@ -126,10 +50,15 @@ impl Sub<Int> for Float {
     type Output = Float;
 
     fn sub(self, other: Int) -> Float {
-        Float {
-            number: self.number - other.0 * (10 * self.shift) as i64,
-            shift: self.shift,
-        }
+        Float(OrderedFloat(self.0.0 - other.0 as f64))
+    }
+}
+
+impl Sub<Float> for Float {
+    type Output = Float;
+
+    fn sub(self, other: Float) -> Float {
+        Float(OrderedFloat(self.0.0 - other.0.0))
     }
 }
 
@@ -141,14 +70,14 @@ impl PartialEq<Int> for Float {
 
 impl PartialEq<Bool> for Float {
     fn eq(&self, other: &Bool) -> bool {
-        self.number > 0 && other.0
+        self.0.0 > 0f64 && other.0
     }
 }
 
 impl PartialEq<Text> for Float {
     fn eq(&self, other: &Text) -> bool {
         match other.0.parse::<f64>() {
-            Ok(f) => f == self.as_f64(),
+            Ok(f) => f == self.0.0,
             Err(_) => false,
         }
     }
@@ -156,7 +85,7 @@ impl PartialEq<Text> for Float {
 
 impl Display for Float {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.as_f64())
+        write!(f, "{}", self.0)
     }
 }
 
@@ -164,21 +93,13 @@ impl Display for Float {
 mod tests {
     use crate::Float;
 
-    #[test]
-    fn serialize_deserialize() {
-        let float = Float::new(35.5);
-
-        let res = float.as_f64();
-
-        assert_eq!(res, 35.5)
-    }
 
     #[test]
     fn add() {
-        let float = Float::new(35.5);
+        let float:Float = 35.5.into();
 
         let res = float + float;
 
-        assert_eq!(res.as_f64(), 35.5 + 35.5)
+        assert_eq!(res.0, 35.5 + 35.5)
     }
 }

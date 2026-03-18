@@ -2,7 +2,7 @@ use std::error::Error;
 use bytes::{BufMut, BytesMut};
 use postgres::types::{IsNull, Type};
 use speedy::Writable;
-use crate::{bool};
+use crate::{bool, Text};
 use crate::value::Value;
 
 impl<'a> postgres::types::FromSql<'a> for Value {
@@ -10,7 +10,7 @@ impl<'a> postgres::types::FromSql<'a> for Value {
         match *ty {
             Type::BOOL => Ok(Value::bool(postgres::types::FromSql::from_sql(ty, raw)?)),
             Type::TEXT | Type::CHAR => {
-                Ok(Value::text(postgres::types::FromSql::from_sql(ty, raw)?))
+                Ok(Value::Text(Text(postgres::types::FromSql::from_sql(ty, raw)?)))
             }
             Type::INT2 | Type::INT4 | Type::INT8 => {
                 let val:i64 = postgres::types::FromSql::from_sql(ty, raw)?;
@@ -45,7 +45,7 @@ impl postgres::types::ToSql for Value {
     {
         match self {
             Value::Int(i) => out.put_i32(i.0 as i32),
-            Value::Float(f) => out.put_f64(f.as_f64()),
+            Value::Float(f) => out.put_f64(f.0.0),
             Value::Bool(b) => out.extend_from_slice(&[b.0 as u8]),
             Value::Text(t) => out.extend_from_slice(t.0.as_bytes()),
             Value::Array(a) => out.extend_from_slice(a.write_to_vec()?.as_slice()),

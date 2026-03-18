@@ -1,3 +1,4 @@
+use core::fmt::{Display, Formatter};
 use serde::{Deserialize, Serialize};
 use speedy::Readable;
 use speedy::Writable;
@@ -24,4 +25,12 @@ pub struct Edge {
     pub start: u64,
     pub end: u64,
     pub properties: BTreeMap<String, Value>,
+}
+
+impl Display for Edge {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}:{}-{}", self.id, self.start, self.end)?;
+        write!(f, "{:?}", self.label)?;
+        write!(f, "{:?}", self.properties)
+    }
 }

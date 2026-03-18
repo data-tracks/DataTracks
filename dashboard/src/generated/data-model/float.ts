@@ -22,26 +22,17 @@ static getSizePrefixedRootAsFloat(bb:flatbuffers.ByteBuffer, obj?:Float):Float {
   return (obj || new Float()).__init(bb.readInt32(bb.position()) + bb.position(), bb);
 }
 
-number():bigint {
+value():number {
   const offset = this.bb!.__offset(this.bb_pos, 4);
-  return offset ? this.bb!.readInt64(this.bb_pos + offset) : BigInt('0');
-}
-
-shift():number {
-  const offset = this.bb!.__offset(this.bb_pos, 6);
-  return offset ? this.bb!.readUint8(this.bb_pos + offset) : 0;
+  return offset ? this.bb!.readFloat64(this.bb_pos + offset) : 0.0;
 }
 
 static startFloat(builder:flatbuffers.Builder) {
-  builder.startObject(2);
+  builder.startObject(1);
 }
 
-static addNumber(builder:flatbuffers.Builder, number:bigint) {
-  builder.addFieldInt64(0, number, BigInt('0'));
-}
-
-static addShift(builder:flatbuffers.Builder, shift:number) {
-  builder.addFieldInt8(1, shift, 0);
+static addValue(builder:flatbuffers.Builder, value:number) {
+  builder.addFieldFloat64(0, value, 0.0);
 }
 
 static endFloat(builder:flatbuffers.Builder):flatbuffers.Offset {
@@ -49,10 +40,9 @@ static endFloat(builder:flatbuffers.Builder):flatbuffers.Offset {
   return offset;
 }
 
-static createFloat(builder:flatbuffers.Builder, number:bigint, shift:number):flatbuffers.Offset {
+static createFloat(builder:flatbuffers.Builder, value:number):flatbuffers.Offset {
   Float.startFloat(builder);
-  Float.addNumber(builder, number);
-  Float.addShift(builder, shift);
+  Float.addValue(builder, value);
   return Float.endFloat(builder);
 }
 }
