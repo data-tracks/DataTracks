@@ -189,7 +189,6 @@ impl Persister {
 
                             let name = format!("Persister {} {}", engine, i);
 
-                            // Create a 50ms ticker for the flush interval
                             let mut flush_interval = tokio::time::interval(Duration::from_millis(500));
                             // don't let ticks pile up if processing is slow
                             flush_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
@@ -344,7 +343,7 @@ async fn handle_error(
     // 2. Data Recovery: Try to put records back into the engine's receiver
     // so they can be retried later.
 
-    if let Err(send_err) = engine.buffer_out.0.send(records.records) {
+    if let Err(send_err) = engine.buffer_out.0.send(records.records.to_vec()) {
         // If the internal channel is closed, we truly cannot save this data
         error!("Data loss: could not re-queue record: {:?}", send_err);
     }

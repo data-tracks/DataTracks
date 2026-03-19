@@ -26,6 +26,7 @@ neo4rs = { workspace = true }
 anyhow = { workspace = true }
 flatbuffers = { workspace = true }
 ordered-float = { workspace = true }
+smol_str = { workspace = true, features = ["serde"] }
 
 [[bench]]
 name = "value_bench"

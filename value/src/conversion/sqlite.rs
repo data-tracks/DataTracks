@@ -43,7 +43,7 @@ impl rusqlite::types::ToSql for Value {
             Value::Array(_) => Err(rusqlite::Error::InvalidQuery),
             Value::Dict(_) => Err(rusqlite::Error::InvalidQuery),
             Value::Null => Ok(ToSqlOutput::from(rusqlite::types::Null)),
-            Value::Date(d) => Ok(ToSqlOutput::from(d.days)),
+            Value::Date(d) => Ok(ToSqlOutput::from(d.0)),
             Value::Node(n) => Ok(ToSqlOutput::from(n.write_to_vec().unwrap())),
             Value::Edge(e) => Ok(ToSqlOutput::from(e.write_to_vec().unwrap())),
         }

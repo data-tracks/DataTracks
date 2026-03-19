@@ -19,3 +19,5 @@ rand = { workspace = true }
 crossbeam = { workspace = true }
 anyhow = { workspace = true }
 flume = { workspace = true }
+smallvec = { workspace = true }
+smol_str = { workspace = true }

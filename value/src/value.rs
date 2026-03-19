@@ -15,11 +15,11 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::str;
+use smol_str::SmolStr;
 use tracing::debug;
 
 #[derive(
-    Clone, Debug, Serialize, Deserialize, Ord, PartialOrd, Readable, Writable, Default, Eq,
-)]
+    Clone, Debug, Serialize, Deserialize, Ord, PartialOrd, Readable, Writable, Default, Eq)]
 pub enum Value {
     #[default]
     Null,
@@ -27,8 +27,8 @@ pub enum Value {
     Float(Float),
     Bool(Bool),
     Text(Text),
-    Time(Box<Time>),
-    Date(Box<Date>),
+    Time(Time),
+    Date(Date),
     Array(Box<Array>),
     Dict(Box<Dict>),
     Node(Box<Node>),
@@ -52,7 +52,7 @@ impl_value_conv!(Bool, Bool);
 
 impl Value {
     pub fn text<S: AsRef<str>>(string: S) -> Value {
-        Value::Text(Text(string.as_ref().to_owned().into_boxed_str()))
+        Value::Text(Text(SmolStr::new(string.as_ref())))
     }
     pub fn int<I: Into<i64>>(int: I) -> Value {
         Value::Int(Int(int.into()))
@@ -67,11 +67,11 @@ impl Value {
     }
 
     pub fn time(ms: i64, ns: u32) -> Value {
-        Value::Time(Box::new(Time::new(ms, ns)))
+        Value::Time(Time::new(ms, ns))
     }
 
     pub fn date(days: i64) -> Value {
-        Value::Date(Box::new(Date::new(days)))
+        Value::Date(Date::new(days))
     }
 
     pub fn node(id: Int, labels: Vec<Text>, properties: Dict) -> Value {
@@ -196,7 +196,7 @@ impl Value {
             }
             Value::Bool(b) => Ok(Time::new(b.0 as i64, 0)),
             Value::Text(t) => Ok(Time::from(t.clone())),
-            Value::Time(t) => Ok(**t),
+            Value::Time(t) => Ok(*t),
             Value::Array(_) => bail!("Array cannot be converted"),
             Value::Dict(_) => bail!("Dict cannot be converted"),
             Value::Null => bail!("Null cannot be converted"),
@@ -213,7 +213,7 @@ impl Value {
             Value::Bool(b) => Ok(Date::new(b.0 as i64)),
             Value::Text(t) => Ok(Date::from(t.0.to_string())),
             Value::Time(_) => bail!("Time cannot be converted"),
-            Value::Date(d) => Ok(*d.clone()),
+            Value::Date(d) => Ok(d.clone()),
             Value::Array(_) => bail!("Array cannot be converted"),
             Value::Dict(_) => bail!("Dict cannot be converted"),
             Value::Null => bail!("Null cannot be converted"),
@@ -270,7 +270,7 @@ impl Value {
             Value::Array(a) => Ok(Bool(!a.values.is_empty())),
             Value::Dict(d) => Ok(Bool(!d.is_empty())),
             Value::Null => Ok(Bool(false)),
-            Value::Date(d) => Ok(Bool(d.days > 0)),
+            Value::Date(d) => Ok(Bool(d.0 > 0)),
             Value::Node(_) => bail!("Node cannot be converted"),
             Value::Edge(_) => bail!("Edge cannot be converted"),
         }
@@ -278,34 +278,32 @@ impl Value {
 
     pub fn as_text(&self) -> anyhow::Result<Text> {
         match self {
-            Value::Int(i) => Ok(Text(i.to_string().into_boxed_str())),
-            Value::Float(f) => Ok(Text(f.0.0.to_string().into_boxed_str())),
-            Value::Bool(b) => Ok(Text(b.to_string().into_boxed_str())),
+            Value::Int(i) => Ok(Text(SmolStr::new(i.to_string()))),
+            Value::Float(f) => Ok(Text(SmolStr::new(f.0.0.to_string()))),
+            Value::Bool(b) => Ok(Text(SmolStr::new(b.to_string()))),
             Value::Text(t) => Ok(t.clone()),
             Value::Array(a) => Ok(Text(
-                format!(
+                SmolStr::new(format!(
                     "[{}]",
                     a.values
                         .iter()
                         .map(|v| v.as_text().unwrap().0.to_string())
                         .collect::<Vec<String>>()
                         .join(",")
-                )
-                .into_boxed_str(),
+                )),
             )),
             Value::Dict(d) => Ok(Text(
-                format!(
+                SmolStr::new(format!(
                     "[{}]",
                     d.iter()
                         .map(|(k, v)| format!("{}:{}", k, v.as_text().unwrap().0))
                         .collect::<Vec<String>>()
                         .join(",")
-                )
-                .into_boxed_str(),
+                )),
             )),
-            Value::Null => Ok(Text("null".to_owned().into_boxed_str())),
-            Value::Time(t) => Ok(Text(t.to_string().into_boxed_str())),
-            Value::Date(d) => Ok(Text(d.to_string().into_boxed_str())),
+            Value::Null => Ok(Text(SmolStr::new("null"))),
+            Value::Time(t) => Ok(Text(SmolStr::new(t.to_string()))),
+            Value::Date(d) => Ok(Text(SmolStr::new(d.to_string()))),
             Value::Node(_) => bail!("Node cannot be converted"),
             Value::Edge(_) => bail!("Edge cannot be converted"),
         }
@@ -383,9 +381,9 @@ impl PartialEq for Value {
                 })
                 .unwrap_or(false),
             (Value::Time(t1), Value::Time(t2)) => t1 == t2,
-            (Value::Time(t), _) => **t == other.as_time().unwrap(),
+            (Value::Time(t), _) => *t == other.as_time().unwrap(),
             (Value::Date(d1), Value::Date(d2)) => d1 == d2,
-            (Value::Date(d), _) => **d == other.as_date().unwrap(),
+            (Value::Date(d), _) => *d == other.as_date().unwrap(),
             (Value::Node(n1), Value::Node(n2)) => n1 == n2,
             (Value::Edge(n1), Value::Edge(n2)) => n1 == n2,
             (Value::Node(n), o) => o.as_node().map(|node| n.as_ref() == node).unwrap_or(false),
@@ -428,7 +426,7 @@ impl Hash for Value {
                 t.ns.hash(state)
             }
             Value::Date(d) => {
-                d.days.hash(state);
+                d.0.hash(state);
             }
             Value::Node(n) => {
                 n.labels.hash(state);
@@ -476,13 +474,13 @@ impl From<f64> for Value {
 
 impl From<&str> for Value {
     fn from(value: &str) -> Self {
-        Value::Text(Text(value.to_string().into_boxed_str()))
+        Value::Text(Text(SmolStr::new(value.to_string())))
     }
 }
 
 impl From<String> for Value {
     fn from(value: String) -> Self {
-        Value::Text(Text(value.into_boxed_str()))
+        Value::Text(Text(SmolStr::new(value)))
     }
 }
 

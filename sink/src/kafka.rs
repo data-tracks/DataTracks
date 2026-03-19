@@ -6,11 +6,12 @@ use rdkafka::producer::{FutureProducer, FutureRecord, Producer};
 use rdkafka::{ClientConfig, Message};
 use std::error::Error;
 use std::time::Duration;
+use smallvec::SmallVec;
 use tokio::task::JoinSet;
 use tracing::{debug, error, info};
 use util::container::Mapping;
 use util::{InitialMeta, container};
-use value::Value;
+use value::{Value};
 
 const TOPIC: &str = "poly"; // The topic to consume from
 const GROUP_ID: &str = "rust-kafka-sink-group"; // Consumer group ID
@@ -61,7 +62,7 @@ impl KafkaSink {
                             match sender.send((
                                 Value::from(record.value),
                                 InitialMeta {
-                                    topics: record.topics,
+                                    topics: SmallVec::from_vec(record.topics.into_iter().map(|t| t.into()).collect()),
                                 },
                             )) {
                                 Ok(_) => {}

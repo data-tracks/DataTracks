@@ -30,7 +30,6 @@ mod text;
 mod time;
 pub mod timeunit;
 mod r#type;
-pub mod wagon;
 mod conversion;
 mod math;
 pub(crate) mod value;

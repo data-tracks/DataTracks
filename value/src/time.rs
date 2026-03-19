@@ -80,7 +80,7 @@ impl<T: TimeZone> From<DateTime<T>> for Time {
 
 impl From<Time> for Value {
     fn from(time: Time) -> Self {
-        Value::Time(Box::new(time))
+        Value::Time(time)
     }
 }
 

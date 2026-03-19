@@ -12,6 +12,7 @@ pub mod runtimes;
 mod segment;
 mod types;
 pub mod query;
+mod batch;
 
 pub use segment::*;
 
@@ -30,6 +31,8 @@ pub use event::*;
 pub use runtimes::*;
 
 pub use record::*;
+
+pub use batch::*;
 
 pub use partition::*;
 

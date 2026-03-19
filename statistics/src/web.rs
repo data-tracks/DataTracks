@@ -15,6 +15,7 @@ use tokio::sync::broadcast::Sender;
 use tower_http::cors::CorsLayer;
 use tracing::{error, info, warn};
 use util::{Batch, Event, StatisticEvent, TargetedRecord, ThroughputEvent};
+use value::Text;
 
 #[derive(RustEmbed)]
 #[folder = "../dashboard/dist/dashboard/browser/"]
@@ -158,6 +159,7 @@ async fn ws_channel_handler(
 
 async fn handle_socket(mut socket: WebSocket, topic: String, state: EventState) {
     let mut recv = state.output.subscribe();
+    let topic = Text::from(topic);
     loop {
         if let Ok(records) = recv.recv().await {
             let records = records
