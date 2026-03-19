@@ -1,10 +1,10 @@
-
+use crate::Dict;
+use crate::value::Value;
 use mongodb::bson::Document;
 use mongodb::change_stream::event::{ChangeStreamEvent, OperationType};
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
-use std::collections::BTreeMap;
-use crate::value::Value;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Deserialize, Serialize, Writable, Readable)]
 pub enum Event {
@@ -16,29 +16,25 @@ pub enum Event {
     Other,
 }
 
-
 impl From<Event> for Value {
     fn from(event: Event) -> Self {
         match event {
-            Event::Insert(i) => {
-                let mut map = BTreeMap::new();
-                map.insert("value".to_string(), i.value);
-                map.insert("type".to_string(), Value::text("insert"));
-                Value::dict(map)
-            }
-            Event::Update(u) => {
-                let mut map = BTreeMap::new();
-                map.insert("identity".to_string(), u.identity);
-                map.insert("value".to_string(), u.value);
-                map.insert("type".to_string(), Value::text("update"));
-                Value::dict(map)
-            }
-            Event::Delete(d) => {
-                let mut map = BTreeMap::new();
-                map.insert("identity".to_string(), d.identity);
-                map.insert("type".to_string(), Value::text("delete"));
-                Value::dict(map)
-            }
+            Event::Insert(i) => Value::from((
+                vec!["value".to_string(), "type".to_string()],
+                vec![i.value, Value::text("insert")],
+            )),
+            Event::Update(u) => Value::from((
+                vec![
+                    "identity".to_string(),
+                    "value".to_string(),
+                    "type".to_string(),
+                ],
+                vec![u.identity, u.value, Value::text("update")],
+            )),
+            Event::Delete(d) => Value::from((
+                vec!["identity".to_string(), "type".to_string()],
+                vec![d.identity, Value::text("update")],
+            )),
             Event::Begin => Value::text("begin"),
             Event::End => Value::text("commit"),
             Event::Other => Value::text("other"),
@@ -46,14 +42,13 @@ impl From<Event> for Value {
     }
 }
 
-
 impl From<ChangeStreamEvent<Document>> for Event {
     fn from(event: ChangeStreamEvent<Document>) -> Self {
         //println!("{:?}", event);
         match event.operation_type {
             OperationType::Insert => Event::Insert(InsertEvent {
                 value: {
-                    Value::dict(BTreeMap::from_iter(
+                    Value::dict(HashMap::from_iter(
                         event
                             .full_document
                             .unwrap_or_default()
@@ -65,11 +60,12 @@ impl From<ChangeStreamEvent<Document>> for Event {
             OperationType::Update => {
                 let description = event.update_description.unwrap();
                 Event::Update(UpdateEvent {
-                    identity: Value::dict_from_kv(
+                    identity: Dict::from((
                         "_id",
                         event.document_key.unwrap().get("_id").unwrap().into(),
-                    ),
-                    value: Value::dict(BTreeMap::from_iter(
+                    ))
+                    .into(),
+                    value: Value::dict(HashMap::from_iter(
                         description
                             .updated_fields
                             .into_iter()
@@ -79,10 +75,11 @@ impl From<ChangeStreamEvent<Document>> for Event {
             }
             OperationType::Replace => todo!(),
             OperationType::Delete => Event::Delete(DeleteEvent {
-                identity: Value::dict_from_kv(
+                identity: Dict::from((
                     "_id",
                     event.document_key.unwrap().get("_id").unwrap().into(),
-                ),
+                ))
+                .into(),
             }),
             OperationType::Drop => todo!(),
             OperationType::Rename => todo!(),
@@ -123,7 +120,7 @@ impl From<serde_json::Value> for Event {
 
 impl Event {
     fn extract_values_for_key<S: AsRef<str>>(key: S, value: serde_json::Value) -> Value {
-        Value::dict(BTreeMap::from_iter(
+        Value::dict(HashMap::from_iter(
             value
                 .get(key.as_ref())
                 .unwrap()

@@ -8,7 +8,7 @@ use std::time::Duration;
 use tokio::task::JoinSet;
 use tracing::Level;
 use tracing_subscriber::FmtSubscriber;
-use value::Value;
+use value::{Dict, Value};
 
 mod management;
 mod util;
@@ -57,10 +57,11 @@ fn setup_inputs(joins: &mut JoinSet<()>, tx: Sender<InitialRecord>, statistics_t
         let statistics = statistics_tx.clone();
         joins.spawn(async move {
             let mut dummy = DummySink::interval(
-                Value::dict_from_pairs(vec![
+                Dict::from(vec![
                     ("test", Value::text("test")),
                     ("age", Value::text("test2")),
-                ]),
+                ])
+                .into(),
                 Duration::from_millis(10),
             );
             dummy
@@ -74,14 +75,15 @@ fn setup_inputs(joins: &mut JoinSet<()>, tx: Sender<InitialRecord>, statistics_t
         let statistics = statistics_tx.clone();
         joins.spawn(async move {
             let mut dummy = DummySink::interval(
-                Value::dict_from_pairs(vec![
+                Dict::from(vec![
                     ("id", Value::text("test")),
                     ("label", Value::text("test2")),
                     (
                         "properties",
-                        Value::dict_from_pairs(vec![("test", Value::text("text"))]),
+                        Dict::from(vec![("test", Value::text("text"))]).into(),
                     ),
-                ]),
+                ])
+                .into(),
                 Duration::from_millis(10),
             );
             dummy

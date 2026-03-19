@@ -1,11 +1,9 @@
-use crate::value::Value;
+use crate::{Dict, Int, Text};
 use core::fmt::Display;
 use serde::{Deserialize, Serialize};
 use speedy::Readable;
 use speedy::Writable;
-use std::collections::BTreeMap;
 use std::fmt::Formatter;
-use crate::{Int, Text};
 
 #[derive(
     Eq,
@@ -18,12 +16,12 @@ use crate::{Int, Text};
     PartialOrd,
     Readable,
     Writable,
-    PartialEq
+    PartialEq,
 )]
 pub struct Node {
     pub id: Int,
     pub labels: Vec<Text>,
-    pub properties: BTreeMap<String, Value>,
+    pub properties: Dict,
 }
 
 impl Display for Node {

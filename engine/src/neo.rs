@@ -389,12 +389,12 @@ fn to_primitive(value: &Value) -> Value {
 mod tests {
     use crate::EngineKind;
     use neo4rs::{BoltInteger, BoltMap, BoltString, BoltType, query};
-    use std::collections::{BTreeMap, HashMap};
+    use std::collections::HashMap;
     use std::vec;
     use util::definition::{Definition, DefinitionFilter, Model, Stage};
-    use util::{NativeMapping, PartitionId, TargetedMeta, batch, target};
     use util::query::Query;
-    use value::Value;
+    use util::{NativeMapping, PartitionId, TargetedMeta, batch, target};
+    use value::{Dict, Value};
 
     //#[tokio::test]
     //#[traced_test]
@@ -437,7 +437,7 @@ mod tests {
                 Value::node(
                     Value::int(0).as_int().unwrap(),
                     vec![Value::text("test").as_text().unwrap()],
-                    BTreeMap::new(),
+                    Dict::default(),
                 ),
                 TargetedMeta::default()
             )],
@@ -479,7 +479,7 @@ mod tests {
                 let node = Value::node(
                     Value::int(0).as_int().unwrap(),
                     vec![Value::text("test3").as_text().unwrap()],
-                    BTreeMap::new(),
+                    Dict::default(),
                 );
                 let node = node.as_node().unwrap();
                 let mut props = HashMap::new();
@@ -504,13 +504,11 @@ mod tests {
                 let node = Value::node(
                     Value::int(0).as_int().unwrap(),
                     vec![Value::text("test3").as_text().unwrap()],
-                    Value::dict_from_pairs(vec![
+                    Dict::from(vec![
                         ("key", Value::int(3)),
                         ("key2", Value::text("value2")),
                     ])
-                    .as_dict()
-                    .unwrap()
-                    .values,
+                    .into(),
                 );
 
                 let query = query.param("values", vec![node]);

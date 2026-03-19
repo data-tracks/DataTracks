@@ -2,8 +2,9 @@ use crate::RelationalType;
 use indexmap::IndexMap;
 use processing::Schema;
 use serde::{Deserialize, Deserializer, Serialize};
+use value::Dict;
 use value::Value;
-use value::Value::{Array, Dict};
+use value::Value::Array;
 use value::edge::Edge;
 use value::node::Node;
 
@@ -220,14 +221,14 @@ impl NativeMapping {
                 DocumentSource::Key(k) => {
                     let key = k.clone();
                     Box::new(move |v: &Value| {
-                        if let Dict(d) = v {
+                        if let Value::Dict(d) = v {
                             return Some(d.get(&key).cloned().unwrap_or_default());
                         }
                         None
                     })
                 }
                 DocumentSource::Whole => Box::new(|v: &Value| {
-                    if let Dict(_) = v {
+                    if let Value::Dict(_) = v {
                         return Some(v.clone());
                     }
                     None
@@ -238,12 +239,15 @@ impl NativeMapping {
                 let keys = keys.clone();
                 Box::new(move |v: &Value| {
                     if let Array(a) = v {
-                        return Some(Value::dict_from_pairs(
-                            keys.iter()
-                                .map(|k| k.as_str())
-                                .zip(a.values.clone())
-                                .collect::<Vec<(&str, Value)>>(),
-                        ));
+                        return Some(
+                            Dict::from(
+                                keys.iter()
+                                    .map(|k| k.to_string())
+                                    .zip(a.values.clone())
+                                    .collect::<Vec<(String, Value)>>(),
+                            )
+                            .into(),
+                        );
                     }
                     None
                 })
@@ -267,7 +271,7 @@ impl NativeMapping {
                             .map(|v| v.as_text().ok().map(|v| vec![v]).unwrap_or_default())
                             .unwrap_or_default(),
                         properties: properties(value)
-                            .map(|v| v.as_dict().ok().map(|m| m.values).unwrap_or_default())
+                            .map(|v| v.as_dict().ok().unwrap_or_default())
                             .unwrap_or_default(),
                     })))
                 })
@@ -290,7 +294,7 @@ impl NativeMapping {
                             .unwrap_or_default(),
                         label: Some(label(value).unwrap_or_default().as_text().unwrap()),
                         properties: properties(value)
-                            .map(|v| v.as_dict().ok().map(|m| m.values).unwrap_or_default())
+                            .map(|v| v.as_dict().ok().unwrap_or_default())
                             .unwrap_or_default(),
                         end: end(value)
                             .map(|v| v.as_int())

@@ -3,31 +3,23 @@ use crate::date::Date;
 use crate::dict::Dict;
 use crate::edge::Edge;
 use crate::node::Node;
-use crate::r#type::ValType;
 use crate::time::Time;
+use crate::r#type::ValType;
 use crate::{Bool, Float, Int, Text};
 use anyhow::{anyhow, bail};
 use ordered_float::OrderedFloat;
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 use std::cmp::PartialEq;
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::str;
 use tracing::debug;
 
 #[derive(
-    Clone,
-    Debug,
-    Serialize,
-    Deserialize,
-    Ord,
-    PartialOrd,
-    Readable,
-    Writable,
-    Default,
-    Eq)]
+    Clone, Debug, Serialize, Deserialize, Ord, PartialOrd, Readable, Writable, Default, Eq,
+)]
 pub enum Value {
     #[default]
     Null,
@@ -58,7 +50,6 @@ impl_value_conv!(Text, Text);
 impl_value_conv!(Float, Float);
 impl_value_conv!(Bool, Bool);
 
-
 impl Value {
     pub fn text<S: AsRef<str>>(string: S) -> Value {
         Value::Text(Text(string.as_ref().to_owned().into_boxed_str()))
@@ -83,7 +74,7 @@ impl Value {
         Value::Date(Box::new(Date::new(days)))
     }
 
-    pub fn node(id: Int, labels: Vec<Text>, properties: BTreeMap<String, Value>) -> Value {
+    pub fn node(id: Int, labels: Vec<Text>, properties: Dict) -> Value {
         Value::Node(Box::new(Node {
             id,
             labels,
@@ -96,7 +87,7 @@ impl Value {
         label: Option<Text>,
         start: u64,
         end: u64,
-        properties: BTreeMap<String, Value>,
+        properties: Dict,
     ) -> Value {
         Value::Edge(Box::new(Edge {
             id,
@@ -111,34 +102,7 @@ impl Value {
         Value::Array(Box::new(Array::new(tuple.into())))
     }
 
-    pub fn dict(values: BTreeMap<String, Value>) -> Value {
-        let mut map = BTreeMap::new();
-
-        values.into_iter().for_each(|(k, v)| {
-            match v {
-                Value::Dict(d) => {
-                    flatten(*d, vec![k]).into_iter().for_each(|(k, v)| {
-                        map.insert(k, v);
-                    });
-                }
-                _ => {
-                    map.insert(k, v);
-                }
-            };
-        });
-
-        Value::Dict(Box::new(Dict::new(map)))
-    }
-
-    pub fn dict_from_kv<S: AsRef<str>>(key: S, value: Value) -> Value {
-        Self::dict_from_pairs(vec![(key.as_ref(), value)])
-    }
-
-    pub fn dict_from_pairs(pairs: Vec<(&str, Value)>) -> Value {
-        let mut map = BTreeMap::new();
-        pairs.into_iter().for_each(|(k, v)| {
-            map.insert(k.to_string(), v);
-        });
+    pub fn dict(map: HashMap<String, Value>) -> Value {
         Value::Dict(Box::new(Dict::new(map)))
     }
 
@@ -318,21 +282,27 @@ impl Value {
             Value::Float(f) => Ok(Text(f.0.0.to_string().into_boxed_str())),
             Value::Bool(b) => Ok(Text(b.to_string().into_boxed_str())),
             Value::Text(t) => Ok(t.clone()),
-            Value::Array(a) => Ok(Text(format!(
-                "[{}]",
-                a.values
-                    .iter()
-                    .map(|v| v.as_text().unwrap().0.to_string())
-                    .collect::<Vec<String>>()
-                    .join(",")
-            ).into_boxed_str())),
-            Value::Dict(d) => Ok(Text(format!(
-                "[{}]",
-                d.iter()
-                    .map(|(k, v)| format!("{}:{}", k, v.as_text().unwrap().0))
-                    .collect::<Vec<String>>()
-                    .join(",")
-            ).into_boxed_str())),
+            Value::Array(a) => Ok(Text(
+                format!(
+                    "[{}]",
+                    a.values
+                        .iter()
+                        .map(|v| v.as_text().unwrap().0.to_string())
+                        .collect::<Vec<String>>()
+                        .join(",")
+                )
+                .into_boxed_str(),
+            )),
+            Value::Dict(d) => Ok(Text(
+                format!(
+                    "[{}]",
+                    d.iter()
+                        .map(|(k, v)| format!("{}:{}", k, v.as_text().unwrap().0))
+                        .collect::<Vec<String>>()
+                        .join(",")
+                )
+                .into_boxed_str(),
+            )),
             Value::Null => Ok(Text("null".to_owned().into_boxed_str())),
             Value::Time(t) => Ok(Text(t.to_string().into_boxed_str())),
             Value::Date(d) => Ok(Text(d.to_string().into_boxed_str())),
@@ -360,19 +330,6 @@ impl From<usize> for Value {
     }
 }
 
-fn flatten(dict: Dict, prefix: Vec<String>) -> Vec<(String, Value)> {
-    let mut values = vec![];
-    dict.into_iter().for_each(|(k, v)| match v {
-        Value::Dict(d) => {
-            let mut prefix = prefix.clone();
-            prefix.push(k);
-            values.append(&mut flatten(*d, prefix))
-        }
-        _ => values.push((k, v)),
-    });
-    values
-}
-
 // Define the macro
 #[macro_export]
 macro_rules! value_display {
@@ -397,9 +354,7 @@ impl PartialEq for Value {
                 .map(|v| &Value::Float(v) == other)
                 .unwrap_or(false),
             (Value::Int(i), _) => other.as_int().map(|v| i.0 == v.0).unwrap_or(false),
-            (Value::Float(f), Value::Float(other_f)) => {
-                f.0 == other_f.0
-            }
+            (Value::Float(f), Value::Float(other_f)) => f.0 == other_f.0,
             (Value::Float(_), _) => other
                 .as_float()
                 .map(|v| self == &Value::Float(v))
@@ -460,7 +415,7 @@ impl Hash for Value {
                 }
             }
             Value::Dict(d) => {
-                for (k, v) in &d.values {
+                for (k, v) in d.iter() {
                     k.hash(state);
                     v.hash(state);
                 }
@@ -546,8 +501,8 @@ impl From<Dict> for Value {
 #[cfg(test)]
 mod tests {
     use crate::value::Value;
-    use std::collections::hash_map::DefaultHasher;
     use std::collections::HashMap;
+    use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
     use std::vec;
 

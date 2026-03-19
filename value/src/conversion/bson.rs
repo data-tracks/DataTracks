@@ -1,6 +1,6 @@
-use std::collections::{BTreeMap, HashMap};
-use mongodb::bson::{to_bson, Bson, DateTime, Document, Timestamp};
 use crate::value::Value;
+use mongodb::bson::{Bson, DateTime, Document, Timestamp, to_bson};
+use std::collections::HashMap;
 
 impl From<&Bson> for Value {
     fn from(bson: &Bson) -> Self {
@@ -26,7 +26,6 @@ impl From<Bson> for Value {
 }
 
 impl From<Value> for Bson {
-
     fn from(value: Value) -> Self {
         match value {
             Value::Int(i) => Bson::Int32(i.0 as i32),
@@ -44,7 +43,7 @@ impl From<Value> for Bson {
                     .map(|(k, v)| (k, v.into()))
                     .collect::<HashMap<String, Bson>>(),
             )
-                .unwrap(),
+            .unwrap(),
             Value::Node(_) => todo!(),
             Value::Edge(_) => todo!(),
             Value::Null => Bson::Null,
@@ -54,7 +53,7 @@ impl From<Value> for Bson {
 
 impl From<&Document> for Value {
     fn from(doc: &Document) -> Self {
-        let mut map: BTreeMap<String, Value> = BTreeMap::new();
+        let mut map: HashMap<String, Value> = HashMap::new();
         doc.iter().for_each(|(k, v)| {
             map.insert(k.to_string(), v.clone().into());
         });

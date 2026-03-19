@@ -1,7 +1,9 @@
-use std::collections::HashMap;
-use neo4rs::{BoltBoolean, BoltFloat, BoltInteger, BoltList, BoltMap, BoltNull, BoltString, BoltType, Row};
-use crate::{Int, Text};
 use crate::value::Value;
+use crate::{Int, Text};
+use neo4rs::{
+    BoltBoolean, BoltFloat, BoltInteger, BoltList, BoltMap, BoltNull, BoltString, BoltType, Row,
+};
+use std::collections::HashMap;
 
 impl From<Value> for BoltType {
     fn from(value: Value) -> Self {
@@ -41,7 +43,6 @@ impl From<Value> for BoltType {
             }
             Value::Dict(d) => BoltType::Map(BoltMap {
                 value: d
-                    .values
                     .into_iter()
                     .map(|(k, v)| (BoltString::new(k.as_str()), BoltType::from(v)))
                     .collect(),

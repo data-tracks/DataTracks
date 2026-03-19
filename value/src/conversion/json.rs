@@ -1,7 +1,7 @@
-use std::collections::BTreeMap;
-use json::JsonValue;
-use crate::{Dict};
+use crate::Dict;
 use crate::value::Value;
+use json::JsonValue;
+use std::collections::HashMap;
 
 impl From<&serde_json::Map<String, serde_json::Value>> for Value {
     fn from(value: &serde_json::Map<String, serde_json::Value>) -> Self {
@@ -11,7 +11,7 @@ impl From<&serde_json::Map<String, serde_json::Value>> for Value {
 
 impl From<&serde_json::Map<String, serde_json::Value>> for Dict {
     fn from(value: &serde_json::Map<String, serde_json::Value>) -> Self {
-        let mut map = BTreeMap::new();
+        let mut map = HashMap::new();
         for (key, value) in value {
             map.insert(key.clone(), value.into());
         }

@@ -1,11 +1,11 @@
-use core::str;
-use std::collections::BTreeMap;
-use rumqttd::Notification;
-use anyhow::{anyhow, bail};
-use rumqttd::protocol::Publish;
-use rumqttc::{Event, Incoming};
-use crate::{Dict};
+use crate::Dict;
 use crate::value::Value;
+use anyhow::{anyhow, bail};
+use core::str;
+use rumqttc::{Event, Incoming};
+use rumqttd::Notification;
+use rumqttd::protocol::Publish;
+use std::collections::HashMap;
 
 impl TryFrom<Notification> for Dict {
     type Error = anyhow::Error;
@@ -22,7 +22,7 @@ impl TryFrom<Publish> for Dict {
     type Error = anyhow::Error;
 
     fn try_from(publish: Publish) -> Result<Self, Self::Error> {
-        let mut dict = BTreeMap::new();
+        let mut dict = HashMap::new();
         let value = str::from_utf8(&publish.payload)
             .map_err(|e| anyhow!(e))?
             .into();
@@ -42,7 +42,7 @@ impl TryFrom<Event> for Dict {
         match value {
             Event::Incoming(i) => match i {
                 Incoming::Publish(p) => {
-                    let mut map = BTreeMap::new();
+                    let mut map = HashMap::new();
                     map.insert(
                         "$".to_string(),
                         Value::text(str::from_utf8(&p.payload).map_err(|err| anyhow!(err))?),
