@@ -105,9 +105,9 @@ impl Statistics {
                         self.delay.native = total_dur / count;
                     }
                     Stage::Process => {
-                        let (total_dur, max_dur) = ids.iter().fold(
-                            (Duration::from_secs(0), Duration::from_secs(0)),
-                            |(sum, max), id| {
+                        let total_dur = ids.iter().fold(
+                            Duration::from_secs(0),
+                            |sum, id| {
                                 let dur = self
                                     .ids
                                     .swap_remove(id)
@@ -116,15 +116,15 @@ impl Statistics {
                                         error!("Processed without Mapped/Plain for ID: {}", id);
                                         Duration::from_secs(0)
                                     });
-                                (sum + dur, cmp::max(max, dur))
+                                (sum + dur)
                             },
                         );
-                        self.delay.native = total_dur / count;
-                        self.delay.max = max_dur;
-                        self.delay.open_ids = ids.len()
+                        self.delay.process = total_dur / count;
                     }
                     _ => {}
                 }
+                self.delay.open_ids = self.ids.len();
+                self.delay.max = self.ids.iter().map(|e| e.1.elapsed()).reduce(cmp::max).unwrap_or(Duration::from_millis(0));
             }
             Event::Definition(definition_id, definition) => {
                 self.definitions.insert(definition_id, *definition);
