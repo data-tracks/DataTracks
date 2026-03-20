@@ -18,6 +18,7 @@ pub enum Op {
     Index,
     Minus,
     Multiply,
+    Divide,
     Length,
 
     // Flatten
@@ -159,6 +160,14 @@ impl Program {
     }
 }
 
+macro_rules! binary_op {
+    ($self:ident, $op:tt) => {{
+        let r = $self.vm.stack.pop().expect("Stack underflow");
+        let l = $self.vm.stack.pop().expect("Stack underflow");
+        $self.vm.stack.push(&l $op &r);
+    }};
+}
+
 impl Iterator for Program {
     type Item = Value;
 
@@ -173,11 +182,10 @@ impl Iterator for Program {
                 Op::LoadField(idx) => {
                     self.vm.stack.push(self.vm.current_record[*idx].clone());
                 }
-                Op::Add => {
-                    let r = self.vm.stack.pop().unwrap();
-                    let l = self.vm.stack.pop().unwrap();
-                    self.vm.stack.push(&l + &r);
-                }
+                Op::Add => binary_op!(self, +),
+                Op::Minus => binary_op!(self, -),
+                Op::Multiply => binary_op!(self, *),
+                Op::Divide => binary_op!(self, /),
                 Op::JumpIfFalse { target } => {
                     if !self.vm.stack.pop().unwrap().as_bool().unwrap().0 {
                         self.vm.pc = *target;
@@ -243,11 +251,6 @@ impl Iterator for Program {
                         self.vm.stack.push(Value::text(&t.0[index..index + 1]))
                     }
                 }
-                Op::Minus => {
-                    let r = self.vm.stack.pop().unwrap();
-                    let l = self.vm.stack.pop().unwrap();
-                    self.vm.stack.push(&l - &r);
-                }
                 Op::Length => {
                     let val = self.vm.stack.pop().unwrap();
 
@@ -258,11 +261,6 @@ impl Iterator for Program {
                         Value::Text(t) => self.vm.stack.push(Value::int(t.0.len() as i64)),
                         _ => {}
                     }
-                }
-                Op::Multiply => {
-                    let r = self.vm.stack.pop().unwrap();
-                    let l = self.vm.stack.pop().unwrap();
-                    self.vm.stack.push(&l * &r);
                 }
                 Op::NextOrPop => {
                     if let Some(state) = self.vm.explode_stack.last_mut() {

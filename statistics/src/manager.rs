@@ -116,7 +116,7 @@ impl Statistics {
                                         error!("Processed without Mapped/Plain for ID: {}", id);
                                         Duration::from_secs(0)
                                     });
-                                (sum + dur)
+                                sum + dur
                             },
                         );
                         self.delay.process = total_dur / count;
