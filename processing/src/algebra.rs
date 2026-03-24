@@ -1,7 +1,7 @@
 use crate::expression::Expression;
 use crate::language::Sql;
 use crate::operator::Operator;
-use crate::program::Program;
+use crate::tuple::program::Program;
 use indexmap::IndexMap;
 use serde::Serialize;
 use std::cmp;
@@ -32,7 +32,9 @@ impl Algebra {
             Algebra::Scan(_) | Algebra::Todo(_) => Scope::Tuple,
             Algebra::Collect(_) | Algebra::Unwind(_) => Scope::Multi,
             Algebra::Project(p) => {
-                let expr_max = p.expressions.values()
+                let expr_max = p
+                    .expressions
+                    .values()
                     .map(|e| e.scope())
                     .max()
                     .unwrap_or(Scope::Tuple);
@@ -46,7 +48,10 @@ impl Algebra {
     /// Usually, you want to transform the schema as it moves up the tree.
     pub fn set_schema(&mut self, s: Schema) {
         let input = match self {
-            Algebra::Scan(scan) => { scan.schema = s; return; },
+            Algebra::Scan(scan) => {
+                scan.schema = s;
+                return;
+            }
             Algebra::Project(p) => &mut p.input,
             Algebra::Filter(f) => &mut f.input,
             Algebra::Collect(c) => &mut c.input,
@@ -79,12 +84,10 @@ impl Algebra {
 
     #[cfg(test)]
     pub(crate) fn scan<S: AsRef<str>>(resource: S, schema: Schema) -> Self {
-        Algebra::Scan (
-            Scan{
-                source: resource.as_ref().to_string(),
-                schema,
-            }
-        )
+        Algebra::Scan(Scan {
+            source: resource.as_ref().to_string(),
+            schema,
+        })
     }
 
     #[cfg(test)]
@@ -96,11 +99,9 @@ impl Algebra {
         })
     }
 
-
     pub fn schema(&self) -> Schema {
         Schema::Fixed(IndexMap::from([("price".to_string(), ValType::Float)]))
     }
-
 
     pub fn processing(&self) -> Program {
         Program::from(self)
@@ -232,6 +233,4 @@ mod test {
         let sql = algebra.sql();
         debug!("{:?}", sql);
     }
-
-
 }

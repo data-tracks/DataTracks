@@ -1,11 +1,13 @@
 mod algebra;
 mod expression;
-mod program;
-mod operator;
+mod instruction;
 mod language;
+mod operator;
+mod simd;
+mod tuple;
 
 pub use algebra::*;
 
 pub use language::*;
 
-pub use program::*;
+pub use tuple::program::*;

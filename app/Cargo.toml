@@ -20,17 +20,17 @@ anyhow = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
 tracing = { workspace = true }
-tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
+tracing-subscriber = { workspace = true }
 util = { workspace = true }
 engine = { workspace = true }
 sink = { workspace = true }
 futures = { workspace = true }
-statistics = { workspace = true }
 flume = { workspace = true }
 toml = { workspace = true }
 serde = { workspace = true }
 async-trait = { workspace = true }
-enum_dispatch = { workspace = true }
+rand = "0.9.2"
+statistics = { workspace = true }
 
 
 

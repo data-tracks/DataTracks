@@ -45,7 +45,7 @@ rumqttd = "0.20.0"
 rusqlite = { version = "0.39.0", features = ["bundled"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
-serde_with = "3.17.0"
+serde_with = "3.18.0"
 sink = { path = "./sink" }
 speedy = "0.8.7"
 statistics = { path = "./statistics" }
@@ -58,6 +58,7 @@ toml = "1.0.6"
 tower-http = { version = "0.6.8", features = ["full"] }
 tracing = "0.1.44"
 tracing-test = "0.2.6"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 util = { path = "./util" }
 uuid = { version = "1.22.0", features = ["v4"] }
 value = { path = "./value" }

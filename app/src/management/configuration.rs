@@ -1,8 +1,8 @@
 use serde::Deserialize;
 use std::collections::HashMap;
+use util::NativeMapping;
 use util::definition::{DefinitionFilter, Model};
 use util::query::Query;
-use util::NativeMapping;
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
@@ -28,14 +28,12 @@ mod tests {
     async fn relational() {
         let mapping = r#"relational = [{name = "TEXT"}, {age = "INT"}]"#;
 
-        let mapping: NativeMapping = toml::from_str(&mapping).unwrap();
-        if let NativeMapping::Relational(r) = mapping
-            && let RelationalMapping::Tuple(val, _m) = r
-        {
+        let mapping: NativeMapping = toml::from_str(mapping).unwrap();
+        if let NativeMapping::Relational(RelationalMapping::Tuple(val, _m)) = mapping {
             assert_eq!(val[0].0, "name");
             assert_eq!(val[1].0, "age");
         } else {
-            assert!(false);
+            panic!();
         }
     }
 
@@ -72,7 +70,7 @@ mod tests {
         properties = {doc.key = "properties"}
         "#;
 
-        let config: Config = toml::from_str(&mapping).unwrap();
+        let _config: Config = toml::from_str(mapping).unwrap();
     }
 
     #[tokio::test]
@@ -86,7 +84,7 @@ mod tests {
         mapping.document = "document"
         processing.mql = "None""#;
 
-        let config: Config = toml::from_str(&mapping).unwrap();
+        let _config: Config = toml::from_str(mapping).unwrap();
     }
 
     #[tokio::test]
@@ -98,7 +96,7 @@ mod tests {
         properties = {doc.key = "properties"}
         processing = "None""#;
 
-        let config: NativeMapping = toml::from_str(&mapping).unwrap();
+        let _config: NativeMapping = toml::from_str(mapping).unwrap();
     }
 
     #[tokio::test]
@@ -114,6 +112,6 @@ mod tests {
         ]
         processing.sql = "None""#;
 
-        let config: Config = toml::from_str(&mapping).unwrap();
+        let _config: Config = toml::from_str(mapping).unwrap();
     }
 }

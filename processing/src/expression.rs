@@ -3,7 +3,7 @@ use crate::language::Sql;
 use crate::operator::Operator;
 use mongodb::bson::Bson;
 use serde::Serialize;
-use sqlparser::ast::{Expr, SelectItem};
+use sqlparser::ast::{BinaryOperator, Expr, SelectItem};
 use std::{cmp, vec};
 use value::Value;
 
@@ -17,7 +17,6 @@ pub enum Expression {
         expressions: Vec<Expression>,
     },
 }
-
 
 impl Expression {
     pub(crate) fn scope(&self) -> Scope {
@@ -34,12 +33,22 @@ impl Expression {
                     .map(|e| e.scope())
                     .fold(Scope::Tuple, cmp::max),
             ),
-            Expression::Exclude(_) => Scope::Tuple
+            Expression::Exclude(_) => Scope::Tuple,
         }
     }
 
     pub(crate) fn field(name: &str) -> Self {
         Self::Field(name.to_string())
+    }
+
+    fn build_call(left: &Box<Expr>, op: &BinaryOperator, right: &Box<Expr>) -> Expression {
+        Expression::Call {
+            operator: Operator::from(op),
+            expressions: vec![
+                Expression::from(left.clone()),
+                Expression::from(right.clone()),
+            ],
+        }
     }
 }
 
@@ -47,20 +56,15 @@ impl From<&SelectItem> for Expression {
     fn from(value: &SelectItem) -> Self {
         if let SelectItem::UnnamedExpr(f) = value {
             if let Expr::Identifier(i) = f {
-                return Expression::Field(i.value.clone());
+                Expression::Field(i.value.clone())
             } else if let Expr::BinaryOp { left, op, right } = f {
-                return Expression::Call {
-                    operator: Operator::from(op),
-                    expressions: vec![
-                        Expression::from(left.clone()),
-                        Expression::from(right.clone()),
-                    ],
-                };
+                Self::build_call(left, op, right)
             } else {
                 panic!("Expected identifier, found {:?}", f);
             }
+        } else {
+            todo!()
         }
-        todo!()
     }
 }
 
@@ -74,6 +78,7 @@ impl From<Box<Expr>> for Expression {
                 }
                 e => todo!("{:?}", e),
             },
+            Expr::BinaryOp { left, right, op } => Self::build_call(&left, &op, &right),
             e => todo!("{:?}", e),
         }
     }
@@ -87,9 +92,9 @@ impl From<(&str, &Bson)> for Expression {
             } else {
                 Expression::Exclude(value.0.to_string())
             }
-        }else if let Some (field) = value.1.as_str() {
+        } else if let Some(field) = value.1.as_str() {
             Expression::Field(field.to_string())
-        }else {
+        } else {
             Expression::from(value.1)
         }
     }
@@ -110,7 +115,7 @@ impl Sql for Expression {
                 operator,
                 expressions,
             } => operator.sql(expressions.clone()),
-            Expression::Exclude(_) => unreachable!()
+            Expression::Exclude(_) => unreachable!(),
         }
     }
 }

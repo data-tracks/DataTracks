@@ -78,7 +78,6 @@ impl Processor {
                 .collect::<Vec<Engine>>();
             let outgoing = outgoing.clone();
 
-
             // Spawn a dedicated OS thread for this specific engine
             thread::spawn(move || {
                 let rt = Builder::new_multi_thread()
@@ -165,6 +164,7 @@ impl RecordProcessor for TupleProcessor {
                 }
 
                 res = self.rx.recv_async() => {
+                    let mut start = Instant::now();
                     let mut records = match res {
                         Ok(r) => r,
                         Err(_) => bail!("Could not receive"), // Channel closed
@@ -198,11 +198,16 @@ impl RecordProcessor for TupleProcessor {
                         .collect();
                     let partition_id = definition.partition_info.next(&id, &(records.len() as u64)).into();
 
+                    info!("Processing of {} records took: {:?}", records.len(), start.elapsed());
+                    start = Instant::now();
+
                     // Store and notify
                     engine
                         .store(partition_id, Stage::Process, definition_id, &processed_data)
                         .await
                         .map_err(|e| anyhow!(e))?;
+
+                    info!("Storing of {} records took:  {:?}", records.len(), start.elapsed());
 
                     let ids: Vec<u64> = records.records.iter().map(|r| r.meta.id).collect();
                     let _ = engine.statistic_sender.send(Event::Insert {
@@ -220,5 +225,55 @@ impl RecordProcessor for TupleProcessor {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use processing::{Schema, parse_sql};
+    use rand::{Rng, rng};
+    use std::collections::HashMap;
+    use std::time::Instant;
+    use value::{ValType, Value};
+
+    #[test]
+    fn test_tp() {
+        let query = "SELECT concurrency * concurrency FROM $$source";
+        let mut alg = parse_sql(query);
+        alg.set_schema(Schema::fixed([("concurrency".to_string(), ValType::Float)]));
+        let mut program = alg.processing();
+
+        let mut source = vec![];
+        let mut res = vec![];
+
+        println!("parallelism {:?}", std::thread::available_parallelism());
+
+        let mut rng = rng();
+        for _ in 0..100_000 {
+            let value = rng.random::<i32>();
+            source.push(Value::dict(HashMap::from([(
+                "concurrency".to_string(),
+                value.into(),
+            )])));
+            res.push((value as i64).saturating_mul(value as i64));
+        }
+
+        program
+            .set_resource("$$source", source.clone().into_iter())
+            .unwrap();
+        for i in 0..100_000 {
+            let val = program.next().unwrap();
+            let res = Value::array(vec![Value::from(*res.get(i).unwrap())]);
+            assert_eq!(val, res);
+        }
+
+        let now = Instant::now();
+        program
+            .set_resource("$$source", source.clone().into_iter())
+            .unwrap();
+        for _ in 0..100_000 {
+            let _ = program.next();
+        }
+        println!("Duration: {:?}", now.elapsed());
     }
 }
