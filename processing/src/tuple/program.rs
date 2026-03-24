@@ -7,6 +7,38 @@ use crate::tuple::vm::VM;
 use anyhow::anyhow;
 use value::Value;
 
+#[derive(Clone, Debug)]
+pub enum Op {
+    // Scalar Ops
+    LoadField(usize), // load value from record
+    StoreField(usize),
+    PushConst(usize),
+    Add,
+    Greater,
+    Equal,
+    Index,
+    Minus,
+    Multiply,
+    Length,
+
+    // Flatten
+    Flatten,
+
+    // Explode
+    NextOrPop,
+    LoadExplodeElement,
+    InitExplode(usize),
+
+    // Ops (The Algebra)
+    NextTuple { resource_id: usize }, // holds the "raw" data so that multiple different expressions (filters, math, etc.) can all look at the same row simultaneously without fighting over the stack.
+    JumpIfFalse { target: usize },    // jump if top is false
+    Jump { target: usize },
+
+    // The "Materialize" Op
+    // arg = how many items to pop from stack to form the result row
+    Yield(usize),
+}
+
 #[derive(Clone)]
 pub struct ExplodeState {
     pub array: Vec<Value>,
@@ -106,6 +138,14 @@ impl Program {
     }
 }
 
+macro_rules! binary_op {
+    ($self:ident, $op:tt) => {{
+        let r = $self.vm.stack.pop().expect("Stack underflow");
+        let l = $self.vm.stack.pop().expect("Stack underflow");
+        $self.vm.stack.push(&l $op &r);
+    }};
+}
+
 impl Iterator for Program {
     type Item = Value;
 
@@ -120,11 +160,10 @@ impl Iterator for Program {
                 Instruction::LoadField(idx) => {
                     self.vm.stack.push(self.vm.current_record[*idx].clone());
                 }
-                Instruction::Add => {
-                    let r = self.vm.stack.pop().unwrap();
-                    let l = self.vm.stack.pop().unwrap();
-                    self.vm.stack.push(&l + &r);
-                }
+                Instruction::Add => binary_op!(self, +),
+                Instruction::Minus => binary_op!(self, -),
+                Instruction::Multiply => binary_op!(self, *),
+                Instruction::Divide => binary_op!(self, /),
                 Instruction::JumpIfFalse { target } => {
                     if !self.vm.stack.pop().unwrap().as_bool().unwrap().0 {
                         self.vm.pc = *target;

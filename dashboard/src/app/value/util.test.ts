@@ -1,4 +1,4 @@
-import { ValueMapper, Value } from './util';
+import {Value, ValueMapper} from './util';
 
 describe('ValueMapper Round-trip Tests', () => {
 
@@ -16,7 +16,7 @@ describe('ValueMapper Round-trip Tests', () => {
                             type: 'Array',
                             values: [
                                 { type: 'Int', value: BigInt(10) },
-                                { type: 'Float', number: BigInt(1234), shift: 2 } // 12.34
+                                {type: 'Float', number: 12.34} // 12.34
                             ]
                         }
                     }

@@ -8,17 +8,15 @@ const EPOCH_DATE: NaiveDate = NaiveDate::from_ymd_opt(1970, 1, 1).unwrap();
 #[derive(
     Clone, Debug, Eq, Ord, PartialOrd, PartialEq, Serialize, Deserialize, Readable, Writable,
 )]
-pub struct Date {
-    pub days: i64,
-}
+pub struct Date(pub i64);
 
 impl Date {
     pub fn new(days: i64) -> Date {
-        Date { days }
+        Date(days)
     }
 
     pub fn as_epoch(&self) -> i64 {
-        self.days
+        self.0
     }
 }
 
@@ -30,7 +28,7 @@ pub struct TimeContainer {
 
 impl std::fmt::Display for Date {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let target_date = EPOCH_DATE + Duration::days(self.days);
+        let target_date = EPOCH_DATE + Duration::days(self.0);
         write!(f, "{}", target_date.format("%Y-%m-%d"))
     }
 }

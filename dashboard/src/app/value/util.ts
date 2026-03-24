@@ -4,7 +4,7 @@ import {DataModel as fb} from '../../generated/value';
 
 export type Value =
     | { type: 'Int'; value: bigint }
-    | { type: 'Float'; number: bigint; shift: number }
+    | { type: 'Float'; number: number }
     | { type: 'Bool'; value: boolean }
     | { type: 'Text'; value: string }
     | { type: 'Time'; ms: bigint; ns: number }
@@ -87,7 +87,7 @@ export class ValueMapper {
 
             case 'Float':
                 dataType = fb.ValueData.Float;
-                dataOffset = fb.Float.createFloat(builder, val.number, val.shift);
+                dataOffset = fb.Float.createFloat(builder, val.number);
                 break;
 
             case 'Bool':
@@ -207,7 +207,7 @@ export class ValueMapper {
 
             case fb.ValueData.Float: {
                 const table = fbVal.data(new fb.Float())!;
-                return { type: 'Float', number: table.number(), shift: table.shift() };
+                return {type: 'Float', number: table.number()};
             }
 
             case fb.ValueData.Bool: {

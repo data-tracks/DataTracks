@@ -4,6 +4,10 @@ use std::fmt::{Display, Formatter};
 use std::ops::{Deref, DerefMut};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+pub trait Identifiable {
+    fn id(&self) -> u64;
+}
+
 #[derive(
     Copy, Clone, Debug, Serialize, Deserialize, Readable, Writable, Hash, Eq, PartialEq, Default,
 )]

@@ -1,6 +1,7 @@
 use crate::{Array, Bool, Int, Text, Value, flatbuf as fb};
 use anyhow::{Context, bail};
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
+use smol_str::SmolStr;
 use std::collections::HashMap;
 
 impl Value {
@@ -111,7 +112,7 @@ impl Value {
                 (fb::ValueData::Time, data.as_union_value())
             }
             Value::Date(d) => {
-                let data = fb::Date::create(fbb, &fb::DateArgs { days: d.days });
+                let data = fb::Date::create(fbb, &fb::DateArgs { days: d.0 });
                 (fb::ValueData::Date, data.as_union_value())
             }
             Value::Edge(e) => {
@@ -175,7 +176,7 @@ impl<'a> TryFrom<fb::Value<'a>> for Value {
             fb::ValueData::Text => {
                 let table = fb_val.data_as_text().context("Missing Text table")?;
                 let s = table.value().context("Null string in Text table")?;
-                Ok(Value::Text(Text(s.to_string().into_boxed_str())))
+                Ok(Value::Text(Text(SmolStr::new(s))))
             }
             fb::ValueData::Bool => {
                 let table = fb_val.data_as_bool().context("Missing Bool table")?;
@@ -207,7 +208,7 @@ impl<'a> TryFrom<fb::Value<'a>> for Value {
                 let mut labels = Vec::new();
                 if let Some(fb_labels) = table.labels() {
                     for l in fb_labels.iter() {
-                        labels.push(Text(l.to_string().into_boxed_str()));
+                        labels.push(Text(SmolStr::new(l)));
                     }
                 }
 
@@ -236,9 +237,7 @@ impl<'a> TryFrom<fb::Value<'a>> for Value {
             }
             fb::ValueData::Edge => {
                 let table = fb_val.data_as_edge().context("Missing Edge table")?;
-                let label = table
-                    .label()
-                    .map(|label| Text(label.to_string().into_boxed_str()));
+                let label = table.label().map(|label| Text(SmolStr::new(label)));
 
                 let mut props = HashMap::new();
                 if let Some(fb_props) = table.properties() {
@@ -280,10 +279,7 @@ mod tests {
 
         let original_node = Value::node(
             Int(42),
-            vec![
-                Text("User".to_string().into_boxed_str()),
-                Text("Admin".to_string().into_boxed_str()),
-            ],
+            vec![Text(SmolStr::new("User")), Text(SmolStr::new("Admin"))],
             properties.into(),
         );
 
@@ -309,10 +305,10 @@ mod tests {
         // 5. Manual check for specific fields in the payload
         if let Value::Node(n) = &decoded_msg.payload[0] {
             assert_eq!(n.id.0, 42);
-            assert_eq!(n.labels[0].0.as_ref(), "User");
+            assert_eq!(n.labels[0].0.as_str(), "User");
 
             let email = n.properties.get("email").unwrap().as_text().unwrap();
-            assert_eq!(email.0.as_ref(), "alice@example.com");
+            assert_eq!(email.0.as_str(), "alice@example.com");
         } else {
             panic!("Decoded payload was not a Node");
         }

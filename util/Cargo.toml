@@ -27,3 +27,5 @@ once_cell = { workspace = true }
 indexmap = { workspace = true }
 serde_json = { workspace = true }
 processing = { workspace = true }
+smallvec = { workspace = true }
+smol_str = { workspace = true }

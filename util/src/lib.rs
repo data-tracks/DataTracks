@@ -1,3 +1,4 @@
+mod batch;
 mod channel;
 pub mod container;
 pub mod definition;
@@ -6,12 +7,12 @@ pub mod id;
 mod mappings;
 mod meta;
 mod partition;
+pub mod query;
 pub mod queue;
 mod record;
 pub mod runtimes;
 mod segment;
 mod types;
-pub mod query;
 
 pub use segment::*;
 
@@ -31,5 +32,6 @@ pub use runtimes::*;
 
 pub use record::*;
 
-pub use partition::*;
+pub use batch::*;
 
+pub use partition::*;

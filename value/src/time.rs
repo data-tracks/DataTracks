@@ -1,3 +1,5 @@
+use crate::Text;
+use crate::value::Value;
 use chrono::{DateTime, Duration, TimeZone, Timelike, Utc};
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
@@ -6,8 +8,6 @@ use std::fmt::Formatter;
 use std::ops;
 use std::ops::Sub;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
-use crate::Text;
-use crate::value::Value;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize, Readable, Writable, Copy)]
 pub struct Time {
@@ -80,7 +80,7 @@ impl<T: TimeZone> From<DateTime<T>> for Time {
 
 impl From<Time> for Value {
     fn from(time: Time) -> Self {
-        Value::Time(Box::new(time))
+        Value::Time(time)
     }
 }
 

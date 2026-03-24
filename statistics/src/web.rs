@@ -1,20 +1,21 @@
+use axum::Router;
 use axum::extract::ws::Message::Binary;
 use axum::extract::ws::{Message, WebSocket};
 use axum::extract::{Path, State, WebSocketUpgrade};
-use axum::response::{IntoResponse};
+use axum::response::IntoResponse;
 use axum::routing::get;
-use axum::Router;
 use axum_embed::{FallbackBehavior, ServeEmbed};
-use rust_embed::RustEmbed;
-use std::sync::{Arc, Mutex};
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
+use rust_embed::RustEmbed;
+use std::sync::{Arc, Mutex};
 use tokio::net::TcpListener;
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::Sender;
 use tower_http::cors::CorsLayer;
 use tracing::{error, info, warn};
 use util::{Batch, Event, StatisticEvent, TargetedRecord, ThroughputEvent};
+use value::Text;
 
 #[derive(RustEmbed)]
 #[folder = "../dashboard/dist/dashboard/browser/"]
@@ -42,7 +43,11 @@ pub fn start(
             last_tp,
         };
 
-        let serve_assets = ServeEmbed::<Assets>::with_parameters(Some("index.html".to_string()), FallbackBehavior::Redirect, None);
+        let serve_assets = ServeEmbed::<Assets>::with_parameters(
+            Some("index.html".to_string()),
+            FallbackBehavior::Redirect,
+            None,
+        );
 
         let app = Router::new()
             .route("/events", get(ws_handler))
@@ -108,24 +113,26 @@ async fn handle_socket_logic(mut socket: WebSocket, state: EventState, path: Str
 
                 // Offload CPU-heavy serialization to Rayon's thread pool
                 let msgs: Vec<String> = batch
-                        .into_par_iter()
-                        .filter_map(|event| {
-                            match (path_clone.as_str(), event) {
-                                ("/events", e) => {
-                                    if matches!(e, Event::Heartbeat(_)) || matches!(e, Event::Insert { .. }) {
-                                        return None;
-                                    }
-                                    serde_json::to_string(&e).ok()
-                                }
-                                ("/queues", Event::Queue(q)) => serde_json::to_string(&q).ok(),
-                                ("/statistics", e) if matches!(e, Event::Statistics(_)) || matches!(e, Event::Throughput(_)) => {
-                                    serde_json::to_string(&e).ok()
-                                }
-                                ("/threads", Event::Heartbeat(h)) => Some(h),
-                                _ => None,
+                    .into_par_iter()
+                    .filter_map(|event| match (path_clone.as_str(), event) {
+                        ("/events", e) => {
+                            if matches!(e, Event::Heartbeat(_)) || matches!(e, Event::Insert { .. })
+                            {
+                                return None;
                             }
-                        })
-                        .collect();
+                            serde_json::to_string(&e).ok()
+                        }
+                        ("/queues", Event::Queue(q)) => serde_json::to_string(&q).ok(),
+                        ("/statistics", e)
+                            if matches!(e, Event::Statistics(_))
+                                || matches!(e, Event::Throughput(_)) =>
+                        {
+                            serde_json::to_string(&e).ok()
+                        }
+                        ("/threads", Event::Heartbeat(h)) => Some(h),
+                        _ => None,
+                    })
+                    .collect();
 
                 // Back on the async side: Send the serialized messages
                 for text in msgs {
@@ -158,6 +165,7 @@ async fn ws_channel_handler(
 
 async fn handle_socket(mut socket: WebSocket, topic: String, state: EventState) {
     let mut recv = state.output.subscribe();
+    let topic = Text::from(topic);
     loop {
         if let Ok(records) = recv.recv().await {
             let records = records

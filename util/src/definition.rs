@@ -1,15 +1,16 @@
+use crate::batch::Batch;
 use crate::definition::DefinitionFilter::AllMatch;
 use crate::mappings::NativeMapping;
 use crate::partition::PartitionInfo;
 use crate::query::Query;
-use crate::{Batch, DefinitionId, EntityId, PartitionId, TargetedRecord, TimedMeta, log_channel};
+use crate::{DefinitionId, EntityId, PartitionId, TargetedRecord, TimedMeta, log_channel};
 use flume::{Receiver, Sender, unbounded};
 use processing::{Algebra, Program};
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 use std::sync::atomic::{AtomicU64, Ordering};
-use value::Value;
 use value::Value::Dict;
+use value::{Text, Value};
 
 static ID_BUILDER: AtomicU64 = AtomicU64::new(0);
 
@@ -126,7 +127,7 @@ impl Definition {
 pub enum DefinitionFilter {
     AllMatch,
     #[serde(alias = "topic")]
-    Topic(String),
+    Topic(Text),
     KeyName(String, String),
 }
 

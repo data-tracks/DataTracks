@@ -1,19 +1,21 @@
-use std::error::Error;
+use crate::value::Value;
+use crate::{Text, bool};
 use bytes::{BufMut, BytesMut};
 use postgres::types::{IsNull, Type};
+use smol_str::SmolStr;
 use speedy::Writable;
-use crate::{bool, Text};
-use crate::value::Value;
+use std::error::Error;
 
 impl<'a> postgres::types::FromSql<'a> for Value {
     fn from_sql(ty: &Type, raw: &'a [u8]) -> Result<Self, Box<dyn Error + Sync + Send>> {
         match *ty {
             Type::BOOL => Ok(Value::bool(postgres::types::FromSql::from_sql(ty, raw)?)),
             Type::TEXT | Type::CHAR => {
-                Ok(Value::Text(Text(postgres::types::FromSql::from_sql(ty, raw)?)))
+                let result: &str = postgres::types::FromSql::from_sql(ty, raw)?;
+                Ok(Value::Text(Text(SmolStr::new(result))))
             }
             Type::INT2 | Type::INT4 | Type::INT8 => {
-                let val:i64 = postgres::types::FromSql::from_sql(ty, raw)?;
+                let val: i64 = postgres::types::FromSql::from_sql(ty, raw)?;
                 Ok(Value::int(val))
             }
             Type::FLOAT4 | Type::FLOAT8 => {
@@ -52,7 +54,7 @@ impl postgres::types::ToSql for Value {
             Value::Dict(d) => out.extend_from_slice(d.write_to_vec()?.as_slice()),
             Value::Null => return Ok(IsNull::Yes),
             Value::Time(t) => out.put_i128(t.ms as i128),
-            Value::Date(d) => out.put_i64(d.days),
+            Value::Date(d) => out.put_i64(d.0),
             Value::Node(n) => out.extend_from_slice(n.write_to_vec()?.as_slice()),
             Value::Edge(e) => out.extend_from_slice(e.write_to_vec()?.as_slice()),
         }

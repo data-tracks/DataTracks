@@ -3,14 +3,14 @@ use crate::management::catalog::Catalog;
 use crate::phases::{timer, wal};
 use anyhow::anyhow;
 use engine::engine::Engine;
-use flume::{Receiver, Sender, unbounded, bounded};
+use flume::{Receiver, Sender, bounded, unbounded};
 use std::collections::HashMap;
 use std::error::Error;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::{fs, thread};
-use std::path::PathBuf;
 use std::time::Duration;
+use std::{fs, thread};
 use tokio::runtime::Builder;
 use tokio::select;
 use tokio::task::JoinSet;
@@ -55,7 +55,12 @@ impl Persister {
         Ok(())
     }
 
-    pub fn start(self, incoming: Receiver<InitialRecord>, rt: Runtimes, control_rx: Receiver<u64>) -> anyhow::Result<()> {
+    pub fn start(
+        self,
+        incoming: Receiver<InitialRecord>,
+        rt: Runtimes,
+        control_rx: Receiver<u64>,
+    ) -> anyhow::Result<()> {
         let storer_workers = 8; // todo make dynamic
 
         let (sender, receiver) = unbounded();
@@ -138,7 +143,11 @@ impl Persister {
         ))
     }
 
-    pub async fn start_distributor(&mut self, _join_set: &mut JoinSet<()>, _rt: Runtimes) -> anyhow::Result<()> {
+    pub async fn start_distributor(
+        &mut self,
+        _join_set: &mut JoinSet<()>,
+        _rt: Runtimes,
+    ) -> anyhow::Result<()> {
         let engines = self.catalog.engines().await;
 
         let builder_id = Arc::new(AtomicU64::new(0));
@@ -189,7 +198,6 @@ impl Persister {
 
                             let name = format!("Persister {} {}", engine, i);
 
-                            // Create a 50ms ticker for the flush interval
                             let mut flush_interval = tokio::time::interval(Duration::from_millis(500));
                             // don't let ticks pile up if processing is slow
                             flush_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
@@ -344,7 +352,7 @@ async fn handle_error(
     // 2. Data Recovery: Try to put records back into the engine's receiver
     // so they can be retried later.
 
-    if let Err(send_err) = engine.buffer_out.0.send(records.records) {
+    if let Err(send_err) = engine.buffer_out.0.send(records.records.to_vec()) {
         // If the internal channel is closed, we truly cannot save this data
         error!("Data loss: could not re-queue record: {:?}", send_err);
     }

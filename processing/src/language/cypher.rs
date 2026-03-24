@@ -2,14 +2,14 @@ use crate::expression::Expression;
 use crate::{Algebra, Project, Scan, Schema};
 use anyhow::anyhow;
 use indexmap::IndexMap;
+use nom::IResult;
+use nom::Parser;
 use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::character::complete::{alpha1, alphanumeric1, multispace1};
 use nom::combinator::recognize;
 use nom::multi::many0;
 use nom::sequence::{delimited, pair};
-use nom::IResult;
-use nom::Parser;
 
 #[derive(Debug, PartialEq)]
 pub struct MatchQuery {
@@ -140,6 +140,6 @@ mod tests {
     #[test]
     fn test_parse_cypher_alg() {
         let query = "MATCH (n:$$source:Person) RETURN n.age";
-        let result = parse_cypher(query).unwrap();
+        let _result = parse_cypher(query).unwrap();
     }
 }

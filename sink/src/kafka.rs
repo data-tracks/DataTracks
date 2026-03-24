@@ -4,6 +4,7 @@ use rdkafka::admin::{AdminClient, AdminOptions, NewTopic, TopicReplication};
 use rdkafka::consumer::{Consumer, StreamConsumer};
 use rdkafka::producer::{FutureProducer, FutureRecord, Producer};
 use rdkafka::{ClientConfig, Message};
+use smallvec::SmallVec;
 use std::error::Error;
 use std::time::Duration;
 use tokio::task::JoinSet;
@@ -61,7 +62,9 @@ impl KafkaSink {
                             match sender.send((
                                 Value::from(record.value),
                                 InitialMeta {
-                                    topics: record.topics,
+                                    topics: SmallVec::from_vec(
+                                        record.topics.into_iter().map(|t| t.into()).collect(),
+                                    ),
                                 },
                             )) {
                                 Ok(_) => {}

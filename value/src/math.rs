@@ -1,7 +1,8 @@
-use std::ops::{Add, AddAssign, Div, Mul, Neg, Sub};
-use tracing::error;
 use crate::Text;
 use crate::value::Value;
+use smol_str::SmolStr;
+use std::ops::{Add, AddAssign, Div, Mul, Neg, Sub};
+use tracing::error;
 
 impl Add for &Value {
     type Output = Value;
@@ -27,7 +28,7 @@ impl Add for &Value {
                 let ns = a.ns + b.as_time().unwrap().ns;
                 Value::time(ms, ns)
             }
-            (Value::Date(a), b) => Value::date(a.days + b.as_date().unwrap().days),
+            (Value::Date(a), b) => Value::date(a.0 + b.as_date().unwrap().0),
             // array
             (Value::Array(a), b) => {
                 let mut a = a.clone();
@@ -66,9 +67,7 @@ impl Mul for &Value {
             (Value::Int(a), Value::Float(b)) | (Value::Float(b), Value::Int(a)) => {
                 Value::float(a.0 as f64 * b.0.0)
             }
-            (Value::Float(a), Value::Float(b)) => {
-                Value::float(a.0.0 * b.0.0)
-            }
+            (Value::Float(a), Value::Float(b)) => Value::float(a.0.0 * b.0.0),
             (Value::Text(text), Value::Int(b)) => Value::text(text.0.repeat(b.0 as usize)),
             (lhs, rhs) => panic!("Cannot multiply {:?} with {:?}.", lhs, rhs),
         }
@@ -99,7 +98,7 @@ impl AddAssign for Value {
                 f.0 += rhs.as_float().unwrap().0;
             }
             Value::Bool(b) => b.0 = b.0 && rhs.as_bool().unwrap().0,
-            Value::Text(t) => *t = Text((t.0.to_string() + &rhs.as_text().unwrap().0).into_boxed_str()),
+            Value::Text(t) => *t = Text(SmolStr::new(t.0.to_string() + &rhs.as_text().unwrap().0)),
             Value::Array(a) => a.values.push(rhs),
             Value::Dict(d) => d.append(&mut rhs.as_dict().unwrap()),
             Value::Null => {}
@@ -109,7 +108,7 @@ impl AddAssign for Value {
                 t.ns += time.ns;
             }
             Value::Date(d) => {
-                d.days += rhs.as_date().unwrap().days;
+                d.0 += rhs.as_date().unwrap().0;
             }
             Value::Node(_) => {
                 error!("Cannot add Node");
