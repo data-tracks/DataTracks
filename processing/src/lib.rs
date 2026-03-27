@@ -5,6 +5,7 @@ mod language;
 mod operator;
 mod simd;
 mod tuple;
+mod jit;
 
 pub use algebra::*;
 
