@@ -89,7 +89,7 @@ mod test {
         let mut program = Program {
             vm,
             instructions: vec![LoadField(0), LoadField(1), Add, Yield(1)],
-            compiler: Compiler {},
+            compiler: Compiler::new(),
         };
 
         // 4. VALIDATE
