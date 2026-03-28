@@ -7,6 +7,7 @@ pub struct VM {
     pub(crate) current_batch: Option<RecordBatch>,
     pub(crate) constants: Vec<Value>, // The "Pool" for literals
     pub pc: usize,                    // Program Counter
+    pub size: usize,
     pub resources: Vec<Box<dyn Iterator<Item = RecordBatch> + Send + Sync>>,
 }
 
@@ -17,6 +18,7 @@ impl Clone for VM {
             current_batch: self.current_batch.clone(),
             constants: self.constants.clone(),
             pc: self.pc,
+            size: 0,
             resources: vec![],
         }
     }

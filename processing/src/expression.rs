@@ -37,6 +37,10 @@ impl Expression {
         }
     }
 
+    pub(crate) fn constant(value: Value) -> Expression {
+        Expression::Literal(value)
+    }
+
     pub(crate) fn field(name: &str) -> Self {
         Self::Field(name.to_string())
     }

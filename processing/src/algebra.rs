@@ -119,6 +119,13 @@ impl Schema {
         Schema::Fixed(fields.into())
     }
 
+    pub fn len(&self) -> usize {
+        match self {
+            Schema::Dynamic => 1,
+            Schema::Fixed(f) => f.len()
+        }
+    }
+
     pub fn get(&self, name: &str) -> Option<usize> {
         match self {
             Schema::Dynamic => Some(0),
