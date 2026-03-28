@@ -23,5 +23,4 @@ cranelift = { version = "0.130.0", features = [] }
 cranelift-module = { version = "0.130.0", features = [] }
 cranelift-jit = "0.130.0"
 cranelift-native = "0.130.0"
-target-lexicon = "0.13.5"
 cranelift-codegen = "0.130.0"

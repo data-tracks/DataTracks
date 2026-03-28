@@ -126,7 +126,7 @@ impl Iterator for Program {
                     self.vm.stack.push(column);
                 }
                 Instruction::NextTuple { resource_id } => {
-                    let batch = self.vm.resources[0].next()?; // Pull a batch
+                    let batch = self.vm.resources[resource_id].next()?; // Pull a batch
                     self.vm.size = batch.num_of_rows;
                     self.vm.current_batch = Some(batch);
                 }
@@ -194,8 +194,15 @@ mod test {
 
     #[test]
     fn test_add_algebra() {
-        let col_a = Column::Int(vec![Int(10.into()), Int(20.into()), Int(30.into())]);
-        let col_b = Column::Int(vec![Int(1.into()), Int(2.into()), Int(3.into())]);
+        let count = 10_000;
+
+        let a = (0..count).into_iter().map(|i| Int((i * 10).into())).collect::<Vec<_>>();
+        let b = (0..count).into_iter().map(|i| Int(i.into())).collect::<Vec<_>>();
+
+        let calc = (0..count).into_iter().map(|i| Int((i * 10 + i).into())).collect::<Vec<_>>();
+
+        let col_a = Column::Int(a);
+        let col_b = Column::Int(b);
 
         let batch = RecordBatch {
             columns: vec![col_a.clone(), col_b],
@@ -219,15 +226,21 @@ mod test {
             ],
         ));
 
+
         program
             .set_resource("test", [batch].into_iter())
             .unwrap();
 
+        let now = Instant::now();
+        let result = program.next();
+
+        println!("{:?}", now.elapsed());
+
         assert_eq!(
-            program.next(),
+            result,
             Some(
                 RecordBatch{ columns: vec![
-                    Column::Int(vec![Int(11.into()), Int(22.into()), Int(33.into())]),
+                    Column::Int(calc),
                     col_a
                 ], num_of_rows: 3 }
             )

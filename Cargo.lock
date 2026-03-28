@@ -3312,7 +3312,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sqlparser",
- "target-lexicon",
  "tracing",
  "value",
 ]
